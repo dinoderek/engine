@@ -13,8 +13,10 @@ default_harness = "claude"
 
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
+launch = "claude --permission-mode <hands-off mode> --model {model}"
 [harness.codex]
 max_sessions = 2
+launch = "codex --sandbox <mode> --ask-for-approval never -m {model}"
 
 [host.mac]
 kind = "local"
@@ -52,10 +54,9 @@ The coordinator places a ready task on a host that meets all of these:
 - the host's capabilities include everything in the card's `requires`.
 
 Ties go to the host with the most free slots. A task that no host can take
-stays ready, and the coordinator reports why.
-
-The coordinator runs on one always-on machine and reaches the other local
-hosts over SSH.
+stays ready, and the coordinator reports why. Each harness's launch line must
+start a session that never stops for a permission prompt; only hard stops
+should pause it. How the coordinator reaches each host is in `coordinator.md`.
 
 ## Naming
 
@@ -87,6 +88,13 @@ or URL. `engine ps` lists every live session with the same details.
 - **Start:** create the worktree, open a tmux window in it, launch the harness
   with the model and the kickoff prompt (`Execute task <tracker ref> with the
   engine executor protocol`), and register remote control.
+- **tmux mechanics:**
+  - Send text with `send-keys -l`, then send `Enter` as a separate call after
+    a short delay. Input boxes can swallow a newline that arrives with the
+    text.
+  - Run `pipe-pane` into the run directory, so the raw terminal log outlives
+    the tmux server.
+  - Set `allow-rename off`, so agents can't rename windows.
 - **Questions:** the executor sets `needs-human` and waits in the live session.
   Answer from any surface. A comment on the task's issue also works, because
   the executor reads its inbox when it resumes.

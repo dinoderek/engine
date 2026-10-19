@@ -54,8 +54,9 @@ Docs cite the verbs and never restate the commands behind them.
 
 - The lanes are listed in a registry (`lanes.tsv`). `./dev test` runs them in
   parallel with no fail-fast and writes `.test-ai-results/summary.md`.
-- **CI runs the same command, and every required lane runs in CI.** This is
-  what makes merge-on-green safe.
+- **Where there is CI, it runs the same command.** A lane CI cannot run, such
+  as one that needs a simulator, runs locally, and its evidence goes in the PR.
+  Merge on green means local gates plus every CI check.
 - Default targets:
 
 | Target | Default |

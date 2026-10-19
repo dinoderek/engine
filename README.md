@@ -12,8 +12,9 @@ loop unless a task asks for you.
 
 | Part | What it is |
 | --- | --- |
-| Execution protocol | The phases, roles and state machine from PRD to merged feature. |
-| Coordinator | A deterministic CLI. It finds ready tasks, places them on a host, spawns an executor session and records the run. No LLM. |
+| Execution protocol | The phases, roles and state machine from requirements to merged feature. |
+| Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through plan and execution, spawning sessions on local or SSH hosts. No LLM. |
+| Skills | The planner, executor and reviewer protocols, shipped from this repo for both Claude Code and Codex. |
 | Tracker adapter | Plan and status storage behind one interface. GitHub Issues first. |
 | Hosts | Config for each machine or cloud: its harnesses, session cap and capabilities. Rules for how you reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |
@@ -25,8 +26,9 @@ Load only what your task needs:
 
 | If you are… | Load |
 | --- | --- |
-| changing phases, roles, task states, rulings or merge rules | `docs/execution-protocol.md` |
+| changing phases, roles, task states, rulings, hard stops or merge rules | `docs/execution-protocol.md` |
+| changing how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changing host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changing what is recorded about runs or where it is stored | `docs/telemetry.md` |
 | changing what a target repo must provide, or the seed prompt | `docs/project-context.md` |
-| deciding something not yet settled | `design/open-questions.md` (ephemeral) |
+| deciding something not yet settled | `design/open-questions.md` and `design/prior-art.md` (ephemeral) |
