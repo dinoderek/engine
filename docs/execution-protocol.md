@@ -53,7 +53,8 @@ A task card holds:
 
 - the dependency graph has no cycles;
 - every card has an outcome, tests and a requires list;
-- every task stays within the size budget (about 2000 added lines);
+- every task stays within the size budget (about 2000 added lines, not
+  counting generated files such as lockfiles);
 - the final acceptance task exists.
 
 If lint fails, the planner fixes the plan. Once it passes, execution starts.

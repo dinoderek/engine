@@ -34,19 +34,24 @@ A single script (e.g. `./dev`) has these verbs:
 
 - `doctor`: sets up the machine, and turns "can't run" into a gap to fix;
 - `run`;
-- `test [lane | for <paths>]`;
+- `test [lane | for <paths>]`: `for` runs the required lanes whose trigger
+  patterns in the lane registry match the paths;
 - `worktree create | release`;
 - `deploy`;
 - `deps`.
 
-Docs cite the verbs and never restate the commands behind them.
+A verb the repo has no use for yet, such as `deploy` with nothing to deploy,
+is left out, and the script's usage and the docs say so. Docs cite the verbs
+and never restate the commands behind them.
 
 ### 4. Worktrees
 
 - Always work in a worktree, never in the main checkout. One task, one
   worktree, one branch, one PR.
-- `worktree create` branches from the latest default branch and provisions
-  anything the task needs. `worktree release` tears it all down.
+- `worktree create` branches from the remote's current default branch and
+  provisions anything the task needs. It puts the worktree outside the
+  checkout, so the checkout's tools and `git status` never walk it.
+  `worktree release` tears it all down.
 - Commit work in progress rather than stashing it, because the stash is shared
   across worktrees.
 
@@ -61,14 +66,16 @@ Docs cite the verbs and never restate the commands behind them.
 
 | Target | Default |
 | --- | --- |
-| Coverage | 80% lines, 80% branches |
+| Coverage | 80% lines, 80% branches. A stack with no branch coverage (Go) gates statements, and its quality-gates doc says so. |
 | Per function | cognitive complexity ≤ 25, ≤ 200 lines, nesting ≤ 4, ≤ 5 parameters |
-| Per file | ≤ 500 lines |
-| Import direction | No cycles, plus layer rules (`import-rules.tsv`) |
+| Per file | ≤ 500 lines of code or config; docs have word budgets instead |
+| Import direction | No cycles, plus layer rules (`import-rules.tsv`). Where the compiler already rejects cycles (Go), the lane checks the layers only. |
 | Always | Lint, format, types, docs check |
 
-- Existing violations go in baselines that only shrink. Loosening a target is
-  a hard stop.
+- Existing violations go in baselines that only shrink: a row the code no
+  longer needs fails its lane until it is lowered or deleted. An inline
+  suppression (a `nolint`-style comment) counts as a violation and needs a
+  row. Loosening a target is a hard stop.
 
 ### 6. Run, test, deploy
 
@@ -87,6 +94,10 @@ Docs cite the verbs and never restate the commands behind them.
 - Summarised in the brief.
 - Every version has exactly one source file (`.python-version`, a lockfile,
   and so on). Docs cite the file and never restate the version.
+- The gates run on exactly that version, locally and in CI: the gate command
+  takes it from the source file (for Go, `./dev` sets `GOTOOLCHAIN` from
+  go.mod's `toolchain` line). Dev tools are pinned in the same lockfile where
+  the stack allows it (Go's `tool` directives), so the bot bumps them too.
 
 ### 9. Docs discipline
 

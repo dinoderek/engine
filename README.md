@@ -6,7 +6,8 @@ the work. Then a coordinator runs each task in its own agent session, on
 whichever host and harness fits, through to a merged PR, without you in the
 loop unless a task asks for you.
 
-**Status:** design draft. Nothing is built yet.
+**Status:** design draft. The code so far is `engine version` and the repo's
+own tooling: `./dev` and its quality gates.
 
 ## Parts
 
@@ -32,4 +33,6 @@ Load only what your task needs:
 | changing what is recorded about runs or where it is stored | `docs/telemetry.md` |
 | setting up engine's GitHub identity, tokens, notifications or harness sign-in | `docs/operator-setup.md` |
 | changing what a target repo must provide, or the seed prompt | `docs/project-context.md` |
+| changing a gate lane, a quality target, a baseline or `./dev` | `docs/quality-gates.md` |
+| changing a Go, tool or Action version, or handling a Dependabot PR | `docs/versions.md` |
 | deciding something not yet settled | `design/open-questions.md` and `design/prior-art.md` (ephemeral) |

@@ -1,0 +1,28 @@
+# Weekly, grouped upgrade PRs for Go modules (including the go.mod tools) and
+# the CI actions. What Dependabot does not cover (the Go toolchain) and how to
+# handle its PRs: docs/versions.md.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    allow:
+      - dependency-type: direct
+      # The tools' modules are `// indirect` requirements; naming them keeps them current.
+      - dependency-name: github.com/golangci/golangci-lint/v2
+      - dependency-name: golang.org/x/vuln
+    groups:
+      go-modules:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]

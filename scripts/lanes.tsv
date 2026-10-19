@@ -1,0 +1,22 @@
+# Lane registry: the single source for the quality-gate lanes. Read by
+# devtools/internal/lanes (./dev test, ./dev test for <paths>, ./dev test --list).
+# What each lane enforces and how to fix a failure: docs/quality-gates.md.
+# Change that doc in the same PR as this file.
+#
+# Columns (tab-separated): name  gate  triggers  command
+#   gate      required: runs in ./dev test and must be green before every PR
+#             extra:    runs by name only, by agreement with the operator
+#   triggers  comma-separated patterns for ./dev test for <paths>: a pattern
+#             ending in / matches a directory, one with a / matches the whole
+#             path, any other matches the file name. A change to this file
+#             triggers every required lane.
+#   command   run from the repository root, not through a shell; a leading
+#             `dev` is the ./dev binary itself (its `check` subcommands)
+format	required	*.go	dev check format
+vet	required	*.go,go.mod,go.sum	go vet ./...
+lint	required	*.go,go.mod,go.sum,.golangci.yml,lint-baseline.tsv	dev check lint
+unit	required	*.go,go.mod,go.sum,testdata/	go test -race -count=1 ./...
+coverage	required	*.go,go.mod,go.sum,testdata/	dev check coverage -min 80
+file-length	required	*	dev check file-length -max 500 -exclude *.md,go.sum
+imports	required	*.go,go.mod,import-rules.tsv,import-baseline.tsv	dev check imports
+versions	required	go.mod,*.md,.github/,.golangci.yml	dev check versions
