@@ -14,7 +14,7 @@ loop unless a task asks for you.
 | --- | --- |
 | Execution protocol | The phases, roles and state machine from requirements to merged feature. |
 | Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through plan and execution, spawning sessions on local or SSH hosts. No LLM. |
-| Skills | The planner, executor and reviewer protocols, shipped from this repo for both Claude Code and Codex. |
+| Skills | The planner, executor and reviewer protocols, plus `task-protocol` for human-gated work. All ship from this repo, as a Claude Code plugin marketplace and with a Codex symlink installer. |
 | Tracker adapter | Plan and status storage behind one interface. GitHub Issues first. |
 | Hosts | Config for each machine or cloud: its harnesses, session cap and capabilities. Rules for how you reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |
@@ -30,5 +30,6 @@ Load only what your task needs:
 | changing how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changing host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changing what is recorded about runs or where it is stored | `docs/telemetry.md` |
+| setting up engine's GitHub identity, tokens, notifications or harness sign-in | `docs/operator-setup.md` |
 | changing what a target repo must provide, or the seed prompt | `docs/project-context.md` |
 | deciding something not yet settled | `design/open-questions.md` and `design/prior-art.md` (ephemeral) |

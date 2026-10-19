@@ -13,10 +13,10 @@ default_harness = "claude"
 
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
-launch = "claude --permission-mode <hands-off mode> --model {model}"
+launch = "claude --permission-mode auto --model {model}"
 [harness.codex]
 max_sessions = 2
-launch = "codex --sandbox <mode> --ask-for-approval never -m {model}"
+launch = "codex --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model}"
 
 [host.mac]
 kind = "local"
@@ -54,9 +54,29 @@ The coordinator places a ready task on a host that meets all of these:
 - the host's capabilities include everything in the card's `requires`.
 
 Ties go to the host with the most free slots. A task that no host can take
-stays ready, and the coordinator reports why. Each harness's launch line must
-start a session that never stops for a permission prompt; only hard stops
-should pause it. How the coordinator reaches each host is in `coordinator.md`.
+stays ready, and the coordinator reports why. How the coordinator reaches each
+host is in `coordinator.md`.
+
+## Permission mode
+
+Sessions default to **auto mode**, so they never stop for a permission prompt.
+Only hard stops pause them.
+
+- **Claude Code:** `--permission-mode auto`.
+- **Codex:** the `workspace-write` sandbox, with Codex's auto-review deciding
+  any action that crosses the sandbox boundary. With
+  `approval_policy = "never"` there would be nothing for it to review.
+
+The Codex sandbox needs two exceptions for executors:
+
+- **Network access** (`sandbox_workspace_write.network_access`), for `gh`
+  and `git push`.
+- **Engine's clone as a writable root**
+  (`sandbox_workspace_write.writable_roots`), because a worktree's git
+  metadata lives in the main clone's `.git/worktrees/`, outside the worktree.
+
+All Codex settings are passed per session with `-c`. The host's own
+`~/.codex/config.toml` is never edited.
 
 ## Naming
 

@@ -76,8 +76,9 @@ Agent state is never scraped from the pane. Three sources:
 
 1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
 2. **Harness hooks** that write to the run directory: Claude Code's
-   `Notification` and `Stop` hooks, and Codex's `notify` program. They mark
-   "waiting for input" and "turn ended".
+   `Notification` and `Stop` hooks, and Codex's hooks. They mark "waiting for
+   input" and "turn ended". Codex's `notify` is not used, because it holds a
+   single program and other tools already claim it (Computer Use on the Mac).
 3. **tmux.** If the window exists, the session is alive.
 
 ## Identity and notifications
@@ -88,7 +89,8 @@ own identity:
 
 - **V1:** a machine user, added as a collaborator. GitHub allows one free
   machine account per person. The coordinator and every session get its
-  token as `GH_TOKEN`.
+  token as `GH_TOKEN`. If you are setting it up, load
+  `operator-setup.md`.
 - **Later:** a GitHub App.
 
 You subscribe to (or are assigned) each feature issue. Hard stops @mention
