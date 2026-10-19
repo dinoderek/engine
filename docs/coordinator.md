@@ -26,7 +26,7 @@ is done, you stop it, or the machine goes down.
 it. A pass can:
 
 - spawn the planner and lint the plan;
-- place and spawn ready tasks;
+- place and spawn ready tasks, which is `engine start` for each one;
 - mark dead sessions `failed`;
 - update the feature's label;
 - gather and upload telemetry for runs that have ended.
@@ -36,9 +36,18 @@ A pass runs every 60 seconds. Webhooks make passes start sooner:
 a public URL. An event only triggers an early pass and never carries state, so
 a missed event costs at most one poll interval.
 
-Other commands:
+The coordinator never claims tasks; executors claim their own. To avoid
+starting a task twice in the gap between spawning it and its claim landing, it
+skips any task whose tmux window already exists.
 
-- `engine ps`: every live session on every host, with how to attach.
+Commands that work without `run`, and come first in the build:
+
+- `engine start <issue>`: place and launch one executor session
+  (`hosts-and-sessions.md`).
+- `engine ps`: every claimed task, built from the claim comments plus a
+  liveness probe of each host.
+- `engine attach <repo>-<task>`: attach to a session's tmux window, locally or
+  over SSH.
 - `engine lint <feature>`: plan lint on its own.
 
 ## Later: `engine serve`
