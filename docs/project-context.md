@@ -95,9 +95,9 @@ and never restate the commands behind them.
 - Every version has exactly one source file (`.python-version`, a lockfile,
   and so on). Docs cite the file and never restate the version.
 - The gates run on exactly that version, locally and in CI: the gate command
-  takes it from the source file (for Go, `./dev` sets `GOTOOLCHAIN` from
-  go.mod's `toolchain` line). Dev tools are pinned in the same lockfile where
-  the stack allows it (Go's `tool` directives), so the bot bumps them too.
+  takes it from the source file, and the versions lane fails when anything
+  runs another. Dev tools are pinned in the stack's own lockfile where it
+  allows that, so the dependency bot bumps them too.
 
 ### 9. Docs discipline
 

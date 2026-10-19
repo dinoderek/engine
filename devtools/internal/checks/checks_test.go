@@ -108,14 +108,16 @@ func TestLint(t *testing.T) {
 		return "a.go:3: too long (funlen)\n", os.WriteFile(path, []byte(report), 0o644)
 	}
 	files := map[string]string{
-		"a.go":                      "package a\n\nfunc f() {} //" + "nolint:funlen // reason\n// prose about //nolint is fine\n",
+		"a.go": "package a\n\nimport \"os\"\n\nfunc f() {} //nolint:funlen // reason\n\n" +
+			"// prose about //nolint is fine\nfunc g() { _ = os.Remove(\"http://x\") //nolint:errcheck\n}\n\n" +
+			"func h() {} // nolint:unused\n",
 		"scripts/lint-baseline.tsv": "# header\n",
 	}
 
 	e, out := tree(t, files, golangci)
-	expect(t, Lint(e), 1, out, "too long (funlen)", "a.go funlen: 1 found", "a.go nolint: 1 found")
+	expect(t, Lint(e), 1, out, "too long (funlen)", "a.go funlen: 1 found", "a.go nolint: 3 found")
 
-	files["scripts/lint-baseline.tsv"] = "a.go\tfunlen\t1\na.go\tnolint\t1\n"
+	files["scripts/lint-baseline.tsv"] = "a.go\tfunlen\t1\na.go\tnolint\t3\n"
 	e, out = tree(t, files, golangci)
 	expect(t, Lint(e), 0, out, "no findings beyond the baseline")
 }
@@ -146,10 +148,11 @@ func TestCoverage(t *testing.T) {
 	expect(t, Coverage(e, []string{"-min", "90"}), 1, out, "add tests")
 
 	e, out = tree(t, nil, func(string, []string) (string, error) { return "FAIL x\n", errors.New("exit 1") })
-	expect(t, Coverage(e, nil), 1, out, "FAIL x")
+	expect(t, Coverage(e, []string{"-min", "80"}), 1, out, "FAIL x")
 
 	e, out = tree(t, nil, nil)
 	expect(t, Coverage(e, []string{"-bogus"}), 2, out)
+	expect(t, Coverage(e, nil), 2, out, "usage: dev check coverage -min")
 }
 
 func TestParseProfileRejectsGarbage(t *testing.T) {
@@ -185,6 +188,7 @@ func TestFileLength(t *testing.T) {
 	files["long.go"] = "x\n"
 	e, out = tree(t, files, nil)
 	expect(t, FileLength(e, args), 1, out, "lower the row")
+	expect(t, FileLength(e, nil), 2, out, "usage: dev check file-length -max")
 }
 
 func TestImports(t *testing.T) {
@@ -209,9 +213,9 @@ func TestImports(t *testing.T) {
 	e, out = tree(t, files, golist)
 	expect(t, Imports(e), 0, out, "4 packages follow 3 rules")
 
-	files["scripts/import-rules.tsv"] += "gone/...\tforbid\t-\n"
+	files["scripts/import-rules.tsv"] += "gone/...\tforbid\tdevtool/...\n"
 	e, out = tree(t, files, golist)
-	expect(t, Imports(e), 1, out, "importer gone/... matches no package")
+	expect(t, Imports(e), 1, out, "importer gone/... matches no package", "target devtool/... matches no package")
 
 	files["scripts/import-rules.tsv"] = "internal/a\tmaybe\tx\n"
 	e, out = tree(t, files, golist)

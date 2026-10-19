@@ -24,9 +24,13 @@ func FileLength(e Env, args []string) int {
 	var maximum int
 	var exclude string
 	if err := e.flags(lane, args, func(fs *flag.FlagSet) {
-		fs.IntVar(&maximum, "max", 0, "maximum lines per file")
+		fs.IntVar(&maximum, "max", 0, "maximum lines per file (required)")
 		fs.StringVar(&exclude, "exclude", "", "comma-separated patterns to skip")
 	}); err != nil {
+		return 2
+	}
+	if maximum < 1 {
+		fmt.Fprintln(e.Out, "usage: dev check file-length -max <lines> [-exclude <patterns>]")
 		return 2
 	}
 	files, err := repo.Files(e.Run, e.Root)

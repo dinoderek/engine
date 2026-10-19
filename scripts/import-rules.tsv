@@ -8,7 +8,7 @@
 #   and every package below it. Targets are comma-separated; `-` means none.
 #   only    the importer may import first-party packages matching the targets, nothing else
 #   forbid  the importer may never import packages matching the targets
-# A rule whose importer matches no package fails the lane.
+# A rule whose importer or a target matches no package fails the lane.
 internal/...	forbid	devtools/...,cmd/...
 internal/version	only	-
 internal/cli	only	internal/version

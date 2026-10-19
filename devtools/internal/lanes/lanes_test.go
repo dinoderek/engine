@@ -34,7 +34,7 @@ func TestParse(t *testing.T) {
 	if got := strings.Join(lanes[1].Command, " "); got != "dev check docs" {
 		t.Errorf("command = %q", got)
 	}
-	for _, bad := range []string{"", "a\trequired\tx\n", "a\tsometimes\t*\tcmd\n", "a\trequired\t*\tx\na\trequired\t*\ty\n"} {
+	for _, bad := range []string{"", "a\trequired\tx\n", "a\tsometimes\t*\tcmd\n", "a\trequired\t*\tx\na\trequired\t*\ty\n", "a\trequired\t*\t \n"} {
 		if _, err := Parse(bad); err == nil {
 			t.Errorf("Parse(%q): want an error", bad)
 		}
@@ -80,6 +80,8 @@ func TestFor(t *testing.T) {
 	}{
 		{[]string{"internal/x/y.go"}, "format"},
 		{[]string{"docs/a.txt"}, "docs"},
+		{[]string{"internal/docs/a.txt"}, "docs"},
+		{[]string{"notdocs/a.txt"}, ""},
 		{[]string{"./README.md"}, "docs"},
 		{[]string{".github/workflows/ci.yml"}, "ci"},
 		{[]string{".github/dependabot.yml"}, ""},
@@ -129,6 +131,9 @@ func TestRunWritesEveryLaneWithoutFailFast(t *testing.T) {
 	out.Reset()
 	if code := Run(lanes[1:2], root, "go", &out); code != 0 {
 		t.Errorf("passing run: exit code %d\n%s", code, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, Results, "fails.txt")); !os.IsNotExist(err) {
+		t.Errorf("a lane output from the previous run survived: %v", err)
 	}
 }
 

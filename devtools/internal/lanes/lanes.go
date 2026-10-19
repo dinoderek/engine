@@ -38,7 +38,8 @@ func Parse(text string) ([]Lane, error) {
 	seen := map[string]bool{}
 	for _, row := range repo.Rows(text) {
 		f := row.Fields
-		if len(f) != 4 || (f[1] != "required" && f[1] != "extra") || f[0] == "" || seen[f[0]] {
+		if len(f) != 4 || (f[1] != "required" && f[1] != "extra") || f[0] == "" || seen[f[0]] ||
+			len(strings.Fields(f[3])) == 0 {
 			return nil, fmt.Errorf("%s:%d: want a unique '<name>\\t<required|extra>\\t<triggers>\\t<command>'",
 				Registry, row.Line)
 		}
@@ -111,13 +112,13 @@ func For(lanes []Lane, paths []string) []Lane {
 }
 
 // triggeredBy reports whether p matches one of the lane's patterns. A pattern
-// ending in "/" matches everything under that directory; one containing "/"
-// matches the whole path; any other matches the file name.
+// ending in "/" matches any path with that directory in it, at any depth; one
+// containing "/" matches the whole path; any other matches the file name.
 func (l Lane) triggeredBy(p string) bool {
 	for _, pat := range l.Triggers {
 		switch {
 		case strings.HasSuffix(pat, "/"):
-			if strings.HasPrefix(p+"/", pat) {
+			if strings.Contains("/"+p, "/"+pat) {
 				return true
 			}
 		case strings.Contains(pat, "/"):
@@ -149,11 +150,15 @@ type Result struct {
 	Elapsed time.Duration
 }
 
-// Run runs lanes in parallel from root, writes <lane>.txt and summary.md to
-// the results directory, prints the summary and returns 0 only if every lane
+// Run runs lanes in parallel from root, replaces the results directory with
+// one <lane>.txt per lane and summary.md, prints the summary and returns 0 only if every lane
 // passed. self is the path of this tool, which a leading "dev" runs.
 func Run(lanes []Lane, root, self string, out io.Writer) int {
 	dir := filepath.Join(root, Results)
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Fprintln(out, err)
+		return 1
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		fmt.Fprintln(out, err)
 		return 1

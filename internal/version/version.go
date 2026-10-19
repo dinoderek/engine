@@ -43,10 +43,7 @@ func FromBuildInfo(bi *debug.BuildInfo) Info {
 
 // Current returns the Info of the running binary.
 func Current() Info {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok {
-		bi = nil
-	}
+	bi, _ := debug.ReadBuildInfo() // nil when the binary has none
 	return FromBuildInfo(bi)
 }
 

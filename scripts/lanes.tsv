@@ -7,9 +7,9 @@
 #   gate      required: runs in ./dev test and must be green before every PR
 #             extra:    runs by name only, by agreement with the operator
 #   triggers  comma-separated patterns for ./dev test for <paths>: a pattern
-#             ending in / matches a directory, one with a / matches the whole
-#             path, any other matches the file name. A change to this file
-#             triggers every required lane.
+#             ending in / matches any path with that directory in it, one with
+#             a / matches the whole path, any other matches the file name. A
+#             change to this file triggers every required lane.
 #   command   run from the repository root, not through a shell; a leading
 #             `dev` is the ./dev binary itself (its `check` subcommands)
 format	required	*.go	dev check format

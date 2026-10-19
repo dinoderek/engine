@@ -29,8 +29,12 @@ func Coverage(e Env, args []string) int {
 	const lane = "coverage"
 	var minimum float64
 	if err := e.flags(lane, args, func(fs *flag.FlagSet) {
-		fs.Float64Var(&minimum, "min", 0, "minimum statement coverage, in percent")
+		fs.Float64Var(&minimum, "min", -1, "minimum statement coverage, in percent (required)")
 	}); err != nil {
+		return 2
+	}
+	if minimum < 0 {
+		fmt.Fprintln(e.Out, "usage: dev check coverage -min <percent>")
 		return 2
 	}
 	tmp, err := os.MkdirTemp("", "engine-coverage-")

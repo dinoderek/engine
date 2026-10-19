@@ -1,12 +1,13 @@
 package checks
 
 import (
-	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/dinoderek/engine/devtools/internal/baseline"
@@ -84,28 +85,26 @@ func (e Env) countNolint(found baseline.Counts) error {
 		return err
 	}
 	for _, f := range files {
-		file, err := os.Open(filepath.Join(e.Root, f))
+		parsed, err := parser.ParseFile(token.NewFileSet(), filepath.Join(e.Root, f), nil, parser.ParseComments)
 		if err != nil {
 			return err
 		}
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			if isNolint(scanner.Text()) {
-				found[f+"\t"+nolintLinter]++
+		for _, group := range parsed.Comments {
+			for _, c := range group.List {
+				if isNolint(c.Text) {
+					found[f+"\t"+nolintLinter]++
+				}
 			}
-		}
-		closeErr := file.Close()
-		if err := errors.Join(scanner.Err(), closeErr); err != nil {
-			return err
 		}
 	}
 	return nil
 }
 
-// isNolint reports whether a line's comment is a //nolint directive. The
-// comment starts at the line's first "//", which is close enough for Go
-// source that keeps such text out of string literals.
-func isNolint(line string) bool {
-	i := strings.Index(line, "//")
-	return i >= 0 && strings.HasPrefix(line[i+2:], "nolint")
+// nolintDirective is golangci-lint's own test for a suppression comment,
+// applied after it strips the comment's leading slashes and spaces.
+var nolintDirective = regexp.MustCompile(`^nolint( |:|$)`)
+
+// isNolint reports whether a comment's text is a nolint directive.
+func isNolint(comment string) bool {
+	return nolintDirective.MatchString(strings.TrimLeft(comment, "/ "))
 }

@@ -129,8 +129,18 @@ func matchesAny(patterns []string, pkg string) bool {
 	return false
 }
 
+func matchesAnyPackage(pattern string, graph map[string][]string) bool {
+	for pkg := range graph {
+		if matches(pattern, pkg) {
+			return true
+		}
+	}
+	return false
+}
+
 // checkImports returns each violating import as a baseline key, plus a
-// problem for every rule that matches no package (a stale or mistyped rule).
+// problem for every importer or target that matches no package (a stale or
+// mistyped rule).
 func checkImports(rules []importRule, graph map[string][]string) (baseline.Counts, []string) {
 	found := baseline.Counts{}
 	var problems []string
@@ -149,6 +159,11 @@ func checkImports(rules []importRule, graph map[string][]string) (baseline.Count
 		}
 		if !used {
 			problems = append(problems, fmt.Sprintf("%s:%d: importer %s matches no package", ImportRules, r.line, r.importer))
+		}
+		for _, target := range r.targets {
+			if !matchesAnyPackage(target, graph) {
+				problems = append(problems, fmt.Sprintf("%s:%d: target %s matches no package", ImportRules, r.line, target))
+			}
 		}
 	}
 	return found, problems
