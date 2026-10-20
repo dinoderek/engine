@@ -10,6 +10,7 @@ import (
 	"io"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -46,7 +47,9 @@ var (
 	// valueFlags are gh flags that take the next word as their value.
 	valueFlags = map[string]bool{"-R": true, "--repo": true, "--hostname": true}
 	// wrappers run the command that follows them.
-	wrappers  = map[string]bool{"sudo": true, "env": true, "command": true, "time": true, "xargs": true, "nohup": true, "exec": true}
+	wrappers = map[string]bool{"sudo": true, "env": true, "command": true, "time": true, "xargs": true, "nohup": true, "exec": true, "timeout": true, "nice": true, "stdbuf": true}
+	// keywords open or continue a compound command; a command follows them.
+	keywords  = map[string]bool{"if": true, "then": true, "else": true, "elif": true, "do": true, "while": true, "until": true, "{": true, "!": true}
 	shells    = map[string]bool{"sh": true, "bash": true, "zsh": true}
 	mutations = []string{"mergePullRequest", "enablePullRequestAutoMerge"}
 	shellName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -71,6 +74,9 @@ func problem(command string, depth int) string {
 		if reason := commandProblem(words, depth); reason != "" {
 			return reason
 		}
+		if graphQL(words) && containsMutation(command) {
+			return "merging through the GraphQL API is not allowed; use gh pr merge --match-head-commit <sha>"
+		}
 	}
 	for _, inner := range nested {
 		if reason := problem(inner, depth+1); reason != "" {
@@ -89,10 +95,8 @@ func commandProblem(words []string, depth int) string {
 	}
 	switch name := path.Base(words[0]); {
 	case shells[name]:
-		for i, w := range words[1:] {
-			if w == "-c" && i+2 < len(words) {
-				return problem(words[i+2], depth+1)
-			}
+		if script, ok := shellScript(words[1:]); ok {
+			return problem(script, depth+1)
 		}
 	case name == "gh":
 		return ghProblem(words[1:])
@@ -100,23 +104,62 @@ func commandProblem(words []string, depth int) string {
 	return ""
 }
 
-// stripPrefix drops leading variable assignments and wrapper commands, with
-// the wrappers' flags.
+// stripPrefix drops leading keywords and variable assignments. After a
+// wrapper command it skips to the first gh or shell, since a wrapper's own
+// flags may take values.
 func stripPrefix(words []string) []string {
-	wrapped := false
 	for len(words) > 0 {
 		w := words[0]
 		switch {
 		case wrappers[path.Base(w)]:
-			wrapped = true
-		case wrapped && strings.HasPrefix(w, "-"):
-		case isAssignment(w):
+			for i, v := range words {
+				if name := path.Base(v); name == "gh" || shells[name] {
+					return words[i:]
+				}
+			}
+			return nil
+		case keywords[w] || isAssignment(w):
+			words = words[1:]
 		default:
 			return words
 		}
-		words = words[1:]
 	}
 	return words
+}
+
+// shellScript finds the -c script in a shell's args: after -c or a short
+// flag cluster holding c, such as -lc or -euc.
+func shellScript(args []string) (string, bool) {
+	for i, a := range args {
+		if !strings.HasPrefix(a, "-") || strings.HasPrefix(a, "--") || !strings.Contains(a, "c") {
+			continue
+		}
+		for _, script := range args[i+1:] {
+			if !strings.HasPrefix(script, "-") {
+				return script, true
+			}
+		}
+	}
+	return "", false
+}
+
+// graphQL reports whether words run gh api graphql.
+func graphQL(words []string) bool {
+	words = stripPrefix(words)
+	if len(words) == 0 || path.Base(words[0]) != "gh" {
+		return false
+	}
+	rest, ok := ghSubcommand(words[1:], "api")
+	return ok && slices.Contains(rest, "graphql")
+}
+
+func containsMutation(text string) bool {
+	for _, m := range mutations {
+		if strings.Contains(text, m) {
+			return true
+		}
+	}
+	return false
 }
 
 func isAssignment(word string) bool {
@@ -132,13 +175,6 @@ func ghProblem(args []string) string {
 		return mergeFlagsProblem(rest)
 	}
 	if rest, ok := ghSubcommand(args, "api"); ok {
-		for _, w := range rest {
-			for _, m := range mutations {
-				if strings.Contains(w, m) {
-					return "merging through the GraphQL API is not allowed; use gh pr merge --match-head-commit <sha>"
-				}
-			}
-		}
 		if apiMergePut(rest) {
 			return "merging through gh api is not allowed; use gh pr merge --match-head-commit <sha>"
 		}

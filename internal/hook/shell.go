@@ -16,17 +16,25 @@ type lexer struct {
 	word     strings.Builder
 	inWord   bool     // the current word has started, even if empty (`""`)
 	heredocs []string // delimiters whose bodies start after this line
+	// A lexer reading the inside of `$(…)` stops at its closing paren.
+	inSubstitution bool
+	parens         int
+	closed         bool
 }
 
 // split returns command's simple commands as words, and the text of every
 // command substitution in it.
 func split(command string) ([][]string, []string) {
 	l := &lexer{src: []rune(command)}
-	for l.i < len(l.src) {
-		l.step()
-	}
+	l.run()
 	l.endCommand()
 	return l.commands, l.nested
+}
+
+func (l *lexer) run() {
+	for l.i < len(l.src) && !l.closed {
+		l.step()
+	}
 }
 
 func (l *lexer) peek(offset int) rune {
@@ -39,6 +47,8 @@ func (l *lexer) peek(offset int) rune {
 func (l *lexer) step() {
 	c := l.src[l.i]
 	switch {
+	case c == '\\' && l.peek(1) == '\n':
+		l.i += 2
 	case c == '\\' && l.i+1 < len(l.src):
 		l.add(string(l.src[l.i+1]))
 		l.i += 2
@@ -53,11 +63,23 @@ func (l *lexer) step() {
 		l.backtick()
 	case c == '<' && l.peek(1) == '<' && l.peek(2) != '<':
 		l.heredoc()
+	case c == '#' && !l.inWord:
+		for l.i < len(l.src) && l.src[l.i] != '\n' {
+			l.i++
+		}
 	case c == '\n':
 		l.endCommand()
 		l.i++
 		l.skipHeredocBodies()
-	case strings.ContainsRune(";&|()", c):
+	case c == ')' && l.inSubstitution && l.parens == 0:
+		l.endCommand()
+		l.closed = true
+		l.i++
+	case c == '(' || c == ')':
+		l.parens += map[rune]int{'(': 1, ')': -1}[c]
+		l.endCommand()
+		l.i++
+	case strings.ContainsRune(";&|", c):
 		l.endCommand()
 		l.i++
 	case c == ' ' || c == '\t':
@@ -106,6 +128,8 @@ func (l *lexer) doubleQuoted() {
 	l.inWord = true
 	for l.i < len(l.src) && l.src[l.i] != '"' {
 		switch c := l.src[l.i]; {
+		case c == '\\' && l.peek(1) == '\n':
+			l.i += 2
 		case c == '\\' && l.i+1 < len(l.src):
 			l.add(string(l.src[l.i+1]))
 			l.i += 2
@@ -121,25 +145,20 @@ func (l *lexer) doubleQuoted() {
 	l.i++
 }
 
-// substitution consumes a balanced `$(…)`.
+// substitution consumes a `$(…)`, finding its closing paren with a lexer of
+// its own, so quotes, comments and heredocs inside it are honoured.
 func (l *lexer) substitution() {
-	start, depth := l.i+2, 1
-	end := start
-	for ; end < len(l.src) && depth > 0; end++ {
-		switch l.src[end] {
-		case '(':
-			depth++
-		case ')':
-			depth--
-		}
+	start := l.i + 2
+	sub := &lexer{src: l.src, i: start, inSubstitution: true}
+	sub.run()
+	end := sub.i
+	if sub.closed {
+		end--
 	}
-	inner := string(l.src[start:max(start, end-1)])
-	if depth > 0 {
-		inner = string(l.src[start:end])
-	}
+	inner := string(l.src[start:end])
 	l.nested = append(l.nested, inner)
 	l.add("$(" + inner + ")")
-	l.i = end
+	l.i = sub.i
 }
 
 func (l *lexer) backtick() {
