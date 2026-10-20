@@ -9,7 +9,8 @@ import (
 // Worktree runs `worktree create <branch>` or `worktree release <branch>`.
 // Worktrees live outside the checkout, in <checkout>-worktrees/ beside the
 // main checkout. Release removes the worktree, then deletes the branch when
-// git sees it as merged or its PR is merged (and then its remote branch too).
+// git sees it as merged or its PR is merged; it deletes the remote branch
+// only when a PR merged the tip and the remote is still at it.
 func (t Tool) Worktree(args []string) int {
 	if len(args) != 2 || (args[0] != "create" && args[0] != "release") {
 		fmt.Fprintln(t.Stderr, "usage: ./dev worktree create|release <branch>")
@@ -109,45 +110,61 @@ func (t Tool) releaseWorktree(main, branch string) error {
 		return fmt.Errorf("worktree kept (commit or discard its changes first): %w", err)
 	}
 	fmt.Fprintf(t.Stdout, "removed worktree %s\n", dir)
-	if _, err := t.git(main, "branch", "-d", branch); err == nil {
-		fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
-		return nil
-	}
-	// A squash merge looks unmerged to git; the PR settles it, but only when
-	// the branch still points at the commit the PR merged, so no later commit
-	// is lost.
-	head, err := t.mergedHead(main, branch)
+	return t.deleteBranch(main, branch)
+}
+
+// deleteBranch deletes the local branch when git sees it as merged or its PR
+// merged it, and origin's branch only when its PR merged it: git branch -d
+// also passes a branch that is merely pushed to its upstream.
+func (t Tool) deleteBranch(main, branch string) error {
+	tip, err := t.git(main, "rev-parse", "refs/heads/"+branch)
 	if err != nil {
-		fmt.Fprintf(t.Stdout, "kept branch %s: %v\n", branch, err)
-		return nil
-	}
-	if _, err := t.git(main, "branch", "-D", branch); err != nil {
 		return err
 	}
-	fmt.Fprintf(t.Stdout, "deleted branch %s: its PR merged it\n", branch)
-	lease := fmt.Sprintf("--force-with-lease=%s:%s", branch, head)
-	if _, err := t.git(main, "push", "--quiet", lease, "origin", "--delete", branch); err == nil {
-		fmt.Fprintf(t.Stdout, "deleted remote branch %s\n", branch)
+	// The PR settles a squash merge, which looks unmerged to git, but only
+	// when the branch still points at the commit the PR merged, so no later
+	// commit is lost.
+	merged := t.prMergedAt(main, branch, tip)
+	if _, err := t.git(main, "branch", "-d", branch); err == nil {
+		fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
+	} else if merged != nil {
+		fmt.Fprintf(t.Stdout, "kept branch %s: %v\n", branch, merged)
+		return nil
+	} else {
+		if _, err := t.git(main, "branch", "-D", branch); err != nil {
+			return err
+		}
+		fmt.Fprintf(t.Stdout, "deleted branch %s: its PR merged it\n", branch)
+	}
+	if merged == nil {
+		t.deleteRemoteBranch(main, branch, tip)
 	}
 	return nil
 }
 
-// mergedHead returns the branch's tip when its PR is merged at exactly that
-// commit, and an error saying why not otherwise.
-func (t Tool) mergedHead(main, branch string) (string, error) {
+// deleteRemoteBranch deletes origin's branch only while it is still at tip,
+// the commit the local branch had, so nobody's later push is lost. A remote
+// branch that is gone or has moved is left alone.
+func (t Tool) deleteRemoteBranch(main, branch, tip string) {
+	ref := "refs/heads/" + branch
+	lease := fmt.Sprintf("--force-with-lease=%s:%s", ref, tip)
+	if _, err := t.git(main, "push", "--quiet", lease, "origin", "--delete", ref); err == nil {
+		fmt.Fprintf(t.Stdout, "deleted remote branch %s\n", branch)
+	}
+}
+
+// prMergedAt returns nil when the branch's PR is merged at exactly tip, and
+// an error saying why not otherwise.
+func (t Tool) prMergedAt(main, branch, tip string) error {
 	out, err := t.Run(main, "gh", "pr", "view", branch, "--json", "state,headRefOid", "--jq", `.state + " " + .headRefOid`)
 	fields := strings.Fields(out)
 	if err != nil || len(fields) != 2 || fields[0] != "MERGED" {
-		return "", fmt.Errorf("it is not merged and has no merged PR")
-	}
-	tip, err := t.git(main, "rev-parse", "refs/heads/"+branch)
-	if err != nil {
-		return "", err
+		return fmt.Errorf("it is not merged and has no merged PR")
 	}
 	if tip != fields[1] {
-		return "", fmt.Errorf("it has commits after its merged PR (%s); push them or delete it with git branch -D", short(fields[1]))
+		return fmt.Errorf("it has commits after its merged PR (%s); push them or delete it with git branch -D", short(fields[1]))
 	}
-	return tip, nil
+	return nil
 }
 
 func short(sha string) string {
