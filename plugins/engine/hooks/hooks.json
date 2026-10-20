@@ -1,0 +1,13 @@
+{
+  "description": "engine's merge guard: blocks gh pr merge without --match-head-commit, auto-merge, --admin, and merges through the API.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "engine hook pre-tool-use" }
+        ]
+      }
+    ]
+  }
+}

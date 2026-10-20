@@ -7,7 +7,7 @@
 | Layer | How | Put a claim here when it is about… |
 | --- | --- | --- |
 | Unit | a table-driven test of a pure function in the same package | parsing, matching, comparison or rendering, such as a registry parser, trigger patterns or baseline comparison |
-| Fake boundary | the code under test gets a fake `repo.Runner`, or `dev.Tool` fields (`Run`, `LookPath`, `Fetch`, `Attach`) that return canned output | how the code reacts to what git, go, Homebrew or the network say, especially their failures |
+| Fake boundary | the code under test gets a fake `repo.Runner` or `tracker.Runner`, or `dev.Tool` fields (`Run`, `LookPath`, `Fetch`, `Attach`) that return canned output | how the code reacts to what git, go, Homebrew or the network say, especially their failures |
 | Real process | real `git` or `go` in `t.TempDir()`: a bare origin and a clone, or a small module | that the commands a wrapper runs really do what it claims, such as creating and releasing a worktree, or gofmt flagging a file |
 | Command line | `cli.Run` or `dev.Tool.Main` with buffers for stdout and stderr | exit codes, usage text and verb dispatch |
 

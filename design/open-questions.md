@@ -10,10 +10,9 @@ when its answer lands in the owning doc.
    `docs/project-context.md`.
 2. **Skills move** (alongside step 1): see "Set up" below.
 3. **Executor skill, run by hand.** The skill, the marketplace and the
-   task-issue template exist. Left: the label set (`engine labels sync`) and
-   the merge-guard hook (question 10). Then pilot it on two or three
-   hand-written Gnocchi task issues, with at least one dependency; the
-   operator picks the feature later.
+   task-issue template, `engine labels sync` and the merge guard exist. Left:
+   pilot it on two or three hand-written Gnocchi task issues, with at least
+   one dependency; the operator picks the feature later.
 4. **Plans written together.** Write real feature plans with an agent until the
    template settles. Only then codify the planner skill.
 5. **`engine start` / `ps` / `attach`.** The launcher and session overview,
@@ -29,11 +28,6 @@ when its answer lands in the owning doc.
 
 ## Decide
 
-10. **Hook-enforced stops.** Agreed: one Claude `PreToolUse` merge guard now,
-   shipped in the plugin as `engine hook pre-tool-use`. It blocks `gh pr merge`
-   without `--match-head-commit`, or with `--auto` or `--admin`. Deploy hooks
-   wait for BOGA3, gate-loosening checks wait for pilot evidence, and Codex
-   hooks wait for breadth. Graduates in the PR that builds it.
 11. **Pilot features.** One feature in BOGA3 and one in Gnocchi. To be decided.
 
 ## Set up

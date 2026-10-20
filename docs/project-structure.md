@@ -14,7 +14,7 @@
 | `scripts/` | registries: lanes, import rules, doc budgets, and the three shrink-only baselines |
 | `docs/` | the persistent docs, every one indexed in `AGENTS.md` |
 | `design/` | ephemeral drafts: exempt from the doc rules, never cited |
-| `plugins/engine/` | the `engine` Claude Code plugin; its skills in `skills/<name>/SKILL.md` |
+| `plugins/engine/` | the `engine` Claude Code plugin: its skills in `skills/<name>/SKILL.md`, its hooks in `plugins/engine/hooks/hooks.json` |
 | `.claude-plugin/` | the marketplace that publishes `plugins/` |
 | `.claude/` | this repo's Claude Code settings: it enables the `engine` plugin |
 | `.github/` | the CI workflow, Dependabot config, PR template and task-issue template |

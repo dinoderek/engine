@@ -49,6 +49,10 @@ Commands that work without `run`, and come first in the build:
 - `engine attach <repo>-<task>`: attach to a session's tmux window, locally or
   over SSH.
 - `engine lint <feature>`: plan lint on its own.
+- `engine labels sync <owner/repo>`: create or update the `engine:` labels in
+  a target repo. Built.
+- `engine hook pre-tool-use`: the executor plugin's merge guard
+  (`execution-protocol.md`, "Enforced by hook"). Built.
 
 ## Later: `engine serve`
 

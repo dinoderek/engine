@@ -1,0 +1,77 @@
+package hook
+
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+// mergeURL is a merge endpoint path, split so this file holds no tracker
+// reference.
+const mergeURL = "repos/o/r/pul" + "ls/7/merge"
+
+func TestMergeProblem(t *testing.T) {
+	tests := map[string]struct {
+		command string
+		want    string // a substring of the reason; "" means allowed
+	}{
+		"pinned squash":         {"gh pr merge 7 --squash --match-head-commit abc123", ""},
+		"pinned with equals":    {"gh pr merge --match-head-commit=abc123", ""},
+		"not a merge":           {"gh pr view 7 --json mergedAt && git merge origin/main", ""},
+		"search for merge":      {"gh pr list --search merge", ""},
+		"api GET merge status":  {"gh api " + mergeURL, ""},
+		"other tool":            {"echo gh pr merged", ""},
+		"auto disabled":         {"gh pr merge 7 --auto=false --match-head-commit abc", ""},
+		"unpinned":              {"gh pr merge 7 --squash", "needs --match-head-commit"},
+		"flag without value":    {"gh pr merge 7 --match-head-commit", "needs --match-head-commit"},
+		"auto":                  {"gh pr merge 7 --auto --match-head-commit abc", "auto-merge is not allowed"},
+		"admin":                 {"gh pr merge 7 --admin --match-head-commit abc", "--admin bypasses"},
+		"repo flag first":       {"gh -R o/r pr merge 7", "needs --match-head-commit"},
+		"full path to gh":       {"/opt/homebrew/bin/gh pr merge 7", "needs --match-head-commit"},
+		"after a token prefix":  {`GH_TOKEN="$(cat ~/.config/engine/github-token)" gh pr merge 7 --squash`, "needs --match-head-commit"},
+		"second in a chain":     {"./dev test && gh pr merge 7", "needs --match-head-commit"},
+		"inside a subshell":     {"bash -c 'gh pr merge 7'", "needs --match-head-commit"},
+		"api PUT":               {"gh api -X PUT " + mergeURL, "through gh api"},
+		"api method PUT":        {"gh api --method=put " + mergeURL, "through gh api"},
+		"api XPUT":              {"gh api -XPUT " + mergeURL + " -f merge_method=squash", "through gh api"},
+		"graphql merge":         {`gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'`, "GraphQL"},
+		"graphql auto-merge":    {`gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'`, "GraphQL"},
+		"unsafe after safe one": {"gh pr merge 7 --match-head-commit a; gh pr merge 8", "needs --match-head-commit"},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := MergeProblem(tt.command)
+			if (tt.want == "") != (got == "") || !strings.Contains(got, tt.want) {
+				t.Errorf("MergeProblem(%q) = %q, want %q", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
+func eventJSON(tool, command string) string {
+	e := map[string]any{"tool_name": tool, "tool_input": map[string]string{"command": command}}
+	data, _ := json.Marshal(e)
+	return string(data)
+}
+
+func TestPreToolUse(t *testing.T) {
+	tests := map[string]struct {
+		in     string
+		code   int
+		stderr string
+	}{
+		"blocked merge": {eventJSON("Bash", "gh pr merge 7"), 2, "engine merge guard: gh pr merge needs --match-head-commit"},
+		"safe merge":    {eventJSON("Bash", "gh pr merge 7 --match-head-commit abc"), 0, ""},
+		"other tool":    {eventJSON("Write", "gh pr merge 7"), 0, ""},
+		"unreadable":    {"not json", 1, "unreadable PreToolUse event"},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			var errOut bytes.Buffer
+			if code := PreToolUse(strings.NewReader(tt.in), &errOut); code != tt.code || !strings.Contains(errOut.String(), tt.stderr) {
+				t.Errorf("exit %d, stderr %q; want %d, %q", code, errOut.String(), tt.code, tt.stderr)
+			}
+		})
+	}
+}

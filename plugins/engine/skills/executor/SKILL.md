@@ -11,7 +11,7 @@ owns the executor's rules. The repo's `AGENTS.md` owns its commands: the
 worktree command, the gate command, the PR template, the merge method and its
 own extra hard-stop classes. Where it defines a step, it wins. Where it is
 silent, use `git worktree add` from the default branch, the repo's standard
-test command and a concise PR body with evidence, and say so in the session.
+test command and a concise PR body, and say so.
 
 ## Modes
 
@@ -24,7 +24,7 @@ The kickoff names the mode. If it names none, run **gated**.
 | Merge | On green, without asking | Say the PR is ready and wait for the operator's approval |
 | After merge | Report and clean up | Also list the next ready tasks, each with a kickoff line |
 
-Never enable auto-merge, and never merge with `--auto` or `--admin`.
+Never enable auto-merge or merge with `--admin`; the merge guard blocks both.
 
 ## Card sources
 
@@ -53,12 +53,13 @@ credentials.
 1. **Claim** (issue cards). First check, changing nothing: the task has no
    `engine:running`, `engine:needs-human`, `engine:in-review` or
    `engine:failed`; every blocker is closed; the host file and the token
-   exist; the repo has the `engine:` labels. If a check fails, ask in the
-   session only. Then add `engine:running` and post the claim comment.
+   exist; the repo has the `engine:` labels (`engine labels sync`). If a check
+   fails, ask in the session only. Then add `engine:running` and post the claim comment.
    Re-read the comments: if an earlier claim from another run exists, delete
    your own claim comment, say so, and end the session.
-2. **Open.** Unless you are already in the task's worktree, create one with
-   the repo's command. The branch carries the session name
+2. **Open.** `engine version` must run: the plugin's merge guard calls it
+   (environment). Unless you are already in the task's worktree, create one
+   with the repo's command. The branch carries the session name
    (`<type>/<repo>-<task>-<slug>`, unless the repo says otherwise). Work only
    there.
 3. **Load and check freshness.** Read the card, the feature issue and the
