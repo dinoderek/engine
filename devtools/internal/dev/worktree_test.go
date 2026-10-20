@@ -80,16 +80,89 @@ func TestWorktreeKeepsUnmergedBranch(t *testing.T) {
 		t.Fatalf("create: %d\n%s", code, stderr)
 	}
 	dir := WorktreePath(tool.Root, "feat/y")
-	writeFile(t, filepath.Join(dir, "new.txt"), "x\n")
-	for _, args := range [][]string{{"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "wip"}} {
-		if out, err := repo.Exec(dir, "git", args...); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-	}
+	commit(t, dir, "new.txt")
+	gitIn(t, dir, "push", "-q", "origin", "feat/y")
 	if code := tool.Worktree([]string{"release", "feat/y"}); code != 0 {
 		t.Fatalf("release: %d\n%s", code, stderr)
 	}
 	want(t, 0, 0, stdout, "kept branch feat/y: it is not merged")
+	if remoteTip(t, tool, "feat/y") == "" {
+		t.Error("remote branch of a kept branch was deleted")
+	}
+}
+
+func TestWorktreeReleaseDeletesThePushedBranch(t *testing.T) {
+	tool, stdout, stderr := clone(t)
+	if code := tool.Worktree([]string{"create", "feat/p"}); code != 0 {
+		t.Fatalf("create: %d\n%s", code, stderr)
+	}
+	dir := WorktreePath(tool.Root, "feat/p")
+	commit(t, dir, "p.txt")
+	gitIn(t, dir, "push", "-q", "-u", "origin", "feat/p")
+	if code := tool.Worktree([]string{"release", "feat/p"}); code != 0 {
+		t.Fatalf("release: %d\n%s", code, stderr)
+	}
+	want(t, 0, 0, stdout, "deleted branch feat/p\n", "deleted remote branch feat/p")
+	if _, err := repo.Exec(tool.Root, "git", "rev-parse", "--verify", "refs/heads/feat/p"); err == nil {
+		t.Error("local branch survived")
+	}
+	if tip := remoteTip(t, tool, "feat/p"); tip != "" {
+		t.Errorf("remote branch survived at %s", tip)
+	}
+}
+
+func TestWorktreeReleaseKeepsAMovedRemoteBranch(t *testing.T) {
+	tool, stdout, stderr := clone(t)
+	if code := tool.Worktree([]string{"create", "feat/m"}); code != 0 {
+		t.Fatalf("create: %d\n%s", code, stderr)
+	}
+	dir := WorktreePath(tool.Root, "feat/m")
+	commit(t, dir, "m1.txt")
+	gitIn(t, dir, "push", "-q", "-u", "origin", "feat/m")
+	// Someone else's commit lands on origin; the local branch stays behind it,
+	// so git branch -d still sees it as merged into its upstream.
+	moved := commit(t, dir, "m2.txt")
+	gitIn(t, dir, "push", "-q", "origin", "feat/m")
+	gitIn(t, dir, "reset", "-q", "--hard", "HEAD~1")
+	if code := tool.Worktree([]string{"release", "feat/m"}); code != 0 {
+		t.Fatalf("release: %d\n%s", code, stderr)
+	}
+	want(t, 0, 0, stdout, "deleted branch feat/m\n")
+	if strings.Contains(stdout.String(), "deleted remote branch") {
+		t.Errorf("reported a remote delete:\n%s", stdout)
+	}
+	if tip := remoteTip(t, tool, "feat/m"); tip != moved {
+		t.Errorf("remote branch at %q, want it kept at %s", tip, moved)
+	}
+}
+
+// commit adds file to dir's branch in a new commit and returns its sha.
+func commit(t *testing.T, dir, file string) string {
+	t.Helper()
+	writeFile(t, filepath.Join(dir, file), file+"\n")
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-q", "-m", file)
+	return gitIn(t, dir, "rev-parse", "HEAD")
+}
+
+// remoteTip is the sha of branch on the tool's origin, or "" when it has none.
+func remoteTip(t *testing.T, tool Tool, branch string) string {
+	t.Helper()
+	fields := strings.Fields(gitIn(t, tool.Root, "ls-remote", "origin", "refs/heads/"+branch))
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+func gitIn(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	args = append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com"}, args...)
+	out, err := repo.Exec(dir, "git", args...)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	return strings.TrimSpace(out)
 }
 
 func TestWorktreeDeletesASquashMergedBranch(t *testing.T) {
