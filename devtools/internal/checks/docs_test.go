@@ -31,11 +31,12 @@ func goodDocs() map[string]string {
 		"docs/b.md":           "# B\n\n" + header + "\n[up](../AGENTS.md) and [web](https://example.com/x.md).\n",
 		drafts + "draft.md":   "no header, cites #" + "12 and " + drafts + "x.md\n",
 		".github/template.md": "Closes #<task>\n",
+		"skills/x/SKILL.md":   "---\nname: x\n---\nNo header; cites `their/own.md`.\n",
 		".github/ci.yml":      "on: push\n",
 		"scripts/lanes.tsv":   "unit\trequired\t*.go\tgo test ./...\n",
 		"scripts/doc-budgets.tsv": "budget\t*\t100\nbudget\tAGENTS.md\t200\n" +
 			"set\talways-load\t400\tAGENTS.md,docs/a.md\n" +
-			"ephemeral\tdesign/\nexempt\t.github/\n",
+			"ephemeral\tdesign/\nexempt\t.github/\nbudget-only\tskills/\nbudget\tskills/x/SKILL.md\t20\n",
 		"main.go": "package main // see the docs\n",
 	}
 }
@@ -61,7 +62,7 @@ func TestDocsPass(t *testing.T) {
 	if code := Docs(e); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out())
 	}
-	for _, want := range []string{"4 docs follow the doc rules", "set always-load", "/   200 words  AGENTS.md"} {
+	for _, want := range []string{"4 docs follow the doc rules", "set always-load", "/   200 words  AGENTS.md", "/    20 words  skills/x/SKILL.md"} {
 		if !strings.Contains(out(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out())
 		}
@@ -75,6 +76,12 @@ func TestDocsFailures(t *testing.T) {
 	}{
 		"over budget": {func(f map[string]string) { f["docs/b.md"] += strings.Repeat("word ", 100) },
 			"docs/b.md: 1"},
+		"budget-only over budget": {func(f map[string]string) { f["skills/x/SKILL.md"] += strings.Repeat("word ", 20) },
+			"skills/x/SKILL.md: 28 words, over its 20-word budget"},
+		"budget-only over the default": {func(f map[string]string) { f["skills/y/SKILL.md"] = strings.Repeat("word ", 101) },
+			"skills/y/SKILL.md: 101 words, over its 100-word budget"},
+		"budget-only tracker reference": {func(f map[string]string) { f["skills/x/SKILL.md"] += "Closes #" + "4\n" },
+			"skills/x/SKILL.md:5: tracker reference"},
 		"stale budget row": {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "budget\tdocs/gone.md\t5\n" },
 			"budget row for docs/gone.md"},
 		"set over budget": {func(f map[string]string) {

@@ -69,7 +69,9 @@ moving the code.
 `docs-check` treats every tracked Markdown file as a persistent doc, except
 under the `exempt` and `ephemeral` prefixes in `scripts/doc-budgets.tsv`.
 `.github/` is exempt: its templates need no header, budget or index row.
-`design/` is ephemeral: drafts there follow no rule at all. It enforces:
+`design/` is ephemeral: drafts there follow no rule at all. `plugins/` is
+budget-only: a skill is not a doc and cites paths in the repos that use it, so
+it keeps only rule 1, and rule 6 as every file does. It enforces:
 
 1. **Word budgets** (whitespace-separated words). Each doc has its own budget
    or the default. A `set` row caps docs loaded together. The `always-load`

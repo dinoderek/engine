@@ -14,7 +14,7 @@ operator is out of the loop unless a task asks for them.
 | --- | --- |
 | Execution protocol | The phases, roles and state machine from requirements to merged feature. |
 | Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through planning and execution, spawning sessions on local or SSH hosts. No LLM. |
-| Skills | The planner, executor and reviewer protocols, plus `task-protocol` for human-gated work. All ship from this repo. |
+| Skills | The planner, executor and reviewer protocols. The executor runs hands-off, or gated for human-approved work. All ship from this repo as a Claude Code plugin. |
 | Tracker adapter | Plan and status storage behind one interface. GitHub Issues first. |
 | Hosts | Config for each machine: its harnesses, session cap and capabilities, plus how to reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |
@@ -22,8 +22,9 @@ operator is out of the loop unless a task asks for them.
 
 ## State
 
-The parts are designed, in `docs/`, and not built yet. The code is
-`engine version` and the repo's own tooling: `./dev` and its quality gates.
+The parts are designed, in `docs/`. Built so far: `engine version`, the
+executor skill (a Claude Code plugin this repo publishes), and the repo's own
+tooling: `./dev` and its quality gates.
 engine is the first worked example of the project context guideline's core.
 
 ## Scope

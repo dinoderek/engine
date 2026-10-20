@@ -45,7 +45,17 @@
 - **Claude Code:** signed in, with Remote Control working from the Claude app.
 - **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
   per session (`hosts-and-sessions.md`, "Permission mode").
-- **Skills:** engine's skills installed for both harnesses (`skills/`).
+- **Host name:** its logical name (`mac`, `devbox`) on one line in
+  `~/.config/engine/host`. Claims post this name, never the hostname
+  (`hosts-and-sessions.md`, "Hosts").
+- **Skills (Claude Code):** the `engine` plugin from this repo's marketplace,
+  `.claude-plugin/marketplace.json`. A target repo enables it in its
+  `.claude/settings.json`, as this repo does; or install it for yourself with
+  `/plugin install engine --marketplace dinoderek/engine`. Codex has no
+  install yet.
+- **Sessions started by hand** use the token file for their `gh` calls, so
+  their @mentions reach you. Their `git push` uses the checkout's own
+  credentials.
 - **SSH (the fallback route to any session):**
   - every host on the same Tailscale tailnet as the phone;
   - key-based SSH between the coordinator host and every other host;

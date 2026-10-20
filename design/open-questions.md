@@ -9,10 +9,11 @@ when its answer lands in the owning doc.
    CI, and Dependabot. It is the first worked example of
    `docs/project-context.md`.
 2. **Skills move** (alongside step 1): see "Set up" below.
-3. **Executor skill, run by hand.** Two modes, hands-off and gated; gated
-   replaces `task-protocol`. Also the label set and the task-issue template.
-   Pilot it on two or three hand-written Gnocchi task issues, with at least one
-   dependency.
+3. **Executor skill, run by hand.** The skill, the marketplace and the
+   task-issue template exist. Left: the label set (`engine labels sync`) and
+   the merge-guard hook (question 10). Then pilot it on two or three
+   hand-written Gnocchi task issues, with at least one dependency; the
+   operator picks the feature later.
 4. **Plans written together.** Write real feature plans with an agent until the
    template settles. Only then codify the planner skill.
 5. **`engine start` / `ps` / `attach`.** The launcher and session overview,
@@ -28,26 +29,28 @@ when its answer lands in the owning doc.
 
 ## Decide
 
-10. **Hook-enforced stops.** Auto mode is the default. Which hard stops also
-   need a hook that blocks the action, rather than relying on the prompt? For
-   example: deploy commands, a merge without `--match-head-commit`, or edits
-   to gate thresholds.
+10. **Hook-enforced stops.** Agreed: one Claude `PreToolUse` merge guard now,
+   shipped in the plugin as `engine hook pre-tool-use`. It blocks `gh pr merge`
+   without `--match-head-commit`, or with `--auto` or `--admin`. Deploy hooks
+   wait for BOGA3, gate-loosening checks wait for pilot evidence, and Codex
+   hooks wait for breadth. Graduates in the PR that builds it.
 11. **Pilot features.** One feature in BOGA3 and one in Gnocchi. To be decided.
 
 ## Set up
 
 12. **Move the skills here from `agent-skills`.** The remote is
    `dinoderek/engine`. Steps, in order:
-   1. Bring `plugins/task-protocol` across with its history.
-   2. Make engine a plugin marketplace (`.claude-plugin/marketplace.json`).
-   3. Port `install-codex.sh`.
-   4. Push engine.
-   5. Switch the marketplace in BOGA3's and Gnocchi's `.claude/settings.json`,
+   Engine is already a marketplace with the `engine` plugin. Left, after the
+   pilot:
+   1. Bring `plugins/task-protocol` across with its history, or retire it if
+      the executor and a planner skill cover it by then.
+   2. Port `install-codex.sh`.
+   3. Switch the marketplace in BOGA3's and Gnocchi's `.claude/settings.json`,
       and in BOGA3's docs, which point to the user-level skill.
-   6. Re-run the Codex installer from engine, after uninstalling the old links.
-   7. Archive `agent-skills`.
+   4. Re-run the Codex installer from engine, after uninstalling the old links.
+   5. Archive `agent-skills`.
 
-   Until step 5, `agent-skills` stays the live copy.
+   Until step 3, `agent-skills` stays the live copy of `task-protocol`.
 
 ## Verify
 
