@@ -68,26 +68,33 @@ moving the code.
 
 `docs-check` treats every tracked Markdown file as a persistent doc, except
 under the `exempt` and `ephemeral` prefixes in `scripts/doc-budgets.tsv`.
-`design/` is ephemeral: drafts there follow no doc rule. It enforces:
+`.github/` is exempt: its templates need no header, budget or index row.
+`design/` is ephemeral: drafts there follow no rule at all. It enforces:
 
 1. **Word budgets** (whitespace-separated words). Each doc has its own budget
    or the default. A `set` row caps docs loaded together. The `always-load`
    set must hold exactly `AGENTS.md` and the docs listed under its "Always
    load" heading. The lane output lists every count against its budget.
-2. **Links resolve and cited paths exist.** Every relative link, and every
-   code-span word that names a repository path, must exist, relative to the
-   doc or to the root. Gitignored outputs count as existing. Cite a file,
-   never a line: line numbers rot.
+2. **Links resolve and cited paths exist.** Every relative link (inline,
+   reference definition or `href`), and every code-span word that names a
+   repository path, must exist relative to the doc or the root, outside fenced
+   blocks. Gitignored outputs count as existing. Cite a file, never a line:
+   line numbers rot.
 3. **The header.** The first lines carry exactly one
    `> **Owns:** … **Not here:** …` line, with no load trigger.
-4. **The index is complete.** Every doc except the `unindexed` ones (the
-   entrypoints) appears under "Always load" or "Load on demand" in
+4. **The index is complete.** Every doc except the entrypoints (`AGENTS.md`
+   and `README.md`) appears under "Always load" or "Load on demand" in
    `AGENTS.md`. `CLAUDE.md` is a symlink to `AGENTS.md`.
 5. **Lane citations are real.** Every `./dev test <lane>` names a lane.
-6. **No tracker or ephemeral references**, in docs or code: no issue or PR
-   number (alone or after `owner/repo`), no issue or PR URL, no plan file
-   path, and no path to a file in an ephemeral directory. The bare directory
-   name is fine.
+6. **No tracker or ephemeral references** in any file outside an ephemeral
+   directory, docs and code alike, `.github/` included: no issue or PR number
+   (alone, after `owner/repo`, or after a word like "issue", "PR" or "GH"), no
+   issue or PR URL, no plan file path, and no path, however relative, to a
+   file in an ephemeral directory. The bare directory name is fine.
+   Placeholders such as `#<task>` pass.
+
+The check does not judge link wording, one place per fact, or whether a doc
+is still true; the reviewer does.
 
 ## Setup
 

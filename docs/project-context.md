@@ -25,9 +25,12 @@ template, and BOGA3 supplies the optional modules.
   doc table. Every persistent doc appears in it or in always-load, so there
   are no orphans. The check enforces that.
 - **Persistent docs** are every tracked Markdown file outside the ephemeral
-  and exempt directories the docs registry names (`design/` for drafts,
-  `.github/` for templates). The entrypoints, `AGENTS.md` and the README, are
-  persistent but need no index row.
+  and exempt directories the docs registry names: an ephemeral one for
+  drafts (`design/`), and exempt ones whose Markdown is not a doc, such as
+  `.github/` and its PR template. The entrypoints, `AGENTS.md` and the
+  README, are persistent but need no index row. Every file outside the
+  ephemeral directories, exempt ones and code included, is still scanned for
+  tracker references.
 - **Doc header:** one line, `> **Owns:** … **Not here:** …`, under the title
   of every persistent doc, the entrypoints included. It is for the agent that
   has already arrived, and its job is to stop duplication. It carries no
@@ -107,9 +110,10 @@ and never restate the commands behind them.
 
 ### 9. Docs discipline
 
-- **Budgets:** every indexed doc has a word budget in `doc-budgets.tsv`. A doc
-  over budget is split or trimmed, never given a bigger budget without the
-  operator.
+- **Budgets:** every persistent doc, the entrypoints included, has a word
+  budget in `doc-budgets.tsv` (its own or the default). A doc over budget is
+  split or trimmed, never given a bigger budget without the operator. Adding
+  or widening an exempt, ephemeral or set row loosens the check the same way.
 - **One place per fact.** Where a registry or the code is the source, docs cite
   it.
 - **The docs check** verifies:
@@ -127,10 +131,12 @@ and never restate the commands behind them.
 
 - Docs describe how things are. No "previously", no "we changed X to Y", no
   dated entries, no changelog sections. History is in git and the PRs.
-- Plans, designs and task cards live in the tracker. Docs and code never cite
-  an issue, a PR or a task. The docs check greps for tracker references:
-  issue and PR numbers (alone or after `owner/repo`), tracker URLs and plan
-  file paths. Commit messages and PR bodies may cite them.
+- Plans, designs and task cards live in the tracker, or in a repo's
+  ephemeral directory while in flight. Docs and code never cite an issue, a PR
+  or a task. The docs check greps for tracker references:
+  issue and PR numbers (alone, after `owner/repo`, or after a word like
+  "issue" or "PR"), issue and PR URLs, and plan file paths. Commit messages
+  and PR bodies may cite them.
 - Drafts that must sit in the repo for a while live in one ephemeral
   directory, exempt from every doc rule and never cited from persistent docs
   or code.

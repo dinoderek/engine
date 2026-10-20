@@ -2,6 +2,7 @@ package dev
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,8 @@ import (
 )
 
 // clone makes a bare origin with one commit on main and a main checkout
-// cloned from it, and returns a Tool rooted in the checkout.
+// cloned from it, and returns a Tool rooted in the checkout. git is real; gh
+// is faked and reports no PR.
 func clone(t *testing.T) (Tool, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -37,7 +39,13 @@ func clone(t *testing.T) (Tool, *bytes.Buffer, *bytes.Buffer) {
 	git(base, "clone", "-q", origin, main)
 
 	var stdout, stderr bytes.Buffer
-	return Tool{Root: main, Run: repo.Exec, Stdout: &stdout, Stderr: &stderr}, &stdout, &stderr
+	run := func(dir, name string, args ...string) (string, error) {
+		if name == "gh" {
+			return "no pull requests found", errors.New("exit 1")
+		}
+		return repo.Exec(dir, name, args...)
+	}
+	return Tool{Root: main, Run: run, Stdout: &stdout, Stderr: &stderr}, &stdout, &stderr
 }
 
 func TestWorktreeCreateAndRelease(t *testing.T) {
@@ -80,7 +88,32 @@ func TestWorktreeKeepsUnmergedBranch(t *testing.T) {
 	if code := tool.Worktree([]string{"release", "feat/y"}); code != 0 {
 		t.Fatalf("release: %d\n%s", code, stderr)
 	}
-	want(t, 0, 0, stdout, "kept branch feat/y")
+	want(t, 0, 0, stdout, "kept branch feat/y: it is not merged")
+}
+
+func TestWorktreeDeletesASquashMergedBranch(t *testing.T) {
+	tool, stdout, stderr := clone(t)
+	if code := tool.Worktree([]string{"create", "feat/s"}); code != 0 {
+		t.Fatalf("create: %d\n%s", code, stderr)
+	}
+	dir := WorktreePath(tool.Root, "feat/s")
+	writeFile(t, filepath.Join(dir, "s.txt"), "x\n")
+	for _, args := range [][]string{{"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "s"}, {"push", "-q", "origin", "feat/s"}} {
+		if out, err := repo.Exec(dir, "git", args...); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	}
+	gitOnly := tool.Run
+	tool.Run = func(dir, name string, args ...string) (string, error) {
+		if name == "gh" {
+			return "MERGED\n", nil
+		}
+		return gitOnly(dir, name, args...)
+	}
+	if code := tool.Worktree([]string{"release", "feat/s"}); code != 0 {
+		t.Fatalf("release: %d\n%s", code, stderr)
+	}
+	want(t, 0, 0, stdout, "deleted branch feat/s: its PR is merged", "deleted remote branch feat/s")
 }
 
 func TestWorktreeRefusals(t *testing.T) {

@@ -11,18 +11,31 @@ import (
 )
 
 var (
-	mdLink     = regexp.MustCompile(`\]\(([^)\s]+)\)`)
+	// Link targets: inline links (optionally <bracketed>, optionally titled),
+	// reference definitions and HTML hrefs.
+	linkForms = []*regexp.Regexp{
+		regexp.MustCompile(`\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)`),
+		regexp.MustCompile(`^\s*\[[^\]]+\]:\s*<?([^\s>]+)>?`),
+		regexp.MustCompile(`href="([^"]+)"`),
+	}
 	codeSpan   = regexp.MustCompile("`([^`\n]+)`")
-	lineCite   = regexp.MustCompile(`^[^\s]+\.\w+(?::\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$`)
+	lineSuffix = regexp.MustCompile(`(?::\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$`)
 	laneCite   = regexp.MustCompile(`\./dev test ([A-Za-z][\w-]*)`)
 	headerLine = regexp.MustCompile(`^> \*\*Owns:\*\* .+ \*\*Not here:\*\* .+`)
-	// Tracker references: issue or PR numbers, alone or after owner/repo, and
-	// tracker URLs; plus plan file paths.
+	// Tracker references: issue or PR numbers, alone, after owner/repo or
+	// after a word such as "issue" or "PR"; issue and PR URL paths; plan file
+	// paths. A pattern's first group, if any, is the reference itself.
 	trackerRefs = []*regexp.Regexp{
-		regexp.MustCompile(`(?:^|[\s(\[,])#\d+\b`),
+		regexp.MustCompile(`(?:^|[^\w&/])(#\d+)(?:$|[^\w-])`),
 		regexp.MustCompile(`\b[\w.-]+/[\w.-]+#\d+\b`),
-		regexp.MustCompile(`github\.com/[\w.-]+/[\w.-]+/(?:issues|pull|discussions)/\d+`),
+		regexp.MustCompile(`(?i)\b(?:issues?|prs?|pull requests?|gh)[\s:#-]+\d+\b`),
+		regexp.MustCompile(`(?:^|/)(?:issues|pulls?|discussions)/\d+`),
 		regexp.MustCompile(`(?:^|[^\w-])plans/[\w.-]+(?:/[\w.-]+)*\.\w+`),
+	}
+	// fileExt is the extensions that make a code-span word a file path.
+	fileExt = map[string]bool{
+		".md": true, ".go": true, ".mod": true, ".sum": true, ".tsv": true, ".yml": true,
+		".yaml": true, ".json": true, ".toml": true, ".sh": true, ".txt": true,
 	}
 )
 
@@ -58,15 +71,17 @@ type citation struct {
 // words of its code spans.
 func citations(line string) []citation {
 	var out []citation
-	for _, m := range mdLink.FindAllStringSubmatch(line, -1) {
-		target := m[1]
-		if strings.Contains(target, "://") || strings.HasPrefix(target, "mailto:") || strings.HasPrefix(target, "#") {
-			continue
+	for _, form := range linkForms {
+		for _, m := range form.FindAllStringSubmatch(line, -1) {
+			target := m[1]
+			if strings.Contains(target, "://") || strings.HasPrefix(target, "mailto:") || strings.HasPrefix(target, "#") {
+				continue
+			}
+			if i := strings.Index(target, "#"); i >= 0 && !lineSuffix.MatchString(target) {
+				target = target[:i]
+			}
+			out = append(out, citation{target: target, link: true})
 		}
-		if i := strings.Index(target, "#"); i >= 0 && !lineCite.MatchString(target) {
-			target = target[:i]
-		}
-		out = append(out, citation{target: target, link: true})
 	}
 	for _, m := range codeSpan.FindAllStringSubmatch(line, -1) {
 		for _, word := range strings.Fields(m[1]) {
@@ -81,7 +96,8 @@ func citations(line string) []citation {
 
 // pathLike reports whether a code-span word names a repository path: a bare
 // Markdown file, or a slash path whose first segment exists or that ends in
-// a file extension. Words like origin/main, and paths inside .git, are not.
+// a file extension. Words like origin/main and gopkg.in/yaml.v3, and paths
+// inside .git, are not.
 func (d docsEnv) pathLike(doc, word string) bool {
 	if !strings.Contains(word, "/") {
 		return strings.HasSuffix(word, ".md")
@@ -90,7 +106,14 @@ func (d docsEnv) pathLike(doc, word string) bool {
 	if first == ".git" {
 		return false
 	}
-	return d.exists(path.Join(path.Dir(doc), first)) || d.exists(first) || path.Ext(strings.TrimSuffix(word, "/")) != ""
+	return d.exists(path.Join(path.Dir(doc), first)) || d.exists(first) || fileExt[path.Ext(strings.TrimSuffix(word, "/"))]
+}
+
+// lineCitation reports whether target points at a line of a file, such as
+// main.go:12 or a.md#L3. Addresses such as 127.0.0.1:8080 are not.
+func (d docsEnv) lineCitation(doc, target string) bool {
+	file := lineSuffix.ReplaceAllString(target, "")
+	return file != target && (fileExt[path.Ext(file)] || d.pathLike(doc, file))
 }
 
 func (d docsEnv) exists(rel string) bool {
@@ -126,7 +149,7 @@ func (d docsEnv) citationProblems(doc, text string) []string {
 		for _, c := range citations(line.text) {
 			at := fmt.Sprintf("%s:%d", doc, line.number)
 			switch {
-			case lineCite.MatchString(c.target):
+			case d.lineCitation(doc, c.target):
 				problems = append(problems, at+": cite a file, never a line: "+c.target)
 			case !c.link && !d.pathLike(doc, c.target):
 				continue
@@ -162,7 +185,8 @@ func headerProblems(doc, text string) []string {
 	return []string{doc + ": no `> **Owns:** … **Not here:** …` header under the title"}
 }
 
-// laneProblems checks that every `./dev test <lane>` names a real lane.
+// laneProblems checks that every `./dev test <lane>` names a real lane,
+// fenced examples included: they are commands an agent copies.
 func (d docsEnv) laneProblems(doc, text string) []string {
 	var problems []string
 	for i, line := range strings.Split(text, "\n") {
@@ -175,16 +199,17 @@ func (d docsEnv) laneProblems(doc, text string) []string {
 	return problems
 }
 
-// referenceProblems scans every persistent text file, docs and code, for
-// tracker references and for paths into an ephemeral directory.
+// referenceProblems scans every file outside the ephemeral directories, docs
+// and code alike (exempt ones included), for tracker references and for paths
+// into an ephemeral directory, however they are spelled relative.
 func (d docsEnv) referenceProblems() ([]string, error) {
 	ephemeral := make([]*regexp.Regexp, 0, len(d.rules.ephemeral))
 	for _, prefix := range d.rules.ephemeral {
-		ephemeral = append(ephemeral, regexp.MustCompile(`(?:^|[^\w./-])`+regexp.QuoteMeta(prefix)+`[\w.-]`))
+		ephemeral = append(ephemeral, regexp.MustCompile(`(?:^|[^\w./-])(?:\.\.?/)*`+regexp.QuoteMeta(prefix)+`[\w.-]`))
 	}
 	var problems []string
 	for _, f := range d.files {
-		if d.rules.isExempt(f) || f == "go.sum" {
+		if d.rules.isEphemeral(f) || f == "go.sum" {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(d.Root, f))
@@ -197,8 +222,9 @@ func (d docsEnv) referenceProblems() ([]string, error) {
 		for i, line := range strings.Split(string(data), "\n") {
 			at := fmt.Sprintf("%s:%d", f, i+1)
 			for _, re := range trackerRefs {
-				if m := re.FindString(line); m != "" {
-					problems = append(problems, fmt.Sprintf("%s: tracker reference %q; docs and code never cite an issue, PR or plan", at, strings.TrimSpace(m)))
+				if m := re.FindStringSubmatch(line); m != nil {
+					ref := m[len(m)-1]
+					problems = append(problems, fmt.Sprintf("%s: tracker reference %q; docs and code never cite an issue, PR or plan", at, strings.TrimSpace(ref)))
 				}
 			}
 			for j, re := range ephemeral {

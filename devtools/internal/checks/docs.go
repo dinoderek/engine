@@ -36,12 +36,14 @@ type docRules struct {
 	budgets       map[string]int
 	sets          map[string]docSet
 	exempt        []string // prefixes no doc rule applies to
-	ephemeral     []string // exempt prefixes that persistent files never cite into
-	unindexed     map[string]bool
+	ephemeral     []string // exempt prefixes that no file outside them may cite into
 }
 
+// entrypoints are persistent docs that need no index row.
+var entrypoints = map[string]bool{entryDoc: true, "README.md": true}
+
 func parseDocRules(text string) (docRules, error) {
-	r := docRules{budgets: map[string]int{}, sets: map[string]docSet{}, unindexed: map[string]bool{}}
+	r := docRules{budgets: map[string]int{}, sets: map[string]docSet{}}
 	for _, row := range repo.Rows(text) {
 		f := row.Fields
 		bad := fmt.Errorf("%s:%d: malformed row", DocBudgets, row.Line)
@@ -58,7 +60,7 @@ func parseDocRules(text string) (docRules, error) {
 			}
 		case f[0] == "set" && len(f) == 4:
 			n, err := strconv.Atoi(f[2])
-			if err != nil {
+			if _, dup := r.sets[f[1]]; err != nil || dup {
 				return r, bad
 			}
 			r.sets[f[1]] = docSet{limit: n, members: strings.Split(f[3], ",")}
@@ -67,8 +69,6 @@ func parseDocRules(text string) (docRules, error) {
 		case f[0] == "ephemeral" && len(f) == 2:
 			r.exempt = append(r.exempt, f[1])
 			r.ephemeral = append(r.ephemeral, f[1])
-		case f[0] == "unindexed" && len(f) == 2:
-			r.unindexed[f[1]] = true
 		default:
 			return r, bad
 		}
@@ -81,6 +81,15 @@ func parseDocRules(text string) (docRules, error) {
 
 func (r docRules) isExempt(file string) bool {
 	for _, p := range r.exempt {
+		if strings.HasPrefix(file, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r docRules) isEphemeral(file string) bool {
+	for _, p := range r.ephemeral {
 		if strings.HasPrefix(file, p) {
 			return true
 		}
@@ -190,7 +199,7 @@ func (d docsEnv) budgetProblems() []string {
 			problems = append(problems, fmt.Sprintf("%s: %d words, over its %d-word budget; split or trim it", doc, words, limit))
 		}
 	}
-	for doc := range d.rules.budgets {
+	for _, doc := range sortedDocs(budgetDocs(d.rules.budgets)) {
 		if _, ok := d.docs[doc]; !ok {
 			problems = append(problems, fmt.Sprintf("%s: budget row for %s, which is not a persistent doc", DocBudgets, doc))
 		}
@@ -214,6 +223,14 @@ func (d docsEnv) budgetProblems() []string {
 		}
 	}
 	return problems
+}
+
+func budgetDocs(budgets map[string]int) map[string]string {
+	docs := make(map[string]string, len(budgets))
+	for doc := range budgets {
+		docs[doc] = ""
+	}
+	return docs
 }
 
 func sortedSetNames(sets map[string]docSet) []string {
@@ -269,7 +286,7 @@ func (d docsEnv) indexProblems() []string {
 	onDemand := d.sectionDocs(onDemandTitle)
 	var problems []string
 	for _, doc := range sortedDocs(d.docs) {
-		if !d.rules.unindexed[doc] && !always[doc] && !onDemand[doc] {
+		if !entrypoints[doc] && !always[doc] && !onDemand[doc] {
 			problems = append(problems, fmt.Sprintf("%s is in neither %q nor %q in %s: add a load trigger", doc, alwaysLoadTitle, onDemandTitle, entryDoc))
 		}
 	}
@@ -295,7 +312,7 @@ func (d docsEnv) indexProblems() []string {
 // entryLinkProblems checks that CLAUDE.md is a symlink to the entry doc.
 func (d docsEnv) entryLinkProblems() []string {
 	target, err := os.Readlink(filepath.Join(d.Root, entryLink))
-	if err != nil || target != entryDoc {
+	if err != nil || path.Clean(target) != entryDoc {
 		return []string{entryLink + " must be a symlink to " + entryDoc}
 	}
 	return nil

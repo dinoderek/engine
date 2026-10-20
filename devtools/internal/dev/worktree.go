@@ -8,7 +8,8 @@ import (
 
 // Worktree runs `worktree create <branch>` or `worktree release <branch>`.
 // Worktrees live outside the checkout, in <checkout>-worktrees/ beside the
-// main checkout.
+// main checkout. Release removes the worktree, then deletes the branch when
+// git sees it as merged or its PR is merged (and then its remote branch too).
 func (t Tool) Worktree(args []string) int {
 	if len(args) != 2 || (args[0] != "create" && args[0] != "release") {
 		fmt.Fprintln(t.Stderr, "usage: ./dev worktree create|release <branch>")
@@ -108,11 +109,22 @@ func (t Tool) releaseWorktree(main, branch string) error {
 		return fmt.Errorf("worktree kept (commit or discard its changes first): %w", err)
 	}
 	fmt.Fprintf(t.Stdout, "removed worktree %s\n", dir)
-	if _, err := t.git(main, "branch", "-d", branch); err != nil {
-		fmt.Fprintf(t.Stdout, "kept branch %s: git sees it as unmerged (a squash merge looks unmerged). "+
-			"Once its PR is merged, delete it with git branch -D %s\n", branch, branch)
+	if _, err := t.git(main, "branch", "-d", branch); err == nil {
+		fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
 		return nil
 	}
-	fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
+	// A squash merge looks unmerged to git; the PR's state settles it.
+	state, err := t.Run(main, "gh", "pr", "view", branch, "--json", "state", "--jq", ".state")
+	if err != nil || strings.TrimSpace(state) != "MERGED" {
+		fmt.Fprintf(t.Stdout, "kept branch %s: it is not merged and has no merged PR\n", branch)
+		return nil
+	}
+	if _, err := t.git(main, "branch", "-D", branch); err != nil {
+		return err
+	}
+	fmt.Fprintf(t.Stdout, "deleted branch %s: its PR is merged\n", branch)
+	if _, err := t.git(main, "push", "--quiet", "origin", "--delete", branch); err == nil {
+		fmt.Fprintf(t.Stdout, "deleted remote branch %s\n", branch)
+	}
 	return nil
 }
