@@ -12,8 +12,8 @@ template, and BOGA3 supplies the optional modules.
 
 - `AGENTS.md` is the single entrypoint, and `CLAUDE.md` is a symlink to it.
 - **Rules live in the file; links are for depth, never for rules.**
-- At most 1000 words. Sections: Non-negotiables, Always load, Load on demand,
-  Docs, Workflow, extra hard stops.
+- At most 1000 words. Sections: Non-negotiables (including the repo's extra
+  hard-stop classes), Always load, Load on demand, Docs, Workflow.
 
 ### 2. Loading
 
@@ -21,9 +21,15 @@ template, and BOGA3 supplies the optional modules.
   structure, testing strategy, quality gates. The set, with `AGENTS.md`, is
   capped at about 4000 words, and the check enforces the cap.
 - **Load on demand:** a trigger table in `AGENTS.md` ("if your task… load…").
-  It is the **only** routing. Every persistent doc appears in it or in
-  always-load, so there are no orphans. The check enforces that.
-- **Doc header:** one line, `Owns: … Not here: …`. It is for the agent that
+  It is the **only** routing: the README points to `AGENTS.md` and keeps no
+  doc table. Every persistent doc appears in it or in always-load, so there
+  are no orphans. The check enforces that.
+- **Persistent docs** are every tracked Markdown file outside the ephemeral
+  and exempt directories the docs registry names (`design/` for drafts,
+  `.github/` for templates). The entrypoints, `AGENTS.md` and the README, are
+  persistent but need no index row.
+- **Doc header:** one line, `> **Owns:** … **Not here:** …`, under the title
+  of every persistent doc, the entrypoints included. It is for the agent that
   has already arrived, and its job is to stop duplication. It carries no
   "load when", because that would restate the index.
 - **Links inside a doc** say when to follow them. No unconditional "see also".
@@ -107,18 +113,27 @@ and never restate the commands behind them.
 - **One place per fact.** Where a registry or the code is the source, docs cite
   it.
 - **The docs check** verifies:
-  - budgets, per doc and for the always-load set;
-  - that links resolve and cited paths exist;
+  - budgets, per doc and for the always-load set, which must match the
+    always-load list in `AGENTS.md`;
+  - that links resolve and cited paths exist, citing files and never lines;
   - the doc headers;
-  - that the index is complete;
-  - that there are no ephemeral references.
+  - that the index is complete, and `CLAUDE.md` is a symlink;
+  - that every cited gate lane exists;
+  - that no doc or code file holds a tracker reference (§10) or cites a file
+    in an ephemeral directory.
+- It is written in the repo's own stack, so the repo has one toolchain.
 
 ### 10. Current state only, no chronicle
 
 - Docs describe how things are. No "previously", no "we changed X to Y", no
   dated entries, no changelog sections. History is in git and the PRs.
 - Plans, designs and task cards live in the tracker. Docs and code never cite
-  an issue, a PR or a task. The docs check greps for tracker references.
+  an issue, a PR or a task. The docs check greps for tracker references:
+  issue and PR numbers (alone or after `owner/repo`), tracker URLs and plan
+  file paths. Commit messages and PR bodies may cite them.
+- Drafts that must sit in the repo for a while live in one ephemeral
+  directory, exempt from every doc rule and never cited from persistent docs
+  or code.
 
 ### 11. Dependency freshness
 

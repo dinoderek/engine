@@ -1,6 +1,6 @@
 # Quality gates
 
-> **Owns:** the gate lanes' intent, the quality targets, import rules, baselines, setup, and debugging a failed gate. **Not here:** the lane list and commands (`scripts/lanes.tsv`), where versions are pinned (`versions.md`).
+> **Owns:** the gate lanes' intent, the quality targets, baselines, the doc rules, setup, and debugging a failed gate. **Not here:** the lane list and commands (`scripts/lanes.tsv`), why the layers are what they are (`architecture.md`), where versions are pinned (`versions.md`).
 
 ## Run the gates
 
@@ -31,6 +31,7 @@ artifact. Every lane runs in CI; none is local-only.
 | `file-length` | **≤ 500 lines** per text file, except Markdown and `go.sum` | `scripts/lanes.tsv` (`-max`), `scripts/file-length-baseline.tsv` |
 | `imports` | the layer rules | `scripts/import-rules.tsv`, `scripts/import-baseline.tsv` |
 | `versions` | the version pins agree | `docs/versions.md` says what it checks |
+| `docs-check` | the doc rules below | `scripts/doc-budgets.tsv` |
 
 Per function (`lint`): cognitive complexity **≤ 25** (gocognit), **≤ 200**
 lines (funlen), control nesting **≤ 4** and **≤ 5** parameters (revive). Every
@@ -43,18 +44,11 @@ counts as covered when any package's tests run it.
 ## Import rules
 
 The Go compiler rejects import cycles, so `imports` checks only the layers in
-`scripts/import-rules.tsv`, on non-test imports. Test files may import anything.
-It sees the files built for the host OS, so CI on Linux also covers any
-Linux-only file.
-
-- **Product code** is `cmd/engine` and `internal/`. It never imports `devtools/`.
-  `cmd/engine` only parses arguments through `internal/cli`.
-- **Repo tooling** is `devtools/`: the `./dev` verbs and the lane checks. It
-  never imports product code, so the gates cannot depend on what they check.
-  Go's `internal/` rule also keeps `devtools/internal/` out of product reach.
-
-Add a package by adding its rule in the same PR. A rule whose importer or a
-target matches no package fails the lane.
+`scripts/import-rules.tsv`, on non-test imports. Test files may import
+anything. It sees the files built for the host OS, so CI on Linux also covers
+any Linux-only file. A rule whose importer or a target matches no package
+fails the lane. If you are adding a package or changing a rule, load
+`architecture.md`, which owns the reasons.
 
 ## Baselines only shrink
 
@@ -69,6 +63,31 @@ Adding a row, raising a count, lowering a threshold or excluding a linter is a
 hard stop: it needs the operator's agreement, stated in the PR's
 **Deviations**. Meet a target by adding tests, splitting the function or
 moving the code.
+
+## Doc rules
+
+`docs-check` treats every tracked Markdown file as a persistent doc, except
+under the `exempt` and `ephemeral` prefixes in `scripts/doc-budgets.tsv`.
+`design/` is ephemeral: drafts there follow no doc rule. It enforces:
+
+1. **Word budgets** (whitespace-separated words). Each doc has its own budget
+   or the default. A `set` row caps docs loaded together. The `always-load`
+   set must hold exactly `AGENTS.md` and the docs listed under its "Always
+   load" heading. The lane output lists every count against its budget.
+2. **Links resolve and cited paths exist.** Every relative link, and every
+   code-span word that names a repository path, must exist, relative to the
+   doc or to the root. Gitignored outputs count as existing. Cite a file,
+   never a line: line numbers rot.
+3. **The header.** The first lines carry exactly one
+   `> **Owns:** … **Not here:** …` line, with no load trigger.
+4. **The index is complete.** Every doc except the `unindexed` ones (the
+   entrypoints) appears under "Always load" or "Load on demand" in
+   `AGENTS.md`. `CLAUDE.md` is a symlink to `AGENTS.md`.
+5. **Lane citations are real.** Every `./dev test <lane>` names a lane.
+6. **No tracker or ephemeral references**, in docs or code: no issue or PR
+   number (alone or after `owner/repo`), no issue or PR URL, no plan file
+   path, and no path to a file in an ephemeral directory. The bare directory
+   name is fine.
 
 ## Setup
 
