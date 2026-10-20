@@ -9,8 +9,8 @@ import (
 // Worktree runs `worktree create <branch>` or `worktree release <branch>`.
 // Worktrees live outside the checkout, in <checkout>-worktrees/ beside the
 // main checkout. Release removes the worktree, then deletes the branch when
-// git sees it as merged or its PR is merged, and then its remote branch if
-// that is still at the deleted tip.
+// git sees it as merged or its PR is merged; it deletes the remote branch
+// only when a PR merged the tip and the remote is still at it.
 func (t Tool) Worktree(args []string) int {
 	if len(args) != 2 || (args[0] != "create" && args[0] != "release") {
 		fmt.Fprintln(t.Stderr, "usage: ./dev worktree create|release <branch>")
@@ -110,27 +110,35 @@ func (t Tool) releaseWorktree(main, branch string) error {
 		return fmt.Errorf("worktree kept (commit or discard its changes first): %w", err)
 	}
 	fmt.Fprintf(t.Stdout, "removed worktree %s\n", dir)
+	return t.deleteBranch(main, branch)
+}
+
+// deleteBranch deletes the local branch when git sees it as merged or its PR
+// merged it, and origin's branch only when its PR merged it: git branch -d
+// also passes a branch that is merely pushed to its upstream.
+func (t Tool) deleteBranch(main, branch string) error {
 	tip, err := t.git(main, "rev-parse", "refs/heads/"+branch)
 	if err != nil {
 		return err
 	}
+	// The PR settles a squash merge, which looks unmerged to git, but only
+	// when the branch still points at the commit the PR merged, so no later
+	// commit is lost.
+	merged := t.prMergedAt(main, branch, tip)
 	if _, err := t.git(main, "branch", "-d", branch); err == nil {
 		fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
+	} else if merged != nil {
+		fmt.Fprintf(t.Stdout, "kept branch %s: %v\n", branch, merged)
+		return nil
+	} else {
+		if _, err := t.git(main, "branch", "-D", branch); err != nil {
+			return err
+		}
+		fmt.Fprintf(t.Stdout, "deleted branch %s: its PR merged it\n", branch)
+	}
+	if merged == nil {
 		t.deleteRemoteBranch(main, branch, tip)
-		return nil
 	}
-	// A squash merge looks unmerged to git; the PR settles it, but only when
-	// the branch still points at the commit the PR merged, so no later commit
-	// is lost.
-	if err := t.prMergedAt(main, branch, tip); err != nil {
-		fmt.Fprintf(t.Stdout, "kept branch %s: %v\n", branch, err)
-		return nil
-	}
-	if _, err := t.git(main, "branch", "-D", branch); err != nil {
-		return err
-	}
-	fmt.Fprintf(t.Stdout, "deleted branch %s: its PR merged it\n", branch)
-	t.deleteRemoteBranch(main, branch, tip)
 	return nil
 }
 
@@ -138,8 +146,9 @@ func (t Tool) releaseWorktree(main, branch string) error {
 // the commit the local branch had, so nobody's later push is lost. A remote
 // branch that is gone or has moved is left alone.
 func (t Tool) deleteRemoteBranch(main, branch, tip string) {
-	lease := fmt.Sprintf("--force-with-lease=%s:%s", branch, tip)
-	if _, err := t.git(main, "push", "--quiet", lease, "origin", "--delete", branch); err == nil {
+	ref := "refs/heads/" + branch
+	lease := fmt.Sprintf("--force-with-lease=%s:%s", ref, tip)
+	if _, err := t.git(main, "push", "--quiet", lease, "origin", "--delete", ref); err == nil {
 		fmt.Fprintf(t.Stdout, "deleted remote branch %s\n", branch)
 	}
 }
