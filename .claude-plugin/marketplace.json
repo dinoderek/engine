@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "engine",
+  "description": "engine's agent skills: the executor that runs one task card to a merged PR.",
+  "owner": {
+    "name": "dinoderek"
+  },
+  "plugins": [
+    {
+      "name": "engine",
+      "description": "The engine executor: one task card, one session, one worktree, one PR, hands-off or gated.",
+      "source": "./plugins/engine",
+      "category": "development"
+    }
+  ]
+}

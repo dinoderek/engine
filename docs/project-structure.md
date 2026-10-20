@@ -14,7 +14,10 @@
 | `scripts/` | registries: lanes, import rules, doc budgets, and the three shrink-only baselines |
 | `docs/` | the persistent docs, every one indexed in `AGENTS.md` |
 | `design/` | ephemeral drafts: exempt from the doc rules, never cited |
-| `.github/` | the CI workflow, Dependabot config and PR template |
+| `plugins/engine/` | the `engine` Claude Code plugin; its skills in `skills/<name>/SKILL.md` |
+| `.claude-plugin/` | the marketplace that publishes `plugins/` |
+| `.claude/` | this repo's Claude Code settings: it enables the `engine` plugin |
+| `.github/` | the CI workflow, Dependabot config, PR template and task-issue template |
 | `go.mod`, `go.sum` | the module, the Go version, and the dev tools |
 | `.golangci.yml` | the lint configuration |
 
@@ -33,6 +36,9 @@
   row in the lane table of `quality-gates.md`.
 - **A `./dev` verb:** a method on `dev.Tool` in `devtools/internal/dev`, plus
   its line in the usage text.
+- **A skill:** `plugins/engine/skills/<name>/SKILL.md`, with a budget row in
+  `scripts/doc-budgets.tsv`. Bump `version` in the plugin's `plugin.json`:
+  Claude Code sees an update only when it changes.
 - **A doc:** a file in `docs/` with the Owns/Not here header, a row in
   `AGENTS.md`'s load-on-demand table, and, if it needs one, a budget in
   `scripts/doc-budgets.tsv`.

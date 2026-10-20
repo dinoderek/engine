@@ -1,8 +1,8 @@
 # Docs registry: the single source for doc word budgets and for which Markdown
 # the doc rules cover. Read by the docs-check lane (devtools/internal/checks/docs.go).
 # The rules: docs/quality-gates.md ("Doc rules"). Words are whitespace-separated
-# tokens. Raising a budget, or adding or widening an exempt, ephemeral or set
-# row, loosens a gate: it needs the operator's agreement. AGENTS.md and
+# tokens. Raising a budget, or adding or widening an exempt, ephemeral,
+# budget-only or set row, loosens a gate: it needs the operator's agreement. AGENTS.md and
 # README.md are the entrypoints and need no index row.
 #
 # Rows (tab-separated):
@@ -12,6 +12,9 @@
 #   exempt     <prefix>                     Markdown there is not a doc (no budget, header or index row);
 #                                           tracker references are still banned
 #   ephemeral  <prefix>                     exempt from every rule, and no file outside it cites a file in it
+#   budget-only <prefix>                    Markdown there is not a doc (no header, index row or path
+#                                           checks) but keeps a word budget: its own row or the default;
+#                                           an ephemeral prefix inside it stays rule-free
 budget	*	2000
 budget	AGENTS.md	1000
 budget	README.md	300
@@ -24,3 +27,5 @@ budget	docs/quality-gates.md	1100
 set	always-load	4000	AGENTS.md,docs/project-brief.md,docs/architecture.md,docs/project-structure.md,docs/testing-strategy.md,docs/quality-gates.md
 ephemeral	design/
 exempt	.github/
+budget-only	plugins/
+budget	plugins/engine/skills/executor/SKILL.md	1500

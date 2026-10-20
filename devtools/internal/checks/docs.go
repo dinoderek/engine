@@ -35,8 +35,9 @@ type docRules struct {
 	defaultBudget int
 	budgets       map[string]int
 	sets          map[string]docSet
-	exempt        []string // prefixes no doc rule applies to
+	exempt        []string // prefixes whose Markdown is not a persistent doc
 	ephemeral     []string // exempt prefixes that no file outside them may cite into
+	budgetOnly    []string // exempt prefixes whose Markdown still has a word budget
 }
 
 // entrypoints are persistent docs that need no index row.
@@ -69,6 +70,9 @@ func parseDocRules(text string) (docRules, error) {
 		case f[0] == "ephemeral" && len(f) == 2:
 			r.exempt = append(r.exempt, f[1])
 			r.ephemeral = append(r.ephemeral, f[1])
+		case f[0] == "budget-only" && len(f) == 2:
+			r.exempt = append(r.exempt, f[1])
+			r.budgetOnly = append(r.budgetOnly, f[1])
 		default:
 			return r, bad
 		}
@@ -80,16 +84,19 @@ func parseDocRules(text string) (docRules, error) {
 }
 
 func (r docRules) isExempt(file string) bool {
-	for _, p := range r.exempt {
-		if strings.HasPrefix(file, p) {
-			return true
-		}
-	}
-	return false
+	return hasPrefix(file, r.exempt)
 }
 
 func (r docRules) isEphemeral(file string) bool {
-	for _, p := range r.ephemeral {
+	return hasPrefix(file, r.ephemeral)
+}
+
+func (r docRules) isBudgetOnly(file string) bool {
+	return hasPrefix(file, r.budgetOnly)
+}
+
+func hasPrefix(file string, prefixes []string) bool {
+	for _, p := range prefixes {
 		if strings.HasPrefix(file, p) {
 			return true
 		}
@@ -108,15 +115,16 @@ func (r docRules) budget(doc string) int {
 // repository file, so cited paths are judged against the same tree in CI.
 type docsEnv struct {
 	Env
-	rules docRules
-	files []string
-	docs  map[string]string // persistent doc -> text
-	lanes map[string]bool
+	rules    docRules
+	files    []string
+	docs     map[string]string // persistent doc -> text
+	budgeted map[string]string // budget-only Markdown -> text
+	lanes    map[string]bool
 }
 
-// Docs enforces the doc rules: word budgets, links and cited paths, the
-// Owns/Not here header, index completeness, lane citations, and no tracker
-// or ephemeral references in docs or code.
+// Docs enforces the doc rules: word budgets (budget-only Markdown included),
+// links and cited paths, the Owns/Not here header, index completeness, lane
+// citations, and no tracker or ephemeral references in docs or code.
 func Docs(e Env) int {
 	const lane = "docs-check"
 	d, err := loadDocs(e)
@@ -140,7 +148,7 @@ func Docs(e Env) int {
 }
 
 func loadDocs(e Env) (docsEnv, error) {
-	d := docsEnv{Env: e, docs: map[string]string{}, lanes: map[string]bool{"for": true}}
+	d := docsEnv{Env: e, docs: map[string]string{}, budgeted: map[string]string{}, lanes: map[string]bool{"for": true}}
 	text, err := os.ReadFile(filepath.Join(e.Root, DocBudgets))
 	if err != nil {
 		return d, err
@@ -152,13 +160,22 @@ func loadDocs(e Env) (docsEnv, error) {
 		return d, err
 	}
 	for _, f := range d.files {
-		if strings.HasSuffix(f, ".md") && !d.rules.isExempt(f) {
-			body, err := os.ReadFile(filepath.Join(e.Root, f))
-			if err != nil {
-				return d, err
-			}
-			d.docs[f] = string(body)
+		if !strings.HasSuffix(f, ".md") {
+			continue
 		}
+		into := d.docs
+		// A draft stays rule-free even under a budget-only prefix.
+		switch {
+		case d.rules.isBudgetOnly(f) && !d.rules.isEphemeral(f):
+			into = d.budgeted
+		case d.rules.isExempt(f):
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(e.Root, f))
+		if err != nil {
+			return d, err
+		}
+		into[f] = string(body)
 	}
 	registry, err := os.ReadFile(filepath.Join(e.Root, "scripts/lanes.tsv"))
 	if err != nil {
@@ -188,20 +205,27 @@ func inSet(doc string, members []string) bool {
 	return false
 }
 
-// budgetProblems checks each doc's budget and every set's combined budget,
-// and prints the counts so a passing run shows the headroom.
+// budgetProblems checks the budget of each doc and budget-only file, and
+// every set's combined budget, and prints the counts so a passing run shows
+// the headroom.
 func (d docsEnv) budgetProblems() []string {
 	var problems []string
-	for _, doc := range sortedDocs(d.docs) {
-		words, limit := len(strings.Fields(d.docs[doc])), d.rules.budget(doc)
+	budgeted := make(map[string]string, len(d.docs)+len(d.budgeted))
+	for _, m := range []map[string]string{d.docs, d.budgeted} {
+		for doc, text := range m {
+			budgeted[doc] = text
+		}
+	}
+	for _, doc := range sortedDocs(budgeted) {
+		words, limit := len(strings.Fields(budgeted[doc])), d.rules.budget(doc)
 		fmt.Fprintf(d.Out, "docs-check: %5d / %5d words  %s\n", words, limit, doc)
 		if words > limit {
 			problems = append(problems, fmt.Sprintf("%s: %d words, over its %d-word budget; split or trim it", doc, words, limit))
 		}
 	}
 	for _, doc := range sortedDocs(budgetDocs(d.rules.budgets)) {
-		if _, ok := d.docs[doc]; !ok {
-			problems = append(problems, fmt.Sprintf("%s: budget row for %s, which is not a persistent doc", DocBudgets, doc))
+		if _, ok := budgeted[doc]; !ok {
+			problems = append(problems, fmt.Sprintf("%s: budget row for %s, which is neither a persistent doc nor budget-only", DocBudgets, doc))
 		}
 	}
 	for _, name := range sortedSetNames(d.rules.sets) {

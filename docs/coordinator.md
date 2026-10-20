@@ -60,7 +60,7 @@ adds to it.
 ## Reaching hosts
 
 A host is either `local` or `ssh`. The coordinator calls
-`engine host <op> --json` in place for a local host, or via `ssh <host>` for an
+`engine host <op> --json` in place for a local host, or via `ssh <address>` for an
 SSH host. It reads JSON from stdout.
 
 | Op | Does |

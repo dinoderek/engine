@@ -8,11 +8,13 @@ the work. Then a coordinator runs each task in its own agent session, on
 whichever host and harness fits, through to a merged PR, without you in the
 loop unless a task asks for you.
 
-**Status:** design draft. The code so far is `engine version` and the repo's
-own tooling: `./dev` and its quality gates.
+**Status:** design draft. The code so far is `engine version`, the executor
+skill, and the repo's own tooling: `./dev` and its quality gates.
 
 ## Start here
 
 - Agents, and anyone changing the repo: `AGENTS.md`. It holds the rules and
   routes to every doc.
 - To set up a machine: `./dev doctor`, then `./dev test`.
+- To run the executor skill in another repo with Claude Code:
+  `/plugin install engine --marketplace dinoderek/engine`.

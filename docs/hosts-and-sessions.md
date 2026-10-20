@@ -1,12 +1,18 @@
 # Hosts and sessions
 
-> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (`execution-protocol.md`), what it records (`telemetry.md`).
+> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (the executor skill, `plugins/engine/skills/executor/SKILL.md`), what it records (`telemetry.md`).
 
 ## Hosts
 
 A host is somewhere sessions run. Each one declares the harnesses it runs, how
 many sessions it holds at once, and its capabilities. Capabilities are
 declared, never inferred.
+
+A host's name is its `[host.<name>]` key, a logical name such as `mac` or
+`devbox`, never a hostname or an address. Each host keeps its own name in
+`~/.config/engine/host`, so a session started by hand knows where it runs.
+How engine reaches an SSH host (an SSH alias or a Tailscale name) is its
+`address`, which stays in this config and is never posted anywhere.
 
 ```toml
 default_harness = "claude"
@@ -24,8 +30,9 @@ harnesses = ["claude", "codex"]
 max_sessions = 3
 capabilities = ["ios", "android", "docker"]
 
-[host.linux]
-kind = "local"
+[host.devbox]
+kind = "ssh"
+address = "devbox"      # an SSH alias or a Tailscale name
 harnesses = ["claude", "codex"]
 max_sessions = 6
 capabilities = ["docker"]
@@ -81,8 +88,8 @@ All Codex settings are passed per session with `-c`. The host's own
 ## Naming
 
 Every surface uses one name per session, `<repo>-<task>`, for example
-`boga3-412`. It is the tmux window, the remote-control session name and the
-branch prefix, so a session can be found from any surface. Never use `#` in
+`boga3-412`. It is the tmux window, the remote-control session name and part
+of the branch name, so a session can be found from any surface. Never use `#` in
 the name: tmux treats it as special.
 
 ## Starting a session: `engine start`
@@ -97,14 +104,15 @@ is up. On the target host (this machine, unless `--host` says otherwise) it:
    worktree, so the repo's `AGENTS.md` loads;
 4. launches the harness's interactive CLI with the host's launch line, and
    the kickoff prompt as its first message (`Execute <issue> with the engine
-   executor, hands-off mode`);
+   executor, hands-off mode`), plus the `run=`, `tmux=` and `rc=` values its
+   claim comment records;
 5. makes the session reachable from the apps (see below);
 6. prints how to attach.
 
 The executor claims the task itself. `engine start` only places and launches.
 
 **Remote hosts:** with `--host devbox`, every step runs on `devbox` over SSH
-(`ssh devbox engine host spawn …`). The session lives in `devbox`'s tmux
+(`ssh <address> engine host spawn …`). The session lives in `devbox`'s tmux
 server, so the machine you typed on can sleep or disconnect.
 
 **Other ways to start:** a session started any other way (Claude desktop, a
@@ -114,10 +122,9 @@ reached from wherever it was started.
 
 ## The claim comment is the registry
 
-The executor's claim comment on the task issue records:
-
-- the run ID, host and harness;
-- the tmux target and the remote-control name.
+The executor's claim comment on the task issue records the run ID, the
+host's logical name, the harness and model, the mode, the tmux target, the
+Remote Control name and the branch. The executor skill owns its format.
 
 Everything that lists sessions reads these comments, so a task started by
 hand and one started by the coordinator look the same.
@@ -133,7 +140,7 @@ hand and one started by the coordinator look the same.
 
 | From | How |
 | --- | --- |
-| Any terminal | `engine attach <repo>-<task>`. This runs `tmux attach` locally, or `ssh <host> -t tmux attach -t engine:<repo>-<task>` for a remote host. Detach with `Ctrl-b d`; the session keeps running. |
+| Any terminal | `engine attach <repo>-<task>`. This runs `tmux attach` locally, or `ssh <address> -t tmux attach -t engine:<repo>-<task>` for a remote host. Detach with `Ctrl-b d`; the session keeps running. |
 | Phone, SSH | An SSH app over Tailscale, then `tmux attach -t engine`, then `Ctrl-b w` to pick the window. Best for debugging. |
 | Phone, chat | Claude sessions: the Claude app, through Remote Control. Codex sessions: the ChatGPT app, through Codex remote control. Best for answering a question. |
 | Desktop | claude.ai/code or the Claude desktop app for Remote Control sessions; the ChatGPT or Codex desktop app for Codex. |

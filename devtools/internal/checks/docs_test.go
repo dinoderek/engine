@@ -31,11 +31,12 @@ func goodDocs() map[string]string {
 		"docs/b.md":           "# B\n\n" + header + "\n[up](../AGENTS.md) and [web](https://example.com/x.md).\n",
 		drafts + "draft.md":   "no header, cites #" + "12 and " + drafts + "x.md\n",
 		".github/template.md": "Closes #<task>\n",
+		"skills/x/SKILL.md":   "---\nname: x\n---\nNo header; cites `their/own.md`.\n",
 		".github/ci.yml":      "on: push\n",
 		"scripts/lanes.tsv":   "unit\trequired\t*.go\tgo test ./...\n",
 		"scripts/doc-budgets.tsv": "budget\t*\t100\nbudget\tAGENTS.md\t200\n" +
 			"set\talways-load\t400\tAGENTS.md,docs/a.md\n" +
-			"ephemeral\tdesign/\nexempt\t.github/\n",
+			"ephemeral\tdesign/\nexempt\t.github/\nbudget-only\tskills/\nbudget\tskills/x/SKILL.md\t20\n",
 		"main.go": "package main // see the docs\n",
 	}
 }
@@ -61,7 +62,7 @@ func TestDocsPass(t *testing.T) {
 	if code := Docs(e); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out())
 	}
-	for _, want := range []string{"4 docs follow the doc rules", "set always-load", "/   200 words  AGENTS.md"} {
+	for _, want := range []string{"4 docs follow the doc rules", "set always-load", "/   200 words  AGENTS.md", "/    20 words  skills/x/SKILL.md"} {
 		if !strings.Contains(out(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out())
 		}
@@ -75,6 +76,14 @@ func TestDocsFailures(t *testing.T) {
 	}{
 		"over budget": {func(f map[string]string) { f["docs/b.md"] += strings.Repeat("word ", 100) },
 			"docs/b.md: 1"},
+		"budget-only over budget": {func(f map[string]string) { f["skills/x/SKILL.md"] += strings.Repeat("word ", 20) },
+			"skills/x/SKILL.md: 28 words, over its 20-word budget"},
+		"budget-only over the default": {func(f map[string]string) { f["skills/y/SKILL.md"] = strings.Repeat("word ", 101) },
+			"skills/y/SKILL.md: 101 words, over its 100-word budget"},
+		"budget-only tracker reference": {func(f map[string]string) { f["skills/x/SKILL.md"] += "Closes #" + "4\n" },
+			"skills/x/SKILL.md:5: tracker reference"},
+		"stale budget-only row": {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "budget\tskills/gone/SKILL.md\t5\n" },
+			"budget row for skills/gone/SKILL.md"},
 		"stale budget row": {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "budget\tdocs/gone.md\t5\n" },
 			"budget row for docs/gone.md"},
 		"set over budget": {func(f map[string]string) {
@@ -94,30 +103,31 @@ func TestDocsFailures(t *testing.T) {
 		"load trigger in header": {func(f map[string]string) {
 			f["docs/b.md"] = "# B\n\n> **Owns:** x. **Not here:** y. **Load when:** z.\n"
 		}, "header carries no load trigger"},
-		"broken link":             {func(f map[string]string) { f["docs/b.md"] += "[x](missing.md)\n" }, "docs/b.md:6: cited path does not exist: missing.md"},
-		"missing path":            {func(f map[string]string) { f["docs/b.md"] += "`scripts/nope.tsv`\n" }, "cited path does not exist: scripts/nope.tsv"},
-		"line citation":           {func(f map[string]string) { f["docs/b.md"] += "`main.go:12`\n" }, "cite a file, never a line: main.go:12"},
-		"unknown lane":            {func(f map[string]string) { f["docs/b.md"] += "Run `./dev test nope`.\n" }, "./dev test nope names no lane"},
-		"issue number":            {func(f map[string]string) { f["docs/b.md"] += "Fixed in #" + "42.\n" }, `tracker reference "#` + `42"`},
-		"repo issue":              {func(f map[string]string) { f["main.go"] += "// owner/repo#" + "7\n" }, "main.go:2: tracker reference"},
-		"issue URL":               {func(f map[string]string) { f["docs/b.md"] += "https://github.com/o/r/" + "pull/3\n" }, "tracker reference"},
-		"plan path":               {func(f map[string]string) { f["main.go"] += "// see " + drafts + "pl" + "ans/m1/01-x.md\n" }, `tracker reference "/plans/`},
-		"ephemeral file":          {func(f map[string]string) { f["main.go"] += "// " + drafts + "draft.md\n" }, "cites a file in design/, which is ephemeral"},
-		"line citation link":      {func(f map[string]string) { f["docs/b.md"] += "[x](b.md#L" + "3)\n" }, "cite a file, never a line: b.md#L3"},
-		"reference definition":    {func(f map[string]string) { f["docs/b.md"] += "[r]: nowhere.md\n" }, "does not exist: nowhere.md"},
-		"titled link":             {func(f map[string]string) { f["docs/b.md"] += "[x](nowhere.md \"t\")\n" }, "does not exist: nowhere.md"},
-		"href":                    {func(f map[string]string) { f["docs/b.md"] += "<a href=\"nowhere.md\">x</a>\n" }, "does not exist: nowhere.md"},
-		"single-quoted href":      {func(f map[string]string) { f["docs/b.md"] += "<a href='nowhere.md'>x</a>\n" }, "does not exist: nowhere.md"},
-		"dir-relative ephemeral":  {func(f map[string]string) { f["docs/b.md"] += "`docs/../" + drafts + "draft.md`\n" }, "docs/b.md:6: cites a file in design/"},
-		"PR word":                 {func(f map[string]string) { f["docs/b.md"] += "Since PR#" + "12.\n" }, "tracker reference"},
-		"issue word":              {func(f map[string]string) { f["main.go"] += "// issue " + "42\n" }, "tracker reference"},
-		"GH number":               {func(f map[string]string) { f["docs/b.md"] += "See GH-" + "9.\n" }, "tracker reference"},
-		"relative URL":            {func(f map[string]string) { f["main.go"] += "// ../../iss" + "ues/12\n" }, "tracker reference"},
-		"exempt workflow":         {func(f map[string]string) { f[".github/ci.yml"] += "# works around #" + "123\n" }, ".github/ci.yml:2: tracker reference"},
-		"relative ephemeral link": {func(f map[string]string) { f["docs/b.md"] += "[q](../" + drafts + "draft.md)\n" }, "docs/b.md:6: cites a file in design/"},
-		"dot-relative ephemeral":  {func(f map[string]string) { f["main.go"] += "// ./" + drafts + "draft.md\n" }, "main.go:2: cites a file in design/"},
-		"duplicate set":           {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "set\talways-load\t1\tAGENTS.md\n" }, "malformed row"},
-		"no entry doc":            {func(f map[string]string) { delete(f, "AGENTS.md") }, "AGENTS.md is missing"},
+		"broken link":               {func(f map[string]string) { f["docs/b.md"] += "[x](missing.md)\n" }, "docs/b.md:6: cited path does not exist: missing.md"},
+		"missing path":              {func(f map[string]string) { f["docs/b.md"] += "`scripts/nope.tsv`\n" }, "cited path does not exist: scripts/nope.tsv"},
+		"line citation":             {func(f map[string]string) { f["docs/b.md"] += "`main.go:12`\n" }, "cite a file, never a line: main.go:12"},
+		"unknown lane":              {func(f map[string]string) { f["docs/b.md"] += "Run `./dev test nope`.\n" }, "./dev test nope names no lane"},
+		"issue number":              {func(f map[string]string) { f["docs/b.md"] += "Fixed in #" + "42.\n" }, `tracker reference "#` + `42"`},
+		"repo issue":                {func(f map[string]string) { f["main.go"] += "// owner/repo#" + "7\n" }, "main.go:2: tracker reference"},
+		"issue URL":                 {func(f map[string]string) { f["docs/b.md"] += "https://github.com/o/r/" + "pull/3\n" }, "tracker reference"},
+		"plan path":                 {func(f map[string]string) { f["main.go"] += "// see " + drafts + "pl" + "ans/m1/01-x.md\n" }, `tracker reference "/plans/`},
+		"ephemeral file":            {func(f map[string]string) { f["main.go"] += "// " + drafts + "draft.md\n" }, "cites a file in design/, which is ephemeral"},
+		"line citation link":        {func(f map[string]string) { f["docs/b.md"] += "[x](b.md#L" + "3)\n" }, "cite a file, never a line: b.md#L3"},
+		"reference definition":      {func(f map[string]string) { f["docs/b.md"] += "[r]: nowhere.md\n" }, "does not exist: nowhere.md"},
+		"titled link":               {func(f map[string]string) { f["docs/b.md"] += "[x](nowhere.md \"t\")\n" }, "does not exist: nowhere.md"},
+		"href":                      {func(f map[string]string) { f["docs/b.md"] += "<a href=\"nowhere.md\">x</a>\n" }, "does not exist: nowhere.md"},
+		"single-quoted href":        {func(f map[string]string) { f["docs/b.md"] += "<a href='nowhere.md'>x</a>\n" }, "does not exist: nowhere.md"},
+		"dir-relative ephemeral":    {func(f map[string]string) { f["docs/b.md"] += "`docs/../" + drafts + "draft.md`\n" }, "docs/b.md:6: cites a file in design/"},
+		"PR word":                   {func(f map[string]string) { f["docs/b.md"] += "Since PR#" + "12.\n" }, "tracker reference"},
+		"issue word":                {func(f map[string]string) { f["main.go"] += "// issue " + "42\n" }, "tracker reference"},
+		"GH number":                 {func(f map[string]string) { f["docs/b.md"] += "See GH-" + "9.\n" }, "tracker reference"},
+		"relative URL":              {func(f map[string]string) { f["main.go"] += "// ../../iss" + "ues/12\n" }, "tracker reference"},
+		"exempt workflow":           {func(f map[string]string) { f[".github/ci.yml"] += "# works around #" + "123\n" }, ".github/ci.yml:2: tracker reference"},
+		"relative ephemeral link":   {func(f map[string]string) { f["docs/b.md"] += "[q](../" + drafts + "draft.md)\n" }, "docs/b.md:6: cites a file in design/"},
+		"dot-relative ephemeral":    {func(f map[string]string) { f["main.go"] += "// ./" + drafts + "draft.md\n" }, "main.go:2: cites a file in design/"},
+		"malformed budget-only row": {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "budget-only\tskills/\textra\n" }, "malformed row"},
+		"duplicate set":             {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "set\talways-load\t1\tAGENTS.md\n" }, "malformed row"},
+		"no entry doc":              {func(f map[string]string) { delete(f, "AGENTS.md") }, "AGENTS.md is missing"},
 		"no always-load set": {func(f map[string]string) {
 			f["scripts/doc-budgets.tsv"] = "budget\t*\t100\n"
 		}, `no "always-load" set`},
@@ -153,6 +163,16 @@ func TestDocsAcceptsADotSlashSymlink(t *testing.T) {
 	if err := os.Symlink("./AGENTS.md", link); err != nil {
 		t.Fatal(err)
 	}
+	if code := Docs(e); code != 0 {
+		t.Errorf("exit %d:\n%s", code, out())
+	}
+}
+
+func TestDocsDraftsStayRuleFreeUnderABudgetOnlyPrefix(t *testing.T) {
+	files := goodDocs()
+	files["scripts/doc-budgets.tsv"] += "budget-only\t" + drafts + "\n"
+	files[drafts+"long.md"] = strings.Repeat("word ", 150)
+	e, out := docsTree(t, files)
 	if code := Docs(e); code != 0 {
 		t.Errorf("exit %d:\n%s", code, out())
 	}

@@ -1,0 +1,8 @@
+{
+  "name": "engine",
+  "description": "The engine executor: one task card, one session, one worktree, one PR, hands-off or gated.",
+  "version": "0.1.0",
+  "author": {
+    "name": "dinoderek"
+  }
+}

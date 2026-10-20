@@ -30,10 +30,11 @@ this file on purpose: **links are for depth, never for rules.**
 4. **Hard stops.** Stop and ask the operator for:
    - the protocol's classes: product, data, security, contract, gates,
      outward or costly, drift, objectives, review, environment
-     (`docs/execution-protocol.md` defines each);
+     (the executor skill, `plugins/engine/skills/executor/SKILL.md`,
+     defines each);
    - **loosening a gate:** a lower threshold, a baseline row, a `//nolint`, a
-     linter exclusion, a bigger word budget, or an `exempt`, `ephemeral` or
-     `set` row added or widened in `scripts/doc-budgets.tsv`;
+     linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,
+     `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`;
    - **a new runtime dependency:** any module in `go.mod` that the `engine`
      binary links. Dev tools (go.mod's `tool` block) are yours to add, logged
      as a ruling.
@@ -59,7 +60,7 @@ Read these at the start of every session:
 
 | If your task… | Load |
 | --- | --- |
-| changes phases, roles, task states, rulings, hard stops or merge rules, or executes a task card | `docs/execution-protocol.md` |
+| changes phases, roles, task states or the executor skill | `docs/execution-protocol.md` |
 | changes how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changes host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
