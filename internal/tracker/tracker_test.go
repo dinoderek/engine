@@ -44,6 +44,9 @@ func TestTokenMissing(t *testing.T) {
 	if _, err := Token(noEnv, t.TempDir()); err == nil || !strings.Contains(err.Error(), "no GH_TOKEN and no token file") {
 		t.Errorf("got %v", err)
 	}
+	if _, err := Token(noEnv, ""); err == nil || !strings.Contains(err.Error(), "no home directory") {
+		t.Errorf("no home: %v", err)
+	}
 }
 
 func TestLabelsAreWellFormed(t *testing.T) {

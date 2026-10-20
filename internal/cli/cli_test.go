@@ -31,14 +31,16 @@ func TestRun(t *testing.T) {
 		{"no command", nil, "", none, false, 2, "", "usage: engine"},
 		{"version", []string{"version"}, "", none, false, 0, "engine ", ""},
 		{"help", []string{"--help"}, "", none, false, 0, "usage: engine", ""},
-		{"unknown", []string{"frobnicate"}, "", none, false, 2, "", `unknown command ["frobnicate"]`},
-		{"labels without sync", []string{"labels", "o/r"}, "", none, false, 2, "", "unknown command"},
+		{"unknown", []string{"frobnicate"}, "", none, false, 2, "", `unknown command "frobnicate"`},
+		{"labels without sync", []string{"labels", "o/r"}, "", none, false, 2, "", "usage: engine labels sync <owner/repo>"},
+		{"labels sync without repo", []string{"labels", "sync"}, "", none, false, 2, "", "usage: engine labels sync <owner/repo>"},
 		{"labels sync", []string{"labels", "sync", "o/r"}, "", token, false, 0, "13 engine labels in o/r", ""},
 		{"labels sync, gh fails", []string{"labels", "sync", "o/r"}, "", token, true, 1, "", "HTTP 403"},
 		{"labels sync, no token", []string{"labels", "sync", "o/r"}, "", none, false, 1, "", "no GH_TOKEN and no token file"},
 		{"hook blocks", []string{"hook", "pre-tool-use"}, `{"tool_name":"Bash","tool_input":{"command":"gh pr merge --auto"}}`, none, false, 2, "", "merge guard"},
 		{"hook allows", []string{"hook", "pre-tool-use"}, `{"tool_name":"Read","tool_input":{}}`, none, false, 0, "", ""},
-		{"unknown hook", []string{"hook", "stop"}, "", none, false, 2, "", "unknown command"},
+		{"unknown hook fails open", []string{"hook", "stop"}, "", none, false, 1, "", `unknown hook "stop"`},
+		{"hook without a name fails open", []string{"hook"}, "", none, false, 1, "", "unknown hook"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

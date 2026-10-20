@@ -24,7 +24,8 @@ The kickoff names the mode. If it names none, run **gated**.
 | Merge | On green, without asking | Say the PR is ready and wait for the operator's approval |
 | After merge | Report and clean up | Also list the next ready tasks, each with a kickoff line |
 
-Never enable auto-merge or merge with `--admin`; the merge guard blocks both.
+Never enable auto-merge or merge with `--admin`; in Claude Code the merge
+guard blocks both.
 
 ## Card sources
 
@@ -57,8 +58,8 @@ credentials.
    fails, ask in the session only. Then add `engine:running` and post the claim comment.
    Re-read the comments: if an earlier claim from another run exists, delete
    your own claim comment, say so, and end the session.
-2. **Open.** `engine version` must run: the plugin's merge guard calls it
-   (environment). Unless you are already in the task's worktree, create one
+2. **Open.** `engine` must be on `PATH` (`engine version` runs): the merge
+   guard calls it (environment). Unless you are already in the task's worktree, create one
    with the repo's command. The branch carries the session name
    (`<type>/<repo>-<task>-<slug>`, unless the repo says otherwise). Work only
    there.

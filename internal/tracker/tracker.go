@@ -38,6 +38,9 @@ func Token(getenv func(string) string, home string) (string, error) {
 	if token := getenv("GH_TOKEN"); token != "" {
 		return token, nil
 	}
+	if home == "" {
+		return "", errors.New("no GH_TOKEN and no home directory for the token file")
+	}
 	path := filepath.Join(home, TokenFile)
 	data, err := os.ReadFile(path)
 	if err != nil {

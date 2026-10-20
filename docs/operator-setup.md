@@ -44,7 +44,8 @@
 - **Tools:** `tmux`, `gh` and `git`, plus `go` to build engine.
 - **engine on `PATH`:** `go install ./cmd/engine` from a checkout, with Go's
   install directory on `PATH`. The plugin's merge guard runs it on every Bash
-  call; without it the guard fails open.
+  call; without it, or with a binary too old for the plugin's hooks, the guard
+  fails open. Update `engine` on each host before taking a plugin update.
 - **Claude Code:** signed in, with Remote Control working from the Claude app.
 - **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
   per session (`hosts-and-sessions.md`, "Permission mode").

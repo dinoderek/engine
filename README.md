@@ -8,8 +8,8 @@ the work. Then a coordinator runs each task in its own agent session, on
 whichever host and harness fits, through to a merged PR, without you in the
 loop unless a task asks for you.
 
-**Status:** design draft. The code so far is `engine version`, the executor
-skill, and the repo's own tooling: `./dev` and its quality gates.
+**Status:** mostly designed, partly built: `docs/project-brief.md` ("State")
+says what exists.
 
 ## Start here
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/tracker"
@@ -33,7 +34,7 @@ type Env struct {
 
 // System is the Env of the running process.
 func System() Env {
-	home, _ := os.UserHomeDir() // "" leaves the token file unfound
+	home, _ := os.UserHomeDir() // "" makes tracker.Token refuse the token file
 	return Env{In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Getenv: os.Getenv, Home: home}
 }
 
@@ -43,21 +44,36 @@ func Run(args []string, env Env) int {
 		fmt.Fprint(env.Err, usage)
 		return 2
 	}
-	switch {
-	case args[0] == "version" && len(args) == 1:
+	switch args[0] {
+	case "version":
 		fmt.Fprintln(env.Out, version.Current())
 		return 0
-	case args[0] == "labels" && len(args) == 3 && args[1] == "sync":
+	case "labels":
+		if len(args) != 3 || args[1] != "sync" {
+			fmt.Fprint(env.Err, "usage: engine labels sync <owner/repo>\n")
+			return 2
+		}
 		return syncLabels(args[2], env)
-	case args[0] == "hook" && len(args) == 2 && args[1] == "pre-tool-use":
-		return hook.PreToolUse(env.In, env.Err)
-	case args[0] == "help" || args[0] == "-h" || args[0] == "--help":
+	case "hook":
+		return runHook(args[1:], env)
+	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0
 	default:
-		fmt.Fprintf(env.Err, "engine: unknown command %q\n\n%s", args, usage)
+		fmt.Fprintf(env.Err, "engine: unknown command %q\n\n%s", args[0], usage)
 		return 2
 	}
+}
+
+// runHook runs a harness hook. An unknown hook fails open (exit 1, which
+// blocks nothing) rather than 2, which a harness reads as "block": a plugin
+// can be newer than the engine binary it calls.
+func runHook(args []string, env Env) int {
+	if len(args) == 1 && args[0] == "pre-tool-use" {
+		return hook.PreToolUse(env.In, env.Err)
+	}
+	fmt.Fprintf(env.Err, "engine hook: unknown hook %q; update engine (go install ./cmd/engine)\n", strings.Join(args, " "))
+	return 1
 }
 
 func syncLabels(repo string, env Env) int {

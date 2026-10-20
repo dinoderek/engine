@@ -1,6 +1,7 @@
 // Package hook holds engine's harness hooks: checks that block an action the
 // executor's rules forbid, whatever the prompt said. They guard against
-// mistakes, not against a session set on getting round them.
+// mistakes, not against a session set on getting round them: they read a
+// command's words, they do not run a shell.
 package hook
 
 import (
@@ -41,69 +42,142 @@ func PreToolUse(in io.Reader, stderr io.Writer) int {
 }
 
 var (
-	// separators split a shell command into simple commands, roughly: the
-	// guard reads words, it does not parse shell.
-	separators = regexp.MustCompile("&&|\\|\\||[;|&\n()`]")
-	apiMerge   = regexp.MustCompile(`(?:^|/)pulls/\d+/merge$`)
+	apiMerge = regexp.MustCompile(`(?:^|/)pulls/[^/\s]+/merge/?(?:\?.*)?$`)
 	// valueFlags are gh flags that take the next word as their value.
 	valueFlags = map[string]bool{"-R": true, "--repo": true, "--hostname": true}
+	// wrappers run the command that follows them.
+	wrappers  = map[string]bool{"sudo": true, "env": true, "command": true, "time": true, "xargs": true, "nohup": true, "exec": true}
+	shells    = map[string]bool{"sh": true, "bash": true, "zsh": true}
+	mutations = []string{"mergePullRequest", "enablePullRequestAutoMerge"}
+	shellName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
+
+// maxDepth bounds how deep the guard reads into `bash -c` and command
+// substitutions.
+const maxDepth = 4
 
 // MergeProblem returns why command's pull request merge is not allowed, or
 // "" when it merges nothing or merges safely.
 func MergeProblem(command string) string {
-	if strings.Contains(command, "mergePullRequest") || strings.Contains(command, "enablePullRequestAutoMerge") {
-		return "merging through the GraphQL API is not allowed; use gh pr merge --match-head-commit <sha>"
+	return problem(command, 0)
+}
+
+func problem(command string, depth int) string {
+	if depth > maxDepth {
+		return ""
 	}
-	for _, segment := range separators.Split(command, -1) {
-		words := strings.FieldsFunc(segment, func(r rune) bool { return r == ' ' || r == '\t' || r == '"' || r == '\'' })
-		if rest, ok := ghSubcommand(words, "pr", "merge"); ok {
-			if reason := mergeFlagsProblem(rest); reason != "" {
-				return reason
+	commands, nested := split(command)
+	for _, words := range commands {
+		if reason := commandProblem(words, depth); reason != "" {
+			return reason
+		}
+	}
+	for _, inner := range nested {
+		if reason := problem(inner, depth+1); reason != "" {
+			return reason
+		}
+	}
+	return ""
+}
+
+// commandProblem judges one simple command: gh itself, or a shell's -c
+// script.
+func commandProblem(words []string, depth int) string {
+	words = stripPrefix(words)
+	if len(words) == 0 {
+		return ""
+	}
+	switch name := path.Base(words[0]); {
+	case shells[name]:
+		for i, w := range words[1:] {
+			if w == "-c" && i+2 < len(words) {
+				return problem(words[i+2], depth+1)
 			}
 		}
-		if rest, ok := ghSubcommand(words, "api"); ok && apiMergePut(rest) {
+	case name == "gh":
+		return ghProblem(words[1:])
+	}
+	return ""
+}
+
+// stripPrefix drops leading variable assignments and wrapper commands, with
+// the wrappers' flags.
+func stripPrefix(words []string) []string {
+	wrapped := false
+	for len(words) > 0 {
+		w := words[0]
+		switch {
+		case wrappers[path.Base(w)]:
+			wrapped = true
+		case wrapped && strings.HasPrefix(w, "-"):
+		case isAssignment(w):
+		default:
+			return words
+		}
+		words = words[1:]
+	}
+	return words
+}
+
+func isAssignment(word string) bool {
+	name, _, ok := strings.Cut(word, "=")
+	if !ok {
+		return false
+	}
+	return shellName.MatchString(name)
+}
+
+func ghProblem(args []string) string {
+	if rest, ok := ghSubcommand(args, "pr", "merge"); ok {
+		return mergeFlagsProblem(rest)
+	}
+	if rest, ok := ghSubcommand(args, "api"); ok {
+		for _, w := range rest {
+			for _, m := range mutations {
+				if strings.Contains(w, m) {
+					return "merging through the GraphQL API is not allowed; use gh pr merge --match-head-commit <sha>"
+				}
+			}
+		}
+		if apiMergePut(rest) {
 			return "merging through gh api is not allowed; use gh pr merge --match-head-commit <sha>"
 		}
 	}
 	return ""
 }
 
-// ghSubcommand reports whether words run gh with the given subcommand, and
-// returns the words after it. Flags before or between subcommand words are
+// ghSubcommand reports whether gh's args name the given subcommand, and
+// returns the args after it. Flags before or between subcommand words are
 // skipped.
-func ghSubcommand(words []string, sub ...string) ([]string, bool) {
-	for i, w := range words {
-		if path.Base(w) != "gh" {
-			continue
+func ghSubcommand(args []string, sub ...string) ([]string, bool) {
+	matched := 0
+	for len(args) > 0 && matched < len(sub) {
+		switch {
+		case valueFlags[args[0]]:
+			args = args[min(2, len(args)):]
+		case strings.HasPrefix(args[0], "-"):
+			args = args[1:]
+		case args[0] == sub[matched]:
+			args, matched = args[1:], matched+1
+		default:
+			return nil, false
 		}
-		rest, matched := words[i+1:], 0
-		for len(rest) > 0 && matched < len(sub) {
-			switch {
-			case valueFlags[rest[0]]:
-				rest = rest[min(2, len(rest)):]
-			case strings.HasPrefix(rest[0], "-"):
-				rest = rest[1:]
-			case rest[0] == sub[matched]:
-				rest, matched = rest[1:], matched+1
-			default:
-				return nil, false
-			}
-		}
-		return rest, matched == len(sub)
 	}
-	return nil, false
+	return args, matched == len(sub)
 }
 
 func mergeFlagsProblem(args []string) string {
 	pinned := false
 	for i, a := range args {
 		switch {
+		case a == "--help" || a == "-h":
+			return ""
 		case a == "--auto" || (strings.HasPrefix(a, "--auto=") && a != "--auto=false"):
 			return "auto-merge is not allowed; merge on green with gh pr merge --match-head-commit <sha>"
 		case a == "--admin" || (strings.HasPrefix(a, "--admin=") && a != "--admin=false"):
 			return "--admin bypasses the checks; merge only on green"
-		case a == "--match-head-commit" && i+1 < len(args), strings.HasPrefix(a, "--match-head-commit="):
+		case a == "--match-head-commit" && i+1 < len(args) && args[i+1] != "",
+			strings.HasPrefix(a, "--match-head-commit=") && len(a) > len("--match-head-commit="):
 			pinned = true
 		}
 	}

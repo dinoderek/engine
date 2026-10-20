@@ -8,8 +8,9 @@
   open questions itself and logs each decision as a ruling. It stops only for
   a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program. Merging is a
-  scripted check of the reviewed head commit against green checks, and the
-  executor plugin's merge guard (below) blocks any other merge.
+  scripted check of the reviewed head commit against green checks. In Claude
+  Code, the executor plugin's merge guard (below) blocks an unpinned, auto or
+  admin merge through `gh`.
 - **One task = one session = one worktree = one PR.**
 - **The tracker is the only state store.** The requirements, design, plan,
   task cards and their states live in the tracker, never in the repo. Code and
@@ -119,8 +120,7 @@ conflict merges per run, so this can be revisited on evidence.
 ## Enforced by hook
 
 The executor plugin ships one Claude Code `PreToolUse` hook,
-`engine hook pre-tool-use`, so `engine` must be on the session's `PATH`. It
-blocks a Bash call that:
+`engine hook pre-tool-use`. It blocks a Bash call that:
 
 - runs `gh pr merge` without `--match-head-commit`, or with `--auto` or
   `--admin`;
