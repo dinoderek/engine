@@ -1,5 +1,5 @@
 # Import-direction rules, enforced by the `imports` lane on non-test imports.
-# Why the layers are what they are: docs/quality-gates.md ("Import rules").
+# Why the layers are what they are: docs/architecture.md ("Layers and import rules").
 # The Go compiler already rejects import cycles, and Go's internal/ rule keeps
 # devtools/internal/ out of reach of the product code.
 #

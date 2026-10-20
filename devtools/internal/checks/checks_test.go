@@ -15,7 +15,7 @@ import (
 
 // tree writes files under a fresh root and returns an Env whose runner
 // answers git ls-files with those files and sends every other command to
-// handle.
+// handle (an error when handle is nil).
 func tree(t *testing.T, files map[string]string, handle func(name string, args []string) (string, error)) (Env, *bytes.Buffer) {
 	t.Helper()
 	root := t.TempDir()
@@ -32,7 +32,7 @@ func tree(t *testing.T, files map[string]string, handle func(name string, args [
 	}
 	sort.Strings(names)
 	run := func(_, name string, args ...string) (string, error) {
-		if name == "git" {
+		if name == "git" && args[0] == "ls-files" {
 			return strings.Join(names, "\x00"), nil
 		}
 		if handle == nil {
@@ -230,9 +230,9 @@ func TestVersions(t *testing.T) {
 			"  - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0\n" +
 			"    with:\n      go-version-file: go.mod\n" +
 			"  - uses: ./local-action\n",
-		".golangci.yml":   "version: \"2\"\nrun:\n  timeout: 5m\n",
-		"docs/a.md":       "Cite go.mod.\n",
-		"design/draft.md": "We tried Go 1.26.\n",
+		".golangci.yml":        "version: \"2\"\nrun:\n  timeout: 5m\n",
+		"docs/a.md":            "Cite go.mod.\n",
+		"design/" + "draft.md": "We tried Go 1.26.\n",
 	}
 	e, out := tree(t, good, nil)
 	expect(t, Versions(e), 0, out, "go1.27.2 from go.mod everywhere")

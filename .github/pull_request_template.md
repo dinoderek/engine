@@ -29,6 +29,6 @@ If wrong: <what it costs to undo>
 
 ## Deviations
 
-<!-- Anything that departs from the gates or the docs: new baseline rows or
+<!-- Anything that departs from AGENTS.md or the docs: new baseline rows or
 //nolint directives, raised budgets, lowered thresholds (each with the
 operator's agreement), skipped lanes. "None" if none. -->

@@ -1,0 +1,43 @@
+# Project brief
+
+> **Owns:** what engine is, its current state, its scope and its stack. **Not here:** how the parts fit together (`architecture.md`), where files live (`project-structure.md`).
+
+## What
+
+engine is a hands-off feature build protocol for agent-driven repos, plus the
+tooling that runs it. An operator and an agent agree on the *what* and the
+*how*. An agent plans the work. A coordinator then runs each task in its own
+agent session, on whichever host and harness fits, through to a merged PR. The
+operator is out of the loop unless a task asks for them.
+
+| Part | What it is |
+| --- | --- |
+| Execution protocol | The phases, roles and state machine from requirements to merged feature. |
+| Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through planning and execution, spawning sessions on local or SSH hosts. No LLM. |
+| Skills | The planner, executor and reviewer protocols, plus `task-protocol` for human-gated work. All ship from this repo. |
+| Tracker adapter | Plan and status storage behind one interface. GitHub Issues first. |
+| Hosts | Config for each machine: its harnesses, session cap and capabilities, plus how to reach every session. |
+| Telemetry | Raw run data in a standard format, stored off-machine. |
+| Project context guideline | What a repo must provide so executors can run hands-off. It is the source for a language-neutral seed prompt. |
+
+## State
+
+The parts are designed, in `docs/`, and not built yet. The code is
+`engine version` and the repo's own tooling: `./dev` and its quality gates.
+engine is the first worked example of the project context guideline's core.
+
+## Scope
+
+- **In:** the protocol, the coordinator CLI, the skills, the GitHub tracker
+  adapter, host config, telemetry, and the guideline with its seed prompt.
+- **Out, for now:** `engine serve` (the daemon and web UI), trackers other
+  than GitHub, a GitHub App identity, and deploys: engine has no deploy
+  target, so `./dev` has no `deploy` verb.
+
+## Stack
+
+- Go, one module, version pinned in `go.mod`. The runtime uses the standard
+  library only. Dev tools (golangci-lint, govulncheck) are go.mod tools.
+- Talks to the outside world only through CLIs: `git`, `gh`, `tmux`, `ssh`
+  and the harnesses (Claude Code, Codex).
+- GitHub Actions CI, and Dependabot for version freshness.

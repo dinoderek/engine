@@ -8,7 +8,8 @@ import (
 
 // Worktree runs `worktree create <branch>` or `worktree release <branch>`.
 // Worktrees live outside the checkout, in <checkout>-worktrees/ beside the
-// main checkout.
+// main checkout. Release removes the worktree, then deletes the branch when
+// git sees it as merged or its PR is merged (and then its remote branch too).
 func (t Tool) Worktree(args []string) int {
 	if len(args) != 2 || (args[0] != "create" && args[0] != "release") {
 		fmt.Fprintln(t.Stderr, "usage: ./dev worktree create|release <branch>")
@@ -108,11 +109,50 @@ func (t Tool) releaseWorktree(main, branch string) error {
 		return fmt.Errorf("worktree kept (commit or discard its changes first): %w", err)
 	}
 	fmt.Fprintf(t.Stdout, "removed worktree %s\n", dir)
-	if _, err := t.git(main, "branch", "-d", branch); err != nil {
-		fmt.Fprintf(t.Stdout, "kept branch %s: git sees it as unmerged (a squash merge looks unmerged). "+
-			"Once its PR is merged, delete it with git branch -D %s\n", branch, branch)
+	if _, err := t.git(main, "branch", "-d", branch); err == nil {
+		fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
 		return nil
 	}
-	fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
+	// A squash merge looks unmerged to git; the PR settles it, but only when
+	// the branch still points at the commit the PR merged, so no later commit
+	// is lost.
+	head, err := t.mergedHead(main, branch)
+	if err != nil {
+		fmt.Fprintf(t.Stdout, "kept branch %s: %v\n", branch, err)
+		return nil
+	}
+	if _, err := t.git(main, "branch", "-D", branch); err != nil {
+		return err
+	}
+	fmt.Fprintf(t.Stdout, "deleted branch %s: its PR merged it\n", branch)
+	lease := fmt.Sprintf("--force-with-lease=%s:%s", branch, head)
+	if _, err := t.git(main, "push", "--quiet", lease, "origin", "--delete", branch); err == nil {
+		fmt.Fprintf(t.Stdout, "deleted remote branch %s\n", branch)
+	}
 	return nil
+}
+
+// mergedHead returns the branch's tip when its PR is merged at exactly that
+// commit, and an error saying why not otherwise.
+func (t Tool) mergedHead(main, branch string) (string, error) {
+	out, err := t.Run(main, "gh", "pr", "view", branch, "--json", "state,headRefOid", "--jq", `.state + " " + .headRefOid`)
+	fields := strings.Fields(out)
+	if err != nil || len(fields) != 2 || fields[0] != "MERGED" {
+		return "", fmt.Errorf("it is not merged and has no merged PR")
+	}
+	tip, err := t.git(main, "rev-parse", "refs/heads/"+branch)
+	if err != nil {
+		return "", err
+	}
+	if tip != fields[1] {
+		return "", fmt.Errorf("it has commits after its merged PR (%s); push them or delete it with git branch -D", short(fields[1]))
+	}
+	return tip, nil
+}
+
+func short(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
