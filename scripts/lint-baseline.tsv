@@ -1,0 +1,7 @@
+# Shrink-only baseline: violations that existed when the gate landed. The lane
+# fails above a row's count, and also below it until the row is lowered or
+# deleted, so rows only shrink. Adding a row or raising a count is a hard stop:
+# it needs the operator's agreement, stated in the PR. docs/quality-gates.md
+# ("Baselines only shrink").
+#
+# Columns (tab-separated): path  linter  count: golangci-lint findings, or //nolint directives (linter `nolint`), tolerated in a file

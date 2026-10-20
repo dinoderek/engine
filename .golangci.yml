@@ -1,0 +1,36 @@
+# golangci-lint, run by the `lint` lane (devtools/internal/checks/lint.go).
+# The per-function targets are gates: docs/quality-gates.md. Lowering one, or
+# adding an exclusion or //nolint, needs the operator's agreement.
+version: "2"
+linters:
+  default: standard
+  enable:
+    - gocognit
+    - funlen
+    - revive
+    - misspell
+    - errorlint
+  settings:
+    errcheck:
+      # Writes to the terminal are best-effort; every other error is checked.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gocognit:
+      min-complexity: 25 # reports cognitive complexity above 25
+    funlen:
+      lines: 200
+      statements: -1
+    revive:
+      rules:
+        - name: max-control-nesting
+          arguments: [4]
+        - name: argument-limit
+          arguments: [5]
+formatters:
+  enable:
+    - gofmt
+issues:
+  # Report every finding, even several on one line: the lint baseline counts them.
+  uniq-by-line: false

@@ -1,0 +1,25 @@
+#!/bin/sh
+# ./dev: one command per job. Verbs: doctor, run, test, worktree, deps
+# (./dev help lists them). They are Go, in devtools/; this script only pins Go
+# to go.mod's toolchain line, installs Go if it is missing, and starts them.
+set -eu
+cd "$(dirname "$0")"
+toolchain=$(sed -n 's/^toolchain //p' go.mod)
+if [ -z "$toolchain" ]; then
+  echo 'dev: go.mod has no toolchain line' >&2
+  exit 1
+fi
+# Exactly this Go for every verb and lane; any installed Go downloads it.
+export GOTOOLCHAIN="$toolchain"
+if ! command -v go >/dev/null 2>&1; then
+  if [ "${1:-}" = doctor ] && command -v brew >/dev/null 2>&1; then
+    echo '...  go: installing with brew install go'
+    brew install go
+  else
+    echo "dev: Go is not installed. On macOS with Homebrew run ./dev doctor; otherwise install any Go from https://go.dev/dl/ and it fetches $toolchain itself." >&2
+    exit 127
+  fi
+fi
+mkdir -p .dev
+go build -o .dev/dev ./devtools/cmd/dev
+exec .dev/dev "$@"

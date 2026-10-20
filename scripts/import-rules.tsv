@@ -1,0 +1,22 @@
+# Import-direction rules, enforced by the `imports` lane on non-test imports.
+# Why the layers are what they are: docs/quality-gates.md ("Import rules").
+# The Go compiler already rejects import cycles, and Go's internal/ rule keeps
+# devtools/internal/ out of reach of the product code.
+#
+# Columns (tab-separated): importer  only|forbid  targets
+#   importer, targets: package paths relative to the module; `x/...` matches x
+#   and every package below it. Targets are comma-separated; `-` means none.
+#   only    the importer may import first-party packages matching the targets, nothing else
+#   forbid  the importer may never import packages matching the targets
+# A rule whose importer or a target matches no package fails the lane.
+internal/...	forbid	devtools/...,cmd/...
+internal/version	only	-
+internal/cli	only	internal/version
+cmd/engine	only	internal/cli
+devtools/...	forbid	internal/...,cmd/...
+devtools/internal/repo	only	-
+devtools/internal/baseline	only	devtools/internal/repo
+devtools/internal/lanes	only	devtools/internal/repo
+devtools/internal/checks	only	devtools/internal/repo,devtools/internal/baseline
+devtools/internal/dev	only	devtools/internal/repo,devtools/internal/lanes,devtools/internal/checks
+devtools/cmd/dev	only	devtools/internal/dev
