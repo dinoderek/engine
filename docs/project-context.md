@@ -125,7 +125,8 @@ and never restate the commands behind them.
   - that every cited gate lane exists;
   - that no doc or code file holds a tracker reference (§10) or cites a file
     in an ephemeral directory.
-- It is written in the repo's own stack, so the repo has one toolchain.
+- It is written in the repo's own stack, so the repo has one toolchain. Its
+  idea of a file path (which extensions count) is per stack too.
 
 ### 10. Current state only, no chronicle
 

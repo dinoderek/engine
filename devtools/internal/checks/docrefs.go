@@ -16,7 +16,7 @@ var (
 	linkForms = []*regexp.Regexp{
 		regexp.MustCompile(`\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)`),
 		regexp.MustCompile(`^\s*\[[^\]]+\]:\s*<?([^\s>]+)>?`),
-		regexp.MustCompile(`href="([^"]+)"`),
+		regexp.MustCompile(`href=["']([^"']+)["']`),
 	}
 	codeSpan   = regexp.MustCompile("`([^`\n]+)`")
 	lineSuffix = regexp.MustCompile(`(?::\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$`)
@@ -28,11 +28,12 @@ var (
 	trackerRefs = []*regexp.Regexp{
 		regexp.MustCompile(`(?:^|[^\w&/])(#\d+)(?:$|[^\w-])`),
 		regexp.MustCompile(`\b[\w.-]+/[\w.-]+#\d+\b`),
-		regexp.MustCompile(`(?i)\b(?:issues?|prs?|pull requests?|gh)[\s:#-]+\d+\b`),
+		regexp.MustCompile(`(?i)\b(?:issues?|prs?|pull requests?|gh)(?:\s*#|:#|\s+|-)\d+\b`),
 		regexp.MustCompile(`(?:^|/)(?:issues|pulls?|discussions)/\d+`),
 		regexp.MustCompile(`(?:^|[^\w-])plans/[\w.-]+(?:/[\w.-]+)*\.\w+`),
 	}
-	// fileExt is the extensions that make a code-span word a file path.
+	// fileExt is the extensions that make a code-span word a file path: this
+	// repo's stack. Another stack lists its own.
 	fileExt = map[string]bool{
 		".md": true, ".go": true, ".mod": true, ".sum": true, ".tsv": true, ".yml": true,
 		".yaml": true, ".json": true, ".toml": true, ".sh": true, ".txt": true,
@@ -205,7 +206,7 @@ func (d docsEnv) laneProblems(doc, text string) []string {
 func (d docsEnv) referenceProblems() ([]string, error) {
 	ephemeral := make([]*regexp.Regexp, 0, len(d.rules.ephemeral))
 	for _, prefix := range d.rules.ephemeral {
-		ephemeral = append(ephemeral, regexp.MustCompile(`(?:^|[^\w./-])(?:\.\.?/)*`+regexp.QuoteMeta(prefix)+`[\w.-]`))
+		ephemeral = append(ephemeral, regexp.MustCompile(`(?:^|[^\w./-])(?:[\w.-]+/)*?(?:\.\.?/)+`+regexp.QuoteMeta(prefix)+`[\w.-]|(?:^|[^\w./-])`+regexp.QuoteMeta(prefix)+`[\w.-]`))
 	}
 	var problems []string
 	for _, f := range d.files {

@@ -113,18 +113,46 @@ func (t Tool) releaseWorktree(main, branch string) error {
 		fmt.Fprintf(t.Stdout, "deleted branch %s\n", branch)
 		return nil
 	}
-	// A squash merge looks unmerged to git; the PR's state settles it.
-	state, err := t.Run(main, "gh", "pr", "view", branch, "--json", "state", "--jq", ".state")
-	if err != nil || strings.TrimSpace(state) != "MERGED" {
-		fmt.Fprintf(t.Stdout, "kept branch %s: it is not merged and has no merged PR\n", branch)
+	// A squash merge looks unmerged to git; the PR settles it, but only when
+	// the branch still points at the commit the PR merged, so no later commit
+	// is lost.
+	head, err := t.mergedHead(main, branch)
+	if err != nil {
+		fmt.Fprintf(t.Stdout, "kept branch %s: %v\n", branch, err)
 		return nil
 	}
 	if _, err := t.git(main, "branch", "-D", branch); err != nil {
 		return err
 	}
-	fmt.Fprintf(t.Stdout, "deleted branch %s: its PR is merged\n", branch)
-	if _, err := t.git(main, "push", "--quiet", "origin", "--delete", branch); err == nil {
+	fmt.Fprintf(t.Stdout, "deleted branch %s: its PR merged it\n", branch)
+	lease := fmt.Sprintf("--force-with-lease=%s:%s", branch, head)
+	if _, err := t.git(main, "push", "--quiet", lease, "origin", "--delete", branch); err == nil {
 		fmt.Fprintf(t.Stdout, "deleted remote branch %s\n", branch)
 	}
 	return nil
+}
+
+// mergedHead returns the branch's tip when its PR is merged at exactly that
+// commit, and an error saying why not otherwise.
+func (t Tool) mergedHead(main, branch string) (string, error) {
+	out, err := t.Run(main, "gh", "pr", "view", branch, "--json", "state,headRefOid", "--jq", `.state + " " + .headRefOid`)
+	fields := strings.Fields(out)
+	if err != nil || len(fields) != 2 || fields[0] != "MERGED" {
+		return "", fmt.Errorf("it is not merged and has no merged PR")
+	}
+	tip, err := t.git(main, "rev-parse", "refs/heads/"+branch)
+	if err != nil {
+		return "", err
+	}
+	if tip != fields[1] {
+		return "", fmt.Errorf("it has commits after its merged PR (%s); push them or delete it with git branch -D", short(fields[1]))
+	}
+	return tip, nil
+}
+
+func short(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }

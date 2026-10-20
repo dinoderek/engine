@@ -25,6 +25,7 @@ func goodDocs() map[string]string {
 		"docs/a.md": "# A\n\n" + header + "\nIf you change b, load `b.md`. Lanes: `scripts/lanes.tsv`, " +
 			"output `out/summary.md` in `out/`, branch `origin/main`, `internal/...`, `<placeholder>/x.md`.\n" +
 			"Also [angle](<b.md>), [titled](b.md \"B\"), `127.0.0.1:8080`, `gopkg.in/yaml.v3`, `#<task>`.\n" +
+			"Known issues: 3 remain.\n" +
 			"[ref]: b.md\n" +
 			"```\nnot/a/path.md inside a fence\n```\n",
 		"docs/b.md":           "# B\n\n" + header + "\n[up](../AGENTS.md) and [web](https://example.com/x.md).\n",
@@ -106,6 +107,8 @@ func TestDocsFailures(t *testing.T) {
 		"reference definition":    {func(f map[string]string) { f["docs/b.md"] += "[r]: nowhere.md\n" }, "does not exist: nowhere.md"},
 		"titled link":             {func(f map[string]string) { f["docs/b.md"] += "[x](nowhere.md \"t\")\n" }, "does not exist: nowhere.md"},
 		"href":                    {func(f map[string]string) { f["docs/b.md"] += "<a href=\"nowhere.md\">x</a>\n" }, "does not exist: nowhere.md"},
+		"single-quoted href":      {func(f map[string]string) { f["docs/b.md"] += "<a href='nowhere.md'>x</a>\n" }, "does not exist: nowhere.md"},
+		"dir-relative ephemeral":  {func(f map[string]string) { f["docs/b.md"] += "`docs/../" + drafts + "draft.md`\n" }, "docs/b.md:6: cites a file in design/"},
 		"PR word":                 {func(f map[string]string) { f["docs/b.md"] += "Since PR#" + "12.\n" }, "tracker reference"},
 		"issue word":              {func(f map[string]string) { f["main.go"] += "// issue " + "42\n" }, "tracker reference"},
 		"GH number":               {func(f map[string]string) { f["docs/b.md"] += "See GH-" + "9.\n" }, "tracker reference"},
@@ -156,7 +159,7 @@ func TestDocsAcceptsADotSlashSymlink(t *testing.T) {
 }
 
 func TestDocsRegistryErrors(t *testing.T) {
-	for _, registry := range []string{"budget\t*\tx\n", "set\ta\tx\tb\n", "bogus\trow\n", "unindexed\tAGENTS.md\n"} {
+	for _, registry := range []string{"budget\t*\tx\n", "set\ta\tx\tb\n", "bogus\trow\n", "budget\tAGENTS.md\t5\n"} {
 		files := goodDocs()
 		files["scripts/doc-budgets.tsv"] = registry
 		e, out := docsTree(t, files)
