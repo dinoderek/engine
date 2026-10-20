@@ -13,7 +13,8 @@
 #                                           tracker references are still banned
 #   ephemeral  <prefix>                     exempt from every rule, and no file outside it cites a file in it
 #   budget-only <prefix>                    Markdown there is not a doc (no header, index row or path
-#                                           checks) but keeps a word budget: its own row or the default
+#                                           checks) but keeps a word budget: its own row or the default;
+#                                           an ephemeral prefix inside it stays rule-free
 budget	*	2000
 budget	AGENTS.md	1000
 budget	README.md	300

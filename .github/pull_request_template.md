@@ -15,10 +15,11 @@
 
 ## Rulings
 
-<!-- Decisions the author made, each as:
+<!-- Decisions made for this PR, each as:
 Ruling (risk: low|med|high): <decision>
 Why: <reason>
-If wrong: <what it costs to undo>
+If wrong: <what it costs to undo, what it touches>
+plus a last line `Decided by: operator` when the operator made it.
 "None" if none. -->
 
 ## Review

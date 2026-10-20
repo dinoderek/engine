@@ -82,6 +82,8 @@ func TestDocsFailures(t *testing.T) {
 			"skills/y/SKILL.md: 101 words, over its 100-word budget"},
 		"budget-only tracker reference": {func(f map[string]string) { f["skills/x/SKILL.md"] += "Closes #" + "4\n" },
 			"skills/x/SKILL.md:5: tracker reference"},
+		"stale budget-only row": {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "budget\tskills/gone/SKILL.md\t5\n" },
+			"budget row for skills/gone/SKILL.md"},
 		"stale budget row": {func(f map[string]string) { f["scripts/doc-budgets.tsv"] += "budget\tdocs/gone.md\t5\n" },
 			"budget row for docs/gone.md"},
 		"set over budget": {func(f map[string]string) {
@@ -165,8 +167,18 @@ func TestDocsAcceptsADotSlashSymlink(t *testing.T) {
 	}
 }
 
+func TestDocsDraftsStayRuleFreeUnderABudgetOnlyPrefix(t *testing.T) {
+	files := goodDocs()
+	files["scripts/doc-budgets.tsv"] += "budget-only\t" + drafts + "\n"
+	files[drafts+"long.md"] = strings.Repeat("word ", 150)
+	e, out := docsTree(t, files)
+	if code := Docs(e); code != 0 {
+		t.Errorf("exit %d:\n%s", code, out())
+	}
+}
+
 func TestDocsRegistryErrors(t *testing.T) {
-	for _, registry := range []string{"budget\t*\tx\n", "set\ta\tx\tb\n", "bogus\trow\n", "budget\tAGENTS.md\t5\n"} {
+	for _, registry := range []string{"budget\t*\tx\n", "budget-only\tskills/\textra\n", "set\ta\tx\tb\n", "bogus\trow\n", "budget\tAGENTS.md\t5\n"} {
 		files := goodDocs()
 		files["scripts/doc-budgets.tsv"] = registry
 		e, out := docsTree(t, files)

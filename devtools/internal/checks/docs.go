@@ -35,7 +35,7 @@ type docRules struct {
 	defaultBudget int
 	budgets       map[string]int
 	sets          map[string]docSet
-	exempt        []string // prefixes no doc rule applies to
+	exempt        []string // prefixes whose Markdown is not a persistent doc
 	ephemeral     []string // exempt prefixes that no file outside them may cite into
 	budgetOnly    []string // exempt prefixes whose Markdown still has a word budget
 }
@@ -164,8 +164,9 @@ func loadDocs(e Env) (docsEnv, error) {
 			continue
 		}
 		into := d.docs
+		// A draft stays rule-free even under a budget-only prefix.
 		switch {
-		case d.rules.isBudgetOnly(f):
+		case d.rules.isBudgetOnly(f) && !d.rules.isEphemeral(f):
 			into = d.budgeted
 		case d.rules.isExempt(f):
 			continue

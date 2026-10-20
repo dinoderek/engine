@@ -4,8 +4,9 @@
 
 ## Principles
 
-- **Hands-off by default, stops by rule.** The executor decides open questions
-  itself and logs each decision as a ruling. It stops only for a hard-stop class.
+- **Hands-off when dispatched, stops by rule.** A dispatched executor decides
+  open questions itself and logs each decision as a ruling. It stops only for
+  a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program. Merging is a
   scripted check of the reviewed head commit against green checks.
 - **One task = one session = one worktree = one PR.**
@@ -70,20 +71,16 @@ Each task runs in one session of the executor skill,
 two modes, the claim comment, the ruling format, the decisions the agent owns
 and the hard-stop classes. If you are changing any of those, change the skill.
 
-- **Modes.** Hands-off decides open questions as rulings and merges on green.
-  Gated asks the operator about open questions and waits for approval before
-  merging. A kickoff with no mode runs gated.
+- **Modes.** Hands-off, or gated for a human-approved run.
 - **Card sources.** A tracker issue, or a card file in the repo for sessions
   you start yourself. The coordinator drives issue cards only.
 - **Starters.** `engine start`, the coordinator, or you by hand. The steps
   don't change.
 
-**Finding rulings.** A task with any medium- or high-risk ruling gets the label
-`engine:ruling-review`. The operator reads the rulings and removes the label.
-So "what needs my review" is one saved search across every repo:
-`is:issue label:engine:ruling-review`. Hard-stop classes are added or removed
-as the rulings show. A repo adds its own classes in `AGENTS.md`; Gnocchi, for
-example, would add any new runtime dependency.
+**Finding rulings.** The operator reads the rulings on each task labelled
+`engine:ruling-review` and removes the label. So "what needs my review" is one
+saved search across every repo: `is:issue label:engine:ruling-review`.
+Hard-stop classes are added or removed as the rulings show.
 
 ## States
 
@@ -92,7 +89,7 @@ All labels use the `engine:` prefix.
 | Entity | States |
 | --- | --- |
 | Feature | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`. `blocked` while any task is `needs-human`. |
-| Task | `todo` → `running` ⇄ `needs-human` → `in-review` (PR open) → closed by merge. `failed` when the session dies. |
+| Task | `todo` → `running` → `in-review` (PR open) → closed by merge. `needs-human` replaces `running` or `in-review` during a hard stop. `failed` when the session dies. `todo` is the absence of a state label, never a label. |
 
 "Ready" is computed, never stored. The operator sets `approved` and clears
 `ruling-review`. The executor sets `running`, `needs-human`, `in-review` and

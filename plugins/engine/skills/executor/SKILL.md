@@ -50,12 +50,13 @@ credentials.
 
 ## Steps
 
-1. **Claim** (issue cards). If the task has `engine:running`,
-   `engine:needs-human` or `engine:in-review`, stop and ask. If a blocker is
-   still open, stop and ask. Add `engine:running`; a missing `engine:` label
-   means the repo is not set up (environment). Post the claim comment. Then
-   re-read the comments: if an earlier claim from another run exists, remove
-   nothing, say so, and end the session.
+1. **Claim** (issue cards). First check, changing nothing: the task has no
+   `engine:running`, `engine:needs-human`, `engine:in-review` or
+   `engine:failed`; every blocker is closed; the host file and the token
+   exist; the repo has the `engine:` labels. If a check fails, ask in the
+   session only. Then add `engine:running` and post the claim comment.
+   Re-read the comments: if an earlier claim from another run exists, delete
+   your own claim comment, say so, and end the session.
 2. **Open.** Unless you are already in the task's worktree, create one with
    the repo's command. The branch carries the session name
    (`<type>/<repo>-<task>-<slug>`, unless the repo says otherwise). Work only
@@ -64,8 +65,8 @@ credentials.
    comments on both (the inbox). Load what `AGENTS.md` routes to for the
    areas you touch. Check every assumption in the card against the default
    branch, merged sibling tasks included; a card the default branch has
-   invalidated is a hard stop (drift). Settle the Open questions for your
-   mode.
+   invalidated is a hard stop (drift). A repo card whose dependencies are not
+   done: stop and ask. Settle the Open questions for your mode.
 4. **Build** with tests, and update the owning docs.
 5. **Gates.** Run the repo's gate command to green, including any lane that
    runs only locally.
@@ -78,9 +79,8 @@ credentials.
 7. **Gates again.**
 8. **Checkpoint.** Read the inbox and act on anything new.
 9. **PR.** Write the body per the repo's template: gate evidence, rulings,
-   deviations, declined findings, and the close line. Push and open it. Swap
-   `engine:running` for `engine:in-review`. If any ruling you made yourself is
-   medium or high risk, add `engine:ruling-review`.
+   deviations, declined findings, and the close line. Push and open it.
+   Issue cards: swap `engine:running` for `engine:in-review`.
 10. **Merge on green.** Watch the checks with `gh pr checks --watch`. On a
     failure, read the logs, fix, and return to step 5. If the default branch
     moved or conflicts, merge it in and return to step 5. When every check is
@@ -100,7 +100,7 @@ stop.
 
 The first line is fixed so claims can be searched. Never invent a value: use
 `none` when one is unknown. Values in the kickoff (`run=`, `tmux=`, `rc=`)
-override these.
+override these. Branch is the one step 2 opens (or you are on).
 
 ```text
 Claim: <repo>-<task>
@@ -132,6 +132,8 @@ If wrong: <what it costs to undo, what it touches>
 ```
 
 A ruling the operator made in gated mode ends with `Decided by: operator`.
+For an issue card, any medium- or high-risk ruling you made yourself adds
+`engine:ruling-review`, whenever you make it.
 
 You own these decisions, each logged as a ruling:
 
@@ -145,10 +147,10 @@ You own these decisions, each logged as a ruling:
 
 ## Hard stops
 
-Stop, and for an issue card swap `engine:running` for `engine:needs-human` and
-comment with an @mention of the operator saying what you need. Then end your
-turn and wait in the live session. On resuming, read the inbox, swap the label
-back and continue.
+Stop. For an issue card, swap the current state label (`engine:running` or
+`engine:in-review`) for `engine:needs-human`, and comment with an @mention of
+the operator saying what you need. End your turn and wait in the live
+session. On resuming, read the inbox, restore the label and continue.
 
 1. **Product:** a product decision that neither the docs nor the requirements
    answer.

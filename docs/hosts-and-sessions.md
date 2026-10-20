@@ -104,14 +104,15 @@ is up. On the target host (this machine, unless `--host` says otherwise) it:
    worktree, so the repo's `AGENTS.md` loads;
 4. launches the harness's interactive CLI with the host's launch line, and
    the kickoff prompt as its first message (`Execute <issue> with the engine
-   executor, hands-off mode`);
+   executor, hands-off mode`), plus the `run=`, `tmux=` and `rc=` values its
+   claim comment records;
 5. makes the session reachable from the apps (see below);
 6. prints how to attach.
 
 The executor claims the task itself. `engine start` only places and launches.
 
 **Remote hosts:** with `--host devbox`, every step runs on `devbox` over SSH
-(`ssh devbox engine host spawn …`). The session lives in `devbox`'s tmux
+(`ssh <address> engine host spawn …`). The session lives in `devbox`'s tmux
 server, so the machine you typed on can sleep or disconnect.
 
 **Other ways to start:** a session started any other way (Claude desktop, a
@@ -139,7 +140,7 @@ hand and one started by the coordinator look the same.
 
 | From | How |
 | --- | --- |
-| Any terminal | `engine attach <repo>-<task>`. This runs `tmux attach` locally, or `ssh <host> -t tmux attach -t engine:<repo>-<task>` for a remote host. Detach with `Ctrl-b d`; the session keeps running. |
+| Any terminal | `engine attach <repo>-<task>`. This runs `tmux attach` locally, or `ssh <address> -t tmux attach -t engine:<repo>-<task>` for a remote host. Detach with `Ctrl-b d`; the session keeps running. |
 | Phone, SSH | An SSH app over Tailscale, then `tmux attach -t engine`, then `Ctrl-b w` to pick the window. Best for debugging. |
 | Phone, chat | Claude sessions: the Claude app, through Remote Control. Codex sessions: the ChatGPT app, through Codex remote control. Best for answering a question. |
 | Desktop | claude.ai/code or the Claude desktop app for Remote Control sessions; the ChatGPT or Codex desktop app for Codex. |
