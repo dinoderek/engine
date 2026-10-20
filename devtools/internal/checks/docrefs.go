@@ -206,6 +206,8 @@ func (d docsEnv) laneProblems(doc, text string) []string {
 func (d docsEnv) referenceProblems() ([]string, error) {
 	ephemeral := make([]*regexp.Regexp, 0, len(d.rules.ephemeral))
 	for _, prefix := range d.rules.ephemeral {
+		// Either the prefix after a ./ or ../ (optionally behind other
+		// segments, as in docs/../design/x), or the prefix starting a word.
 		ephemeral = append(ephemeral, regexp.MustCompile(`(?:^|[^\w./-])(?:[\w.-]+/)*?(?:\.\.?/)+`+regexp.QuoteMeta(prefix)+`[\w.-]|(?:^|[^\w./-])`+regexp.QuoteMeta(prefix)+`[\w.-]`))
 	}
 	var problems []string
