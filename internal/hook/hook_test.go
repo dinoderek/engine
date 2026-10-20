@@ -87,6 +87,7 @@ func TestMergeProblem(t *testing.T) {
 		"graphql via a variable":   {`q='mutation { mergePullRequest(input: {}) { clientMutationId } }'; gh api graphql -f query="$q"`, "GraphQL"},
 		"paren in a heredoc subst": {"gh pr create --body \"$(cat <<'EOF'\nUse (a\nEOF\n)\" && gh pr merge 7 --squash", "needs --match-head-commit"},
 		"quoted paren in subst":    {`gh pr create --body "$(echo "(")" && gh pr merge 7 --squash`, "needs --match-head-commit"},
+		"eval":                     {`eval "gh pr merge 7 --squash"`, "needs --match-head-commit"},
 		"unclosed quote":           {`gh pr merge 7 --body "oops`, "needs --match-head-commit"},
 		"unclosed substitution":    {"gh pr merge 7 --match-head-commit $(git rev-parse", ""},
 	}

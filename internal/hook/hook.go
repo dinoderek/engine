@@ -86,8 +86,8 @@ func problem(command string, depth int) string {
 	return ""
 }
 
-// commandProblem judges one simple command: gh itself, or a shell's -c
-// script.
+// commandProblem judges one simple command: gh itself, or the script a
+// shell's -c or eval runs.
 func commandProblem(words []string, depth int) string {
 	words = stripPrefix(words)
 	if len(words) == 0 {
@@ -98,6 +98,8 @@ func commandProblem(words []string, depth int) string {
 		if script, ok := shellScript(words[1:]); ok {
 			return problem(script, depth+1)
 		}
+	case name == "eval":
+		return problem(strings.Join(words[1:], " "), depth+1)
 	case name == "gh":
 		return ghProblem(words[1:])
 	}
