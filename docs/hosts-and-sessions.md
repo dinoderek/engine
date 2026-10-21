@@ -36,6 +36,7 @@ replaces the derived count.
 | `linux` | runs Linux |
 | `ios` | builds iOS apps and runs the iOS Simulator (Xcode) |
 | `vm` | runs virtual machines |
+| `docker` | runs Docker containers |
 
 A card's `requires` names capabilities from this table. A new one is added
 here first, then declared by the hosts that have it.
@@ -57,13 +58,13 @@ address = "<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 48
 reserve_gb = 16         # also the operator's workstation
-capabilities = ["macos", "ios", "vm"]
+capabilities = ["macos", "ios", "vm", "docker"]
 
 [host.devbox]           # 3 slots
 address = "<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 32
-capabilities = ["linux", "vm"]
+capabilities = ["linux", "vm", "docker"]
 
 [host.claude-cloud]
 kind = "cloud"
