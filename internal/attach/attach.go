@@ -17,9 +17,9 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// sshFailed is ssh's exit status when it cannot connect, as opposed to a
-// command it ran that failed.
-const sshFailed = 255
+// tmuxNoSession is the exit status of a tmux command that finds no server or
+// session, such as has-session.
+const tmuxNoSession = 1
 
 // Deps are the programs and the environment attach reaches. System gives the
 // ones a running engine uses; tests replace them.
@@ -123,7 +123,10 @@ func (d Deps) attachRemote(name string, host hosts.Host) error {
 	if err != nil {
 		return err
 	}
-	return d.replace("ssh", []string{"ssh", "-t", host.Address, "tmux", "attach", "-t", target(id)})
+	// ssh joins its trailing arguments and hands them to the remote shell, so
+	// the remote command goes as one quoted string, the target included.
+	remoteCmd := shellJoin([]string{"tmux", "attach", "-t", target(id)})
+	return d.replace("ssh", []string{"ssh", "-t", host.Address, remoteCmd})
 }
 
 // windowID returns the id of the window named name in engine's tmux session.
@@ -154,23 +157,30 @@ func (d Deps) replace(bin string, argv []string) error {
 }
 
 // sshRunner runs a tmux command on the host at address. The command goes to
-// the remote shell as one quoted string. A failure to connect is reported as
-// such, not as a missing session.
+// the remote shell as one quoted string. tmux exits 1 when the session or the
+// server is missing, which is what HasSession reads as "no session". Any
+// other failure, such as ssh unable to connect (255) or a missing tmux (127),
+// is reported as itself, never as a missing session.
 func (d Deps) sshRunner(address string) session.Runner {
 	return func(name string, args ...string) (string, error) {
-		words := make([]string, 0, len(args)+1)
-		for _, a := range append([]string{name}, args...) {
-			words = append(words, shellQuote(a))
-		}
-		out, err := d.Run("ssh", address, strings.Join(words, " "))
+		out, err := d.Run("ssh", address, shellJoin(append([]string{name}, args...)))
 		var exit *session.ExitError
-		if errors.As(err, &exit) && exit.Code == sshFailed {
-			return out, fmt.Errorf("ssh %s: %s", address, strings.TrimSpace(exit.Stderr))
+		if errors.As(err, &exit) && exit.Code != tmuxNoSession {
+			detail := strings.TrimSpace(exit.Stderr)
+			if detail == "" {
+				detail = fmt.Sprintf("exit status %d", exit.Code)
+			}
+			return out, fmt.Errorf("ssh %s: %s", address, detail)
 		}
 		return out, err
 	}
 }
 
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+// shellJoin quotes each word for a POSIX shell, as one command line.
+func shellJoin(words []string) string {
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+	}
+	return strings.Join(quoted, " ")
 }

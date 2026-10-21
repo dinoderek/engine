@@ -124,18 +124,18 @@ func jsonOf(t *testing.T, v any) string {
 // fakeTmux answers the tmux calls of one host: locally (name "tmux") or over
 // ssh (name "ssh", the remote command as one quoted string).
 type fakeTmux struct {
-	windows   string // what list-windows prints
-	session   bool   // whether the session engine exists
-	sshStatus int    // ssh's exit status when it cannot connect; 0 for none
-	calls     []string
+	windows string             // what list-windows prints
+	session bool               // whether the session engine exists
+	sshErr  *session.ExitError // what every ssh call fails with; nil for none
+	calls   []string
 }
 
 func (f *fakeTmux) run(name string, args ...string) (string, error) {
 	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
 	sub := ""
 	if name == "ssh" {
-		if f.sshStatus != 0 {
-			return "", &session.ExitError{Command: "ssh " + args[0], Code: f.sshStatus, Stderr: "Connection refused"}
+		if f.sshErr != nil {
+			return "", f.sshErr
 		}
 		sub = strings.Trim(strings.Fields(args[1])[1], "'")
 	} else {
@@ -250,7 +250,9 @@ func TestAttachRemoteFindsTheWindowOverSSH(t *testing.T) {
 	if !slices.Contains(tm.calls, wantCall) {
 		t.Errorf("calls %q lack %q", tm.calls, wantCall)
 	}
-	want := []string{"ssh", "-t", remote, "tmux", "attach", "-t", "=engine:@7"}
+	// ssh gets the remote command as one quoted string, so the target is not
+	// expanded by the remote login shell.
+	want := []string{"ssh", "-t", remote, "'tmux' 'attach' '-t' '=engine:@7'"}
 	if r.exec.calls != 1 || r.exec.path != "/bin/ssh" || !slices.Equal(r.exec.argv, want) {
 		t.Errorf("replaced with %s %v, want /bin/ssh %v", r.exec.path, r.exec.argv, want)
 	}
@@ -263,19 +265,31 @@ func TestAttachRemoteIgnoresTmuxInside(t *testing.T) {
 	if err := Attach("web.app-412", r.deps()); err != nil {
 		t.Fatal(err)
 	}
-	if r.exec.argv[3] != "tmux" || r.exec.argv[4] != "attach" {
-		t.Errorf("argv %v, want a remote attach", r.exec.argv)
+	if got := r.exec.argv[3]; !strings.HasPrefix(got, "'tmux' 'attach' ") {
+		t.Errorf("remote command %q, want a remote attach", got)
 	}
 }
 
 func TestAttachRemoteUnreachable(t *testing.T) {
-	r := newRig(t, "mac", &fakeTmux{sshStatus: 255}, webTask("devbox", t0))
+	r := newRig(t, "mac", &fakeTmux{sshErr: &session.ExitError{Code: 255, Stderr: "Connection refused"}}, webTask("devbox", t0))
 	err := Attach("web.app-412", r.deps())
-	if err == nil || !strings.Contains(err.Error(), "ssh "+remote+": Connection refused") {
+	if err == nil || err.Error() != "ssh "+remote+": Connection refused" {
 		t.Errorf("error %v, want the ssh failure", err)
 	}
 	if r.exec.calls != 0 {
 		t.Error("replaced the process after ssh failed")
+	}
+}
+
+func TestAttachRemoteWithoutTmux(t *testing.T) {
+	// A missing tmux on the remote exits 127: that is not a missing session.
+	r := newRig(t, "mac", &fakeTmux{sshErr: &session.ExitError{Code: 127, Stderr: "zsh: command not found: tmux"}}, webTask("devbox", t0))
+	err := Attach("web.app-412", r.deps())
+	if err == nil || err.Error() != "ssh "+remote+": zsh: command not found: tmux" {
+		t.Errorf("error %v, want the remote shell's failure", err)
+	}
+	if r.exec.calls != 0 {
+		t.Error("replaced the process without tmux")
 	}
 }
 
@@ -392,8 +406,8 @@ func TestSystemFillsEveryDep(t *testing.T) {
 	}
 }
 
-func TestShellQuote(t *testing.T) {
-	if got := shellQuote("it's #{x}"); got != `'it'\''s #{x}'` {
+func TestShellJoin(t *testing.T) {
+	if got := shellJoin([]string{"tmux", "it's", "#{x} y"}); got != `'tmux' 'it'\''s' '#{x} y'` {
 		t.Errorf("got %s", got)
 	}
 }
