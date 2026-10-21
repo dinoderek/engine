@@ -119,7 +119,7 @@ Set the issue type `Task` if the owner has issue types.
 
 A task with no feature carries its own approval. Label it `engine:prepare`
 while you draft it. The operator sets `engine:approved`, after which it runs
-like any `todo` task. Tasks inside a feature never carry `engine:prepare`: the
+like any ready task. Tasks inside a feature never carry `engine:prepare`: the
 feature's approval covers them.
 
 ## Starting from an existing issue
