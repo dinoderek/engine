@@ -15,11 +15,11 @@ one line, in `~/.config/engine/host`.
 **Names and addresses.** A host's name is its `[host.<name>]` key, a logical
 name such as `mac` or `devbox`, never a hostname or an IP. It is what claims
 and every surface show. Its `address` is how other hosts reach it over plain
-SSH, `<user>@<tailscale name>`, passed to `ssh` as is, so reaching a host
-needs nothing outside this file. The address stays here and is never posted
-anywhere. A
-machine (below) is local to whichever host has its name in `~/.config/engine/host`,
-and reached over SSH at its `address` from every other one.
+SSH, `<user>@<tailscale name>`, passed to `ssh` as is, so it needs no
+`~/.ssh/config` entry. The address stays in this file and is never posted
+anywhere. A machine (below) is local to whichever host has its name in
+`~/.config/engine/host`, and reached over SSH at its `address` from every
+other one.
 
 **Machines and cloud hosts.** A host with no `kind` is a machine: it needs
 `address` and `ram_gb`. `kind = "cloud"` is the only kind; a cloud host has no

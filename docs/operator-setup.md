@@ -58,43 +58,53 @@
 - **Skills (Claude Code):** the `engine` plugin from this repo's marketplace,
   `.claude-plugin/marketplace.json`. A target repo enables it in its
   `.claude/settings.json`, as this repo does; or install it for yourself with
-  `/plugin install engine --marketplace dinoderek/engine`. Codex has no
-  install yet.
+  `/plugin install engine --marketplace dinoderek/engine` in a session, or
+  from a shell with `claude plugin marketplace add dinoderek/engine` and
+  `claude plugin install engine@engine`. Codex has no install yet.
 - **Sessions started by hand** use the token file for their `gh` calls, so
   their @mentions reach you. Their `git push` uses the checkout's own
   credentials.
 - **SSH (the fallback route to any session):**
   - every host on the same Tailscale tailnet as the phone;
-  - plain OpenSSH with key auth, never Tailscale SSH: its check mode asks for
-    a browser approval, which an unattended coordinator cannot give;
+  - plain OpenSSH, never Tailscale SSH: its check mode asks for a browser
+    approval, which an unattended coordinator cannot give. The keys of the
+    coordinator's host and the phone's SSH app go in each other machine's
+    `authorized_keys`;
   - on macOS, Remote Login turned on.
 
 ## A remote devbox
 
 A Linux machine on the tailnet, set up from the coordinator's host (the Mac).
+It gets every "Each host" item above; these steps are what differs.
 
-1. **Authorize the Mac's key.** On the devbox, append the Mac's
-   `~/.ssh/id_ed25519.pub` to `~/.ssh/authorized_keys`.
-2. **Switch to OpenSSH.** On the devbox, with `openssh-server` installed.
+1. **Authorize keys.** On the devbox, append to `~/.ssh/authorized_keys` the
+   Mac's `~/.ssh/id_ed25519.pub`, and the phone SSH app's key if you use that
+   route.
+2. **Switch to OpenSSH.** First make sure you can reach the devbox's own
+   console: if key auth then fails, that is the only way back. On the devbox,
+   install `openssh-server` (`sudo apt install openssh-server`), then run this;
    Tailscale SSH goes off only once sshd is listening:
 
    ```bash
    sudo systemctl enable --now ssh && ss -ltn | grep -q ":22 " && { ! sudo ufw status | grep -q "Status: active" || sudo ufw allow in on tailscale0 to any port 22 proto tcp; } && sudo tailscale set --ssh=false
    ```
 
-   If plain SSH then fails, `sudo tailscale set --ssh` from the devbox's own
-   console restores Tailscale SSH.
-3. **Check from the Mac.** `ssh -o BatchMode=yes <user>@<tailscale name> true`
-   must succeed with no prompt. That string is the devbox's `address` in
-   `hosts.toml`.
-4. **Everything else over that SSH,** from the Mac:
-   - engine without a checkout:
-     `GOBIN=~/.local/bin go install github.com/dinoderek/engine/cmd/engine@main`
-     (any directory on `PATH`);
-   - copy `hosts.toml` and `github-token` into `~/.config/engine/` with mode
-     `600`, and write `devbox` to `~/.config/engine/host`;
-   - the plugin: `claude plugin marketplace add dinoderek/engine`, then
-     `claude plugin install engine@engine`;
+   To undo it from that console: `sudo tailscale set --ssh`.
+3. **Check from the Mac.** On first contact, accept the devbox's host key
+   (`-o StrictHostKeyChecking=accept-new`); if it changed when sshd took over
+   from Tailscale, check the fingerprint on the devbox, then
+   `ssh-keygen -R <tailscale name>`. Then this must succeed with no prompt:
+   `ssh -o BatchMode=yes <user>@<tailscale name> 'command -v engine tmux gh claude codex'`.
+   It is the non-interactive shell the coordinator uses, and that string is
+   the devbox's `address` (`hosts-and-sessions.md`, "Names and addresses").
+4. **Devbox-only details:**
+   - engine needs no checkout: `GOBIN=~/.local/bin go install
+     github.com/dinoderek/engine/cmd/engine@main`;
+   - the non-interactive `PATH` must include `~/.local/bin` (and any tool
+     manager's shims), so export it at the top of `~/.bashrc`, above the
+     line that returns for non-interactive shells;
+   - copy `hosts.toml` and `github-token` from the Mac over SSH, with mode
+     `600`;
    - no suspend: `sudo systemctl mask sleep.target suspend.target
      hibernate.target hybrid-sleep.target`.
 
