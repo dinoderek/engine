@@ -9,8 +9,9 @@ Two programs share one Go module:
 - **`engine`**, the product: `cmd/engine` → `internal/cli` → one package per
   command. `internal/cli` parses arguments and dispatches. Today:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
-  tracker adapter, through `gh`: `engine labels sync`, and reads of a task
-  issue and of the claim comments on every claimed task), `internal/hook`
+  tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
+  of a task issue and of the claim comments on every claimed task),
+  `internal/hook`
   (harness hooks: `engine hook pre-tool-use`). The commands share
   `internal/hosts`, the host config: it parses `hosts.toml` with an in-house
   reader of the TOML subset the config uses, validates it and works out each
