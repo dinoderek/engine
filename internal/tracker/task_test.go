@@ -21,12 +21,18 @@ func (f *fakeGH) run(env []string, name string, args ...string) (string, error) 
 	if name != "gh" || len(args) < 2 || args[0] != "api" {
 		return "", errors.New("unexpected command " + name)
 	}
-	if err := f.errs[args[1]]; err != nil {
+	key := args[1]
+	for _, a := range args {
+		if q, ok := strings.CutPrefix(a, "q="); ok {
+			key += "?" + q
+		}
+	}
+	if err := f.errs[key]; err != nil {
 		return "HTTP 404 Not Found", err
 	}
-	out, ok := f.replies[args[1]]
+	out, ok := f.replies[key]
 	if !ok {
-		return "", errors.New("no reply for " + args[1])
+		return "", errors.New("no reply for " + key)
 	}
 	return out, nil
 }

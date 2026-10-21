@@ -71,12 +71,17 @@ func TestParseClaimRejects(t *testing.T) {
 
 func commentsPath(n int) string { return issuePath(n, "comments") }
 
-func comments(bodies ...string) string {
+// cm is one comment: who wrote it, and what.
+type cm struct{ by, body string }
+
+// thread renders one page of comments as the API does, oldest first. Comment
+// i is posted i+start minutes past the hour.
+func thread(start int, cms ...cm) string {
 	var items []string
-	for i, b := range bodies {
-		item := `{"body":` + quote(b) + `,"html_url":"https://github.com/o/r/c` + string(rune('1'+i)) +
-			`","created_at":"2026-10-21T20:0` + string(rune('0'+i)) + `:00Z","user":{"login":"bot"}}`
-		items = append(items, item)
+	for i, c := range cms {
+		n := start + i
+		items = append(items, `{"body":`+quote(c.body)+`,"html_url":"https://github.com/o/r/c`+string(rune('0'+n))+
+			`","created_at":"2026-10-21T20:0`+string(rune('0'+n))+`:00Z","user":{"login":"`+c.by+`"}}`)
 	}
 	return "[" + strings.Join(items, ",") + "]"
 }
@@ -88,15 +93,15 @@ func quote(s string) string {
 
 func TestLatestClaimTakesTheNewest(t *testing.T) {
 	older := strings.Replace(fullClaim, "Host: mac", "Host: devbox", 1)
-	page1 := comments("hello", older, "Ruling (risk: med): x")
-	page2 := comments(fullClaim, "done")
+	page1 := thread(0, cm{machine, "hello"}, cm{machine, older}, cm{machine, "Ruling (risk: med): x"})
+	page2 := thread(3, cm{machine, fullClaim}, cm{machine, "done"})
 	gh := &fakeGH{replies: map[string]string{commentsPath(21): page1 + "\n" + page2}}
 	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21})
 	if err != nil || c == nil {
 		t.Fatalf("got %v, %v", c, err)
 	}
-	if c.Host != "mac" || c.Author != "bot" || !strings.HasSuffix(c.URL, "/c1") ||
-		!c.PostedAt.Equal(time.Date(2026, 10, 21, 20, 0, 0, 0, time.UTC)) {
+	if c.Host != "mac" || c.Author != machine || !strings.HasSuffix(c.URL, "/c3") ||
+		!c.PostedAt.Equal(time.Date(2026, 10, 21, 20, 3, 0, 0, time.UTC)) {
 		t.Errorf("got %+v", c)
 	}
 	if !strings.Contains(gh.calls[0], "--paginate") || !strings.Contains(gh.calls[0], "per_page=100") {
@@ -104,8 +109,31 @@ func TestLatestClaimTakesTheNewest(t *testing.T) {
 	}
 }
 
+func TestLatestClaimIgnoresStrangers(t *testing.T) {
+	stranger := strings.Replace(fullClaim, "Host: mac", "Host: evil", 1)
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0,
+		cm{machine, fullClaim}, cm{"stranger", stranger}, cm{machine + "-2", stranger}, cm{"", stranger})}}
+	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21})
+	if err != nil || c == nil || c.Host != "mac" || c.Author != machine {
+		t.Errorf("a later stranger replaced the claim: %+v, %v", c, err)
+	}
+	gh = &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{"stranger", stranger})}}
+	if c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); c != nil || err != nil {
+		t.Errorf("a stranger's claim counted: %+v, %v", c, err)
+	}
+}
+
+func TestLatestClaimAcceptsTheOperator(t *testing.T) {
+	byHand := strings.Replace(fullClaim, "Host: mac", "Host: laptop", 1)
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{machine, fullClaim}, cm{operator, byHand})}}
+	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21})
+	if err != nil || c == nil || c.Host != "laptop" || c.Author != operator {
+		t.Errorf("got %+v, %v", c, err)
+	}
+}
+
 func TestLatestClaimNone(t *testing.T) {
-	gh := &fakeGH{replies: map[string]string{commentsPath(21): comments("hello") + "[]"}}
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{machine, "hello"}) + "[]"}}
 	if c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); c != nil || err != nil {
 		t.Errorf("got %v, %v", c, err)
 	}
