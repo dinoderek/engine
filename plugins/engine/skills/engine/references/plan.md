@@ -20,16 +20,24 @@ question at a time.
 2. Read the code and the docs it touches. Draft the **whole** next layer at
    once. Write a recommended answer for everything you can decide, and list
    only the questions that need the operator.
-3. Put the draft in the issue: create it on the first batch, then overwrite
-   the body (`gh issue edit --body-file`) on each later one. After each
-   batch, add a one-line comment saying what changed.
-4. The body ends with a `## Questions` section, numbered. Tell the operator
+3. Put the draft in a **Claude Doc**, so the operator can annotate the text
+   with comments. On the first batch, also create the issue, labelled
+   `engine:prepare`, with a body that only links the doc. Each later batch
+   updates the doc in place.
+4. The draft ends with a `## Questions` section, numbered. Tell the operator
    in chat which questions matter most.
-5. The operator answers in one batch, in chat or on the issue. Fold the
-   answers in, and go one layer deeper.
+5. The operator answers in one batch: comments on the doc, or chat. Reply in
+   each comment thread with what you changed. Fold the answers in, and go one
+   layer deeper.
 
-Stop when `## Questions` is empty, and tell the operator the issue is ready
-for `engine:approved`.
+Stop when `## Questions` is empty. Then write the final text into the issue
+body (`gh issue edit --body-file`), keep the doc link at the bottom, and tell
+the operator the issue is ready for `engine:approved`. Executors read only the
+issue.
+
+Without the Claude Docs connector (for example in Codex), draft in the issue
+body instead: overwrite it on each batch, and add a one-line comment saying
+what changed.
 
 Feature layers:
 

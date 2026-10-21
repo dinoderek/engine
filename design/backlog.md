@@ -1,7 +1,6 @@
 # Backlog (ephemeral)
 
-Work to do before or alongside the build. Design questions are marked **Q**
-inline in the doc that owns them. Delete each item here when it is done.
+Work to do before or alongside the build. Delete each item when it is done.
 
 ## Set up
 
@@ -33,20 +32,3 @@ inline in the doc that owns them. Delete each item here when it is done.
 7. **Reviewer tier on Codex.** Claude Code can start a subagent on a
    different model. Check whether a Codex session can, or whether its
    reviewer inherits the session's model.
-
-## Questions
-
-10. **Where you review a planner draft.** You need to annotate the text with
-    comments, and a GitHub issue body cannot take inline comments. The plan
-    still ends up in GitHub issues; only the draft surface is open.
-    Candidates:
-    - **Claude Docs:** comments anchored to the text, on the web and the
-      phone, with replies in the thread. It works only with Claude, and the
-      approved text is copied into the issue.
-    - **A draft PR holding the plan as a markdown file** on a branch that is
-      never merged: line comments, GitHub-native, any harness. Comments land
-      on source lines, not on the rendered text.
-    - **A local file in your editor** with inline notes: works, but not from
-      the phone.
-
-    Until this is decided, `references/plan.md` drafts in the issue body.
