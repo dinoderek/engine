@@ -42,8 +42,9 @@ type Row struct {
 	Harness string `json:"harness,omitempty"`
 	Branch  string `json:"branch,omitempty"`
 	State   string `json:"state"`
-	// Alive is null when it is unknown: the claim is on another host, or a
-	// probe failed.
+	// Alive is null when nothing on this host settled it: the claim is on
+	// another host, a probe failed, or the session was started by hand and
+	// Claude Code does not list it.
 	Alive      *bool  `json:"alive"`
 	WaitingFor string `json:"waiting_for,omitempty"`
 	ClaimedAt  string `json:"claimed_at"`

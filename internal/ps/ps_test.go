@@ -347,12 +347,12 @@ func TestRowsAreOrderedByRepoThenNumber(t *testing.T) {
 }
 
 func TestRowFields(t *testing.T) {
-	f := &fake{tasks: []tracker.ClaimedTask{task(42, "w-17", "engine:running")}, windows: []session.WindowInfo{window("w-17")}}
+	f := &fake{tasks: []tracker.ClaimedTask{task(42, "w-42", "engine:running")}, windows: []session.WindowInfo{window("w-42")}}
 	got := list(t, f).Rows[0]
 	yes := true
 	want := Row{
-		Task: tracker.Ref{Repo: "o/r", Number: 42}.String(), Title: "task w-17", Session: "w-17", Run: "w-17-run", Host: "mac",
-		Harness: "claude-code", Branch: "task/w-17", State: Running, Alive: &yes,
+		Task: tracker.Ref{Repo: "o/r", Number: 42}.String(), Title: "task w-42", Session: "w-42", Run: "w-42-run", Host: "mac",
+		Harness: "claude-code", Branch: "task/w-42", State: Running, Alive: &yes,
 		ClaimedAt: "2026-10-21T10:30:00Z", AgeSeconds: 5400,
 	}
 	if !reflect.DeepEqual(got, want) {

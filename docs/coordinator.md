@@ -120,10 +120,11 @@ is waiting for input. Three sources:
 
 On this host, `engine ps` calls a session alive when its tmux window is live
 or `claude agents` lists it. It calls one dead only when its claim names a
-window of engine's session, that window is gone, `claude agents` does not
-list it and no probe failed: a session started by hand can run anywhere, so
-its liveness is unknown unless listed. A failed probe also leaves it unknown. A session in
-`needs-human` or `in-review` keeps that state while alive.
+window of engine's session, that window is gone or its command exited,
+`claude agents` does not list it and no probe failed: a session started by
+hand can run anywhere, so its liveness is unknown unless listed. A failed
+probe also leaves it unknown. A session in `needs-human` or `in-review` keeps
+that state while alive.
 
 **Stalls.** A session whose `waiting-since` is 10 minutes old while its task
 is not `needs-human` has stopped outside the protocol, for example on a

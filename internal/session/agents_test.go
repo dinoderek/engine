@@ -11,10 +11,10 @@ import (
 // claudeAgents is the shape `claude agents --json` prints: the fields engine
 // does not read are here so a decode that choked on them would fail.
 const claudeAgents = `[
-  {"pid": 58375, "cwd": "/work/a", "kind": "interactive", "startedAt": 1792338271385,
-   "sessionId": "b1b918ae-8f92-5258-bc91-4a0bce40deec", "name": "a-7", "status": "idle"},
-  {"pid": 50701, "cwd": "/work/b", "kind": "interactive", "startedAt": 1792604638492,
-   "sessionId": "14497091-e351-4a77-af89-89bc29afc1be", "name": "b-9", "status": "busy"},
+  {"pid": 58375, "cwd": "/work/a", "kind": "interactive", "startedAt": 1700000000001,
+   "sessionId": "11111111-1111-4111-8111-111111111111", "name": "a-7", "status": "idle"},
+  {"pid": 50701, "cwd": "/work/b", "kind": "interactive", "startedAt": 1700000000002,
+   "sessionId": "22222222-2222-4222-8222-222222222222", "name": "b-9", "status": "busy"},
   {"pid": 5, "cwd": "/work/c", "name": "c-1", "status": "waiting", "waitingFor": "approval"}
 ]`
 
