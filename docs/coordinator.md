@@ -128,8 +128,10 @@ its comments and @mentions would never reach your phone. So engine acts as its
 own identity:
 
 - **V1:** a machine user, added as a collaborator. GitHub allows one free
-  machine account per person. The coordinator and every session get its
-  token as `GH_TOKEN`. If you are setting it up, load
+  machine account per person. The coordinator and every session it starts
+  get its token as `GH_TOKEN`. A session started by hand runs `gh` as
+  `engine gh …`, which reads the token file, so no harness needs configuring
+  and the token never appears on a command line. If you are setting it up, load
   `operator-setup.md`.
 - **Later:** a GitHub App.
 

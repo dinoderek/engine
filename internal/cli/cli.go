@@ -19,15 +19,17 @@ commands:
   version                   print the engine version
   labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the Claude Code merge guard: reads the event on stdin
+  gh <args...>              run gh as engine's machine user
 `
 
-// Env is what a command reads and runs: the standard streams, the runner for
+// Env is what a command reads and runs: the standard streams, the runners for
 // outside CLIs, the environment and the home directory.
 type Env struct {
 	In     io.Reader
 	Out    io.Writer
 	Err    io.Writer
 	Exec   tracker.Runner
+	Stream tracker.Streamer
 	Getenv func(string) string
 	Home   string
 }
@@ -35,7 +37,7 @@ type Env struct {
 // System is the Env of the running process.
 func System() Env {
 	home, _ := os.UserHomeDir() // "" makes tracker.Token refuse the token file
-	return Env{In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Getenv: os.Getenv, Home: home}
+	return Env{In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec, Getenv: os.Getenv, Home: home}
 }
 
 // Run executes the command named by args and returns the process exit code.
@@ -56,6 +58,8 @@ func Run(args []string, env Env) int {
 		return syncLabels(args[2], env)
 	case "hook":
 		return runHook(args[1:], env)
+	case "gh":
+		return runGh(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0
@@ -74,6 +78,23 @@ func runHook(args []string, env Env) int {
 	}
 	fmt.Fprintf(env.Err, "engine hook: unknown hook %q; update engine (go install ./cmd/engine)\n", strings.Join(args, " "))
 	return 1
+}
+
+// runGh runs gh as engine's machine user, with its streams and exit code, so
+// a session's comments and @mentions reach the operator without the token
+// appearing on a command line.
+func runGh(args []string, env Env) int {
+	token, err := tracker.Token(env.Getenv, env.Home)
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine gh:", err)
+		return 1
+	}
+	streams := tracker.Streams{In: env.In, Out: env.Out, Err: env.Err}
+	code, err := env.Stream([]string{"GH_TOKEN=" + token}, streams, "gh", args...)
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine gh:", err)
+	}
+	return code
 }
 
 func syncLabels(repo string, env Env) int {

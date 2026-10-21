@@ -67,8 +67,8 @@
   `/plugin install engine --marketplace dinoderek/engine` in a session, or
   from a shell with `claude plugin marketplace add dinoderek/engine` and
   `claude plugin install engine@engine`. Codex has no install yet.
-- **Sessions started by hand** use the token file for their `gh` calls, so
-  their @mentions reach you. Their `git push` uses the checkout's own
+- **Sessions started by hand** run their `gh` calls as `engine gh …`, which
+  reads the token file, so their @mentions reach you. Their `git push` uses the checkout's own
   credentials.
 - **SSH (the fallback route to any session):**
   - every host on the same Tailscale tailnet as the phone;
