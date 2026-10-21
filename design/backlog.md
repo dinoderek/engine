@@ -36,36 +36,17 @@ inline in the doc that owns them. Delete each item here when it is done.
 
 ## Questions
 
-The skill already follows the recommended answer to each of these. Say if one
-should change.
+10. **Where you review a planner draft.** You need to annotate the text with
+    comments, and a GitHub issue body cannot take inline comments. The plan
+    still ends up in GitHub issues; only the draft surface is open.
+    Candidates:
+    - **Claude Docs:** comments anchored to the text, on the web and the
+      phone, with replies in the thread. It works only with Claude, and the
+      approved text is copied into the issue.
+    - **A draft PR holding the plan as a markdown file** on a branch that is
+      never merged: line comments, GitHub-native, any harness. Comments land
+      on source lines, not on the rendered text.
+    - **A local file in your editor** with inline notes: works, but not from
+      the phone.
 
-8. **Planner draft in the issue from batch one** (`references/plan.md`,
-   "Working with the operator"). *Recommended: yes.* You can read and answer
-   from your phone.
-9. **Labels stay the source of truth; issue types are set as well where the
-   owner has them** (`references/plan.md`, "Feature issue"). *Recommended:
-   yes.* Types are organisation-only, so a personal repo such as engine has
-   none.
-10. **The planner writes only to GitHub** (`references/plan.md`, "In-repo
-    plans"). *Recommended: yes, for now.* `task-protocol` already writes
-    in-repo plans. Revisit after the pilot.
-11. **The in-repo mapping** (`references/plan-sources.md`). *Recommended: as
-    written.* It matches how `task-protocol` runs BOGA3's `docs/plans`.
-12. **In-repo plans are mapped by reading the repo's own templates**, with
-    no binding table in the repo (`references/plan-sources.md`, "Which
-    mapping applies"). *Recommended: yes.* The target repo needs no
-    engine-specific changes, and the PR body shows the mapping used.
-15. **Overrides live on the feature and are inherited by its cards**
-    (`references/plan.md`, "Repo rules that block hands-off"). *Recommended:
-    yes.* "Merge on green" would otherwise repeat on every card.
-16. **A repo rule that involves the operator with no override covering it is
-    a hard stop** (`references/rulings.md`, class 11). *Recommended: yes.* A
-    rule the planner missed shows up, rather than being silently skipped.
-13. **`low` decisions get one collapsed line each in the PR body**
-    (`references/rulings.md`). *Recommended: yes.* You never read them, but
-    the evidence is there if a grade was wrong.
-14. **A `high` ruling @mentions you and carries on, rather than stopping**
-    (`references/rulings.md`). *Recommended: yes.* A class of `high` rulings
-    that keeps being reversed becomes a hard stop.
-
-Skill paths are relative to `plugins/engine/skills/engine/`.
+    Until this is decided, `references/plan.md` drafts in the issue body.
