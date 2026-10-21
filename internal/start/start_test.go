@@ -36,9 +36,11 @@ func TestRefusalsChangeNothing(t *testing.T) {
 	cases := []refusal{
 		{name: "unknown mode", opts: Options{Mode: "yolo"}, want: `unknown mode "yolo"`},
 		{name: "unknown tier", opts: Options{Tier: "deeep"}, want: `unknown tier "deeep"`},
-		{name: "no token", setup: removeFile(".config/engine/github-token"), want: "no GH_TOKEN and no token file"},
+		{name: "no token", setup: removeFile(".config/engine/github-token"), want: "the session reads the machine user's token"},
 		{name: "GH_TOKEN but no token file", env: map[string]string{"GH_TOKEN": "tok"},
 			setup: removeFile(".config/engine/github-token"), want: "the session reads the machine user's token"},
+		{name: "empty token file, GH_TOKEN set", env: map[string]string{"GH_TOKEN": "tok"},
+			setup: emptyFile(".config/engine/github-token"), want: "is empty"},
 		{name: "no host file", setup: removeFile(".config/engine/host"), want: "read host file"},
 		{name: "no hosts.toml", setup: removeFile(".config/engine/hosts.toml"), want: "read host config"},
 		{name: "host not in hosts.toml", host: "laptop", want: `host "laptop" is not in hosts.toml`},
@@ -100,6 +102,13 @@ func checkRefusal(t *testing.T, c refusal) {
 	tm.readOnly(t)
 }
 
+func emptyFile(rel string) func(*testing.T, home) {
+	return func(t *testing.T, h home) {
+		t.Helper()
+		write(t, filepath.Join(h.dir, rel), " \n", 0o600)
+	}
+}
+
 func removeFile(rel string) func(*testing.T, home) {
 	return func(t *testing.T, h home) {
 		t.Helper()
@@ -151,9 +160,11 @@ func TestLaunchCommand(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && export GH_TOKEN && `
+		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `
 		if configDir != "" {
 			script += `export CLAUDE_CONFIG_DIR='/cfg dir' && `
+		} else {
+			script += `unset CLAUDE_CONFIG_DIR && `
 		}
 		script += `exec ` + h.bin + ` --permission-mode auto --model opus-x --effort high -n r-7 --remote-control r-7 ` +
 			`'Execute ` + ref(7).String() + ` with the engine executor, hands-off mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`

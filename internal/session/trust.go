@@ -24,8 +24,9 @@ func ClaudeConfig(getenv func(string) string, home string) string {
 // so a session started there skips the workspace trust dialog, which would
 // otherwise stop an unattended launch (its default answer exits). It sets
 // projects[<dir>].hasTrustDialogAccepted, as Claude Code itself does, for dir
-// and for its resolved path when that differs. Every other key is kept byte
-// for byte, and the file is replaced in one rename. Claude Code rewrites the
+// and for its resolved path when that differs. Every other value is kept as
+// written (keys are re-sorted and the file re-indented), and the file is
+// replaced in one rename; a symlinked file is replaced at its target. Claude Code rewrites the
 // file too, without a lock engine could take, so when the file changes
 // between the read and the rename, it starts again, a few times at most. A
 // file that is not a JSON object is left alone and reported.
@@ -34,6 +35,9 @@ func TrustFolder(config, dir string) error { return trustFolder(config, dir, sta
 // trustFolder is TrustFolder with the file's stamp read by check, which tests
 // replace to play a concurrent writer.
 func trustFolder(config, dir string, check func(string) (fileStamp, error)) error {
+	if target, err := filepath.EvalSymlinks(config); err == nil {
+		config = target
+	}
 	keys := []string{dir}
 	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
 		keys = append(keys, real)

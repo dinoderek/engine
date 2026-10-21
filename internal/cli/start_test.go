@@ -51,7 +51,7 @@ func TestStartCommandLine(t *testing.T) {
 	}{
 		{"usage", []string{"start"}, 2, "usage: engine start <owner/repo#n>"},
 		{"refusal", []string{"start", task, "--mode", "yolo"}, 1, `engine start: unknown mode "yolo": want hands-off or gated; nothing was changed`},
-		{"no token", []string{"start", task}, 1, "engine start: no GH_TOKEN and no token file"},
+		{"no token", []string{"start", task}, 1, "engine start: the session reads the machine user's token from"},
 	}
 	for _, c := range cases {
 		var out, errOut bytes.Buffer

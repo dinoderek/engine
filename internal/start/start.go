@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ const Harness = "claude"
 
 // stateLabels are the task states that mean the task is taken or finished
 // badly: a task carrying one is not started again.
-var stateLabels = []string{"engine:running", "engine:needs-human", "engine:in-review", "engine:failed"}
+var stateLabels = append(slices.Clone(tracker.ClaimLabels), "engine:failed")
 
 // approved is the label a standalone task needs before it runs.
 const approved = "engine:approved"
@@ -52,7 +53,7 @@ type Deps struct {
 	Run  session.RunFunc
 	Tmux *session.Tmux
 	Home string
-	// Getenv reads GH_TOKEN and CLAUDE_CONFIG_DIR.
+	// Getenv reads CLAUDE_CONFIG_DIR.
 	Getenv func(string) string
 	Now    func() time.Time
 	// BaseURL is where repos are cloned from; GitHub when empty.
@@ -155,14 +156,12 @@ func (p *plan) checkOptions() error {
 	return nil
 }
 
-// loadHost reads the token and the host config. The session reads the token
-// file itself, so the file must exist even when GH_TOKEN is set.
+// loadHost reads the token and the host config. The token comes from the
+// token file only, never GH_TOKEN, because the session reads that file
+// itself: engine's clone and the session then act as one machine user.
 func (p *plan) loadHost(d Deps) error {
-	token, err := tracker.Token(d.Getenv, d.Home)
+	token, err := tracker.Token(func(string) string { return "" }, d.Home)
 	if err != nil {
-		return refuse("%v", err)
-	}
-	if _, err := os.Stat(tokenFile(d.Home)); err != nil {
 		return refuse("the session reads the machine user's token from %s: %v", tokenFile(d.Home), err)
 	}
 	cfg, host, err := hosts.Open(hosts.ConfigDir(d.Home))
@@ -325,9 +324,13 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 		return "", err
 	}
 	kickoff := Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)
-	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
+	// An empty token would make gh fall back to the operator's own login.
+	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
+	// The tmux server's environment may differ from engine start's.
 	if dir := d.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
 		script += "export CLAUDE_CONFIG_DIR=" + hosts.ShellWord(dir) + " && "
+	} else {
+		script += "unset CLAUDE_CONFIG_DIR && "
 	}
 	script += "exec " + line + " " + hosts.ShellWord(kickoff)
 	return "exec /bin/sh -c " + hosts.ShellWord(script), nil
