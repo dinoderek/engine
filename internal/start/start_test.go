@@ -15,19 +15,24 @@ import (
 // A card body whose Harness / tier section names the given words.
 func card(tier string) string { return "## Outcome\n\nx\n\n## Harness / tier\n\n" + tier + "\n" }
 
+// refusal is one way engine start must refuse. Empty fields take the
+// defaults of a task that would start: host mac, an open sub-task at deep.
+type refusal struct {
+	name    string
+	host    string
+	opts    Options
+	issue   issue
+	windows []string
+	env     map[string]string
+	setup   func(t *testing.T, h home)
+	want    string
+}
+
+var startable = issue{number: 7, state: "open", parent: 3, body: card("deep")}
+
 func TestRefusalsChangeNothing(t *testing.T) {
-	ok := issue{number: 7, state: "open", parent: 3, body: card("deep")}
-	with := func(edit func(*issue)) issue { i := ok; edit(&i); return i }
-	cases := []struct {
-		name    string
-		host    string
-		opts    Options
-		issue   issue
-		windows []string
-		env     map[string]string
-		setup   func(t *testing.T, h home)
-		want    string
-	}{
+	with := func(edit func(*issue)) issue { i := startable; edit(&i); return i }
+	cases := []refusal{
 		{name: "unknown mode", opts: Options{Mode: "yolo"}, want: `unknown mode "yolo"`},
 		{name: "unknown tier", opts: Options{Tier: "deeep"}, want: `unknown tier "deeep"`},
 		{name: "no token", setup: removeFile(".config/engine/github-token"), want: "no GH_TOKEN and no token file"},
@@ -53,46 +58,45 @@ func TestRefusalsChangeNothing(t *testing.T) {
 		{name: "no free slot", windows: []string{"@1 %1 0 r-1", "@2 %2 0 r-2"}, want: "no free slot: 2 sessions running, 2 slots"},
 	}
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			host := c.host
-			if host == "" {
-				host = "mac"
-			}
-			h := newHome(t, host)
-			if c.setup != nil {
-				c.setup(t, h)
-			}
-			if c.issue.number == 0 {
-				c.issue = ok
-			}
-			if c.opts.Ref.Repo == "" {
-				c.opts.Ref = ref(7)
-			}
-			before := files(t, h.dir)
-			gh := &ghFake{issue: c.issue}
-			tm := &tmuxFake{windows: c.windows}
-			d := Deps{GH: gh.run, Run: gitFake(t), Tmux: &session.Tmux{Run: tm.run, Bin: "tmux"}, Home: h.dir,
-				Getenv: func(k string) string { return c.env[k] }, Now: fixedNow}
-			var out bytes.Buffer
-			err := Run(c.opts, d, &out)
-			var refused *RefusedError
-			if !errors.As(err, &refused) || !strings.Contains(err.Error(), c.want) {
-				t.Fatalf("err = %v, want a refusal containing %q", err, c.want)
-			}
-			if !strings.HasSuffix(err.Error(), "nothing was changed") || out.Len() > 0 {
-				t.Errorf("a refusal says nothing changed and prints nothing: %q, %q", err, out.String())
-			}
-			if after := files(t, h.dir); !slices.Equal(before, after) {
-				t.Errorf("files changed:\nbefore %v\nafter  %v", before, after)
-			}
-			gh.readOnly(t)
-			for _, call := range tm.calls {
-				if !strings.HasPrefix(call, "has-session") && !strings.HasPrefix(call, "list-windows") {
-					t.Errorf("a refusal ran tmux %s", call)
-				}
-			}
-		})
+		t.Run(c.name, func(t *testing.T) { checkRefusal(t, c) })
 	}
+}
+
+// checkRefusal runs engine start and wants a refusal that wrote no file, ran
+// no git, and only read the tracker and tmux.
+func checkRefusal(t *testing.T, c refusal) {
+	if c.host == "" {
+		c.host = "mac"
+	}
+	if c.issue.number == 0 {
+		c.issue = startable
+	}
+	if c.opts.Ref.Repo == "" {
+		c.opts.Ref = ref(7)
+	}
+	h := newHome(t, c.host)
+	if c.setup != nil {
+		c.setup(t, h)
+	}
+	before := files(t, h.dir)
+	gh := &ghFake{issue: c.issue}
+	tm := &tmuxFake{windows: c.windows}
+	d := Deps{GH: gh.run, Run: gitFake(t), Tmux: &session.Tmux{Run: tm.run, Bin: "tmux"}, Home: h.dir,
+		Getenv: func(k string) string { return c.env[k] }, Now: fixedNow}
+	var out bytes.Buffer
+	err := Run(c.opts, d, &out)
+	var refused *RefusedError
+	if !errors.As(err, &refused) || !strings.Contains(err.Error(), c.want) {
+		t.Fatalf("err = %v, want a refusal containing %q", err, c.want)
+	}
+	if !strings.HasSuffix(err.Error(), "nothing was changed") || out.Len() > 0 {
+		t.Errorf("a refusal says nothing changed and prints nothing: %q, %q", err, out.String())
+	}
+	if after := files(t, h.dir); !slices.Equal(before, after) {
+		t.Errorf("files changed:\nbefore %v\nafter  %v", before, after)
+	}
+	gh.readOnly(t)
+	tm.readOnly(t)
 }
 
 func removeFile(rel string) func(*testing.T, home) {

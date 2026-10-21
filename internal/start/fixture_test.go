@@ -178,6 +178,16 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 	return "", errors.New("tmux " + args[0] + " is not a read")
 }
 
+// readOnly reports a tmux call other than has-session and list-windows.
+func (f *tmuxFake) readOnly(t *testing.T) {
+	t.Helper()
+	for _, call := range f.calls {
+		if !strings.HasPrefix(call, "has-session") && !strings.HasPrefix(call, "list-windows") {
+			t.Errorf("a refusal ran tmux %s", call)
+		}
+	}
+}
+
 // gitFake fails the test on any git or gh call: a refusal never syncs.
 func gitFake(t *testing.T) session.RunFunc {
 	return func(_ string, _ []string, name string, args ...string) (string, error) {
