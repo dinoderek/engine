@@ -27,7 +27,13 @@ func privateTmux(t *testing.T) *Tmux {
 		}
 	}
 	socket := fmt.Sprintf("engine-test-%d-%d", os.Getpid(), time.Now().UnixNano())
-	tm := &Tmux{Run: Exec, Bin: bin, Socket: socket}
+	// -f /dev/null: the server reads no tmux.conf, so the operator's own
+	// configuration can neither run commands nor change a result. Run's args
+	// begin with `-L <socket>`.
+	isolated := func(name string, args ...string) (string, error) {
+		return Exec(name, append([]string{args[0], args[1], "-f", "/dev/null"}, args[2:]...)...)
+	}
+	tm := &Tmux{Run: isolated, Bin: bin, Socket: socket}
 	t.Cleanup(func() {
 		path, _ := tm.tmux("display-message", "-p", "#{socket_path}")
 		_, _ = tm.tmux("kill-server")
@@ -185,7 +191,7 @@ func TestRealCommandsAreTypedLiterally(t *testing.T) {
 
 func TestRealDirectoryAndLogPathsWithSpecialCharacters(t *testing.T) {
 	tm := privateTmux(t)
-	dir := filepath.Join(t.TempDir(), "it's #x {x}")
+	dir := filepath.Join(t.TempDir(), "it's #S {x}")
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +200,7 @@ func TestRealDirectoryAndLogPathsWithSpecialCharacters(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the log", func() bool { return strings.Contains(readFile(log), "ok") })
-	if text := readFile(log); !strings.Contains(text, "it's #x {x}") {
+	if text := readFile(log); !strings.Contains(text, "it's #S {x}") {
 		t.Errorf("the command ran in the wrong directory:\n%s", text)
 	}
 }
@@ -218,5 +224,28 @@ func TestRealKeepAwakeRunsCaffeinateOnThePanePid(t *testing.T) {
 	pid := strings.TrimSpace(show(t, tm, "display-message", "-p", "-t", got.PaneID, "#{pane_pid}"))
 	if want := "-s -w " + pid + "\n"; readFile(record) != want {
 		t.Errorf("caffeinate got %q, want %q", readFile(record), want)
+	}
+}
+
+func TestRealFailingKeepAwakeLeavesThePaneUsable(t *testing.T) {
+	tm := privateTmux(t)
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "ran.txt")
+	failing := filepath.Join(dir, "failing")
+	script := "#!/bin/sh\necho ran > '" + marker + "'\necho oops >&2\nexit 1\n"
+	if err := os.WriteFile(failing, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tm.Awake = failing
+	got, err := tm.Open(Window{Name: "awake-2", Dir: dir, Command: "sleep 60"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the failing stand-in to run", func() bool { return strings.Contains(readFile(marker), "ran") })
+	// tmux reports a failed run-shell job in the target pane, in view mode.
+	// Give it the time to do so, then check the pane is still a plain one.
+	time.Sleep(300 * time.Millisecond)
+	if mode := strings.TrimSpace(show(t, tm, "display-message", "-p", "-t", got.PaneID, "#{pane_in_mode}")); mode != "0" {
+		t.Errorf("pane_in_mode = %s: keystrokes would be swallowed", mode)
 	}
 }

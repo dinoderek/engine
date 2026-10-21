@@ -204,12 +204,13 @@ Engine owns the tmux session `engine` on each host, and creates it with its
 first window. It sets the options itself, on the session and on each window it
 opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
 
-- `mouse on` and `history-limit 50000`, on the session;
-- on each window, `allow-rename off` and `automatic-rename off`, so agents
+- on the session: `mouse on` and `history-limit 50000`;
+- on each window: `allow-rename off` and `automatic-rename off`, so agents
   can't rename windows;
-- `window-size latest`, so the window fits whoever attached last (a phone or
-  a laptop);
-- `remain-on-exit on`, so a crashed session's last screen stays readable.
+- on each window: `window-size latest`, so the window fits whoever attached
+  last (a phone or a laptop);
+- on each window: `remain-on-exit on`, so a crashed session's last screen
+  stays readable.
 
 `pipe-pane` copies each window's output into its run directory, so the raw log
 outlives the tmux server. Engine opens a window on a placeholder command, sets

@@ -91,7 +91,7 @@ type Tmux struct {
 func New() *Tmux {
 	t := &Tmux{Run: Exec, Bin: "tmux"}
 	if runtime.GOOS == "darwin" {
-		t.Awake = "caffeinate"
+		t.Awake = "/usr/bin/caffeinate"
 	}
 	return t
 }
@@ -120,8 +120,8 @@ type WindowInfo struct {
 // Opened is the result of Open.
 type Opened struct {
 	WindowInfo
-	// AwakeErr is why the host could not be kept awake. The window is open
-	// regardless.
+	// AwakeErr is why tmux refused to start the keep-awake job. The window
+	// is open regardless. A job that fails later is not reported.
 	AwakeErr error
 }
 
@@ -302,6 +302,6 @@ func (t *Tmux) configure(info WindowInfo, w Window) error {
 			return err
 		}
 	}
-	_, err := t.tmux("respawn-pane", "-k", "-t", info.PaneID, "-c", w.Dir, w.Command)
+	_, err := t.tmux("respawn-pane", "-k", "-t", info.PaneID, "-c", formatEscape(w.Dir), w.Command)
 	return err
 }

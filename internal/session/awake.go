@@ -13,7 +13,10 @@ func (t *Tmux) keepAwake(pane string) error {
 		return nil
 	}
 	// A pane whose command has already exited has no pid: nothing to hold.
-	script := `pid=#{pane_pid}; [ -z "$pid" ] || exec ` + shellQuote(formatEscape(t.Awake)) + ` -s -w "$pid"`
+	// The job must neither print nor exit non-zero: run-shell shows either in
+	// the target pane, which puts the agent's pane in view mode, where it
+	// swallows send-keys.
+	script := `pid=#{pane_pid}; [ -z "$pid" ] || ` + shellQuote(formatEscape(t.Awake)) + ` -s -w "$pid" >/dev/null 2>&1; exit 0`
 	if _, err := t.tmux("run-shell", "-b", "-t", pane, script); err != nil {
 		return fmt.Errorf("keeping the host awake: %w", err)
 	}

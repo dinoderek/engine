@@ -14,7 +14,7 @@ func TestKeepAwakeAsksTmuxToRunCaffeinateOnThePanePid(t *testing.T) {
 		t.Fatalf("got %+v, %v", got, err)
 	}
 	last := f.calls[len(f.calls)-1]
-	want := `tmux run-shell -b -t %0 pid=#{pane_pid}; [ -z "$pid" ] || exec '/usr/bin/caffeinate' -s -w "$pid"`
+	want := `tmux run-shell -b -t %0 pid=#{pane_pid}; [ -z "$pid" ] || '/usr/bin/caffeinate' -s -w "$pid" >/dev/null 2>&1; exit 0`
 	if last != want {
 		t.Errorf("last call:\n%s\nwant:\n%s", last, want)
 	}
@@ -52,7 +52,7 @@ func TestKeepAwakeEscapesFormatCharactersInThePath(t *testing.T) {
 	if _, err := tm.Open(window(t)); err != nil {
 		t.Fatal(err)
 	}
-	if last := f.calls[len(f.calls)-1]; !strings.Contains(last, `exec '/opt/a##b/caffeinate'`) {
+	if last := f.calls[len(f.calls)-1]; !strings.Contains(last, `|| '/opt/a##b/caffeinate'`) {
 		t.Errorf("got %s", last)
 	}
 }

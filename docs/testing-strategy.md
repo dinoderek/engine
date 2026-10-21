@@ -28,4 +28,6 @@ a fake would assume the very behaviour under test.
 - **Race detector on.** The `unit` lane runs every test with `-race`. Shared
   state in a test is a bug.
 - **No sleeps or wall-clock assertions.** Test durations by rendering a fixed
-  value, as the summary test does.
+  value, as the summary test does. A real-process test may poll, against a
+  deadline, for another process's effect, such as a log filling; it never
+  asserts on a duration.
