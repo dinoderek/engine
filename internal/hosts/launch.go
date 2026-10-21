@@ -41,7 +41,8 @@ func (h Host) BinPath(harness, home string) (string, error) {
 
 // LaunchLine expands the harness's launch line for host h into a shell
 // command. Every value is quoted for the shell unless it is a plain word, so
-// a value can never add an argument or a command of its own.
+// a placeholder that stands as its own word stays one argument. A placeholder
+// inside quotes in the launch line gets no such protection.
 func (c *Config) LaunchLine(h Host, l Launch) (string, error) {
 	harness, ok := c.Harnesses[l.Harness]
 	if !ok {

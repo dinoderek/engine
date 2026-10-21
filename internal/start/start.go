@@ -287,7 +287,9 @@ func (p plan) launch(d Deps) (Started, error) {
 		return Started{}, err
 	}
 	s := Started{Task: p.opts.Ref, Name: p.name, Worktree: wt, RunID: session.RunID(p.repo, p.opts.Ref.Number, d.Now())}
-	left := fmt.Sprintf("the worktree %s (branch %s) is left in place", wt.Path, wt.Branch)
+	left := fmt.Sprintf("the worktree is left in place; before starting again, remove it with "+
+		"git -C %s worktree remove --force %s && git -C %s branch -D %s",
+		hosts.ShellWord(clone.Path), hosts.ShellWord(wt.Path), hosts.ShellWord(clone.Path), wt.Branch)
 	if err := session.TrustFolder(session.ClaudeConfig(d.Getenv, d.Home), wt.Path); err != nil {
 		return Started{}, fmt.Errorf("trust %s for Claude Code: %w; %s", wt.Path, err, left)
 	}
@@ -310,9 +312,11 @@ func (p plan) launch(d Deps) (Started, error) {
 	return s, nil
 }
 
-// command is the window's shell command: export the machine user's token
-// from its file, so it never appears on a command line, then run the launch
-// line with the kickoff as its last argument.
+// command is the window's shell command. It runs under /bin/sh, whatever
+// tmux's default shell is: export the machine user's token from its file, so
+// it never appears on a command line, and the CLAUDE_CONFIG_DIR engine trusted
+// the worktree in, then run the launch line with the kickoff as its last
+// argument.
 func (p plan) command(d Deps, clone session.Clone, runID string) (string, error) {
 	line, err := p.cfg.LaunchLine(p.host, hosts.Launch{
 		Harness: Harness, Tier: p.tier, Name: p.name, Clone: clone.Path, Home: d.Home,
@@ -321,8 +325,12 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 		return "", err
 	}
 	kickoff := Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)
-	return fmt.Sprintf(`GH_TOKEN="$(cat %s)" && export GH_TOKEN && exec %s %s`,
-		hosts.ShellWord(tokenFile(d.Home)), line, hosts.ShellWord(kickoff)), nil
+	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
+	if dir := d.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		script += "export CLAUDE_CONFIG_DIR=" + hosts.ShellWord(dir) + " && "
+	}
+	script += "exec " + line + " " + hosts.ShellWord(kickoff)
+	return "exec /bin/sh -c " + hosts.ShellWord(script), nil
 }
 
 func (p plan) record(s Started, log string, now time.Time) session.Record {
@@ -346,8 +354,7 @@ func report(out io.Writer, s Started) {
 	fmt.Fprintf(out, "  worktree        %s (branch %s)\n", s.Worktree.Path, s.Worktree.Branch)
 	fmt.Fprintf(out, "  tmux window     %s (%s)\n", target, s.Name)
 	fmt.Fprintf(out, "  Remote Control  %s, in the Claude app and at claude.ai/code\n", s.Name)
-	fmt.Fprintf(out, "Attach: engine attach %s\n", s.Name)
-	fmt.Fprintf(out, "    or: tmux attach -t %s\n", target)
+	fmt.Fprintf(out, "Attach: tmux attach -t %s\n", target)
 	if s.AwakeErr != nil {
 		fmt.Fprintf(out, "Warning: the host may sleep while the session runs: %v\n", s.AwakeErr)
 	}

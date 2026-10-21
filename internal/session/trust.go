@@ -25,37 +25,68 @@ func ClaudeConfig(getenv func(string) string, home string) string {
 // otherwise stop an unattended launch (its default answer exits). It sets
 // projects[<dir>].hasTrustDialogAccepted, as Claude Code itself does, for dir
 // and for its resolved path when that differs. Every other key is kept byte
-// for byte, and the file is replaced in one rename. A file that is not a JSON
-// object is left alone and reported.
-func TrustFolder(config, dir string) error {
+// for byte, and the file is replaced in one rename. Claude Code rewrites the
+// file too, without a lock engine could take, so when the file changes
+// between the read and the rename, it starts again, a few times at most. A
+// file that is not a JSON object is left alone and reported.
+func TrustFolder(config, dir string) error { return trustFolder(config, dir, stamp) }
+
+// trustFolder is TrustFolder with the file's stamp read by check, which tests
+// replace to play a concurrent writer.
+func trustFolder(config, dir string, check func(string) (fileStamp, error)) error {
 	keys := []string{dir}
 	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
 		keys = append(keys, real)
 	}
-	data, mode, err := readConfig(config)
-	if err != nil {
-		return err
+	for range trustAttempts {
+		data, before, err := readConfig(config)
+		if err != nil {
+			return err
+		}
+		changed, out, err := trust(data, keys)
+		if err != nil {
+			return fmt.Errorf("%s: %w", config, err)
+		}
+		if !changed {
+			return nil
+		}
+		unchanged := func() bool { now, err := check(config); return err == nil && now == before }
+		if done, err := replaceFile(config, out, before.mode, unchanged); done || err != nil {
+			return err
+		}
 	}
-	changed, out, err := trust(data, keys)
-	if err != nil {
-		return fmt.Errorf("%s: %w", config, err)
-	}
-	if !changed {
-		return nil
-	}
-	return replaceFile(config, out, mode)
+	return fmt.Errorf("%s kept changing while engine updated it; trust %s by hand", config, dir)
 }
 
-func readConfig(path string) ([]byte, fs.FileMode, error) {
+// trustAttempts bounds the retries when another writer keeps changing the file.
+const trustAttempts = 3
+
+// fileStamp tells whether a file changed: a missing file has the zero stamp.
+type fileStamp struct {
+	exists bool
+	mod    int64
+	size   int64
+	mode   fs.FileMode
+}
+
+func stamp(path string) (fileStamp, error) {
 	info, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return []byte("{}"), 0o600, nil
+		return fileStamp{mode: 0o600}, nil
 	}
 	if err != nil {
-		return nil, 0, err
+		return fileStamp{}, err
+	}
+	return fileStamp{exists: true, mod: info.ModTime().UnixNano(), size: info.Size(), mode: info.Mode().Perm()}, nil
+}
+
+func readConfig(path string) ([]byte, fileStamp, error) {
+	st, err := stamp(path)
+	if err != nil || !st.exists {
+		return []byte("{}"), st, err
 	}
 	data, err := os.ReadFile(path)
-	return data, info.Mode().Perm(), err
+	return data, st, err
 }
 
 // trust sets hasTrustDialogAccepted on each key's project, and reports
@@ -115,23 +146,27 @@ func encode(v any, indent string) ([]byte, error) {
 }
 
 // replaceFile writes data beside path and renames it over path, so a reader
-// never sees half a file.
-func replaceFile(path string, data []byte, mode fs.FileMode) error {
+// never sees half a file. It renames only if unchanged still holds just
+// before, and reports whether it did.
+func replaceFile(path string, data []byte, mode fs.FileMode, unchanged func() bool) (bool, error) {
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".engine-*")
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }() // a no-op once renamed
 	if _, err := tmp.Write(append(data, '\n')); err != nil {
 		_ = tmp.Close()
-		return err
+		return false, err
 	}
 	if err := tmp.Chmod(mode); err != nil {
 		_ = tmp.Close()
-		return err
+		return false, err
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		return false, err
 	}
-	return os.Rename(tmp.Name(), path)
+	if !unchanged() {
+		return false, nil
+	}
+	return true, os.Rename(tmp.Name(), path)
 }

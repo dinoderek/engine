@@ -165,9 +165,9 @@ runs holds one). Then it:
    kickoff as its last argument and Claude's first message: `Execute
    <owner/repo#n> with the engine executor, <mode> mode. Reviewer model:
    <deep model>. run=<run-id> tmux=engine:<name> rc=<name>`, values the
-   claim records. The shell first exports `GH_TOKEN` from the token file,
+   claim records. `/bin/sh` first exports `GH_TOKEN` from the token file,
    keeping it off every command line;
-6. writes `run.json` (`telemetry.md`) and prints how to reach the session.
+6. writes `run.json` (`telemetry.md`) and prints how to attach with tmux.
 
 The executor claims the task; its claim check stops a racing second start.
 Designed, not built: `--harness codex`, and `--host` (spawning over SSH).

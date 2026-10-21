@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -139,19 +140,25 @@ func TestTierFlagReplacesTheCard(t *testing.T) {
 func TestLaunchCommand(t *testing.T) {
 	h := newHome(t, "mac")
 	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3, body: card("deep")}}
-	d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: (&tmuxFake{}).run, Bin: "tmux"}, Home: h.dir, Getenv: func(string) string { return "" }}
-	p, err := check(Options{Ref: ref(7)}, d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := p.command(d, session.Clone{Path: "/clones/o/r"}, "r-7-20260102T030405Z")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && export GH_TOKEN && exec ` +
-		h.bin + ` --permission-mode auto --model opus-x --effort high -n r-7 --remote-control r-7 ` +
-		`'Execute ` + ref(7).String() + ` with the engine executor, hands-off mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`
-	if got != want {
-		t.Errorf("command\n got %s\nwant %s", got, want)
+	for _, configDir := range []string{"", "/cfg dir"} {
+		env := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": configDir}[k] }
+		d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: (&tmuxFake{}).run, Bin: "tmux"}, Home: h.dir, Getenv: env}
+		p, err := check(Options{Ref: ref(7)}, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := p.command(d, session.Clone{Path: "/clones/o/r"}, "r-7-20260102T030405Z")
+		if err != nil {
+			t.Fatal(err)
+		}
+		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && export GH_TOKEN && `
+		if configDir != "" {
+			script += `export CLAUDE_CONFIG_DIR='/cfg dir' && `
+		}
+		script += `exec ` + h.bin + ` --permission-mode auto --model opus-x --effort high -n r-7 --remote-control r-7 ` +
+			`'Execute ` + ref(7).String() + ` with the engine executor, hands-off mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`
+		if want := "exec /bin/sh -c " + hosts.ShellWord(script); got != want {
+			t.Errorf("command\n got %s\nwant %s", got, want)
+		}
 	}
 }

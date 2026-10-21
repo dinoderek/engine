@@ -184,3 +184,49 @@ func TestRecord(t *testing.T) {
 		t.Errorf("run.json:\n%s", text)
 	}
 }
+
+// writerFor is a stamp check that sees another writer change the file the
+// first n times engine is about to rename it.
+func writerFor(n int) func(string) (fileStamp, error) {
+	return func(path string) (fileStamp, error) {
+		st, err := stamp(path)
+		if n > 0 {
+			n--
+			st.size++
+		}
+		return st, err
+	}
+}
+
+func TestTrustFolderRetriesWhenTheFileChanges(t *testing.T) {
+	config := filepath.Join(t.TempDir(), ".claude.json")
+	dir := t.TempDir()
+	if err := os.WriteFile(config, []byte(`{"a": 1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := trustFolder(config, dir, writerFor(trustAttempts-1)); err != nil {
+		t.Fatal(err)
+	}
+	if !trusted(t, config, dir) {
+		t.Errorf("the last attempt should succeed:\n%s", readFile(config))
+	}
+}
+
+func TestTrustFolderGivesUpOnABusyFile(t *testing.T) {
+	config := filepath.Join(t.TempDir(), ".claude.json")
+	dir := t.TempDir()
+	orig := `{"a": 1}`
+	if err := os.WriteFile(config, []byte(orig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := trustFolder(config, dir, writerFor(trustAttempts))
+	if err == nil || !strings.Contains(err.Error(), "kept changing") {
+		t.Errorf("err = %v", err)
+	}
+	if readFile(config) != orig {
+		t.Errorf("a busy file was overwritten:\n%s", readFile(config))
+	}
+	if leftovers, _ := filepath.Glob(config + ".engine-*"); len(leftovers) > 0 {
+		t.Errorf("temp files left: %v", leftovers)
+	}
+}
