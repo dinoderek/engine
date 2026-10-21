@@ -30,7 +30,7 @@ One `run.json` per session, written at spawn and finalised at exit:
 
 ## Pipeline
 
-1. Each local host runs an OpenTelemetry Collector with a file exporter. The
+1. Each machine that runs sessions (every non-cloud host) runs an OpenTelemetry Collector with a file exporter. The
    harnesses point at it through their OTel config, and every session is
    tagged with its run ID as a resource attribute.
 2. At session end, the coordinator gathers the run directory: `run.json`, the

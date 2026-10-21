@@ -53,8 +53,8 @@
   `~/.config/engine/host`. Claims post this name, never the hostname
   (`hosts-and-sessions.md`, "Hosts").
 - **Host config:** the same `~/.config/engine/hosts.toml` as every other
-  host, with this host's entry: its Tailscale name as `address`, its RAM and
-  its capabilities. You write both files by hand.
+  host, with an entry for this host as `hosts-and-sessions.md`, "Hosts",
+  specifies. You write both files by hand.
 - **Skills (Claude Code):** the `engine` plugin from this repo's marketplace,
   `.claude-plugin/marketplace.json`. A target repo enables it in its
   `.claude/settings.json`, as this repo does; or install it for yourself with

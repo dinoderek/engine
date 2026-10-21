@@ -62,7 +62,8 @@ adds to it.
 ## Reaching hosts
 
 The coordinator calls `engine host <op> --json` in place for its own host
-(the name in `~/.config/engine/host`), or via `ssh <address>` for any other.
+(the name in `~/.config/engine/host`), or via `ssh <address>` for any other
+machine. It refuses to run unless that name is a host in `hosts.toml`.
 It reads JSON from stdout. If you are changing host names or addresses, load
 `hosts-and-sessions.md`.
 

@@ -8,19 +8,25 @@ A host is somewhere sessions run. Each one declares the harnesses it runs, its
 memory, and its capabilities. Capabilities are declared, never inferred.
 
 **One file, every host.** The host config is `~/.config/engine/hosts.toml`,
-the same file on every host, because any host can run the coordinator. Each
-host also keeps its own name, one line, in `~/.config/engine/host`.
+the same file on every host, because any host can run the coordinator. Edit
+it on one host and copy it to the others. Each host also keeps its own name,
+one line, in `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, a logical
 name such as `mac` or `devbox`, never a hostname or an IP. It is what claims
 and every surface show. Its `address` is how other hosts reach it over SSH
 (its Tailscale name); it stays in this file and is never posted anywhere. A
-host is local to whichever host has its name in `~/.config/engine/host`, and
-reached over SSH at its `address` from every other one.
+machine is local to whichever host has its name in `~/.config/engine/host`,
+and reached over SSH at its `address` from every other one.
 
-**Slots from memory.** RAM stands in for how many sessions a host runs at
-once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. A host's own
-`max_sessions` overrides that.
+**Machines and cloud hosts.** A host with no `kind` is a machine: it needs
+`address` and `ram_gb`. `kind = "cloud"` is the only kind; a cloud host has no
+address or RAM and must set `max_sessions`.
+
+**Slots from memory.** RAM stands in for how many sessions a machine runs at
+once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. Both divisors
+are set at the top and may be set again per host. A host's `max_sessions`
+replaces the derived count.
 
 **Capabilities:**
 
@@ -46,10 +52,11 @@ launch = "claude --permission-mode auto --model {model}"
 max_sessions = 2
 launch = "codex --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model}"
 
-[host.mac]              # 5 slots
+[host.mac]              # 4 slots
 address = "<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 48
+reserve_gb = 16         # also the operator's workstation
 capabilities = ["macos", "ios", "vm"]
 
 [host.devbox]           # 3 slots
@@ -78,7 +85,8 @@ enabled = false
 The coordinator places a ready task on a host that meets all of these:
 
 - the host is enabled and has a free slot (its slots are under "Hosts");
-- the harness (the card's, or the default) is under its own cap;
+- the host lists the harness (the card's, or the default), and that harness
+  is under its own cap;
 - the host's capabilities include everything in the card's `requires`.
 
 Ties go to the host with the most free slots. A task that no host can take

@@ -64,7 +64,9 @@ when its answer lands in the owning doc.
 - **`engine host` commands.** `engine host init <name>` would write the host's
   name file and check its tools (tmux, gh, signed-in harnesses); `engine host
   add <name> --address … --ram … --capabilities …` would edit `hosts.toml`.
-  Until then both files are written by hand. Revisit before `engine start`.
+  Until then both files are written by hand. Revisit before `engine start`;
+  the names clash with the coordinator's `engine host <op> --json` ops, so
+  pick another namespace (such as `engine hosts`).
 
 ## Later (low priority)
 
