@@ -130,6 +130,7 @@ Docs cite the verbs and never restate the commands behind them.
 | Design system | The repo has a UI | A catalog of **which component to reach for**, never its props: the component file and its tests are the spec. The check fails when a primitive or component folder is missing from the catalog. Tokens are the only source of colour, spacing and type, and a lint ratchet bans literals. |
 | Isolated environments | The repo has stateful infrastructure (DBs, ports, simulators) | A slot lease per worktree, with derived ports. Commands that need the lease refuse to run without it. Only the owner tears down. |
 | Test-directory READMEs | Test layers have local conventions | Editing tests in a directory means reading its README first. |
+| In-repo plans | The repo plans in files and wants engine to execute them | The plans doc carries an engine binding: a table from each engine card field to the repo's heading or column (`plan-sources.md`). |
 
 ## Seed prompt
 

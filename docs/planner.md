@@ -70,8 +70,9 @@ changed, so the issue's history shows every batch. The body ends with a
 
 ### Task card
 
-The fields are the card fields from `execution-protocol.md`, one heading each,
-plus a hidden key, `<!-- engine:card t03 -->`. The key makes `breakdown`
+The fields are the card fields from `execution-protocol.md`, stored as
+`plan-sources.md` says for GitHub: one heading each, dependencies and the
+parent as native links, and a hidden card key. The key makes `breakdown`
 re-runnable (see below).
 
 The planner fills **Gates** from the repo's lane rules and the paths the card

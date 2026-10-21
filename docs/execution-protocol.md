@@ -1,19 +1,20 @@
 # Execution protocol
 
-> **Owns:** phases, roles, task and feature states, rulings, hard stops, merge rules, plan sources. **Not here:** how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** phases, roles, task and feature states, card fields, rulings, hard stops, merge rules. **Not here:** how each plan source stores a plan (`plan-sources.md`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 ## Principles
 
 - **Hands-off by default, stops by rule.** The executor decides open questions
-  itself and logs each decision as a ruling. It stops only for a hard-stop class.
+  itself, and logs as rulings only the decisions worth your review. It stops
+  only for a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program. Merging is a
   scripted check of the reviewed head commit against green checks.
 - **One task = one session = one worktree = one PR.**
 - **One plan source per feature.** The requirements, design, plan, task cards
   and their states live in exactly one place: the tracker, or an in-repo plan
   that the operator points the executor at. Read and update state only in that
-  source. The coordinator drives only the tracker. "Plan source" maps both in
-  the same terms.
+  source. The coordinator drives only the tracker. `plan-sources.md` maps both
+  in the same terms.
 - **Plans are never cited.** Whatever the source, code and docs (other than
   the plan itself) never cite a plan item: no issue number, plan path or task
   ID. Commit messages and PR bodies may.
@@ -50,10 +51,10 @@ A task card holds:
 | --- | --- |
 | Outcome | What the PR makes true, provable by a test. |
 | Decided | Fixed by Prepare or earlier tasks. Links to the owning doc rather than restating it. |
-| Open | Questions the executor decides, each logged as a ruling. |
+| Open | Questions the executor decides. Each answer is graded per "Rulings". |
 | Tests | The claims to prove and the layer each belongs in. |
 | Docs to update | The owning docs this change touches. |
-| Depends on | Blocking tasks (tracker dependencies). |
+| Depends on | Blocking tasks. |
 | Requires | Host capabilities such as `ios`, `docker` or `android`. |
 | Gates | The lanes this card runs beyond the repo's default. In an engine run, this is the operator's agreement wherever a repo asks for one. |
 | Harness / tier | Optional. The harness defaults to host config; the tier follows "Models". |
@@ -113,18 +114,45 @@ tuned from that evidence.
 
 ## Rulings and hard stops
 
-A ruling is one comment on the task's issue, and is repeated in the PR body:
+### Rulings
+
+A ruling is a decision you might want to reverse after the fact. Anything a
+code review of the diff would catch, such as naming, internal structure, test
+layer or a refactor inside the touched modules, is not a ruling and is not
+logged.
+
+Risk is graded by what undoing the decision costs, never by how hard it was
+to make:
+
+| Risk | When | Logged | You |
+| --- | --- | --- | --- |
+| `low` | Undoing it touches only this PR's files. Nothing user-visible, persisted, or built on by another task. | One line in the PR body, under a collapsed **Low-risk decisions**. No issue comment. | Never asked to read it. |
+| `med` | Undoing it touches other modules, changes user-visible behaviour within the mocks, or later tasks build on it. | A comment on the task's issue, repeated in the PR body. The issue gets `engine:ruling-review`. | Read it after the fact, from the `engine:ruling-review` queue, and remove the label. |
+| `high` | Hard to undo once merged: a shape other code or other tasks depend on, a persisted format, or a convention across features. | As `med`, plus an @mention. The executor carries on. | Read it soon. Reverting is still cheap before dependent tasks merge. |
+
+The comment format, for `med` and `high`:
 
 ```text
-Ruling (risk: low|med|high): <decision>
+Ruling (risk: med|high): <decision>
 Why: <reason>
 If wrong: <what it costs to undo, what it touches>
 ```
 
-The operator reviews rulings after the fact, riskiest first. Hard-stop classes
+Telemetry counts rulings per task by risk. A task with several `med` or `high`
+rulings points to a card that Prepare under-specified, and hard-stop classes
 are added or removed as the rulings show.
 
-**The agent owns** these decisions and logs them as rulings:
+> **Q11.** Should `low` decisions be logged at all? *Recommend: yes, as one
+> collapsed line each in the PR body.* It costs you nothing, and it keeps the
+> evidence if a `low` grade turns out wrong.
+>
+> **Q12.** Should a `high` ruling @mention you and carry on, or stop like a
+> hard stop? *Recommend: carry on.* If a class of `high` rulings keeps being
+> reversed, promote it to a hard stop.
+
+### Ownership and hard stops
+
+**The agent owns** these decisions:
 
 - internal design, naming and structure;
 - which test layer a claim belongs in;
@@ -166,7 +194,9 @@ All labels use the `engine:` prefix.
 
 "Ready" is computed, never stored. The operator sets `approved`. The executor
 sets `needs-human` and `in-review`. The merge closes the task. The coordinator
-owns every other transition.
+owns every other transition. `engine:ruling-review` is a marker, not a state:
+the executor adds it with a `med` or `high` ruling, and you remove it once
+read.
 
 ## Changing the plan mid-flight
 
@@ -184,26 +214,9 @@ There is no file ownership. Parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
 
-## Plan source
+## Plan sources
 
-The rest of this doc speaks in tracker terms ("the task's issue", "a comment").
-With an in-repo plan, read them through the right-hand column.
-
-| Operation | Tracker (GitHub) | In-repo plan |
-| --- | --- | --- |
-| Feature | An issue labelled `engine:feature`, with the state label. | The milestone file, in the repo's plan layout. |
-| Tasks | Sub-issues of the feature. | Card files. |
-| Dependencies | Issue dependencies ("blocked by"). | The card's Depends on field. |
-| State | Labels. | A card exists until the PR that ships it deletes it. There is no `running` or `needs-human`: the operator is in the session. |
-| Inbox | Issue comments. | The live session and the PR's comments. |
-| Rulings, deviations, outcome | Issue comments, repeated in the PR body. | The PR body only. |
-| PR link and close | `Closes #<task>` in the PR body. | The PR deletes the card and marks it done in the milestone. |
-
-The in-repo plan runs one task per session, started by the operator, with no
-coordinator. Feature status at a glance (tracker): the feature issue's state
-label and its sub-issue progress. Other trackers plug in behind the same
-operations.
-
-> **Q9.** Is this the right mapping for in-repo plans? *Recommend: yes.* It
-> matches how `task-protocol` already runs BOGA3's `docs/plans`, so an
-> in-repo card can be executed hands-off without moving it to the tracker.
+A plan lives in the tracker or in the repo. This doc speaks in tracker terms
+("the task's issue", "a comment"). If you are reading or writing a plan, or
+changing how a source stores one, load `plan-sources.md`: it maps every
+operation and card field to each source.
