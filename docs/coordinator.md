@@ -138,6 +138,14 @@ own identity:
 You subscribe to (or are assigned) each feature issue. Hard stops @mention
 you. GitHub mobile pushes both.
 
+**Who engine trusts.** Repos can be public, so anyone can comment on a task.
+Engine acts on a claim comment only when its author is the operator or the
+machine user. The list is hardcoded in `internal/tracker` (`TrustedUsers`),
+and the newest trusted claim wins. Finding claimed tasks searches once per
+trusted commenter, so it covers only issues a trusted user has commented on,
+and it leaves out an issue with a claim label but no trusted claim. A claim by
+anyone else is ignored, so a stranger cannot add a task. Reading the list from config is a later change.
+
 ## Salvage from `orchestrator`
 
 Worth porting from the earlier Go repo:
