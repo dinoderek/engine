@@ -17,16 +17,16 @@ type Worktree struct {
 	Branch string
 }
 
-// Name is the session name of a task, <repo>-<task>: the tmux window, the
+// TaskName is the session name of a task, <repo>-<task>: the tmux window, the
 // remote-control name, and part of the branch.
-func Name(repo Repo, task int) string {
+func TaskName(repo Repo, task int) string {
 	return fmt.Sprintf("%s-%d", repo.Name, task)
 }
 
 // Branch is the branch a task's worktree opens on. It carries the session
 // name, so a session can be found from its branch.
 func Branch(repo Repo, task int) string {
-	return "task/" + Name(repo, task)
+	return "task/" + TaskName(repo, task)
 }
 
 // CreateWorktree creates the worktree for a task in clone, branched from the
@@ -38,6 +38,9 @@ func Branch(repo Repo, task int) string {
 func (r Repos) CreateWorktree(clone Clone, task int) (Worktree, error) {
 	if task < 1 {
 		return Worktree{}, fmt.Errorf("task number must be positive, got %d", task)
+	}
+	if err := r.checkToken(); err != nil {
+		return Worktree{}, err
 	}
 	branch := Branch(clone.Repo, task)
 	unlock, err := lock(clone.Path + ".lock")
@@ -78,6 +81,9 @@ func (r Repos) refuseExisting(clone Clone, branch string) error {
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
 		return fmt.Errorf("branch %s already exists in %s with no worktree; delete it or check it out first", branch, clone.Path)
+	}
+	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch); err == nil {
+		return fmt.Errorf("origin already has branch %s, from an earlier run; delete it or continue that work by hand", branch)
 	}
 	return nil
 }

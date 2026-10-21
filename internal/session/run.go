@@ -12,8 +12,8 @@ import (
 // replace it, so the outside CLIs (git, gh) are never started for real.
 type RunFunc func(dir string, env []string, name string, args ...string) (string, error)
 
-// Exec is the RunFunc that starts real processes.
-func Exec(dir string, env []string, name string, args ...string) (string, error) {
+// RunCommand is the RunFunc that starts real processes.
+func RunCommand(dir string, env []string, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)

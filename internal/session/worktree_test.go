@@ -10,13 +10,13 @@ import (
 
 func TestNameAndBranch(t *testing.T) {
 	repo := mustRepo(t, "dinoderek/engine")
-	if got := Name(repo, 14); got != "engine-14" {
+	if got := TaskName(repo, 412); got != "engine-412" {
 		t.Errorf("Name = %q", got)
 	}
-	if got := Branch(repo, 14); got != "task/engine-14" {
+	if got := Branch(repo, 412); got != "task/engine-412" {
 		t.Errorf("Branch = %q", got)
 	}
-	if strings.Contains(Name(repo, 14), "#") {
+	if strings.Contains(TaskName(repo, 412), "#") {
 		t.Error("a session name never holds #: tmux treats it as special")
 	}
 }
@@ -118,6 +118,7 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 		{"task zero", 0, nil, "must be positive"},
 		{"worktree exists", 7, []reply{{key: "worktree list", out: porcelain("/c", "/old", "task/r-7")}}, "already has a worktree at /old"},
 		{"branch exists", 7, []reply{{key: "rev-parse --verify", out: "abc"}}, "already exists"},
+		{"origin has the branch", 7, []reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}}, "origin already has branch task/r-7"},
 		{"list fails", 7, []reply{{key: "worktree list", err: errBoom}}, "list worktrees"},
 		{"git worktree add fails", 7, []reply{{key: "worktree add", err: errBoom}}, "create the worktree for task/r-7"},
 	}
@@ -138,6 +139,25 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 				t.Error("created a worktree despite refusing")
 			}
 		})
+	}
+}
+
+func TestNothingRunsWithoutAToken(t *testing.T) {
+	repo := mustRepo(t, "o/r")
+	for _, token := range []string{"", " \n"} {
+		f := &fake{replies: syncReplies()}
+		r := newRepos(t, f)
+		r.Token = token
+		if _, err := r.Sync(repo); err == nil || !strings.Contains(err.Error(), "no machine-user token") {
+			t.Errorf("Sync with token %q: %v", token, err)
+		}
+		clone := Clone{Repo: repo, Path: filepath.Join(r.Home, "clone"), Default: "main"}
+		if _, err := r.CreateWorktree(clone, 7); err == nil || !strings.Contains(err.Error(), "no machine-user token") {
+			t.Errorf("CreateWorktree with token %q: %v", token, err)
+		}
+		if len(f.calls) != 0 {
+			t.Errorf("ran %v without a token: gh would act as the operator", f.lines())
+		}
 	}
 }
 

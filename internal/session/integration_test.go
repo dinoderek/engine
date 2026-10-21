@@ -23,7 +23,7 @@ func realGit(dir string, env []string, name string, args ...string) (string, err
 	if name == "gh" {
 		return "testbot 42\n", nil
 	}
-	return Exec(dir, append(append([]string{}, env...), isolatedGit...), name, args...)
+	return RunCommand(dir, append(append([]string{}, env...), isolatedGit...), name, args...)
 }
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -177,14 +177,14 @@ func TestCreateWorktreeFallbackForReal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wt, err := r.CreateWorktree(clone, 14)
+	wt, err := r.CreateWorktree(clone, 412)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wt.Branch != "task/r-14" || !samePath(t, wt.Path, clone.Path+"-worktrees/task-r-14") {
+	if wt.Branch != "task/r-412" || !samePath(t, wt.Path, clone.Path+"-worktrees/task-r-412") {
 		t.Errorf("worktree = %+v", wt)
 	}
-	if got := git(t, wt.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "task/r-14" {
+	if got := git(t, wt.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "task/r-412" {
 		t.Errorf("worktree is on %q", got)
 	}
 	if got := git(t, wt.Path, "rev-parse", "HEAD"); got != tip {
@@ -194,7 +194,7 @@ func TestCreateWorktreeFallbackForReal(t *testing.T) {
 	if got := git(t, wt.Path, "config", "user.email"); got != "42+testbot@users.noreply.github.com" {
 		t.Errorf("worktree user.email = %q", got)
 	}
-	if _, err := r.CreateWorktree(clone, 14); err == nil || !strings.Contains(err.Error(), "already has a worktree") {
+	if _, err := r.CreateWorktree(clone, 412); err == nil || !strings.Contains(err.Error(), "already has a worktree") {
 		t.Errorf("second create: %v", err)
 	}
 }

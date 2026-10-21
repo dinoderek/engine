@@ -10,9 +10,9 @@ Two programs share one Go module:
   command. `internal/cli` parses arguments and dispatches. Today:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
   tracker adapter, through `gh`: `engine labels sync`), `internal/hook`
-  (harness hooks: `engine hook pre-tool-use`) and `internal/session` (the
+  (harness hooks: `engine hook pre-tool-use`). `internal/session` (the
   host's session ops, through `git` and `gh`: engine's clones and task
-  worktrees).
+  worktrees) is not reachable from a command yet.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →

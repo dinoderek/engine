@@ -82,6 +82,15 @@ func (r Repos) url(repo Repo) string {
 	return strings.TrimRight(base, "/") + "/" + repo.String() + ".git"
 }
 
+// checkToken refuses an empty token: gh would then fall back to the host's own
+// login, and the clone would act as the operator instead of the machine user.
+func (r Repos) checkToken() error {
+	if strings.TrimSpace(r.Token) == "" {
+		return errors.New("no machine-user token: engine would act as whoever gh is signed in as")
+	}
+	return nil
+}
+
 // env is added to every git and gh call: the token, and no prompting for
 // credentials, so a missing one fails instead of hanging.
 func (r Repos) env() []string {
@@ -99,6 +108,9 @@ func (r Repos) git(dir string, args ...string) (string, error) {
 // and the machine user's name and noreply email. Syncs and worktree creation
 // in one repo take turns, through a lock file beside the clone.
 func (r Repos) Sync(repo Repo) (Clone, error) {
+	if err := r.checkToken(); err != nil {
+		return Clone{}, err
+	}
 	path, err := r.Path(repo)
 	if err != nil {
 		return Clone{}, err
@@ -183,9 +195,12 @@ func (r Repos) configure(path string) error {
 // and the user's noreply email, which GitHub links to the account.
 func (r Repos) machineUser() (login, email string, err error) {
 	out, err := r.Run("", r.env(), "gh", "api", "user", "--jq", `.login + " " + (.id | tostring)`)
+	if err != nil {
+		return "", "", fmt.Errorf("could not read the machine user from GitHub: %w", err)
+	}
 	fields := strings.Fields(out)
-	if err != nil || len(fields) != 2 {
-		return "", "", fmt.Errorf("could not read the machine user from GitHub: %w", errors.Join(err, errors.New(strings.TrimSpace(out))))
+	if len(fields) != 2 {
+		return "", "", fmt.Errorf("could not read the machine user from GitHub: unexpected %q", strings.TrimSpace(out))
 	}
 	return fields[0], fmt.Sprintf("%s+%s@users.noreply.github.com", fields[1], fields[0]), nil
 }

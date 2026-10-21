@@ -180,6 +180,16 @@ func TestSyncRefusesAnUnexpectedDefaultBranchRef(t *testing.T) {
 	}
 }
 
+func TestSyncRefusesAMalformedMachineUser(t *testing.T) {
+	for _, out := range []string{"", "onlyone", "a b c"} {
+		f := &fake{replies: append([]reply{{key: "gh api user", out: out}}, syncReplies()...)}
+		_, err := newRepos(t, f).Sync(mustRepo(t, "o/r"))
+		if err == nil || !strings.Contains(err.Error(), "unexpected") || f.has("config --local user") {
+			t.Errorf("gh said %q: err = %v", out, err)
+		}
+	}
+}
+
 func TestSyncRemovesAFailedClone(t *testing.T) {
 	f := &fake{replies: []reply{{key: " clone ", err: errBoom}}}
 	f.onRun = func(c call) {
@@ -221,11 +231,11 @@ func TestSyncFailsWhenTheLockCannotBeTaken(t *testing.T) {
 }
 
 func TestExecAddsEnvAndWrapsFailures(t *testing.T) {
-	out, err := Exec(t.TempDir(), []string{"ENGINE_TEST=hello"}, "sh", "-c", `printf %s "$ENGINE_TEST"`)
+	out, err := RunCommand(t.TempDir(), []string{"ENGINE_TEST=hello"}, "sh", "-c", `printf %s "$ENGINE_TEST"`)
 	if err != nil || out != "hello" {
 		t.Errorf("out %q, err %v", out, err)
 	}
-	if _, err := Exec("", nil, "sh", "-c", "echo broken >&2; exit 3"); err == nil || !strings.Contains(err.Error(), "broken") {
+	if _, err := RunCommand("", nil, "sh", "-c", "echo broken >&2; exit 3"); err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Errorf("err = %v, want the command's output in it", err)
 	}
 }

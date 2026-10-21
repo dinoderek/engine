@@ -85,7 +85,7 @@ It reads JSON from stdout. If you are changing host names or addresses, load
 | Op | Does |
 | --- | --- |
 | `sync-repo` | Makes sure engine's own clone exists and fetches it. |
-| `spawn` | Creates the worktree with the repo's command, opens the tmux window and launches the harness. |
+| `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), opens the tmux window and launches the harness. |
 | `status` | Reports whether the window is alive and whether the harness is waiting for input. |
 | `collect` | Returns the run directory for telemetry. |
 | `release` | Closes the window, and keeps the worktree when the run failed. |

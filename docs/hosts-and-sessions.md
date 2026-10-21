@@ -142,7 +142,7 @@ is up. On the target host (this machine, unless `--host` says otherwise) it:
 2. creates the task worktree on the branch `task/<repo>-<task>`, with the
    repo's own `./dev worktree create` when the clone has an executable
    `dev`, else with `git worktree add` from the default branch. It refuses
-   when that branch or worktree already exists;
+   when that branch exists locally or on `origin`, or has a worktree;
 3. opens a window `<repo>-<task>` in the tmux session `engine`, in that
    worktree, so the repo's `AGENTS.md` loads;
 4. launches the harness's interactive CLI with the host's launch line, at the
