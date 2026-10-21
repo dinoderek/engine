@@ -59,5 +59,3 @@ Grafana Cloud for live dashboards. The bucket stays the system of record.
 
 - Transcripts can contain secrets. Scan each run directory with a secret
   scanner before upload, and keep the bucket private.
-- Cloud-hosted sessions have no local collector. What can be retrieved from
-  them is an open question.

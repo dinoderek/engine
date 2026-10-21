@@ -28,4 +28,9 @@ set	always-load	4000	AGENTS.md,docs/project-brief.md,docs/architecture.md,docs/p
 ephemeral	design/
 exempt	.github/
 budget-only	plugins/
-budget	plugins/engine/skills/executor/SKILL.md	1500
+budget	plugins/engine/skills/engine/SKILL.md	800
+budget	plugins/engine/skills/engine/references/execute.md	1500
+budget	plugins/engine/skills/engine/references/plan.md	1500
+budget	plugins/engine/skills/engine/references/plan-sources.md	800
+budget	plugins/engine/skills/engine/references/review.md	400
+budget	plugins/engine/skills/engine/references/rulings.md	800

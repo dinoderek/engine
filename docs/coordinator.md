@@ -52,6 +52,11 @@ Commands that work without `run`, and come first in the build:
 - `engine labels sync <owner/repo>`: create or update the `engine:` labels in
   a target repo.
 
+The coordinator's GitHub adapter and `engine lint` implement the skill's plan
+sources (`plugins/engine/skills/engine/references/plan-sources.md`) and its
+lint rules (`plugins/engine/skills/engine/references/plan.md`). The skill is
+the spec; the code follows it.
+
 ## Later: `engine serve`
 
 A persistent daemon over many features, with a web UI for features, sessions

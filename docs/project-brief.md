@@ -23,8 +23,8 @@ operator is out of the loop unless a task asks for them.
 ## State
 
 The parts are designed, in `docs/`. Built so far: `engine version`,
-`engine labels sync`, the executor skill and its merge guard (a Claude Code
-plugin this repo publishes), and the repo's own tooling: `./dev` and its
+`engine labels sync`, the `engine` skill (plan, execute and review) and its
+merge guard (a Claude Code plugin this repo publishes), and the repo's own tooling: `./dev` and its
 quality gates.
 engine is the first worked example of the project context guideline's core.
 
