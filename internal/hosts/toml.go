@@ -278,13 +278,13 @@ func (p *parser) place(t *node, path []string, v *node) {
 			child = newTable(v.line, dotted)
 			t.add(key, child)
 		} else if child.kind != kTable || child.origin != dotted {
-			p.fail("key %s is already defined", strings.Join(path[:i+1], "."))
+			p.failAt(v.line, "key %s is already defined", strings.Join(path[:i+1], "."))
 		}
 		t = child
 	}
 	last := path[len(path)-1]
 	if t.entries[last] != nil {
-		p.fail("key %s is defined twice", strings.Join(path, "."))
+		p.failAt(v.line, "key %s is defined twice", strings.Join(path, "."))
 	}
 	t.add(last, v)
 }

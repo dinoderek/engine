@@ -204,7 +204,7 @@ func (v *validator) host(c *Config, name string, n *node) Host {
 	h := Host{Name: name, ReserveGB: c.ReserveGB, GBPerSession: c.GBPerSession}
 	if addr, at := r.text("address", true); at != nil {
 		h.Address = addr
-		if user, machine, ok := strings.Cut(addr, "@"); !ok || user == "" || machine == "" || strings.Contains(machine, "@") {
+		if user, machine, ok := strings.Cut(addr, "@"); !ok || user == "" || machine == "" || strings.Contains(machine, "@") || strings.HasPrefix(addr, "-") {
 			v.fail(at.line, "%s: address %q must be <user>@<tailscale name>", where, addr)
 		}
 	}
@@ -266,7 +266,7 @@ func (v *validator) hostCapabilities(r *reader, h *Host) {
 // has one, and no other does.
 func (v *validator) hostBin(r *reader, h *Host) {
 	bin := r.table("bin", true)
-	if bin == nil {
+	if bin == nil || len(h.Harnesses) == 0 {
 		return
 	}
 	br := v.reader(bin, r.where+".bin")

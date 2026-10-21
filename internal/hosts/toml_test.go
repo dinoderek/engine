@@ -154,6 +154,7 @@ func TestParseRejects(t *testing.T) {
 		{"unclosed header", "[a\n", 1, `expected ']'`},
 		{"empty header", "[]\n", 1, "expected a key"},
 		{"duplicate key", "a = 1\nb = 2\na = 3\n", 3, "key a is defined twice"},
+		{"duplicate key after an array", "a = [\n\"x\",\n]\na = [\n\"y\",\n]\n", 4, "key a is defined twice"},
 		{"duplicate table", "[a]\n[b]\n[a]\n", 3, "table a is defined twice"},
 		{"table over value", "a = 1\n[a]\n", 2, "a is already defined as a value"},
 		{"header through value", "a = 1\n[a.b]\n", 2, "a is already defined as a value"},
