@@ -70,7 +70,11 @@ func TestSyncFirstClone(t *testing.T) {
 		t.Errorf("clone = %+v", clone)
 	}
 	want := []string{
+		"git ls-remote --get-url https://github.com/o/r.git",
 		"git -c credential.helper= -c credential.helper=!gh auth git-credential clone --quiet https://github.com/o/r.git " + path,
+		"git config --get remote.origin.url",
+		"git remote get-url origin",
+		"git remote get-url --push origin",
 		"gh api user --jq .login + \" \" + (.id | tostring)",
 		"git config --local --replace-all credential.helper ",
 		"git config --local --add credential.helper !gh auth git-credential",
@@ -89,8 +93,8 @@ func TestSyncFirstClone(t *testing.T) {
 			t.Errorf("%q ran with env %v", c.line, c.env)
 		}
 	}
-	if f.calls[0].dir != "" || f.calls[2].dir != path {
-		t.Errorf("clone ran in %q and config in %q", f.calls[0].dir, f.calls[2].dir)
+	if f.calls[1].dir != "" || f.calls[2].dir != path {
+		t.Errorf("clone ran in %q and config in %q", f.calls[1].dir, f.calls[2].dir)
 	}
 	if _, err := os.Stat(path + ".lock"); err != nil {
 		t.Errorf("no lock file beside the clone: %v", err)
@@ -141,9 +145,6 @@ func TestSyncFailures(t *testing.T) {
 		{"set-head fails", "git remote set-head", "", nil, "find the default branch"},
 		{"no default branch", "symbolic-ref", "refs/remotes/other/HEAD", nil, "find the default branch"},
 		{"checkout fails", "git checkout", "", nil, "check out origin/main"},
-		{"other origin", "remote get-url", "https://github.com/x/y.git", func(path string) error {
-			return os.MkdirAll(filepath.Join(path, ".git"), 0o755)
-		}, "is not a clone of https://github.com/o/r.git"},
 		{"directory in the way", "", "", func(path string) error {
 			return os.MkdirAll(path, 0o755)
 		}, "exists and is not a git clone"},
@@ -176,6 +177,62 @@ func TestSyncRefusesAnUnexpectedDefaultBranchRef(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "unexpected") {
 			t.Errorf("ref %q: err = %v", ref, err)
 		}
+	}
+}
+
+// placeClone makes a clone's directory exist at path: now when existing,
+// otherwise once the fake is asked to clone.
+func placeClone(t *testing.T, f *gitFake, path string, existing bool) {
+	t.Helper()
+	gitDir := filepath.Join(path, ".git")
+	if existing {
+		if err := os.MkdirAll(gitDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	f.onRun = func(c call) {
+		if strings.Contains(c.line, " clone ") {
+			_ = os.MkdirAll(gitDir, 0o755)
+		}
+	}
+}
+
+func TestSyncRefusesARewrittenOrForeignRemote(t *testing.T) {
+	const ssh = "git@github.com:o/r.git\n"
+	repo := mustRepo(t, "o/r")
+	tests := []struct {
+		name     string
+		key, out string
+		existing bool
+		wantErr  string
+		clones   bool // whether a clone may have been attempted
+	}{
+		{"rewritten before the first clone", "ls-remote --get-url", ssh, false, "git rewrites https://github.com/o/r.git to git@github.com:o/r.git", false},
+		{"fetch url rewritten", "remote get-url origin", ssh, true, "git rewrites", false},
+		{"push url rewritten", "remote get-url --push", ssh, true, "git rewrites", false},
+		{"push url rewritten after a fresh clone", "remote get-url --push", ssh, false, "pushInsteadOf", true},
+		{"origin is another repo", "config --get remote.origin.url", "https://github.com/x/y.git\n", true, "is not a clone of https://github.com/o/r.git", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &gitFake{replies: append([]reply{{key: tt.key, out: tt.out}}, syncReplies()...)}
+			r := newRepos(t, f)
+			path, _ := r.Path(repo)
+			placeClone(t, f, path, tt.existing)
+			_, err := r.Sync(repo)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("err = %v, want it to contain %q", err, tt.wantErr)
+			}
+			if f.has(" clone ") != tt.clones || f.has("gh api user") {
+				t.Errorf("commands: %v", f.lines())
+			}
+			if !tt.existing {
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Errorf("a refused fresh clone was left at %s", path)
+				}
+			}
+		})
 	}
 }
 

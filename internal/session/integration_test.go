@@ -141,6 +141,49 @@ func TestSyncClonesConfiguresAndFollowsTheRemote(t *testing.T) {
 	}
 }
 
+// rewriting is a RunFunc whose git has a host-level rule, as a global
+// ~/.gitconfig would, that rewrites the remote's URL to somewhere else:
+// kind is "insteadOf" or "pushInsteadOf".
+func rewriting(remote remoteFixture, kind string) RunFunc {
+	rule := []string{
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=url.file:///elsewhere/." + kind,
+		"GIT_CONFIG_VALUE_0=file://" + remote.base + "/",
+	}
+	return func(dir string, env []string, name string, args ...string) (string, error) {
+		return realGit(dir, append(append([]string{}, env...), rule...), name, args...)
+	}
+}
+
+func TestSyncRefusesAHostRuleThatRewritesTheRemote(t *testing.T) {
+	for _, kind := range []string{"insteadOf", "pushInsteadOf"} {
+		t.Run(kind, func(t *testing.T) {
+			remote := newRemote(t, "main")
+			remote.commit(t, "main", "a.txt", "a", 0o644)
+			r := remote.repos(t)
+			r.Run = rewriting(remote, kind)
+			repo := mustRepo(t, "o/r")
+			_, err := r.Sync(repo)
+			if err == nil || !strings.Contains(err.Error(), "git rewrites") || !strings.Contains(err.Error(), "remove the rule") {
+				t.Fatalf("first sync: err = %v", err)
+			}
+			path, _ := r.Path(repo)
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Errorf("a refused clone was left at %s", path)
+			}
+			// A clone made before the rule existed is refused too, with the cause named.
+			r.Run = realGit
+			if _, err := r.Sync(repo); err != nil {
+				t.Fatal(err)
+			}
+			r.Run = rewriting(remote, kind)
+			if _, err := r.Sync(repo); err == nil || !strings.Contains(err.Error(), "git rewrites") {
+				t.Errorf("existing clone: err = %v", err)
+			}
+		})
+	}
+}
+
 func TestSyncRefusesAnotherRepoInThePlace(t *testing.T) {
 	remote := newRemote(t, "main")
 	remote.commit(t, "main", "a.txt", "a", 0o644)

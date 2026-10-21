@@ -68,6 +68,8 @@ func syncReplies() []reply {
 	return []reply{
 		{key: "gh api user", out: "testbot 42\n"},
 		{key: "symbolic-ref", out: "origin/main\n"},
+		{key: "ls-remote --get-url", out: "https://github.com/o/r.git\n"},
+		{key: "config --get remote.origin.url", out: "https://github.com/o/r.git\n"},
 		{key: "remote get-url", out: "https://github.com/o/r.git\n"},
 	}
 }

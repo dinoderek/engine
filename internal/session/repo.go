@@ -139,34 +139,77 @@ func (r Repos) Sync(repo Repo) (Clone, error) {
 	return Clone{Repo: repo, Path: path, Default: def}, nil
 }
 
-// ensureClone clones repo to path unless a clone of it is already there.
+// ensureClone clones repo to path unless a clone of it is already there, and
+// checks that the clone's remote is the HTTPS URL and stays it.
 func (r Repos) ensureClone(repo Repo, path string) error {
 	want := r.url(repo)
+	fresh, err := r.cloneIfMissing(repo, path, want)
+	if err != nil {
+		return err
+	}
+	if err := r.checkRemote(path, want); err != nil {
+		if fresh {
+			_ = os.RemoveAll(path)
+		}
+		return err
+	}
+	return nil
+}
+
+// cloneIfMissing clones want to path unless a clone is there, and reports
+// whether it cloned.
+func (r Repos) cloneIfMissing(repo Repo, path, want string) (bool, error) {
 	_, err := os.Stat(filepath.Join(path, ".git"))
 	switch {
 	case err == nil:
-		got, err := r.git(path, "remote", "get-url", "origin")
-		if err != nil || got != want {
-			return fmt.Errorf("%s is not a clone of %s (origin is %q)", path, want, got)
-		}
-		return nil
+		return false, nil
 	case !errors.Is(err, os.ErrNotExist):
-		return err
+		return false, err
 	}
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s exists and is not a git clone", path)
+		return false, fmt.Errorf("%s exists and is not a git clone", path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return false, err
+	}
+	// A url.<base>.insteadOf rule would send the clone elsewhere, such as over
+	// SSH with the operator's key. ls-remote --get-url applies it, so refuse first.
+	if got, err := r.git("", "ls-remote", "--get-url", want); err != nil || got != want {
+		return false, rewriteError(want, got, err)
 	}
 	// The helper is passed here too, because the clone itself needs the token.
 	_, err = r.git("", "-c", "credential.helper=", "-c", "credential.helper="+credentialHelper,
 		"clone", "--quiet", want, path)
 	if err != nil {
 		_ = os.RemoveAll(path) // a failed clone can leave a partial directory
-		return fmt.Errorf("clone %s: %w", repo, err)
+		return false, fmt.Errorf("clone %s: %w", repo, err)
+	}
+	return true, nil
+}
+
+// checkRemote refuses a clone whose origin is not want, or that git would
+// fetch from or push to anywhere else. A host's url.<base>.insteadOf or
+// pushInsteadOf rule can do that quietly, and then engine's pushes would go
+// out under the operator's own credentials instead of the machine user's.
+func (r Repos) checkRemote(path, want string) error {
+	raw, err := r.git(path, "config", "--get", "remote.origin.url")
+	if err != nil || raw != want {
+		return fmt.Errorf("%s is not a clone of %s (origin is %q)", path, want, raw)
+	}
+	for _, args := range [][]string{{"remote", "get-url", "origin"}, {"remote", "get-url", "--push", "origin"}} {
+		if got, err := r.git(path, args...); err != nil || got != want {
+			return rewriteError(want, got, err)
+		}
 	}
 	return nil
+}
+
+func rewriteError(want, got string, err error) error {
+	if err != nil {
+		return fmt.Errorf("cannot resolve %s: %w", want, err)
+	}
+	return fmt.Errorf("git rewrites %s to %s (a url.<base>.insteadOf or pushInsteadOf rule); "+
+		"remove the rule on this host, so engine's clones fetch and push over HTTPS as the machine user", want, got)
 }
 
 // configure sets the clone's local credential helper and commit identity.
