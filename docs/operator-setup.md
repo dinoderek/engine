@@ -28,13 +28,12 @@
    config, after an empty value that drops any helper the host configures
    globally, such as the keychain. Engine refuses to clone or sync when a
    `url.<base>.insteadOf` or `pushInsteadOf` rule in your git config would
-   send an engine clone over SSH, so limit such a rule to your own checkouts (an `includeIf "gitdir:"`).
-   Your SSH-key checkouts are untouched.
+   send an engine clone over SSH, so limit such a rule to your own checkouts
+   (an `includeIf "gitdir:"`). Your SSH-key checkouts are untouched.
 7. **Attribute commits truthfully.** Each engine clone sets the local
    `user.name` to the machine user's login and `user.email` to its noreply
-   address, and the
-   harness adds its `Co-Authored-By` trailer. PRs open as the machine user,
-   which also means you can approve them.
+   address, and the harness adds its `Co-Authored-By` trailer. PRs open as
+   the machine user, which also means you can approve them.
 
 ## Notifications
 
