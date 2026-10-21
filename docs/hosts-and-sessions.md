@@ -84,7 +84,9 @@ effort comes close to it on coding at a fraction of the cost.
 Each host pins the path of every harness binary (`bin`), and `{bin}` in the
 launch line expands to it. Engine never runs whichever install comes first on
 `PATH`: this Mac has a second Codex under Homebrew that shadows the standalone
-one.
+one. The other placeholders: `{name}` is the session name (`<repo>-<task>`),
+`{model}` and `{effort}` come from the tier, and `{clone}` is engine's clone of
+the repo.
 
 ## Placement
 
