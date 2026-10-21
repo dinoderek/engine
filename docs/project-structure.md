@@ -9,6 +9,7 @@
 | `cmd/engine/` | the `engine` main package: one line that calls `internal/cli` |
 | `internal/` | product packages; `internal/cli` dispatches commands |
 | `internal/hosts/` | host config: `toml.go` parses the TOML subset, `decode.go` holds the validation rules, `hosts.go` the types, slots and loading |
+| `internal/session/` | the local host's ops: `repo.go` and `worktree.go` hold engine's clones and task worktrees, `tmux.go` the tmux session, windows, options and pane logs, `awake.go` keeping a macOS host awake |
 | `devtools/cmd/dev/` | the `dev` main package that `./dev` builds and runs |
 | `devtools/internal/` | the `./dev` verbs (`dev`), the lane runner (`lanes`), the lane checks (`checks`), baselines (`baseline`) and git and file helpers (`repo`) |
 | `dev` | the shell entrypoint: pins Go from `go.mod`, builds `.dev/dev`, runs it |
