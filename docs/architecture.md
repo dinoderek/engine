@@ -9,7 +9,8 @@ Two programs share one Go module:
 - **`engine`**, the product: `cmd/engine` → `internal/cli` → one package per
   command. `internal/cli` parses arguments and dispatches. Today:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
-  tracker adapter, through `gh`: `engine labels sync`) and `internal/hook`
+  tracker adapter, through `gh`: `engine labels sync`, and reads of a task
+  issue and of the claim comments on every claimed task) and `internal/hook`
   (harness hooks: `engine hook pre-tool-use`).
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
