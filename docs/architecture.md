@@ -12,12 +12,14 @@ Two programs share one Go module:
   tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
   of a task issue and of the claim comments on every claimed task),
   `internal/hook`
-  (harness hooks: `engine hook pre-tool-use`). The commands share
+  (harness hooks: `engine hook pre-tool-use`), `internal/ps` (`engine ps`: the
+  state of each claimed task). The commands share
   `internal/hosts`, the host config: it parses `hosts.toml` with an in-house
   reader of the TOML subset the config uses, validates it and works out each
-  machine's slots. `internal/session` (the host's session ops, through `git`,
-  `gh` and `tmux`: engine's clones and task worktrees, and the tmux session,
-  windows and pane logs) is not reachable from a command yet.
+  machine's slots. `internal/session` is the host's session ops, through
+  `git`, `gh`, `tmux` and the harness: engine's clones and task worktrees, the
+  tmux session, windows and pane logs, and the live Claude Code sessions.
+  Only `engine ps` reaches it so far.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →
