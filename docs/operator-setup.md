@@ -46,7 +46,9 @@
   install directory on `PATH`. The plugin's merge guard runs it on every Bash
   call; without it, or with a binary too old for the plugin's hooks, the guard
   fails open. Update `engine` on each host before taking a plugin update.
-- **Claude Code:** signed in, with Remote Control working from the Claude app.
+- **Claude Code:** signed in with your claude.ai account (`/login`), with
+  Remote Control working from the Claude app. Remote Control rejects API keys
+  and `setup-token`, so on a remote host sign in once over SSH.
 - **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
   per session (`hosts-and-sessions.md`, "Permission mode").
 - **Host name:** its logical name (`mac`, `devbox`) on one line in

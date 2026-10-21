@@ -49,7 +49,7 @@ reserve_gb = 8          # RAM kept back for the host itself
 
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
-launch = "{bin} --permission-mode auto --model {model} --effort {effort}"
+launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {name} --remote-control {name}"
 tiers.deep     = { model = "claude-opus-5-5",   effort = "high" }
 tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
 tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
@@ -84,7 +84,9 @@ effort comes close to it on coding at a fraction of the cost.
 Each host pins the path of every harness binary (`bin`), and `{bin}` in the
 launch line expands to it. Engine never runs whichever install comes first on
 `PATH`: this Mac has a second Codex under Homebrew that shadows the standalone
-one.
+one. The other placeholders: `{name}` is the session name (`<repo>-<task>`),
+`{model}` and `{effort}` come from the tier, and `{clone}` is engine's clone of
+the repo.
 
 ## Placement
 
@@ -143,7 +145,8 @@ is up. On the target host (this machine, unless `--host` says otherwise) it:
    Reviewer model: <deep model>`, the reviewer model taken from the same
    harness's `deep` tier), plus the `run=`, `tmux=` and `rc=` values its claim
    comment records;
-5. makes the session reachable from the apps (see below);
+5. makes the session reachable from the apps: the launch line already does
+   it for Claude, and Codex connects to the host's app-server (see below);
 6. prints how to attach.
 
 The executor claims the task itself. `engine start` only places and launches.
@@ -171,7 +174,7 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps`: every claimed task, with its host, harness, state (working, waiting for input, needs-human, in review, CI) and age. Liveness comes from probing each host's tmux; state comes from the hook signals (`coordinator.md`). |
+| Terminal | `engine ps`: every claimed task, with its host, harness, state (working, waiting for input, needs-human, in review, CI) and age. Liveness comes from probing each host's tmux; state comes from the labels and the harness signals (`coordinator.md`). |
 
 ## Connecting to a session
 
@@ -187,7 +190,10 @@ screen, and anyone can type.
 
 Each harness reaches the apps differently:
 
-- **Claude:** the session has Remote Control turned on.
+- **Claude:** the launch line's `-n {name} --remote-control {name}` sets the
+  session's name, `<repo>-<task>`, and shows it in the apps under that name.
+  Remote Control needs the host signed in with a claude.ai account
+  (`operator-setup.md`).
 - **Codex:** the host runs the remote-control app-server
   (`codex remote-control start`), and the session's TUI connects to it with
   `--remote`.

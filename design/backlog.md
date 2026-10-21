@@ -45,17 +45,16 @@ Work to do before or alongside the build. Delete each item when it is done.
 
 ## Check
 
-11. **Remote Control for a launched session.** How does `engine start` turn on
-    Remote Control for an interactive `claude` session that it launches: a
-    setting, a flag, or sending `/remote-control`? For Codex: does a TUI
-    started with `--remote` against the host's `codex remote-control`
-    app-server show up in the ChatGPT app? Check on the Linux host too.
-    `codex remote-control start | pair` is marked experimental in 0.163.
-12. **Existing control planes.** Before building the SSH host layer, evaluate
-    Paseo, Zeron and Pragma (`prior-art.md`).
-13. **Model IDs.** `gpt-6.1-sol` is confirmed (it is this Mac's Codex
+11. **Codex remote control for a launched session.** Does a TUI started with
+    `--remote` against the host's `codex remote-control` app-server show up
+    in the ChatGPT app? Check on the Linux host too. It is still marked
+    experimental in 0.163, and the official docs say phone setup starts in the
+    desktop app (openai/codex#35928). If it fails, Codex runs under Paseo
+    (`prior-art.md`) behind the same `engine host` ops, and Claude stays on
+    tmux.
+12. **Model IDs.** `gpt-6.1-sol` is confirmed (it is this Mac's Codex
     default). Check `gpt-6-luna` with a one-line `codex exec`.
-14. **Reviewer tier on Codex.** Claude Code can start a subagent on a
+13. **Reviewer tier on Codex.** Claude Code can start a subagent on a
     different model. Check whether a Codex session can, or whether its
     reviewer inherits the session's model.
 

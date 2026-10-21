@@ -7,7 +7,8 @@
 - **Go, one binary (`engine`)** for macOS and Linux. The same binary runs on
   every host.
 - **Stateless.** Each pass derives everything from the tracker (issues, labels,
-  comments, PRs) and from each host's tmux sessions and run directories. Run
+  comments, PRs) and from each host's tmux sessions, `claude agents --json`
+  and run directories. Run
   the same command again and it resumes, picking up the sessions that are
   still live.
 - **Never edits code and never merges.** Executors do both.
@@ -29,12 +30,21 @@ it. A pass can:
 - place and spawn ready tasks, which is `engine start` for each one;
 - mark dead sessions `failed`;
 - update the feature's label;
+- @mention you about a stalled session;
 - gather and upload telemetry for runs that have ended.
 
-A pass runs every 60 seconds. Webhooks make passes start sooner:
-`gh webhook forward` sends repo events to a localhost endpoint without needing
-a public URL. An event only triggers an early pass and never carries state, so
-a missed event costs at most one poll interval.
+Each webhook event starts a pass: `gh webhook forward` sends repo events to a
+localhost endpoint without needing a public URL. A backstop pass runs every 5
+minutes. Events that arrive while a pass is pending or running coalesce into
+one more pass. An event never carries state, so a missed one costs at most the
+backstop interval.
+
+Session death raises no webhook, so a session check runs every 60 seconds
+between passes. It reads only the hosts, never GitHub. The first time it sees
+a session waiting, it writes the time to the session's run directory as
+`waiting-since`, and clears it when the session works again. It starts a pass
+when a session has died or has been waiting for 10 minutes ("Session
+signals").
 
 The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it
@@ -76,7 +86,7 @@ It reads JSON from stdout. If you are changing host names or addresses, load
 | --- | --- |
 | `sync-repo` | Makes sure engine's own clone exists and fetches it. |
 | `spawn` | Creates the worktree with the repo's command, opens the tmux window and launches the harness. |
-| `status` | Reports whether the window is alive and the latest signal from the harness hooks. |
+| `status` | Reports whether the window is alive and whether the harness is waiting for input. |
 | `collect` | Returns the run directory for telemetry. |
 | `release` | Closes the window, and keeps the worktree when the run failed. |
 
@@ -90,14 +100,26 @@ It reads JSON from stdout. If you are changing host names or addresses, load
 
 ## Session signals
 
-Agent state is never scraped from the pane. Three sources:
+Agent state is never scraped from the pane. The task's state comes from its
+labels; the session layer adds only whether a session is alive and whether it
+is waiting for input. Three sources:
 
 1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
-2. **Harness hooks** that write to the run directory: Claude Code's
-   `Notification` and `Stop` hooks, and Codex's hooks. They mark "waiting for
-   input" and "turn ended". Codex's `notify` is not used, because it holds a
-   single program and other tools already claim it (Computer Use on the Mac).
+2. **The harness**, for "waiting for input":
+   - **Claude Code:** `claude agents --json` on the host lists every live
+     session, including those in tmux, with its `pid`, `cwd`, `name`,
+     `sessionId` and `status`. Engine matches a session by its name
+     (`<repo>-<task>`), then by its worktree for one started by hand.
+   - **Codex:** its hooks write to the run directory. Codex's `notify` is not
+     used, because it holds a single program and other tools already claim it
+     (Computer Use on the Mac).
 3. **tmux.** If the window exists, the session is alive.
+
+**Stalls.** A session whose `waiting-since` is 10 minutes old while its task
+is not `needs-human` has stopped outside the protocol, for example on a
+question asked in the session rather than on the issue. The coordinator
+@mentions you on the task's issue, once per wait: it skips the mention when
+its own stall comment is newer than `waiting-since`.
 
 ## Identity and notifications
 
