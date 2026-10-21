@@ -21,8 +21,9 @@ merge guard blocks both, and any merge without `--match-head-commit`.
 ## GitHub identity
 
 For a GitHub plan, every `gh` call acts as engine's machine user, so your
-@mentions notify the operator. If `GH_TOKEN` is unset, prefix each call with
-`GH_TOKEN="$(cat ~/.config/engine/github-token)"`. With no token and no file,
+@mentions notify the operator. If `GH_TOKEN` is unset, run each one as
+`engine gh <args…>`, which takes the token from the token file without it
+appearing on the command line. With no token and no file,
 stop (**Environment**). `git push` uses the checkout's own credentials.
 
 **The operator** is the feature issue's assignee, else its author.

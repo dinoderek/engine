@@ -144,8 +144,14 @@ treats anything else (`#`, `:`, spaces) as special.
 runs from any terminal, in any directory. It returns as soon as the session
 is up. On the target host (this machine, unless `--host` says otherwise) it:
 
-1. syncs engine's clone of the repo;
-2. creates the task worktree with the repo's own command;
+1. syncs engine's clone of the repo: clones it over HTTPS on first use,
+   fetches it, and leaves it at the remote's default branch. The clone's
+   local config makes `gh` its only credential helper, and sets the machine
+   user's name and noreply email;
+2. creates the task worktree on the branch `task/<repo>-<task>`, with the
+   repo's own `./dev worktree create` when the clone has an executable
+   `dev`, else with `git worktree add` from the default branch. It refuses
+   when that branch exists locally or on `origin`, or has a worktree;
 3. opens a window `<repo>-<task>` in the tmux session `engine`, in that
    worktree, so the repo's `AGENTS.md` loads;
 4. launches the harness's interactive CLI with the host's launch line, at the
@@ -216,30 +222,28 @@ opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
 - on the session: `mouse on` and `history-limit 50000`;
 - on each window: `allow-rename off` and `automatic-rename off`, so agents
   can't rename windows;
-- on each window: `window-size latest`, so the window fits whoever attached
-  last (a phone or a laptop);
+- on each window: `window-size latest`, so it fits whoever attached last (a
+  phone or a laptop);
 - on each window: `remain-on-exit on`, so a crashed session's last screen
   stays readable.
 
 `pipe-pane` copies each window's output into its run directory, so the raw log
 outlives the tmux server. Engine opens a window on a placeholder command, sets
 the options and the pipe, then swaps in the task's command, so a command that
-fails at once still leaves its log and its screen. Because tmux reads `.` as a
-pane separator, a pane command cannot target a window whose name has one, so
-engine targets the windows it opens by id (`@3`).
+fails at once still leaves its log and its screen. tmux reads `.` as a pane
+separator, so engine targets the windows it opens by id (`@3`), not by name.
 
-When engine has to type into a session, it sends the
-text with `send-keys -l`, then `Enter` as a separate call after a short delay.
-Input boxes can swallow a newline that arrives with the text.
+When engine has to type into a session, it sends the text with `send-keys -l`,
+then `Enter` as a separate call after a short delay. Input boxes can swallow a
+newline that arrives with the text.
 
 ## Keeping hosts awake
 
 tmux survives a closed terminal, but not a sleeping machine. On a macOS host,
 each window that engine opens starts `caffeinate -s -w <pid>` on its command's
-process, through tmux's `run-shell`. `-s` holds off sleep while the host is on
-power, and `-w` ends it when the command does. So the host can sleep as soon
-as the last command has ended, and nothing outlives the windows. A Linux host
-should not suspend at all.
+process, through tmux's `run-shell`. `-s` holds off sleep while on power, and
+`-w` ends it when the command does, so nothing outlives the last command. A
+Linux host should not suspend at all.
 
 ## Lifecycle
 

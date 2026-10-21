@@ -123,6 +123,8 @@ The plugin ships one Claude Code `PreToolUse` hook,
   `--admin`;
 - merges through `gh api`, REST or GraphQL.
 
+`engine gh …` counts as `gh` for both.
+
 Every other hard stop rests on the skill. A guard reads the command's words;
 it catches mistakes, not a session set on getting round it. Codex sessions
 have no guard yet.

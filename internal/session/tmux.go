@@ -1,7 +1,7 @@
-// Package session is engine's local host layer. This file is the tmux layer:
-// the session `engine`, its options, the windows that run tasks and the
-// pane logs. tmux is reached only through its CLI, behind a Runner, so tests
-// replace it or point it at a private socket.
+// This file is the tmux layer: the session `engine`, its options, the windows
+// that run tasks and the pane logs. tmux is reached only through its CLI,
+// behind a Runner, so tests replace it or point it at a private socket.
+
 package session
 
 import (
