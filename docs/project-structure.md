@@ -8,6 +8,7 @@
 | --- | --- |
 | `cmd/engine/` | the `engine` main package: one line that calls `internal/cli` |
 | `internal/` | product packages; `internal/cli` dispatches commands |
+| `internal/attach/` | `engine attach`: finds a task's claim, then replaces the process with `tmux attach` on the claim's host, locally or over `ssh` (`attach.go`) |
 | `internal/hosts/` | host config: `toml.go` parses the TOML subset, `decode.go` holds the validation rules, `hosts.go` the types, slots and loading |
 | `internal/session/` | the local host's ops: `repo.go` and `worktree.go` hold engine's clones and task worktrees, `tmux.go` the tmux session, windows, options and pane logs, `awake.go` keeping a macOS host awake |
 | `devtools/cmd/dev/` | the `dev` main package that `./dev` builds and runs |
