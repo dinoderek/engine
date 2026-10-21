@@ -5,15 +5,8 @@ inline in the doc that owns them. Delete each item here when it is done.
 
 ## Set up
 
-1. **Pilot task.** One task in BOGA3, chosen by the operator. Before it
-   runs, BOGA3 needs:
-   - a line in `AGENTS.md` saying that in an engine run the card's Gates field
-     is the operator's lane agreement, and the executor merges on green;
-   - for an in-repo card, an engine binding in `docs/plans/README.md`:
-     `## Objective` → Outcome, `## Decided` → Decided, `## Open — resolve with
-     the user at session start` → Open, `## Deliverables and acceptance` →
-     Tests, `## Specs to update` → Docs to update, `## Gates` → Gates, and the
-     milestone's `## Task breakdown` table → Depends on and state.
+1. **Pilot task.** One task in BOGA3, chosen by the operator. BOGA3 needs no
+   changes: the planner overrides its blocking rules in the card.
 2. **Move `task-protocol` here from `agent-skills`.** Engine is already a
    plugin marketplace (`plugins/engine`). Steps, in order:
    1. Bring `plugins/task-protocol` across with its history, and add it to
@@ -58,9 +51,16 @@ should change.
     in-repo plans. Revisit after the pilot.
 11. **The in-repo mapping** (`references/plan-sources.md`). *Recommended: as
     written.* It matches how `task-protocol` runs BOGA3's `docs/plans`.
-12. **In-repo bindings live in the target repo** (`references/plan-sources.md`,
-    "Which mapping applies"). *Recommended: yes.* A repo's templates change
-    with the repo, not with engine.
+12. **In-repo plans are mapped by reading the repo's own templates**, with
+    no binding table in the repo (`references/plan-sources.md`, "Which
+    mapping applies"). *Recommended: yes.* The target repo needs no
+    engine-specific changes, and the PR body shows the mapping used.
+15. **Overrides live on the feature and are inherited by its cards**
+    (`references/plan.md`, "Repo rules that block hands-off"). *Recommended:
+    yes.* "Merge on green" would otherwise repeat on every card.
+16. **A repo rule that involves the operator with no override covering it is
+    a hard stop** (`references/rulings.md`, class 11). *Recommended: yes.* A
+    rule the planner missed shows up, rather than being silently skipped.
 13. **`low` decisions get one collapsed line each in the PR body**
     (`references/rulings.md`). *Recommended: yes.* You never read them, but
     the evidence is there if a grade was wrong.

@@ -18,7 +18,8 @@ it cold.
 3. **Correctness.** Bugs, edge cases, error handling, and anything the
    change breaks elsewhere.
 4. **Repo rules.** Everything in `AGENTS.md`: structure, naming, gates,
-   dependencies, docs discipline.
+   dependencies, docs discipline. Only the card's and feature's
+   `## Overrides` set a rule aside.
 5. **Docs.** The owning docs are updated, and say how things are now, with no
    history.
 6. **Plans never cited.** No issue number, plan path or task ID in code, tests

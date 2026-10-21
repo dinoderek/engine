@@ -8,9 +8,11 @@ there and never also in the issue body.
 ## Which mapping applies
 
 - **GitHub:** the columns below. They are the same in every repo.
-- **In-repo plan:** the repo's plans doc may carry an **engine binding**, a
-  table from each engine field to the repo's own heading or column. Use it if
-  it exists. Otherwise use the default in-repo column below.
+- **In-repo plan:** read the repo's own card and milestone templates, and
+  map their headings and columns to the engine fields by meaning. A repo's
+  `Open` that says "resolve with the user" is still an open question you
+  decide. Say in the PR body how you mapped the fields. The default in-repo
+  column below applies when the repo has no template.
 
 ## Operations
 
@@ -33,7 +35,8 @@ there and never also in the issue body.
 | Open | Questions the executor decides, graded per `rulings.md`. | `## Open` | `## Open` |
 | Tests | The claims to prove, and the layer each belongs in. | `## Tests` | `## Tests` |
 | Docs to update | The owning docs the change touches. | `## Docs to update` | `## Docs to update` |
-| Gates | Lanes to run beyond the repo's default. In an engine run, the operator's agreement to them. | `## Gates` | `## Gates` |
+| Gates | Lanes to run beyond the repo's default. | `## Gates` | `## Gates` |
+| Overrides | Repo rules waived for this task, each as `<rule> → <instead>`. Adds to the feature's. | `## Overrides`, on the card and on the feature | Not used: the operator is in the session. |
 | Requires | Host capabilities, such as `ios`, `docker` or `android`. | `## Requires` | Not used: the operator picks the host. |
 | Harness / tier | Optional. Empty means the default harness and `standard`. | `## Harness / tier` | Not used: the operator picks the model. |
 | Depends on | Tasks that must merge first. | Native "blocked by" links only | The milestone task table's Depends on column |

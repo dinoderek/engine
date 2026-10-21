@@ -57,9 +57,11 @@ Docs cite the verbs and never restate the commands behind them.
 - **Where there is CI, it runs the same command.** A lane CI cannot run, such
   as one that needs a simulator, runs locally, and its evidence goes in the PR.
   Merge on green means local gates plus every CI check.
-- **Lane agreement in engine runs.** If the repo asks the operator to agree
-  the lanes beyond a default, `AGENTS.md` says that in an engine run the
-  card's Gates field is that agreement, and the executor does not ask.
+- **Few operator checkpoints.** A rule that makes an agent involve the
+  operator mid-task (agreeing lanes, approving a merge) blocks a hands-off
+  run. The repo needs no engine-specific wording: the planner finds such
+  rules during Prepare, and the operator either changes the rule or overrides
+  it for that feature.
 - Default targets:
 
 | Target | Default |
@@ -130,7 +132,6 @@ Docs cite the verbs and never restate the commands behind them.
 | Design system | The repo has a UI | A catalog of **which component to reach for**, never its props: the component file and its tests are the spec. The check fails when a primitive or component folder is missing from the catalog. Tokens are the only source of colour, spacing and type, and a lint ratchet bans literals. |
 | Isolated environments | The repo has stateful infrastructure (DBs, ports, simulators) | A slot lease per worktree, with derived ports. Commands that need the lease refuse to run without it. Only the owner tears down. |
 | Test-directory READMEs | Test layers have local conventions | Editing tests in a directory means reading its README first. |
-| In-repo plans | The repo plans in files and wants engine to execute them | The plans doc carries an engine binding: a table from each engine card field to the repo's heading or column (`plugins/engine/skills/engine/references/plan-sources.md`). |
 
 ## Seed prompt
 

@@ -33,6 +33,11 @@ you are consulted, so every open question is either answered there or
 explicitly left to the agent. A feature's approval covers its tasks. A
 standalone task carries its own.
 
+Prepare also settles the target repo's rules that would stop a hands-off run,
+such as agreeing lanes or approving merges. The planner reads them in the
+repo itself, and you either change the rule or override it for the feature.
+Target repos need no engine-specific wording.
+
 The executor reviews its own work with a fresh reviewer (mode `review`), and
 merges itself once every check is green, with `--match-head-commit` pinned to
 the commit that was reviewed and gated.

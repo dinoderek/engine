@@ -60,6 +60,8 @@ With an in-repo plan, ask the operator in the session.
 8. **Objectives:** the feature's requirements would have to change.
 9. **Review:** two review rounds that don't converge.
 10. **Environment:** a required gate that cannot run on this host.
+11. **Repo rule:** a repo rule tells you to involve the operator, and no
+    override on the card or its feature covers it.
 
 The repo's `AGENTS.md` may add classes, and they apply too. When the operator
 answers, read the answer (in the session or on the task), remove

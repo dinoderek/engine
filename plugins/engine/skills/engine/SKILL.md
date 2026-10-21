@@ -25,14 +25,17 @@ The kickoff prompt `Execute task <ref> with the engine executor protocol` means
 
 ## Rules in every mode
 
-1. **Load the repo first.** Read the repo's `AGENTS.md` (or `CLAUDE.md`) and
-   what it says to always load.
-2. **The repo owns the how; engine owns the flow.** Take commands, paths,
-   gates, worktree verbs and the PR template from the repo. Where the repo's
-   workflow says to stop and ask the operator (to agree lanes, sign off a
-   design, or approve a merge), an engine run does not ask: the card, or this
-   skill, stands in for that agreement. Hard stops, including any the repo
-   adds, always apply.
+1. **Work from the target repo.** Run in a checkout or worktree of the repo
+   the work is for, and read its `AGENTS.md` (or `CLAUDE.md`) and what it
+   says to always load before anything else.
+2. **The repo's rules win, except where an override says otherwise.** Take
+   commands, paths, gates, worktree verbs and the PR template from the repo.
+   Some repo rules would stop a hands-off run, for example "agree the lanes
+   with the operator" or "never merge unless asked". The planner settles each
+   one before execution: the operator changes the rule, or the feature or
+   card lists an **override**. Follow the overrides, and nothing else in the
+   repo's rules is waived. Hard stops, including any the repo adds, always
+   apply.
 3. **One plan source.** A plan lives either in GitHub issues or in the repo's
    plan files, never both. Read and update state only in that source.
    `references/plan-sources.md` says where each thing lives in each source.

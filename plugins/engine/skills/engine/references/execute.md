@@ -7,6 +7,10 @@ task's issue", "comment"). With an in-repo plan, map each one through
 
 ## Start
 
+Read the card's `## Overrides` and the feature's. They are the only repo rules
+you may set aside. If any other repo rule tells you to involve the operator,
+that is a **Repo rule** hard stop.
+
 The coordinator starts you in the task's worktree root. If you were started
 anywhere else (by hand, for a pilot), first create a worktree with the repo's
 worktree command and work only there.
@@ -21,8 +25,7 @@ worktree command and work only there.
    layers it names. Update the docs the card lists, plus any other owning doc
    the change touches.
 3. **Gates.** Run the repo's gate command for this diff, plus the card's
-   **Gates**, to green. That includes lanes that only run locally. Don't ask
-   the operator to agree lanes: the card is the agreement.
+   **Gates**, to green. That includes lanes that only run locally.
 4. **Review.** Spawn a fresh reviewer that has not seen your work, with the
    `review` mode of this skill (`review.md`). Give it the card and the branch
    diff against the default branch. Fix every real finding, re-run the gates

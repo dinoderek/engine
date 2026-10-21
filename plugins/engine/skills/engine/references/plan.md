@@ -54,10 +54,36 @@ headings, in order:
 | `## Surfaces` | The APIs, schemas, CLIs and screens it touches. |
 | `## Design` | The approach, and the risks with their answers. Link the mocks. |
 | `## Left to the agent` | The questions executors decide themselves. |
+| `## Overrides` | Repo rules this feature waives, each as `<rule> → <instead>`. |
 | `## Questions` | For the operator. Empty when ready to approve. |
 
 Answer every open question here or move it to `## Left to the agent`. Prepare
 is the only time the operator is consulted, so nothing may stay vague.
+
+## Repo rules that block hands-off
+
+In the first batch of `task` or `feature`, read the repo's gates and workflow
+rules: `AGENTS.md`, the gate or lane registry and its docs, the PR template,
+and any planning or review procedure it routes to. Sort every rule that tells
+an agent to involve the operator:
+
+| Kind | Example | What you do |
+| --- | --- | --- |
+| Compatible | Run `fast` on every change. | Nothing. Executors follow it. |
+| Blocks hands-off | Agree lanes beyond `fast` with the operator. Never merge unless asked. Sign off the design target before building. | Put it in `## Questions` with two options: the operator changes the rule in the repo (a separate PR, outside this plan), or this feature or task overrides it. Recommend one. |
+| A real stop | An `open` product fact needs the product owner. | Nothing. It stays a hard stop. If the work needs that answer, it belongs in `## Questions` now. |
+
+Also check that every lane the work needs can run on some host, and record
+the capability in **Requires**. A lane no host can run is a question too.
+
+Record each agreed override under `## Overrides` on the feature, or on a
+standalone task, as `<repo rule> → <what this plan does instead>`. A card
+inherits its feature's overrides and may add its own, agreed the same way.
+Never invent an override the operator has not agreed.
+
+`plan breakdown` cannot ask. If it finds a blocking rule that no override
+covers, comment on the feature with the question and your recommendation,
+@mention the operator, and wait in the session.
 
 ## Writing a card
 
@@ -68,6 +94,7 @@ Write the fields from `plan-sources.md`, "Card fields". For each one:
 - **Open:** only questions an executor can answer without the operator. A
   product question belongs in the feature's `## Questions`, not here.
 - **Gates:** from the repo's lane rules and the paths the card touches.
+- **Overrides:** only those this card adds to its feature's.
 - **Size:** each task is one PR. Aim for about 2000 added lines at most.
   There is no size field: split a task you expect to be larger.
 - **Tier:**
