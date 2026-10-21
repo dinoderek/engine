@@ -13,6 +13,7 @@ internal/...	forbid	devtools/...,cmd/...
 internal/version	only	-
 internal/tracker	only	-
 internal/hook	only	-
+internal/hosts	only	-
 internal/session	only	-
 internal/cli	only	internal/version,internal/tracker,internal/hook
 cmd/engine	only	internal/cli
