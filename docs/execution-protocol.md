@@ -1,6 +1,6 @@
 # Execution protocol
 
-> **Owns:** phases, roles, task and feature states, rulings, hard stops, merge rules. **Not here:** how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** phases, roles, task and feature states, rulings, hard stops, merge rules, plan sources. **Not here:** how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 ## Principles
 
@@ -9,9 +9,14 @@
 - **Enforce in code, not prompts.** The coordinator is a program. Merging is a
   scripted check of the reviewed head commit against green checks.
 - **One task = one session = one worktree = one PR.**
-- **The tracker is the only state store.** The requirements, design, plan,
-  task cards and their states live in the tracker, never in the repo. Code and
-  docs never cite them. Commit messages and PR bodies may.
+- **One plan source per feature.** The requirements, design, plan, task cards
+  and their states live in exactly one place: the tracker, or an in-repo plan
+  that the operator points the executor at. Read and update state only in that
+  source. The coordinator drives only the tracker. "Plan source" maps both in
+  the same terms.
+- **Plans are never cited.** Whatever the source, code and docs (other than
+  the plan itself) never cite a plan item: no issue number, plan path or task
+  ID. Commit messages and PR bodies may.
 - **Durable decisions graduate.** Anything that must stay true after the
   feature ships moves into the repo's owning doc, in the PR that ships it.
 
@@ -179,16 +184,26 @@ There is no file ownership. Parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
 
-## Tracker adapter
+## Plan source
 
-| Operation | GitHub mapping |
-| --- | --- |
-| Feature | An issue labelled `engine:feature`, with the state label. |
-| Tasks | Sub-issues of the feature. |
-| Dependencies | Issue dependencies ("blocked by"). |
-| State | Labels. |
-| Inbox, rulings, deviations | Issue comments. |
-| PR link and close | `Closes #<task>` in the PR body. |
+The rest of this doc speaks in tracker terms ("the task's issue", "a comment").
+With an in-repo plan, read them through the right-hand column.
 
-Feature status at a glance: the feature issue's state label and its sub-issue
-progress. Other trackers plug in behind the same operations.
+| Operation | Tracker (GitHub) | In-repo plan |
+| --- | --- | --- |
+| Feature | An issue labelled `engine:feature`, with the state label. | The milestone file, in the repo's plan layout. |
+| Tasks | Sub-issues of the feature. | Card files. |
+| Dependencies | Issue dependencies ("blocked by"). | The card's Depends on field. |
+| State | Labels. | A card exists until the PR that ships it deletes it. There is no `running` or `needs-human`: the operator is in the session. |
+| Inbox | Issue comments. | The live session and the PR's comments. |
+| Rulings, deviations, outcome | Issue comments, repeated in the PR body. | The PR body only. |
+| PR link and close | `Closes #<task>` in the PR body. | The PR deletes the card and marks it done in the milestone. |
+
+The in-repo plan runs one task per session, started by the operator, with no
+coordinator. Feature status at a glance (tracker): the feature issue's state
+label and its sub-issue progress. Other trackers plug in behind the same
+operations.
+
+> **Q9.** Is this the right mapping for in-repo plans? *Recommend: yes.* It
+> matches how `task-protocol` already runs BOGA3's `docs/plans`, so an
+> in-repo card can be executed hands-off without moving it to the tracker.

@@ -51,8 +51,9 @@ changed, so the issue's history shows every batch. The body ends with a
 **Questions** section, and it is empty when the issue is ready to approve.
 
 > **Q2.** Should the draft go into the issue from batch one, or stay in a
-> local file until it is stable? *Recommend: the issue.* The tracker is the
-> only state store, and you can read and answer from your phone.
+> local file until it is stable? *Recommend: the issue.* The issue is the
+> plan source the planner writes to, and you can read and answer from your
+> phone.
 
 ## Issue shapes
 
@@ -131,9 +132,12 @@ the plan together, and the coordinator skips `breakdown` because tasks exist.
 
 ## Repos with their own planning flow
 
-BOGA3 plans human-gated work as milestone and card files in `docs/plans`, run
-with `task-protocol`. Engine work lives only in the tracker. The two coexist:
-the `engine:` labels mark which flow an issue belongs to.
+BOGA3 plans as milestone and card files in `docs/plans`, written with
+`task-protocol`. An executor can run those cards as they are
+(`execution-protocol.md`, "Plan source"). The planner writes only to the
+tracker, and the `engine:` labels mark which issues are engine's.
 
-> **Q8.** Should engine replace `docs/plans` in BOGA3 over time? *Recommend:
-> not yet.* Decide after the pilot, on evidence.
+> **Q8.** Should the planner also write in-repo plans, and should engine
+> replace `docs/plans` in BOGA3 over time? *Recommend: not yet, for either.*
+> `task-protocol` already writes in-repo plans. Decide after the pilot, on
+> evidence.
