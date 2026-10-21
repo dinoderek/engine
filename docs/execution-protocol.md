@@ -8,7 +8,9 @@
   open questions itself and logs each decision as a ruling. It stops only for
   a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program. Merging is a
-  scripted check of the reviewed head commit against green checks.
+  scripted check of the reviewed head commit against green checks. In Claude
+  Code, the executor plugin's merge guard (below) blocks an unpinned, auto or
+  admin merge through `gh`.
 - **One task = one session = one worktree = one PR.**
 - **The tracker is the only state store.** The requirements, design, plan,
   task cards and their states live in the tracker, never in the repo. Code and
@@ -115,6 +117,19 @@ There is no file ownership. Parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
 
+## Enforced by hook
+
+The executor plugin ships one Claude Code `PreToolUse` hook,
+`engine hook pre-tool-use`. It blocks a Bash call that:
+
+- runs `gh pr merge` without `--match-head-commit`, or with `--auto` or
+  `--admin`;
+- merges through `gh api`, REST or GraphQL.
+
+Every other hard stop rests on the skill. A guard reads the command's words;
+it catches mistakes, not a session set on getting round it. Codex sessions
+have no guard yet.
+
 ## Tracker adapter
 
 | Operation | GitHub mapping |
@@ -122,7 +137,7 @@ conflict merges per run, so this can be revisited on evidence.
 | Feature | An issue labelled `engine:feature`, with the state label. |
 | Tasks | Sub-issues of the feature. |
 | Dependencies | Issue dependencies ("blocked by"). |
-| State | Labels. |
+| State | Labels. `engine labels sync <owner/repo>` creates or updates them all; the set is `internal/tracker`. |
 | Inbox, rulings, deviations | Issue comments. |
 | PR link and close | `Closes #<task>` in the PR body. |
 

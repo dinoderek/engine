@@ -11,7 +11,9 @@
 # A rule whose importer or a target matches no package fails the lane.
 internal/...	forbid	devtools/...,cmd/...
 internal/version	only	-
-internal/cli	only	internal/version
+internal/tracker	only	-
+internal/hook	only	-
+internal/cli	only	internal/version,internal/tracker,internal/hook
 cmd/engine	only	internal/cli
 devtools/...	forbid	internal/...,cmd/...
 devtools/internal/repo	only	-

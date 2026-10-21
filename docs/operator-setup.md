@@ -42,6 +42,10 @@
 ## Each host
 
 - **Tools:** `tmux`, `gh` and `git`, plus `go` to build engine.
+- **engine on `PATH`:** `go install ./cmd/engine` from a checkout, with Go's
+  install directory on `PATH`. The plugin's merge guard runs it on every Bash
+  call; without it, or with a binary too old for the plugin's hooks, the guard
+  fails open. Update `engine` on each host before taking a plugin update.
 - **Claude Code:** signed in, with Remote Control working from the Claude app.
 - **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
   per session (`hosts-and-sessions.md`, "Permission mode").
@@ -60,3 +64,10 @@
   - every host on the same Tailscale tailnet as the phone;
   - key-based SSH between the coordinator host and every other host;
   - on macOS, Remote Login turned on.
+
+## Each target repo
+
+- Add the machine user (above).
+- Run `engine labels sync <owner/repo>` once, and again whenever the label set
+  in `internal/tracker` changes. It never deletes a label.
+- Enable the `engine` plugin in its `.claude/settings.json`.
