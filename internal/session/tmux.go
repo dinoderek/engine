@@ -126,7 +126,7 @@ type Opened struct {
 }
 
 var (
-	nameRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
+	nameRe = regexp.MustCompile(`^[A-Za-z0-9_.][A-Za-z0-9_.-]*$`)
 	idRe   = regexp.MustCompile(`^(@\d+) (%\d+)$`)
 )
 
@@ -207,7 +207,7 @@ func (t *Tmux) HasWindow(name string) (bool, error) {
 func (w Window) validate() error {
 	switch {
 	case !nameRe.MatchString(w.Name):
-		return fmt.Errorf("window name %q: use letters, digits, _, . and -, starting with a letter, digit or _", w.Name)
+		return fmt.Errorf("window name %q: use letters, digits, _, . and -, not starting with -", w.Name)
 	case !filepath.IsAbs(w.Dir):
 		return fmt.Errorf("window %s: directory %q is not absolute", w.Name, w.Dir)
 	case strings.TrimSpace(w.Command) == "":

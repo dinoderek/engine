@@ -134,8 +134,9 @@ All Codex settings are passed per session with `-c`. The host's own
 
 Every surface uses one name per session, `<repo>-<task>`, for example
 `boga3-412`. It is the tmux window, the remote-control session name and part
-of the branch name, so a session can be found from any surface. Never use `#` in
-the name: tmux treats it as special.
+of the branch name, so a session can be found from any surface. The name
+holds letters, digits, `_`, `.` and `-`, and does not start with `-`: tmux
+treats anything else (`#`, `:`, spaces) as special.
 
 ## Starting a session: `engine start`
 
@@ -223,10 +224,9 @@ opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
 `pipe-pane` copies each window's output into its run directory, so the raw log
 outlives the tmux server. Engine opens a window on a placeholder command, sets
 the options and the pipe, then swaps in the task's command, so a command that
-fails at once still leaves its log and its screen. A window name holds letters,
-digits, `_`, `.` and `-`. Because tmux reads `.` as a pane separator, a pane
-command cannot target a window whose name has one, so engine targets the
-windows it opens by id (`@3`).
+fails at once still leaves its log and its screen. Because tmux reads `.` as a
+pane separator, a pane command cannot target a window whose name has one, so
+engine targets the windows it opens by id (`@3`).
 
 When engine has to type into a session, it sends the
 text with `send-keys -l`, then `Enter` as a separate call after a short delay.

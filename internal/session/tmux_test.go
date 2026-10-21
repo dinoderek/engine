@@ -214,7 +214,7 @@ func TestOpenValidatesTheWindow(t *testing.T) {
 			t.Errorf("%s: tmux was asked to create something", name)
 		}
 	}
-	for _, name := range []string{"boga3-412", "next.js-9", "_x", "A1"} {
+	for _, name := range []string{"boga3-412", "next.js-9", "_x", "A1", ".github-5"} {
 		tm, _ := newFake(t)
 		w := good
 		w.Name = name

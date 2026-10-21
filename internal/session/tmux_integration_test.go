@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -227,25 +228,52 @@ func TestRealKeepAwakeRunsCaffeinateOnThePanePid(t *testing.T) {
 	}
 }
 
+// A failed run-shell job is reported in its target pane, in view mode, where
+// the pane swallows keystrokes. run-shell without -b waits until tmux has
+// handled the job's result, so no waiting is needed.
 func TestRealFailingKeepAwakeLeavesThePaneUsable(t *testing.T) {
 	tm := privateTmux(t)
 	dir := t.TempDir()
-	marker := filepath.Join(dir, "ran.txt")
 	failing := filepath.Join(dir, "failing")
-	script := "#!/bin/sh\necho ran > '" + marker + "'\necho oops >&2\nexit 1\n"
-	if err := os.WriteFile(failing, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(failing, []byte("#!/bin/sh\necho oops >&2\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	tm.Awake = failing
-	got, err := tm.Open(Window{Name: "awake-2", Dir: dir, Command: "sleep 60"})
+	quiet, err := tm.Open(Window{Name: "awake-2", Dir: dir, Command: "sleep 60"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the failing stand-in to run", func() bool { return strings.Contains(readFile(marker), "ran") })
-	// tmux reports a failed run-shell job in the target pane, in view mode.
-	// Give it the time to do so, then check the pane is still a plain one.
-	time.Sleep(300 * time.Millisecond)
-	if mode := strings.TrimSpace(show(t, tm, "display-message", "-p", "-t", got.PaneID, "#{pane_in_mode}")); mode != "0" {
-		t.Errorf("pane_in_mode = %s: keystrokes would be swallowed", mode)
+	loud, err := tm.Open(Window{Name: "awake-3", Dir: dir, Command: "sleep 60"})
+	if err != nil {
+		t.Fatal(err)
 	}
+	// The job as engine runs it, with a stand-in that prints and fails.
+	_, _ = tm.tmux("run-shell", "-t", quiet.PaneID, awakeScript(failing))
+	// Positive control: the same failure, unsilenced, does put a pane in view mode.
+	_, _ = tm.tmux("run-shell", "-t", loud.PaneID, "echo oops >&2; exit 1")
+	mode := func(pane string) string {
+		return strings.TrimSpace(show(t, tm, "display-message", "-p", "-t", pane, "#{pane_in_mode}"))
+	}
+	if got := mode(loud.PaneID); got != "1" {
+		t.Fatalf("control: pane_in_mode = %s, want 1 (the check cannot fail)", got)
+	}
+	if got := mode(quiet.PaneID); got != "0" {
+		t.Errorf("pane_in_mode = %s: keystrokes would be swallowed", got)
+	}
+}
+
+// history-limit is a session option set after the first pane exists, so the
+// first window of a fresh session is the one to check.
+func TestRealFirstWindowKeepsTheLongScrollback(t *testing.T) {
+	tm := privateTmux(t)
+	dir := t.TempDir()
+	log := filepath.Join(dir, "pane.log")
+	if _, err := tm.Open(Window{Name: "hist-1", Dir: dir, Command: "seq 1 5000; sleep 60", Log: log}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the output", func() bool { return strings.Contains(readFile(log), "5000") })
+	size := func() int {
+		n, _ := strconv.Atoi(strings.TrimSpace(show(t, tm, "display-message", "-p", "-t", "=engine:hist-1", "#{history_size}")))
+		return n
+	}
+	eventually(t, "the scrollback to pass tmux's default of 2000 lines", func() bool { return size() > 2500 })
 }

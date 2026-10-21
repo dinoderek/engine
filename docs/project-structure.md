@@ -10,6 +10,7 @@
 | `internal/` | product packages; `internal/cli` dispatches commands |
 | `internal/hosts/` | host config: `toml.go` parses the TOML subset, `decode.go` holds the validation rules, `hosts.go` the types, slots and loading |
 | `devtools/cmd/dev/` | the `dev` main package that `./dev` builds and runs |
+| `internal/session/` | the local host's tmux layer: `tmux.go` holds the session, windows, options and pane logs, `awake.go` keeps a macOS host awake |
 | `devtools/internal/` | the `./dev` verbs (`dev`), the lane runner (`lanes`), the lane checks (`checks`), baselines (`baseline`) and git and file helpers (`repo`) |
 | `dev` | the shell entrypoint: pins Go from `go.mod`, builds `.dev/dev`, runs it |
 | `scripts/` | registries: lanes, import rules, doc budgets, and the three shrink-only baselines |
