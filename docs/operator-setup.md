@@ -68,7 +68,7 @@
   - every host on the same Tailscale tailnet as the phone;
   - plain OpenSSH, never Tailscale SSH: its check mode asks for a browser
     approval, which an unattended coordinator cannot give. The keys of the
-    coordinator's host and the phone's SSH app go in each other machine's
+    coordinator's host and the phone's SSH app go in every other machine's
     `authorized_keys`;
   - on macOS, Remote Login turned on.
 
@@ -78,8 +78,7 @@ A Linux machine on the tailnet, set up from the coordinator's host (the Mac).
 It gets every "Each host" item above; these steps are what differs.
 
 1. **Authorize keys.** On the devbox, append to `~/.ssh/authorized_keys` the
-   Mac's `~/.ssh/id_ed25519.pub`, and the phone SSH app's key if you use that
-   route.
+   Mac's `~/.ssh/id_ed25519.pub` and the phone SSH app's key.
 2. **Switch to OpenSSH.** First make sure you can reach the devbox's own
    console: if key auth then fails, that is the only way back. On the devbox,
    install `openssh-server` (`sudo apt install openssh-server`), then run this;
@@ -93,10 +92,10 @@ It gets every "Each host" item above; these steps are what differs.
 3. **Check from the Mac.** On first contact, accept the devbox's host key
    (`-o StrictHostKeyChecking=accept-new`); if it changed when sshd took over
    from Tailscale, check the fingerprint on the devbox, then
-   `ssh-keygen -R <tailscale name>`. Then this must succeed with no prompt:
-   `ssh -o BatchMode=yes <user>@<tailscale name> 'command -v engine tmux gh claude codex'`.
-   It is the non-interactive shell the coordinator uses, and that string is
-   the devbox's `address` (`hosts-and-sessions.md`, "Names and addresses").
+   `ssh-keygen -R <tailscale name>`. Then
+   `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
+   prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
+   "Names and addresses").
 4. **Devbox-only details:**
    - engine needs no checkout: `GOBIN=~/.local/bin go install
      github.com/dinoderek/engine/cmd/engine@main`;
@@ -107,6 +106,10 @@ It gets every "Each host" item above; these steps are what differs.
      `600`;
    - no suspend: `sudo systemctl mask sleep.target suspend.target
      hibernate.target hybrid-sleep.target`.
+5. **Check the coordinator's view.** From the Mac,
+   `ssh -o BatchMode=yes <address> 'command -v engine tmux gh claude codex'`
+   must list every tool: it runs in the non-interactive shell the coordinator
+   uses.
 
 ## Each target repo
 
