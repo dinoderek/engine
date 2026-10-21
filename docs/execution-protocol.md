@@ -49,7 +49,7 @@ A task card holds:
 | Tests | The claims to prove and the layer each belongs in. |
 | Docs to update | The owning docs this change touches. |
 | Depends on | Blocking tasks (tracker dependencies). |
-| Requires | Host capabilities such as `ios`, `docker` or `android`. |
+| Requires | Host capabilities such as `ios`, `linux` or `vm` (`hosts-and-sessions.md`). |
 | Harness / model | Optional. Defaults come from host config. |
 
 A task issue uses the template `.github/ISSUE_TEMPLATE/engine-task.md`, which

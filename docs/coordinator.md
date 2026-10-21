@@ -61,9 +61,10 @@ adds to it.
 
 ## Reaching hosts
 
-A host is either `local` or `ssh`. The coordinator calls
-`engine host <op> --json` in place for a local host, or via `ssh <address>` for an
-SSH host. It reads JSON from stdout.
+The coordinator calls `engine host <op> --json` in place for its own host
+(the name in `~/.config/engine/host`), or via `ssh <address>` for any other.
+It reads JSON from stdout. If you are changing host names or addresses, load
+`hosts-and-sessions.md`.
 
 | Op | Does |
 | --- | --- |
