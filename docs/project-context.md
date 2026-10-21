@@ -1,6 +1,6 @@
 # Project context guideline
 
-> **Owns:** what a repo must provide so executors can run hands-off, and the rules the seed prompt applies. **Not here:** the protocol the executor follows (`execution-protocol.md`).
+> **Owns:** what a repo must provide so executors can run hands-off, and the rules the seed prompt applies. **Not here:** the protocol the executor follows (the `engine` skill, `plugins/engine/skills/engine/`).
 
 The guideline is language-neutral. It names outcomes and registries, and the
 seed prompt picks the tools for each stack. Lineage: Gnocchi is the core
@@ -57,6 +57,11 @@ Docs cite the verbs and never restate the commands behind them.
 - **Where there is CI, it runs the same command.** A lane CI cannot run, such
   as one that needs a simulator, runs locally, and its evidence goes in the PR.
   Merge on green means local gates plus every CI check.
+- **Few operator checkpoints.** A rule that makes an agent involve the
+  operator mid-task (agreeing lanes, approving a merge) blocks a hands-off
+  run. The repo needs no engine-specific wording: the planner finds such
+  rules during Prepare, and the operator either changes the rule or overrides
+  it for that feature.
 - Default targets:
 
 | Target | Default |
