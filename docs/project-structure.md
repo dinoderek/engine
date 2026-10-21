@@ -36,8 +36,9 @@
   row in the lane table of `quality-gates.md`.
 - **A `./dev` verb:** a method on `dev.Tool` in `devtools/internal/dev`, plus
   its line in the usage text.
-- **A skill:** `plugins/engine/skills/<name>/SKILL.md`, with a budget row in
-  `scripts/doc-budgets.tsv`. Bump `version` in the plugin's `plugin.json`:
+- **A skill:** `plugins/engine/skills/<name>/SKILL.md`, with any references
+  in `references/` beside it, and a budget row in `scripts/doc-budgets.tsv`
+  for each file. Bump `version` in the plugin's `plugin.json`:
   Claude Code sees an update only when it changes.
 - **A doc:** a file in `docs/` with the Owns/Not here header, a row in
   `AGENTS.md`'s load-on-demand table, and, if it needs one, a budget in

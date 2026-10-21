@@ -1,14 +1,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "engine",
-  "description": "engine's agent skills: the executor that runs one task card to a merged PR.",
+  "description": "engine's agent skills: the build protocol that plans, executes and reviews tasks through to merged PRs.",
   "owner": {
     "name": "dinoderek"
   },
   "plugins": [
     {
       "name": "engine",
-      "description": "The engine executor: one task card, one session, one worktree, one PR, hands-off or gated.",
+      "description": "The engine skill: plan a task or a feature as GitHub issues, then execute one task per session, hands-off or gated, through review to a PR merged on green.",
       "source": "./plugins/engine",
       "category": "development"
     }

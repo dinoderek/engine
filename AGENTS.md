@@ -29,9 +29,8 @@ this file on purpose: **links are for depth, never for rules.**
    Meet a target with tests, a split function or moved code.
 4. **Hard stops.** Stop and ask the operator for:
    - the protocol's classes: product, data, security, contract, gates,
-     outward or costly, drift, objectives, review, environment
-     (the executor skill, `plugins/engine/skills/executor/SKILL.md`,
-     defines each);
+     outward or costly, drift, objectives, review, environment, repo rule
+     (defined in `plugins/engine/skills/engine/references/rulings.md`);
    - **loosening a gate:** a lower threshold, a baseline row, a `//nolint`, a
      linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,
      `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`;
@@ -60,7 +59,8 @@ Read these at the start of every session:
 
 | If your task… | Load |
 | --- | --- |
-| changes phases, roles, task states or the executor skill | `docs/execution-protocol.md` |
+| changes how agents plan, execute or review | `plugins/engine/skills/engine/SKILL.md` and the reference it routes to |
+| changes phases, roles, task states or the protocol's principles | `docs/execution-protocol.md` |
 | changes how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changes host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |

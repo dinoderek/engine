@@ -1,102 +1,99 @@
 # Execution protocol
 
-> **Owns:** phases, roles, task and feature states, the inbox, merge conflicts. **Not here:** what an executor does, its rulings and hard stops (the executor skill), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+
+The skill is the single source for agent behaviour. This doc explains the
+design around it and never restates a rule the skill holds. If you are
+changing what an agent does, change the skill.
 
 ## Principles
 
 - **Hands-off when dispatched, stops by rule.** A dispatched executor decides
-  open questions itself and logs each decision as a ruling. It stops only for
-  a hard-stop class.
+  open questions itself, and logs as rulings only the decisions worth your
+  review. It stops only for a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program. Merging is a
   scripted check of the reviewed head commit against green checks. In Claude
-  Code, the executor plugin's merge guard (below) blocks an unpinned, auto or
-  admin merge through `gh`.
+  Code, the plugin's merge guard (below) blocks an unpinned, auto or admin
+  merge through `gh`.
 - **One task = one session = one worktree = one PR.**
-- **The tracker is the only state store.** The requirements, design, plan,
-  task cards and their states live in the tracker, never in the repo. Code and
-  docs never cite them. Commit messages and PR bodies may.
-- **Durable decisions graduate.** Anything that must stay true after the
-  feature ships moves into the repo's owning doc, in the PR that ships it.
+- **One plan source per feature:** the tracker, or an in-repo plan that the
+  operator points the executor at. The coordinator drives only the tracker.
+- **Plans are never cited** in code or docs. Commit messages and PR bodies
+  may.
+- **Durable decisions graduate** into the repo's owning doc, in the PR that
+  ships them.
 
 ## Phases
 
-### 1. Prepare (co-work with the operator)
+| Phase | Who | Skill mode | Ends when |
+| --- | --- | --- | --- |
+| 1. Prepare: requirements (the what) and design (the how) | You and a planner, in batches | `plan feature`, `plan task` | You label the issue `engine:approved`. |
+| 2. Plan: task issues with dependencies and a final acceptance task | A planner, alone | `plan breakdown` | Plan lint passes. |
+| 3. Execute: one task, from card to merged PR | One executor per task | `execute` | The PR merges on green. |
 
-- **Requirements (the what).** Objectives stated so a test can prove them,
-  scope in and out, the API, and mocks for visual work.
-- **Design (the how).** High level. It covers every large risk and is good
-  enough to plan from. Its shape varies with the feature.
+Prepare carries more weight than in a human-gated flow. It is the only time
+you are consulted, so every open question is either answered there or
+explicitly left to the agent. A feature's approval covers its tasks. A
+standalone task carries its own.
 
-Both live in the feature issue, or are linked from it. Prepare ends when the
-operator labels the feature `engine:approved`. This is the only approval in the
-protocol. Prepare carries more weight than in a human-gated flow: every open
-question is either answered here, or explicitly left for the agent to decide.
+Prepare also settles the target repo's rules that would stop a hands-off run,
+such as agreeing lanes or approving merges. The planner reads them in the
+repo itself, and you either change the rule or override it for the feature.
+Target repos need no engine-specific wording.
 
-### 2. Plan (agent alone, no approval)
-
-The coordinator spawns a planner session for an approved feature that has no
-tasks. The planner turns the requirements and design into task issues with
-dependencies. It also adds a final acceptance task that proves the feature's
-objectives end to end.
-
-A task card holds:
-
-| Field | Content |
-| --- | --- |
-| Outcome | What the PR makes true, provable by a test. |
-| Decided | Fixed by Prepare or earlier tasks. Links to the owning doc rather than restating it. |
-| Open | Questions the executor decides, each logged as a ruling. |
-| Tests | The claims to prove and the layer each belongs in. |
-| Docs to update | The owning docs this change touches. |
-| Depends on | Blocking tasks (tracker dependencies). |
-| Requires | Host capabilities, named from the table in `hosts-and-sessions.md`, such as `ios` or `vm`. |
-| Harness / model | Optional. Defaults come from host config. |
-
-A task issue uses the template `.github/ISSUE_TEMPLATE/engine-task.md`, which
-has one section per field. "Depends on" has no section: it is the issue's
+A task issue uses the template `.github/ISSUE_TEMPLATE/engine-task.md`, one
+section per card field. Dependencies have no section: they are the issue's
 "blocked by" list.
 
-**Plan lint** runs before anything is dispatched:
+The executor reviews its own work with a fresh reviewer (mode `review`), and
+merges itself once every check is green, with `--match-head-commit` pinned to
+the commit that was reviewed and gated.
 
-- the dependency graph has no cycles;
-- every card has an outcome, tests and a requires list;
-- every task stays within the size budget (about 2000 added lines, not
-  counting generated files such as lockfiles);
-- the final acceptance task exists.
+**Executing a task:**
 
-If lint fails, the planner fixes the plan. Once it passes, execution starts.
+- **Modes:** hands-off, or gated for a run you approve step by step.
+- **Starters:** `engine start`, the coordinator, or you by hand. The steps
+  are the same whichever starts it.
 
-### 3. Execute (one executor session per task)
+## Models
 
-Each task runs in one session of the executor skill,
-`plugins/engine/skills/executor/SKILL.md`. It owns the executor's steps, its
-two modes, the claim comment, the ruling format, the decisions the agent owns
-and the hard-stop classes. If you are changing any of those, change the skill.
+Cards and roles name a tier (`deep`, `standard`, `light`), never a model.
+Host config maps each tier to a model and an effort level for each harness
+(`hosts-and-sessions.md`), so a model upgrade is one config change and no card
+goes stale. The planner runs at `deep` and picks each card's tier. The
+reviewer runs at `deep`. There is no automatic escalation: telemetry records
+the tier and the model for every run, and the defaults are tuned from that.
 
-- **Modes.** Hands-off, or gated for a human-approved run.
-- **Card sources.** A tracker issue, or a card file in the repo for sessions
-  you start yourself. The coordinator drives issue cards only.
-- **Starters.** `engine start`, the coordinator, or you by hand. The steps
-  don't change.
+## Rulings and hard stops
 
-**Finding rulings.** The operator reads the rulings on each task labelled
-`engine:ruling-review` and removes the label. So "what needs my review" is one
-saved search across every repo: `is:issue label:engine:ruling-review`.
-Hard-stop classes are added or removed as the rulings show.
+- **You read only what is costly to undo.** Decisions are graded by what
+  undoing them costs. `low` ones stay in a collapsed PR section that you never
+  have to read. `med` and `high` ones queue under `engine:ruling-review`.
+  You read them and remove the label, so "what needs my review" is one saved
+  search across every repo: `is:issue label:engine:ruling-review`.
+- **Hard stops are the only interruptions.** The list grows or shrinks from
+  evidence. Telemetry counts rulings per task by risk, and a class of `high`
+  rulings that keeps being reversed becomes a hard stop.
+- **Several `med` or `high` rulings on one task** point to a card that Prepare
+  under-specified.
 
 ## States
 
-All labels use the `engine:` prefix.
+All labels use the `engine:` prefix. `engine labels sync <owner/repo>`
+creates or updates them all; the set is `internal/tracker`.
 
 | Entity | States |
 | --- | --- |
 | Feature | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`. `blocked` while any task is `needs-human`. |
-| Task | `todo` → `running` → `in-review` (PR open) → closed by merge. `needs-human` replaces `running` or `in-review` during a hard stop. `failed` when the session dies. `todo` is the absence of a state label, never a label. |
+| Task | `todo` → `running` → `in-review` (PR open) → closed by merge. `needs-human` replaces `running` or `in-review` during a hard stop. `failed` when the session dies. `todo` is the absence of a state label, never a label. A standalone task starts at `prepare` → `approved`. |
 
-"Ready" is computed, never stored. The operator sets `approved` and clears
-`ruling-review`. The executor sets `running`, `needs-human`, `in-review` and
-`ruling-review`. The merge closes the task. The coordinator owns the feature
-labels and `failed`.
+"Ready" is computed, never stored. The planner sets `feature` and `prepare`.
+You set `approved` and clear `ruling-review`. The executor sets `running`,
+`needs-human`, `in-review` and `ruling-review`. The merge closes the task.
+The coordinator owns the other feature labels and `failed`.
+
+Feature status at a glance: the feature issue's state label and its sub-issue
+progress.
 
 ## The inbox
 
@@ -119,7 +116,7 @@ conflict merges per run, so this can be revisited on evidence.
 
 ## Enforced by hook
 
-The executor plugin ships one Claude Code `PreToolUse` hook,
+The plugin ships one Claude Code `PreToolUse` hook,
 `engine hook pre-tool-use`. It blocks a Bash call that:
 
 - runs `gh pr merge` without `--match-head-commit`, or with `--auto` or
@@ -129,17 +126,3 @@ The executor plugin ships one Claude Code `PreToolUse` hook,
 Every other hard stop rests on the skill. A guard reads the command's words;
 it catches mistakes, not a session set on getting round it. Codex sessions
 have no guard yet.
-
-## Tracker adapter
-
-| Operation | GitHub mapping |
-| --- | --- |
-| Feature | An issue labelled `engine:feature`, with the state label. |
-| Tasks | Sub-issues of the feature. |
-| Dependencies | Issue dependencies ("blocked by"). |
-| State | Labels. `engine labels sync <owner/repo>` creates or updates them all; the set is `internal/tracker`. |
-| Inbox, rulings, deviations | Issue comments. |
-| PR link and close | `Closes #<task>` in the PR body. |
-
-Feature status at a glance: the feature issue's state label and its sub-issue
-progress. Other trackers plug in behind the same operations.

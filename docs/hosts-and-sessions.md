@@ -1,6 +1,6 @@
 # Hosts and sessions
 
-> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (the executor skill, `plugins/engine/skills/executor/SKILL.md`), what it records (`telemetry.md`).
+> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (the `engine` skill, `plugins/engine/skills/engine/`), what it records (`telemetry.md`).
 
 ## Hosts
 
@@ -21,9 +21,8 @@ anywhere. A machine (below) is local to whichever host has its name in
 `~/.config/engine/host`, and reached over SSH at its `address` from every
 other one.
 
-**Machines and cloud hosts.** A host with no `kind` is a machine: it needs
-`address` and `ram_gb`. `kind = "cloud"` is the only kind; a cloud host has no
-address or RAM and must set `max_sessions`.
+**Machines only.** Every host is a machine, this one or one reached over SSH,
+and needs `address` and `ram_gb`. Engine does not spawn cloud sessions.
 
 **Slots from memory.** RAM stands in for how many sessions a machine runs at
 once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. Both values
@@ -50,10 +49,17 @@ reserve_gb = 8          # RAM kept back for the host itself
 
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
-launch = "claude --permission-mode auto --model {model}"
+launch = "{bin} --permission-mode auto --model {model} --effort {effort}"
+tiers.deep     = { model = "claude-opus-5-5",   effort = "high" }
+tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
+tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
+
 [harness.codex]
 max_sessions = 2
-launch = "codex --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model}"
+launch = "{bin} --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
+tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }
+tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
+tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 
 [host.mac]              # 4 slots
 address = "<user>@<tailscale name>"
@@ -61,33 +67,30 @@ harnesses = ["claude", "codex"]
 ram_gb = 48
 reserve_gb = 16         # also the operator's workstation
 capabilities = ["macos", "ios", "vm", "docker"]
+bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 
 [host.devbox]           # 3 slots
 address = "<user>@<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 32
 capabilities = ["linux", "vm", "docker"]
-
-[host.claude-cloud]
-kind = "cloud"
-harnesses = ["claude"]
-max_sessions = 4
-capabilities = []
-enabled = false         # until spawning is verified
-
-[host.codex-cloud]
-kind = "cloud"
-harnesses = ["codex"]
-max_sessions = 2
-capabilities = []
-enabled = false
+bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 ```
+
+Each harness maps every tier (`execution-protocol.md`, "Models") to a model
+and an effort level. GPT-6 Astra is deliberately unmapped: GPT-6.1 Sol at high
+effort comes close to it on coding at a fraction of the cost.
+
+Each host pins the path of every harness binary (`bin`), and `{bin}` in the
+launch line expands to it. Engine never runs whichever install comes first on
+`PATH`: this Mac has a second Codex under Homebrew that shadows the standalone
+one.
 
 ## Placement
 
 The coordinator places a ready task on a host that meets all of these:
 
-- the host is enabled and has a free slot (its slots are under "Hosts");
+- the host has a free slot (its slots are under "Hosts");
 - the host lists the harness (the card's, or the default), and that harness
   is under its own cap;
 - the host's capabilities include everything in the card's `requires`.
@@ -126,7 +129,7 @@ the name: tmux treats it as special.
 
 ## Starting a session: `engine start`
 
-`engine start <owner/repo#n> [--host H] [--harness claude|codex] [--model M]`
+`engine start <owner/repo#n> [--host H] [--harness claude|codex] [--tier T]`
 runs from any terminal, in any directory. It returns as soon as the session
 is up. On the target host (this machine, unless `--host` says otherwise) it:
 
@@ -134,10 +137,12 @@ is up. On the target host (this machine, unless `--host` says otherwise) it:
 2. creates the task worktree with the repo's own command;
 3. opens a window `<repo>-<task>` in the tmux session `engine`, in that
    worktree, so the repo's `AGENTS.md` loads;
-4. launches the harness's interactive CLI with the host's launch line, and
-   the kickoff prompt as its first message (`Execute <issue> with the engine
-   executor, hands-off mode`), plus the `run=`, `tmux=` and `rc=` values its
-   claim comment records;
+4. launches the harness's interactive CLI with the host's launch line, at the
+   card's tier (`standard` when it names none), and the kickoff prompt as its
+   first message (`Execute <issue> with the engine executor, hands-off mode.
+   Reviewer model: <deep model>`, the reviewer model taken from the same
+   harness's `deep` tier), plus the `run=`, `tmux=` and `rc=` values its claim
+   comment records;
 5. makes the session reachable from the apps (see below);
 6. prints how to attach.
 
@@ -156,7 +161,7 @@ reached from wherever it was started.
 
 The executor's claim comment on the task issue records the run ID, the
 host's logical name, the harness and model, the mode, the tmux target, the
-Remote Control name and the branch. The executor skill owns its format.
+Remote Control name and the branch. The `engine` skill owns its format.
 
 Everything that lists sessions reads these comments, so a task started by
 hand and one started by the coordinator look the same.

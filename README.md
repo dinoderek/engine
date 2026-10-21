@@ -16,5 +16,5 @@ says what exists.
 - Agents, and anyone changing the repo: `AGENTS.md`. It holds the rules and
   routes to every doc.
 - To set up a machine: `./dev doctor`, then `./dev test`.
-- To run the executor skill in another repo with Claude Code:
+- To run the engine skill in another repo with Claude Code:
   `/plugin install engine --marketplace dinoderek/engine`.

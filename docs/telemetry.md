@@ -19,7 +19,7 @@ summarised away at capture time.
 
 One `run.json` per session, written at spawn and finalised at exit:
 
-- **Identity:** run ID, repo, feature, task, host, harness, model, and the
+- **Identity:** run ID, repo, feature, task, host, harness, tier, model, and the
   harness session ID.
 - **Times:** spawned, started, needs-human waits (each one, with duration),
   PR opened, merged, ended.
@@ -30,7 +30,7 @@ One `run.json` per session, written at spawn and finalised at exit:
 
 ## Pipeline
 
-1. Each machine that runs sessions (every non-cloud host) runs an
+1. Each machine that runs sessions runs an
    OpenTelemetry Collector with a file exporter. The harnesses point at it
    through their OTel config, and every session is tagged with its run ID as a
    resource attribute.
@@ -59,5 +59,3 @@ Grafana Cloud for live dashboards. The bucket stays the system of record.
 
 - Transcripts can contain secrets. Scan each run directory with a secret
   scanner before upload, and keep the bucket private.
-- Cloud-hosted sessions have no local collector. What can be retrieved from
-  them is an open question.
