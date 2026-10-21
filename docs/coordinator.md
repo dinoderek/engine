@@ -109,11 +109,22 @@ is waiting for input. Three sources:
    - **Claude Code:** `claude agents --json` on the host lists every live
      session, including those in tmux, with its `pid`, `cwd`, `name`,
      `sessionId` and `status`. Engine matches a session by its name
-     (`<repo>-<task>`), then by its worktree for one started by hand.
+     (`<repo>-<task>`), then by its worktree (its branch, in the claim's
+     repo) for one started by hand. `busy` is working; `waiting` and `idle`
+     are waiting for input, because only a prompt moves the session on.
    - **Codex:** its hooks write to the run directory. Codex's `notify` is not
      used, because it holds a single program and other tools already claim it
      (Computer Use on the Mac).
-3. **tmux.** If the window exists, the session is alive.
+3. **tmux.** If the window exists and its command has not exited, the
+   session is alive.
+
+On this host, `engine ps` calls a session alive when its tmux window is live
+or `claude agents` lists it. It calls one dead only when its claim names a
+window of engine's session, that window is gone or its command exited,
+`claude agents` does not list it and no probe failed: a session started by
+hand can run anywhere, so its liveness is unknown unless listed. A failed
+probe also leaves it unknown. A session in `needs-human` or `in-review` keeps
+that state while alive.
 
 **Stalls.** A session whose `waiting-since` is 10 minutes old while its task
 is not `needs-human` has stopped outside the protocol, for example on a

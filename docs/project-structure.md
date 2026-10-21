@@ -10,7 +10,8 @@
 | `internal/` | product packages; `internal/cli` dispatches commands |
 | `internal/attach/` | `engine attach`: finds a task's claim, then replaces the process with `tmux attach` on the claim's host, locally or over `ssh` (`attach.go`) |
 | `internal/hosts/` | host config: `toml.go` parses the TOML subset, `decode.go` holds the validation rules, `hosts.go` the types, slots and loading |
-| `internal/session/` | the local host's ops: `repo.go` and `worktree.go` hold engine's clones and task worktrees, `tmux.go` the tmux session, windows, options and pane logs, `awake.go` keeping a macOS host awake |
+| `internal/session/` | the local host's ops: `repo.go` and `worktree.go` hold engine's clones and task worktrees, `tmux.go` the tmux session, windows, options and pane logs, `awake.go` keeping a macOS host awake, `agents.go` the live Claude Code sessions and a directory's checkout |
+| `internal/ps/` | `engine ps`: `ps.go` lists the claimed tasks, `probe.go` settles each claim on this host, `render.go` prints the table and the JSON |
 | `devtools/cmd/dev/` | the `dev` main package that `./dev` builds and runs |
 | `devtools/internal/` | the `./dev` verbs (`dev`), the lane runner (`lanes`), the lane checks (`checks`), baselines (`baseline`) and git and file helpers (`repo`) |
 | `dev` | the shell entrypoint: pins Go from `go.mod`, builds `.dev/dev`, runs it |

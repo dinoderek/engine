@@ -16,7 +16,8 @@ internal/hook	only	-
 internal/hosts	only	-
 internal/session	only	-
 internal/attach	only	internal/hosts,internal/session,internal/tracker
-internal/cli	only	internal/version,internal/tracker,internal/hook,internal/attach
+internal/ps	only	internal/tracker,internal/session
+internal/cli	only	internal/version,internal/tracker,internal/hook,internal/attach,internal/hosts,internal/session,internal/ps
 cmd/engine	only	internal/cli
 devtools/...	forbid	internal/...,cmd/...
 devtools/internal/repo	only	-

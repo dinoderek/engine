@@ -7,9 +7,11 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dinoderek/engine/internal/attach"
 	"github.com/dinoderek/engine/internal/hook"
+	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 	"github.com/dinoderek/engine/internal/version"
 )
@@ -21,6 +23,7 @@ commands:
   labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the Claude Code merge guard: reads the event on stdin
   gh <args...>              run gh as engine's machine user
+  ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
 `
 
@@ -32,6 +35,10 @@ type Env struct {
 	Err    io.Writer
 	Exec   tracker.Runner
 	Stream tracker.Streamer
+	// Local runs the host's own CLIs (tmux, claude, git) and returns their
+	// standard output.
+	Local  session.Runner
+	Now    func() time.Time
 	Getenv func(string) string
 	Home   string
 }
@@ -39,7 +46,7 @@ type Env struct {
 // System is the Env of the running process.
 func System() Env {
 	home, _ := os.UserHomeDir() // "" makes tracker.Token refuse the token file
-	return Env{In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec, Getenv: os.Getenv, Home: home}
+	return Env{In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec, Local: session.Exec, Now: time.Now, Getenv: os.Getenv, Home: home}
 }
 
 // Run executes the command named by args and returns the process exit code.
@@ -62,6 +69,8 @@ func Run(args []string, env Env) int {
 		return runHook(args[1:], env)
 	case "gh":
 		return runGh(args[1:], env)
+	case "ps":
+		return runPs(args[1:], env)
 	case "attach":
 		return runAttach(args[1:], env)
 	case "help", "-h", "--help":
