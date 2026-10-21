@@ -228,10 +228,44 @@ func TestNameBeatsWorktree(t *testing.T) {
 	}
 }
 
-func TestAHandStartedSessionWithNoLiveAgentIsDead(t *testing.T) {
-	f := &fake{tasks: []tracker.ClaimedTask{byHand(task(1, "h-1", "engine:running"))}}
+func TestAHandStartedSessionNoAgentMatchesIsNotDead(t *testing.T) {
+	// It may run under another name, in another directory, or for several
+	// tasks at once: only a vanished tmux window proves a session gone.
+	f := &fake{tasks: []tracker.ClaimedTask{byHand(task(1, "h-1", "engine:running"))}, agents: []session.Agent{agent("elsewhere", session.AgentBusy)}}
+	if r := list(t, f).Rows[0]; r.State != Running || alive(r) != "unknown" {
+		t.Errorf("got %s, %s", r.State, alive(r))
+	}
+}
+
+func TestATmuxClaimWithNoWindowIsDeadWhateverClaudeSays(t *testing.T) {
+	f := &fake{tasks: []tracker.ClaimedTask{task(1, "w-1", "engine:running")}, agents: []session.Agent{agent("elsewhere", session.AgentBusy)}}
 	if r := list(t, f).Rows[0]; r.State != Dead || alive(r) != "dead" {
 		t.Errorf("got %s, %s", r.State, alive(r))
+	}
+}
+
+func TestTheWindowIsTheOneTheClaimNames(t *testing.T) {
+	c := task(1, "w-1", "engine:running")
+	c.Claim.Tmux = "engine:renamed"
+	f := &fake{tasks: []tracker.ClaimedTask{c}, windows: []session.WindowInfo{window("renamed")}}
+	if r := list(t, f).Rows[0]; alive(r) != "alive" {
+		t.Errorf("got %s, %s", r.State, alive(r))
+	}
+	c.Claim.Tmux = "other:w-1" // not engine's tmux session
+	f = &fake{tasks: []tracker.ClaimedTask{c}, windows: []session.WindowInfo{window("w-1")}}
+	if r := list(t, f).Rows[0]; alive(r) != "unknown" || f.windowCalls != 0 {
+		t.Errorf("got %s, %s after %d window probes", r.State, alive(r), f.windowCalls)
+	}
+}
+
+func TestClaudeIsRecognisedWhateverTheClaimCallsIt(t *testing.T) {
+	for _, harness := range []string{"claude 2.1.302 (m)", "claude-code 2.1.302 (m)", "Claude Code 2.1.302 (m)"} {
+		c := byHand(task(1, "h-1", "engine:running"))
+		c.Claim.Harness = harness
+		f := &fake{tasks: []tracker.ClaimedTask{c}, agents: []session.Agent{agent("h-1", session.AgentBusy)}}
+		if r := list(t, f).Rows[0]; r.State != Working {
+			t.Errorf("%q: got %s", harness, r.State)
+		}
 	}
 }
 
@@ -313,11 +347,11 @@ func TestRowsAreOrderedByRepoThenNumber(t *testing.T) {
 }
 
 func TestRowFields(t *testing.T) {
-	f := &fake{tasks: []tracker.ClaimedTask{task(17, "w-17", "engine:running")}, windows: []session.WindowInfo{window("w-17")}}
+	f := &fake{tasks: []tracker.ClaimedTask{task(42, "w-17", "engine:running")}, windows: []session.WindowInfo{window("w-17")}}
 	got := list(t, f).Rows[0]
 	yes := true
 	want := Row{
-		Task: tracker.Ref{Repo: "o/r", Number: 17}.String(), Title: "task w-17", Session: "w-17", Run: "w-17-run", Host: "mac",
+		Task: tracker.Ref{Repo: "o/r", Number: 42}.String(), Title: "task w-17", Session: "w-17", Run: "w-17-run", Host: "mac",
 		Harness: "claude-code", Branch: "task/w-17", State: Running, Alive: &yes,
 		ClaimedAt: "2026-10-21T10:30:00Z", AgeSeconds: 5400,
 	}

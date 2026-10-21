@@ -1,6 +1,7 @@
 package ps
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -122,18 +123,20 @@ func (p *probes) inWorktree(dir string, t tracker.ClaimedTask) (bool, error) {
 
 // settle works out a claim on this host: whether its session is alive, and
 // what it is doing. A session is alive when its window is open and its
-// command has not exited, or when Claude Code lists it. It is dead when
-// nothing says so and every probe that could have said so ran.
+// command has not exited, or when Claude Code lists it. Only a window can
+// prove a session gone: it is dead when the claim names a window of engine's
+// session, nothing says it is alive, and every probe ran. A session started
+// by hand may run anywhere and under any name, so failing to find it proves
+// nothing and leaves liveness unknown.
 func (p *probes) settle(row *Row, t tracker.ClaimedTask) {
 	var agent *session.Agent
-	live, unknown, applicable := false, false, false
-	if strings.HasPrefix(t.Claim.Tmux, session.Name+":") {
-		applicable = true
-		ok, err := p.window(t.Claim.Name)
+	live, unknown, windowed := false, false, false
+	if sess, win, ok := strings.Cut(t.Claim.Tmux, ":"); ok && sess == session.Name {
+		windowed = true
+		ok, err := p.window(cmp.Or(win, t.Claim.Name))
 		live, unknown = live || ok, unknown || err != nil
 	}
-	if row.Harness == claudeCode {
-		applicable = true
+	if isClaude(t.Claim.Harness) {
 		a, err := p.agent(t)
 		agent, live, unknown = a, live || a != nil, unknown || err != nil
 	}
@@ -142,7 +145,7 @@ func (p *probes) settle(row *Row, t tracker.ClaimedTask) {
 	case live:
 		row.Alive = &yes
 		row.apply(agent)
-	case applicable && !unknown:
+	case windowed && !unknown:
 		row.Alive, row.State = &no, Dead
 	}
 }

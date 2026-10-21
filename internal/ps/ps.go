@@ -8,6 +8,7 @@ package ps
 import (
 	"cmp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/dinoderek/engine/internal/session"
@@ -21,12 +22,15 @@ const (
 	Running    = "running"     // holds the task; nothing says more
 	NeedsHuman = "needs-human" // stopped at a hard stop
 	InReview   = "in-review"   // its PR is open
-	Dead       = "dead"        // no window and no live session
+	Dead       = "dead"        // its window is gone, and nothing else says it lives
 )
 
-// claudeCode is the harness name in a claim whose sessions `claude agents`
-// lists.
-const claudeCode = "claude-code"
+// isClaude reports whether a claim's harness line names Claude Code, the
+// harness whose sessions `claude agents` lists. Claims spell it claude,
+// claude-code or Claude Code.
+func isClaude(harness string) bool {
+	return strings.HasPrefix(strings.ToLower(harness), "claude")
+}
 
 // Row is one claimed task.
 type Row struct {
