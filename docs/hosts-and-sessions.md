@@ -5,17 +5,46 @@
 ## Hosts
 
 A host is somewhere sessions run. Each one declares the harnesses it runs, how
-many sessions it holds at once, and its capabilities. Capabilities are
-declared, never inferred.
+many sessions it holds, and its capabilities. Capabilities are declared, never inferred.
 
-A host's name is its `[host.<name>]` key, a logical name such as `mac` or
-`devbox`, never a hostname or an address. Each host keeps its own name in
-`~/.config/engine/host`, so a session started by hand knows where it runs.
-How engine reaches an SSH host (an SSH alias or a Tailscale name) is its
-`address`, which stays in this config and is never posted anywhere.
+**One file, every host.** The host config is `~/.config/engine/hosts.toml`,
+the same file on every host, because any host can run the coordinator. Edit
+it on one host and copy it to the others. Each host also keeps its own name,
+one line, in `~/.config/engine/host`.
+
+**Names and addresses.** A host's name is its `[host.<name>]` key, a logical
+name such as `mac` or `devbox`, never a hostname or an IP. It is what claims
+and every surface show. Its `address` is how other hosts reach it over SSH
+(its Tailscale name); it stays in this file and is never posted anywhere. A
+machine (below) is local to whichever host has its name in `~/.config/engine/host`,
+and reached over SSH at its `address` from every other one.
+
+**Machines and cloud hosts.** A host with no `kind` is a machine: it needs
+`address` and `ram_gb`. `kind = "cloud"` is the only kind; a cloud host has no
+address or RAM and must set `max_sessions`.
+
+**Slots from memory.** RAM stands in for how many sessions a machine runs at
+once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. Both values
+are set at the top and may be set again per host. A host's `max_sessions`
+replaces the derived count.
+
+**Capabilities:**
+
+| Capability | Means |
+| --- | --- |
+| `macos` | runs macOS |
+| `linux` | runs Linux |
+| `ios` | builds iOS apps and runs the iOS Simulator (Xcode) |
+| `vm` | runs virtual machines |
+| `docker` | runs Docker containers |
+
+A card's `requires` names capabilities from this table. A new one is added
+here first, then declared by the hosts that have it.
 
 ```toml
 default_harness = "claude"
+gb_per_session = 8      # RAM one session and its gates need
+reserve_gb = 8          # RAM kept back for the host itself
 
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
@@ -24,18 +53,18 @@ launch = "claude --permission-mode auto --model {model}"
 max_sessions = 2
 launch = "codex --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model}"
 
-[host.mac]
-kind = "local"
+[host.mac]              # 4 slots
+address = "<tailscale name>"
 harnesses = ["claude", "codex"]
-max_sessions = 3
-capabilities = ["ios", "android", "docker"]
+ram_gb = 48
+reserve_gb = 16         # also the operator's workstation
+capabilities = ["macos", "ios", "vm", "docker"]
 
-[host.devbox]
-kind = "ssh"
-address = "devbox"      # an SSH alias or a Tailscale name
+[host.devbox]           # 3 slots
+address = "<tailscale name>"
 harnesses = ["claude", "codex"]
-max_sessions = 6
-capabilities = ["docker"]
+ram_gb = 32
+capabilities = ["linux", "vm", "docker"]
 
 [host.claude-cloud]
 kind = "cloud"
@@ -56,8 +85,9 @@ enabled = false
 
 The coordinator places a ready task on a host that meets all of these:
 
-- the host is enabled and has a free slot;
-- the harness (the card's, or the default) is under its own cap;
+- the host is enabled and has a free slot (its slots are under "Hosts");
+- the host lists the harness (the card's, or the default), and that harness
+  is under its own cap;
 - the host's capabilities include everything in the card's `requires`.
 
 Ties go to the host with the most free slots. A task that no host can take

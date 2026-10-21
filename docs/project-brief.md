@@ -16,7 +16,7 @@ operator is out of the loop unless a task asks for them.
 | Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through planning and execution, spawning sessions on local or SSH hosts. No LLM. |
 | Skills | The planner, executor and reviewer protocols. The executor runs hands-off, or gated for human-approved work. All ship from this repo as a Claude Code plugin. |
 | Tracker adapter | Plan and status storage behind one interface. GitHub Issues first. |
-| Hosts | Config for each machine: its harnesses, session cap and capabilities, plus how to reach every session. |
+| Hosts | Config for each machine: its harnesses, memory (which sets its session slots) and capabilities, plus how to reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |
 | Project context guideline | What a repo must provide so executors can run hands-off. It is the source for a language-neutral seed prompt. |
 

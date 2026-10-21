@@ -52,6 +52,9 @@
 - **Host name:** its logical name (`mac`, `devbox`) on one line in
   `~/.config/engine/host`. Claims post this name, never the hostname
   (`hosts-and-sessions.md`, "Hosts").
+- **Host config:** the same `~/.config/engine/hosts.toml` as every other
+  host, with an entry for this host as `hosts-and-sessions.md`, "Hosts",
+  specifies. You write both files by hand.
 - **Skills (Claude Code):** the `engine` plugin from this repo's marketplace,
   `.claude-plugin/marketplace.json`. A target repo enables it in its
   `.claude/settings.json`, as this repo does; or install it for yourself with
@@ -62,7 +65,8 @@
   credentials.
 - **SSH (the fallback route to any session):**
   - every host on the same Tailscale tailnet as the phone;
-  - key-based SSH between the coordinator host and every other host;
+  - key-based SSH between every pair of hosts, since any of them can run the
+    coordinator;
   - on macOS, Remote Login turned on.
 
 ## Each target repo

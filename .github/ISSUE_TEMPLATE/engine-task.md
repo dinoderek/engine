@@ -30,7 +30,7 @@ section only where it says "optional". -->
 
 ## Requires
 
-<!-- Host capabilities such as ios, docker or android. "None" if none. -->
+<!-- Host capabilities such as ios, linux or vm. "None" if none. -->
 
 ## Harness / model
 
