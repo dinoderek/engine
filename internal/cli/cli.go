@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/attach"
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
@@ -23,6 +24,7 @@ commands:
   hook pre-tool-use         the Claude Code merge guard: reads the event on stdin
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
+  attach <repo>-<task>      attach to a task's tmux window, here or over SSH
 `
 
 // Env is what a command reads and runs: the standard streams, the runners for
@@ -69,6 +71,8 @@ func Run(args []string, env Env) int {
 		return runGh(args[1:], env)
 	case "ps":
 		return runPs(args[1:], env)
+	case "attach":
+		return runAttach(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0
@@ -104,6 +108,20 @@ func runGh(args []string, env Env) int {
 		fmt.Fprintln(env.Err, "engine gh:", err)
 	}
 	return code
+}
+
+// runAttach connects this terminal to a task's tmux window. On success it
+// replaces this process, so it returns only on failure.
+func runAttach(args []string, env Env) int {
+	if len(args) != 1 {
+		fmt.Fprint(env.Err, "usage: engine attach <repo>-<task>\n")
+		return 2
+	}
+	if err := attach.Attach(args[0], attach.System(env.Exec, env.Getenv, env.Home)); err != nil {
+		fmt.Fprintln(env.Err, "engine attach:", err)
+		return 1
+	}
+	return 0
 }
 
 func syncLabels(repo string, env Env) int {
