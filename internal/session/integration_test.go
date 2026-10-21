@@ -26,7 +26,7 @@ func realGit(dir string, env []string, name string, args ...string) (string, err
 	return RunCommand(dir, append(append([]string{}, env...), isolatedGit...), name, args...)
 }
 
-func git(t *testing.T, dir string, args ...string) string {
+func mustGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	out, err := realGit(dir, nil, "git", args...)
 	if err != nil {
@@ -53,9 +53,9 @@ func newRemote(t *testing.T, branch string) remoteFixture {
 			t.Fatal(err)
 		}
 	}
-	git(t, f.bare, "init", "--bare", "--quiet", "--initial-branch="+branch)
-	git(t, f.work, "init", "--quiet", "--initial-branch="+branch)
-	git(t, f.work, "remote", "add", "origin", f.bare)
+	mustGit(t, f.bare, "init", "--bare", "--quiet", "--initial-branch="+branch)
+	mustGit(t, f.work, "init", "--quiet", "--initial-branch="+branch)
+	mustGit(t, f.work, "remote", "add", "origin", f.bare)
 	return f
 }
 
@@ -65,10 +65,10 @@ func (f remoteFixture) commit(t *testing.T, branch, file, content string, mode o
 	if err := os.WriteFile(filepath.Join(f.work, file), []byte(content), mode); err != nil {
 		t.Fatal(err)
 	}
-	git(t, f.work, "add", file)
-	git(t, f.work, "commit", "--quiet", "-m", "add "+file)
-	git(t, f.work, "push", "--quiet", "origin", "HEAD:refs/heads/"+branch)
-	return git(t, f.work, "rev-parse", "HEAD")
+	mustGit(t, f.work, "add", file)
+	mustGit(t, f.work, "commit", "--quiet", "-m", "add "+file)
+	mustGit(t, f.work, "push", "--quiet", "origin", "HEAD:refs/heads/"+branch)
+	return mustGit(t, f.work, "rev-parse", "HEAD")
 }
 
 func (f remoteFixture) repos(t *testing.T) Repos {
@@ -80,7 +80,7 @@ func (f remoteFixture) repos(t *testing.T) Repos {
 func helpers(t *testing.T, dir string) string {
 	t.Helper()
 	var found []string
-	for _, line := range strings.Split(git(t, dir, "config", "--local", "--list"), "\n") {
+	for _, line := range strings.Split(mustGit(t, dir, "config", "--local", "--list"), "\n") {
 		if strings.HasPrefix(line, "credential.helper=") {
 			found = append(found, line)
 		}
@@ -108,13 +108,13 @@ func TestSyncClonesConfiguresAndFollowsTheRemote(t *testing.T) {
 	if clone.Default != "main" || !strings.HasSuffix(clone.Path, filepath.FromSlash(".local/share/engine/repos/o/r")) {
 		t.Errorf("clone = %+v", clone)
 	}
-	if got := git(t, clone.Path, "rev-parse", "HEAD"); got != first {
+	if got := mustGit(t, clone.Path, "rev-parse", "HEAD"); got != first {
 		t.Errorf("HEAD = %s, want %s", got, first)
 	}
-	if got := git(t, clone.Path, "config", "--local", "user.name"); got != "testbot" {
+	if got := mustGit(t, clone.Path, "config", "--local", "user.name"); got != "testbot" {
 		t.Errorf("user.name = %q", got)
 	}
-	if got := git(t, clone.Path, "config", "--local", "user.email"); got != "42+testbot@users.noreply.github.com" {
+	if got := mustGit(t, clone.Path, "config", "--local", "user.email"); got != "42+testbot@users.noreply.github.com" {
 		t.Errorf("user.email = %q", got)
 	}
 	// An empty helper first, so a global helper cannot supply other credentials.
@@ -123,9 +123,9 @@ func TestSyncClonesConfiguresAndFollowsTheRemote(t *testing.T) {
 	}
 
 	// New commits on the remote, and a changed default branch, are followed.
-	git(t, remote.work, "checkout", "--quiet", "-b", "trunk")
+	mustGit(t, remote.work, "checkout", "--quiet", "-b", "trunk")
 	second := remote.commit(t, "trunk", "b.txt", "b", 0o644)
-	git(t, remote.bare, "symbolic-ref", "HEAD", "refs/heads/trunk")
+	mustGit(t, remote.bare, "symbolic-ref", "HEAD", "refs/heads/trunk")
 	again, err := r.Sync(repo)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +133,7 @@ func TestSyncClonesConfiguresAndFollowsTheRemote(t *testing.T) {
 	if again.Path != clone.Path || again.Default != "trunk" {
 		t.Errorf("second sync = %+v", again)
 	}
-	if got := git(t, clone.Path, "rev-parse", "HEAD"); got != second {
+	if got := mustGit(t, clone.Path, "rev-parse", "HEAD"); got != second {
 		t.Errorf("HEAD = %s after the second sync, want %s", got, second)
 	}
 	if got := helpers(t, clone.Path); got != "credential.helper=|credential.helper=!gh auth git-credential" {
@@ -150,7 +150,7 @@ func TestSyncRefusesAnotherRepoInThePlace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	git(t, clone.Path, "remote", "set-url", "origin", "file:///elsewhere/o/other.git")
+	mustGit(t, clone.Path, "remote", "set-url", "origin", "file:///elsewhere/o/other.git")
 	if _, err := r.Sync(repo); err == nil || !strings.Contains(err.Error(), "is not a clone of") {
 		t.Errorf("err = %v", err)
 	}
@@ -184,14 +184,14 @@ func TestCreateWorktreeFallbackForReal(t *testing.T) {
 	if wt.Branch != "task/r-412" || !samePath(t, wt.Path, clone.Path+"-worktrees/task-r-412") {
 		t.Errorf("worktree = %+v", wt)
 	}
-	if got := git(t, wt.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "task/r-412" {
+	if got := mustGit(t, wt.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "task/r-412" {
 		t.Errorf("worktree is on %q", got)
 	}
-	if got := git(t, wt.Path, "rev-parse", "HEAD"); got != tip {
+	if got := mustGit(t, wt.Path, "rev-parse", "HEAD"); got != tip {
 		t.Errorf("worktree is at %s, want origin's default branch tip %s", got, tip)
 	}
 	// The clone's identity applies in the worktree, because git shares local config.
-	if got := git(t, wt.Path, "config", "user.email"); got != "42+testbot@users.noreply.github.com" {
+	if got := mustGit(t, wt.Path, "config", "user.email"); got != "42+testbot@users.noreply.github.com" {
 		t.Errorf("worktree user.email = %q", got)
 	}
 	if _, err := r.CreateWorktree(clone, 412); err == nil || !strings.Contains(err.Error(), "already has a worktree") {
@@ -207,7 +207,7 @@ func TestCreateWorktreeRefusesAStaleBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	git(t, clone.Path, "branch", "task/r-3", "origin/main")
+	mustGit(t, clone.Path, "branch", "task/r-3", "origin/main")
 	if _, err := r.CreateWorktree(clone, 3); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("err = %v", err)
 	}
@@ -232,7 +232,7 @@ func TestCreateWorktreeRunsTheReposOwnCommandForReal(t *testing.T) {
 	if !samePath(t, wt.Path, clone.Path+"-custom") || wt.Branch != "task/r-9" {
 		t.Errorf("worktree = %+v: the path must come from git, not a guess", wt)
 	}
-	if got := git(t, wt.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "task/r-9" {
+	if got := mustGit(t, wt.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "task/r-9" {
 		t.Errorf("worktree is on %q", got)
 	}
 }

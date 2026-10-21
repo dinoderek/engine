@@ -13,10 +13,10 @@ type call struct {
 	line string // name and args, space-joined
 }
 
-// fake is a RunFunc that records every call and answers from canned replies:
+// gitFake is a RunFunc that records every call and answers from canned replies:
 // the first reply whose key is a substring of the call's line wins, and a
 // call nothing matches succeeds with no output.
-type fake struct {
+type gitFake struct {
 	calls   []call
 	replies []reply
 	// onRun runs before each call is answered, for tests that need a side effect.
@@ -31,7 +31,7 @@ type reply struct {
 
 var errBoom = errors.New("exit status 1")
 
-func (f *fake) run(dir string, env []string, name string, args ...string) (string, error) {
+func (f *gitFake) run(dir string, env []string, name string, args ...string) (string, error) {
 	c := call{dir: dir, env: env, line: strings.Join(append([]string{name}, args...), " ")}
 	f.calls = append(f.calls, c)
 	if f.onRun != nil {
@@ -45,7 +45,7 @@ func (f *fake) run(dir string, env []string, name string, args ...string) (strin
 	return "", nil
 }
 
-func (f *fake) lines() []string {
+func (f *gitFake) lines() []string {
 	var out []string
 	for _, c := range f.calls {
 		out = append(out, c.line)
@@ -54,7 +54,7 @@ func (f *fake) lines() []string {
 }
 
 // has reports whether some call's line contains key.
-func (f *fake) has(key string) bool {
+func (f *gitFake) has(key string) bool {
 	for _, c := range f.calls {
 		if strings.Contains(c.line, key) {
 			return true
@@ -72,7 +72,7 @@ func syncReplies() []reply {
 	}
 }
 
-func newRepos(t *testing.T, f *fake) Repos {
+func newRepos(t *testing.T, f *gitFake) Repos {
 	t.Helper()
 	return Repos{Run: f.run, Home: t.TempDir(), Token: "tok"}
 }

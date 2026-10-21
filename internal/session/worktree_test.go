@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-func TestNameAndBranch(t *testing.T) {
+func TestTaskNameAndBranch(t *testing.T) {
 	repo := mustRepo(t, "dinoderek/engine")
 	if got := TaskName(repo, 412); got != "engine-412" {
-		t.Errorf("Name = %q", got)
+		t.Errorf("TaskName = %q", got)
 	}
 	if got := Branch(repo, 412); got != "task/engine-412" {
 		t.Errorf("Branch = %q", got)
@@ -29,10 +29,10 @@ func porcelain(clone, wt, branch string) string {
 
 // worktreeFixture is a clone in a temp dir, and a fake that, once the
 // worktree command ran, lists the task's worktree.
-func worktreeFixture(t *testing.T, withDev bool, mode os.FileMode) (Repos, Clone, *fake, string) {
+func worktreeFixture(t *testing.T, withDev bool, mode os.FileMode) (Repos, Clone, *gitFake, string) {
 	t.Helper()
 	repo := mustRepo(t, "o/r")
-	f := &fake{}
+	f := &gitFake{}
 	r := newRepos(t, f)
 	path, _ := r.Path(repo)
 	if err := os.MkdirAll(path, 0o755); err != nil {
@@ -124,7 +124,7 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &fake{replies: tt.replies}
+			f := &gitFake{replies: tt.replies}
 			f.replies = append(f.replies, reply{key: "rev-parse --verify", err: errBoom})
 			r := newRepos(t, f)
 			path, _ := r.Path(repo)
@@ -145,7 +145,7 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 func TestNothingRunsWithoutAToken(t *testing.T) {
 	repo := mustRepo(t, "o/r")
 	for _, token := range []string{"", " \n"} {
-		f := &fake{replies: syncReplies()}
+		f := &gitFake{replies: syncReplies()}
 		r := newRepos(t, f)
 		r.Token = token
 		if _, err := r.Sync(repo); err == nil || !strings.Contains(err.Error(), "no machine-user token") {
@@ -163,7 +163,7 @@ func TestNothingRunsWithoutAToken(t *testing.T) {
 
 func TestCreateWorktreeFailsWhenTheCommandMakesNone(t *testing.T) {
 	repo := mustRepo(t, "o/r")
-	f := &fake{replies: []reply{{key: "rev-parse --verify", err: errBoom}}}
+	f := &gitFake{replies: []reply{{key: "rev-parse --verify", err: errBoom}}}
 	r := newRepos(t, f)
 	path, _ := r.Path(repo)
 	if err := os.MkdirAll(path, 0o755); err != nil {
@@ -176,7 +176,7 @@ func TestCreateWorktreeFailsWhenTheCommandMakesNone(t *testing.T) {
 }
 
 func TestCreateWorktreeFailsWhenTheLockCannotBeTaken(t *testing.T) {
-	f := &fake{}
+	f := &gitFake{}
 	r := newRepos(t, f)
 	blocker := filepath.Join(r.Home, "file")
 	if err := os.WriteFile(blocker, nil, 0o644); err != nil {

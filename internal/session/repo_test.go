@@ -58,7 +58,7 @@ func TestPathAndURL(t *testing.T) {
 }
 
 func TestSyncFirstClone(t *testing.T) {
-	f := &fake{replies: syncReplies()}
+	f := &gitFake{replies: syncReplies()}
 	r := newRepos(t, f)
 	repo := mustRepo(t, "o/r")
 	clone, err := r.Sync(repo)
@@ -98,7 +98,7 @@ func TestSyncFirstClone(t *testing.T) {
 }
 
 func TestSyncExistingCloneFetchesWithoutCloning(t *testing.T) {
-	f := &fake{replies: syncReplies()}
+	f := &gitFake{replies: syncReplies()}
 	r := newRepos(t, f)
 	repo := mustRepo(t, "o/r")
 	path, _ := r.Path(repo)
@@ -118,7 +118,7 @@ func TestSyncExistingCloneFetchesWithoutCloning(t *testing.T) {
 }
 
 func TestSyncFollowsTheDefaultBranch(t *testing.T) {
-	f := &fake{replies: append([]reply{{key: "symbolic-ref", out: "origin/trunk\n"}}, syncReplies()...)}
+	f := &gitFake{replies: append([]reply{{key: "symbolic-ref", out: "origin/trunk\n"}}, syncReplies()...)}
 	clone, err := newRepos(t, f).Sync(mustRepo(t, "o/r"))
 	if err != nil || clone.Default != "trunk" || !f.has("detach origin/trunk") {
 		t.Errorf("clone %+v, err %v, commands %v", clone, err, f.lines())
@@ -136,7 +136,6 @@ func TestSyncFailures(t *testing.T) {
 	}{
 		{"clone fails", " clone ", "fatal: repository not found", nil, "clone o/r"},
 		{"machine user unreadable", "gh api user", "HTTP 401", nil, "machine user"},
-		{"machine user malformed", "gh api user", "", nil, "machine user"},
 		{"config fails", "config --local user.email", "", nil, "configure"},
 		{"fetch fails", "git fetch", "", nil, "fetch o/r"},
 		{"set-head fails", "git remote set-head", "", nil, "find the default branch"},
@@ -151,7 +150,7 @@ func TestSyncFailures(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &fake{replies: append([]reply{{key: tt.key, out: tt.out, err: errBoom}}, syncReplies()...)}
+			f := &gitFake{replies: append([]reply{{key: tt.key, out: tt.out, err: errBoom}}, syncReplies()...)}
 			if tt.key == "" {
 				f.replies = syncReplies()
 			}
@@ -172,7 +171,7 @@ func TestSyncFailures(t *testing.T) {
 
 func TestSyncRefusesAnUnexpectedDefaultBranchRef(t *testing.T) {
 	for _, ref := range []string{"refs/remotes/other/HEAD", "origin/", ""} {
-		f := &fake{replies: append([]reply{{key: "symbolic-ref", out: ref}}, syncReplies()...)}
+		f := &gitFake{replies: append([]reply{{key: "symbolic-ref", out: ref}}, syncReplies()...)}
 		_, err := newRepos(t, f).Sync(mustRepo(t, "o/r"))
 		if err == nil || !strings.Contains(err.Error(), "unexpected") {
 			t.Errorf("ref %q: err = %v", ref, err)
@@ -182,7 +181,7 @@ func TestSyncRefusesAnUnexpectedDefaultBranchRef(t *testing.T) {
 
 func TestSyncRefusesAMalformedMachineUser(t *testing.T) {
 	for _, out := range []string{"", "onlyone", "a b c"} {
-		f := &fake{replies: append([]reply{{key: "gh api user", out: out}}, syncReplies()...)}
+		f := &gitFake{replies: append([]reply{{key: "gh api user", out: out}}, syncReplies()...)}
 		_, err := newRepos(t, f).Sync(mustRepo(t, "o/r"))
 		if err == nil || !strings.Contains(err.Error(), "unexpected") || f.has("config --local user") {
 			t.Errorf("gh said %q: err = %v", out, err)
@@ -191,7 +190,7 @@ func TestSyncRefusesAMalformedMachineUser(t *testing.T) {
 }
 
 func TestSyncRemovesAFailedClone(t *testing.T) {
-	f := &fake{replies: []reply{{key: " clone ", err: errBoom}}}
+	f := &gitFake{replies: []reply{{key: " clone ", err: errBoom}}}
 	f.onRun = func(c call) {
 		if strings.Contains(c.line, " clone ") { // git leaves a partial directory
 			_ = os.MkdirAll(strings.Fields(c.line)[len(strings.Fields(c.line))-1], 0o755)
@@ -209,14 +208,14 @@ func TestSyncRemovesAFailedClone(t *testing.T) {
 }
 
 func TestSyncRefusesWithoutAHome(t *testing.T) {
-	f := &fake{}
+	f := &gitFake{}
 	if _, err := (Repos{Run: f.run}).Sync(mustRepo(t, "o/r")); err == nil || len(f.calls) != 0 {
 		t.Errorf("err %v, commands %v", err, f.lines())
 	}
 }
 
 func TestSyncFailsWhenTheLockCannotBeTaken(t *testing.T) {
-	f := &fake{replies: syncReplies()}
+	f := &gitFake{replies: syncReplies()}
 	r := newRepos(t, f)
 	// A file where the owner's directory belongs: nothing can be created below it.
 	if err := os.MkdirAll(filepath.Join(r.Home, ".local/share/engine/repos"), 0o755); err != nil {
@@ -230,7 +229,7 @@ func TestSyncFailsWhenTheLockCannotBeTaken(t *testing.T) {
 	}
 }
 
-func TestExecAddsEnvAndWrapsFailures(t *testing.T) {
+func TestRunCommandAddsEnvAndWrapsFailures(t *testing.T) {
 	out, err := RunCommand(t.TempDir(), []string{"ENGINE_TEST=hello"}, "sh", "-c", `printf %s "$ENGINE_TEST"`)
 	if err != nil || out != "hello" {
 		t.Errorf("out %q, err %v", out, err)
