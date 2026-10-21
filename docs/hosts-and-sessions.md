@@ -49,7 +49,7 @@ reserve_gb = 8          # RAM kept back for the host itself
 
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
-launch = "{bin} --permission-mode auto --model {model} --effort {effort}"
+launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {name} --remote-control {name}"
 tiers.deep     = { model = "claude-opus-5-5",   effort = "high" }
 tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
 tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
@@ -143,7 +143,8 @@ is up. On the target host (this machine, unless `--host` says otherwise) it:
    Reviewer model: <deep model>`, the reviewer model taken from the same
    harness's `deep` tier), plus the `run=`, `tmux=` and `rc=` values its claim
    comment records;
-5. makes the session reachable from the apps (see below);
+5. makes the session reachable from the apps: the launch line already does
+   it for Claude, and Codex connects to the host's app-server (see below);
 6. prints how to attach.
 
 The executor claims the task itself. `engine start` only places and launches.
@@ -187,8 +188,8 @@ screen, and anyone can type.
 
 Each harness reaches the apps differently:
 
-- **Claude:** the session is launched with `-n <repo>-<task>` and
-  `--remote-control <repo>-<task>`, so it shows in the apps under its name.
+- **Claude:** the launch line's `-n {name} --remote-control {name}` sets the
+  session's name, `<repo>-<task>`, and shows it in the apps under that name.
   Remote Control needs the host signed in with a claude.ai account
   (`operator-setup.md`).
 - **Codex:** the host runs the remote-control app-server
