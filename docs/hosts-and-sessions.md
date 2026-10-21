@@ -171,7 +171,7 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps`: every claimed task, with its host, harness, state (working, waiting for input, needs-human, in review, CI) and age. Liveness comes from probing each host's tmux; state comes from the hook signals (`coordinator.md`). |
+| Terminal | `engine ps`: every claimed task, with its host, harness, state (working, waiting for input, needs-human, in review, CI) and age. Liveness comes from probing each host's tmux; state comes from the labels and the harness signals (`coordinator.md`). |
 
 ## Connecting to a session
 
@@ -187,7 +187,10 @@ screen, and anyone can type.
 
 Each harness reaches the apps differently:
 
-- **Claude:** the session has Remote Control turned on.
+- **Claude:** the session is launched with `-n <repo>-<task>` and
+  `--remote-control <repo>-<task>`, so it shows in the apps under its name.
+  Remote Control needs the host signed in with a claude.ai account
+  (`operator-setup.md`).
 - **Codex:** the host runs the remote-control app-server
   (`codex remote-control start`), and the session's TUI connects to it with
   `--remote`.
