@@ -4,8 +4,8 @@
 
 ## Hosts
 
-A host is somewhere sessions run. Each one declares the harnesses it runs, its
-memory, and its capabilities. Capabilities are declared, never inferred.
+A host is somewhere sessions run. Each one declares the harnesses it runs, how
+many sessions it holds, and its capabilities. Capabilities are declared, never inferred.
 
 **One file, every host.** The host config is `~/.config/engine/hosts.toml`,
 the same file on every host, because any host can run the coordinator. Edit
@@ -16,7 +16,7 @@ one line, in `~/.config/engine/host`.
 name such as `mac` or `devbox`, never a hostname or an IP. It is what claims
 and every surface show. Its `address` is how other hosts reach it over SSH
 (its Tailscale name); it stays in this file and is never posted anywhere. A
-machine is local to whichever host has its name in `~/.config/engine/host`,
+machine (below) is local to whichever host has its name in `~/.config/engine/host`,
 and reached over SSH at its `address` from every other one.
 
 **Machines and cloud hosts.** A host with no `kind` is a machine: it needs
@@ -24,7 +24,7 @@ and reached over SSH at its `address` from every other one.
 address or RAM and must set `max_sessions`.
 
 **Slots from memory.** RAM stands in for how many sessions a machine runs at
-once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. Both divisors
+once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. Both values
 are set at the top and may be set again per host. A host's `max_sessions`
 replaces the derived count.
 
