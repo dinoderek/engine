@@ -25,7 +25,7 @@ there and never also in the issue body.
 | Inbox | Comments on the task's issue. | The live session, and the PR's comments. |
 | `med` and `high` rulings, deviations, outcome | Comments on the task's issue, repeated in the PR body. | The PR body only. |
 | Ruling review | The `engine:ruling-review` label. | Not used. |
-| Close on merge | `Closes #<task>` in the PR body. | The PR deletes the card and marks it completed in the milestone. |
+| Close on merge | `Closes #<task>` in the PR body. | The PR deletes the card and marks it completed in the milestone. The last card's PR deletes the milestone. |
 
 ## Card fields
 

@@ -50,6 +50,7 @@ Work to do before or alongside the build. Delete each item when it is done.
     setting, a flag, or sending `/remote-control`? For Codex: does a TUI
     started with `--remote` against the host's `codex remote-control`
     app-server show up in the ChatGPT app? Check on the Linux host too.
+    `codex remote-control start | pair` is marked experimental in 0.163.
 12. **Existing control planes.** Before building the SSH host layer, evaluate
     Paseo, Zeron and Pragma (`prior-art.md`).
 13. **Model IDs.** `gpt-6.1-sol` is confirmed (it is this Mac's Codex

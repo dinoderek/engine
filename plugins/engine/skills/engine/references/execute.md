@@ -31,7 +31,8 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
 
 1. **Claim** (GitHub plans). First check, without changing anything:
    - the task has no `engine:running`, `engine:needs-human`,
-     `engine:in-review` or `engine:failed`;
+     `engine:in-review` or `engine:failed`, and a standalone task is
+     `engine:approved`, not `engine:prepare`;
    - every blocker is closed
      (`gh api repos/<o>/<r>/issues/<n>/dependencies/blocked_by`);
    - the host file and the token exist;
@@ -57,6 +58,7 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    - Check every assumption the card makes against the current default
      branch: code, docs, and sibling tasks that have merged. If the card no
      longer holds, that is a **Drift** hard stop.
+   - In-repo plan: if the card's dependencies are not done, stop and ask.
    - Settle the Open questions for your mode.
 4. **Build.** Implement the outcome with the tests the card lists, in the
    layers it names. Update the docs the card lists, plus any other owning doc
@@ -135,7 +137,8 @@ Branch: <branch>
 
 ## Labels you set
 
-- `engine:running` when you claim the task.
+- `engine:running` when you claim the task. On a standalone task it replaces
+  `engine:approved`.
 - `engine:needs-human` during a hard stop. It replaces `engine:running` or
   `engine:in-review`, and you restore that label when the stop is answered.
 - `engine:in-review` when the PR opens.
