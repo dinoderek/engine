@@ -1,6 +1,9 @@
 # Execution protocol
 
-> **Owns:** phases, roles, task and feature states, card fields, rulings, hard stops, merge rules. **Not here:** how each plan source stores a plan (`plan-sources.md`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, task and feature states and who moves them, why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+
+The skill is the single source for agent behaviour. This doc explains the
+design around it and never restates a rule the skill holds.
 
 ## Principles
 
@@ -10,178 +13,49 @@
 - **Enforce in code, not prompts.** The coordinator is a program. Merging is a
   scripted check of the reviewed head commit against green checks.
 - **One task = one session = one worktree = one PR.**
-- **One plan source per feature.** The requirements, design, plan, task cards
-  and their states live in exactly one place: the tracker, or an in-repo plan
-  that the operator points the executor at. Read and update state only in that
-  source. The coordinator drives only the tracker. `plan-sources.md` maps both
-  in the same terms.
-- **Plans are never cited.** Whatever the source, code and docs (other than
-  the plan itself) never cite a plan item: no issue number, plan path or task
-  ID. Commit messages and PR bodies may.
-- **Durable decisions graduate.** Anything that must stay true after the
-  feature ships moves into the repo's owning doc, in the PR that ships it.
+- **One plan source per feature:** the tracker, or an in-repo plan that the
+  operator points the executor at. The coordinator drives only the tracker.
+- **Plans are never cited** in code or docs. Commit messages and PR bodies
+  may.
+- **Durable decisions graduate** into the repo's owning doc, in the PR that
+  ships them.
 
 ## Phases
 
-### 1. Prepare (co-work with the operator)
+| Phase | Who | Skill mode | Ends when |
+| --- | --- | --- | --- |
+| 1. Prepare: requirements (the what) and design (the how) | You and a planner, in batches | `plan feature`, `plan task` | You label the issue `engine:approved`. |
+| 2. Plan: task issues with dependencies and a final acceptance task | A planner, alone | `plan breakdown` | Plan lint passes. |
+| 3. Execute: one task, from card to merged PR | One executor per task | `execute` | The PR merges on green. |
 
-- **Requirements (the what).** Objectives stated so a test can prove them,
-  scope in and out, the API, and mocks for visual work.
-- **Design (the how).** High level. It covers every large risk and is good
-  enough to plan from. Its shape varies with the feature.
+Prepare carries more weight than in a human-gated flow. It is the only time
+you are consulted, so every open question is either answered there or
+explicitly left to the agent. A feature's approval covers its tasks. A
+standalone task carries its own.
 
-Both live in the feature issue, or are linked from it. Prepare ends when the
-operator labels the feature `engine:approved`. This is the only approval in the
-protocol, apart from a standalone task's own (`planner.md`). Prepare carries more weight than in a human-gated flow: every open
-question is either answered here, or explicitly left for the agent to decide.
-
-### 2. Plan (agent alone, no approval)
-
-The coordinator spawns a planner session for an approved feature that has no
-tasks. The planner turns the requirements and design into task issues with
-dependencies. It also adds a final acceptance task that proves the feature's
-objectives end to end. Each task is one PR. The planner aims to keep each one
-to about 2000 added lines; this is a best-effort target, not a lint rule. If
-you are changing how the planner runs, its modes or the issues it writes, load
-`planner.md`.
-
-A task card holds:
-
-| Field | Content |
-| --- | --- |
-| Outcome | What the PR makes true, provable by a test. |
-| Decided | Fixed by Prepare or earlier tasks. Links to the owning doc rather than restating it. |
-| Open | Questions the executor decides. Each answer is graded per "Rulings". |
-| Tests | The claims to prove and the layer each belongs in. |
-| Docs to update | The owning docs this change touches. |
-| Depends on | Blocking tasks. |
-| Requires | Host capabilities such as `ios`, `docker` or `android`. |
-| Gates | The lanes this card runs beyond the repo's default. In an engine run, this is the operator's agreement wherever a repo asks for one. |
-| Harness / tier | Optional. The harness defaults to host config; the tier follows "Models". |
-
-**Plan lint** runs before anything is dispatched:
-
-- the dependency graph has no cycles;
-- every card has an outcome, tests and a requires list;
-- the final acceptance task exists.
-
-If lint fails, the planner fixes the plan. Once it passes, execution starts.
-
-### 3. Execute (one executor session per task)
-
-The executor starts in the task worktree's root, so the repo's `AGENTS.md`
-loads.
-
-1. **Load and check freshness.** Read the card, the feature issue and the
-   comments on both. Check the card's assumptions against the default branch.
-2. **Build** with tests, and update the owning docs.
-3. **Gates.** Run the repo's single gate command to green, including any lane
-   that runs only locally.
-4. **Review.** Spawn a fresh reviewer that did not write the diff. The verdict
-   is the first line, `Verdict: APPROVED` or `Verdict: CHANGES_REQUESTED`. Fix
-   every real finding, then review again. The reviewer uses the same harness by
-   default, at the `deep` tier; a different harness is optional per feature.
-5. **Gates again.**
-6. **Checkpoint.** Read new comments on the task's issue.
-7. **PR.** Write the body per the repo's template, with the gate evidence, the
-   rulings, the deviations, and `Closes #<task>`.
-8. **Merge on green.** Watch the PR's checks with `gh`. On a failure, fix it
-   and go back to step 3. When every check is green, merge with
-   `gh pr merge --match-head-commit <sha>`, where `<sha>` is the commit that
-   was reviewed and gated, so nothing unreviewed lands. If the default branch
-   moved or conflicts, merge it in, then repeat from step 3. A repo with no CI
-   merges on local gates alone. Branch protection is optional.
-9. **Report.** Post an outcome comment on the task's issue: what shipped, the
-   rulings, and the deviations. Update downstream tasks per "Changing the plan
-   mid-flight".
-10. **Cleanup.** Run the repo's worktree-release command, then end the session.
+The executor reviews its own work with a fresh reviewer (mode `review`), and
+merges itself once every check is green, with `--match-head-commit` pinned to
+the commit that was reviewed and gated.
 
 ## Models
 
-Cards and roles name a **tier**, never a model. Host config maps each tier to
-a model and an effort level for each harness (`hosts-and-sessions.md`), so a
-model upgrade is one config change and no card goes stale.
-
-| Tier | Used for |
-| --- | --- |
-| `deep` | The planner, the reviewer, the acceptance task, and executor cards that have `med` or `high` risk open questions, sit next to a hard-stop class, or span several modules. |
-| `standard` | Every other executor card. The default. |
-| `light` | Docs-only or mechanical cards. |
-
-The planner sets the tier on each card. There is no automatic escalation.
-Telemetry records the tier and the model for every run, and the defaults are
-tuned from that evidence.
+Cards and roles name a tier (`deep`, `standard`, `light`), never a model.
+Host config maps each tier to a model and an effort level for each harness
+(`hosts-and-sessions.md`), so a model upgrade is one config change and no card
+goes stale. The planner runs at `deep` and picks each card's tier. The
+reviewer runs at `deep`. There is no automatic escalation: telemetry records
+the tier and the model for every run, and the defaults are tuned from that.
 
 ## Rulings and hard stops
 
-### Rulings
-
-A ruling is a decision you might want to reverse after the fact. Anything a
-code review of the diff would catch, such as naming, internal structure, test
-layer or a refactor inside the touched modules, is not a ruling and is not
-logged.
-
-Risk is graded by what undoing the decision costs, never by how hard it was
-to make:
-
-| Risk | When | Logged | You |
-| --- | --- | --- | --- |
-| `low` | Undoing it touches only this PR's files. Nothing user-visible, persisted, or built on by another task. | One line in the PR body, under a collapsed **Low-risk decisions**. No issue comment. | Never asked to read it. |
-| `med` | Undoing it touches other modules, changes user-visible behaviour within the mocks, or later tasks build on it. | A comment on the task's issue, repeated in the PR body. The issue gets `engine:ruling-review`. | Read it after the fact, from the `engine:ruling-review` queue, and remove the label. |
-| `high` | Hard to undo once merged: a shape other code or other tasks depend on, a persisted format, or a convention across features. | As `med`, plus an @mention. The executor carries on. | Read it soon. Reverting is still cheap before dependent tasks merge. |
-
-The comment format, for `med` and `high`:
-
-```text
-Ruling (risk: med|high): <decision>
-Why: <reason>
-If wrong: <what it costs to undo, what it touches>
-```
-
-Telemetry counts rulings per task by risk. A task with several `med` or `high`
-rulings points to a card that Prepare under-specified, and hard-stop classes
-are added or removed as the rulings show.
-
-> **Q11.** Should `low` decisions be logged at all? *Recommend: yes, as one
-> collapsed line each in the PR body.* It costs you nothing, and it keeps the
-> evidence if a `low` grade turns out wrong.
->
-> **Q12.** Should a `high` ruling @mention you and carry on, or stop like a
-> hard stop? *Recommend: carry on.* If a class of `high` rulings keeps being
-> reversed, promote it to a hard stop.
-
-### Ownership and hard stops
-
-**The agent owns** these decisions:
-
-- internal design, naming and structure;
-- which test layer a claim belongs in;
-- choices the design left open;
-- refactors inside the modules the task touches;
-- splitting its task, or adding `todo` tasks inside the feature's scope;
-- UI details within the agreed mocks;
-- adding dev-only dependencies.
-
-**Hard stops** set the task to `needs-human`, @mention the operator, and wait in
-the live session:
-
-1. **Product:** a product decision that neither the docs nor the requirements
-   answer.
-2. **Data:** a destructive or irreversible data change, such as a migration
-   that drops or rewrites data, or a backfill.
-3. **Security:** auth, permissions, row-level security, or secrets handling.
-4. **Contract:** a change the design doesn't cover to a public API, schema,
-   protocol or CLI surface that others use.
-5. **Gates:** loosening a gate (a threshold, a suppression or a baseline entry).
-6. **Outward or costly:** deploying, touching hosted environments, store
-   releases, paid services, or sending messages.
-7. **Drift:** the default branch has moved in a way that invalidates the card.
-8. **Objectives:** the feature's requirements would have to change.
-9. **Review:** two review rounds that don't converge.
-10. **Environment:** a required gate that cannot run on this host.
-
-A repo adds its own classes in `AGENTS.md`. For example, Gnocchi would add any
-new runtime dependency.
+- **You read only what is costly to undo.** Decisions are graded by what
+  undoing them costs. `low` ones stay in a collapsed PR section that you never
+  have to read. `med` and `high` ones queue under `engine:ruling-review`.
+- **Hard stops are the only interruptions.** The list grows or shrinks from
+  evidence. Telemetry counts rulings per task by risk, and a class of `high`
+  rulings that keeps being reversed becomes a hard stop.
+- A task with several `med` or `high` rulings points to a card that Prepare
+  under-specified.
 
 ## States
 
@@ -190,33 +64,14 @@ All labels use the `engine:` prefix.
 | Entity | States |
 | --- | --- |
 | Feature | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`. `blocked` while any task is `needs-human`. |
-| Task | `todo` → `running` ⇄ `needs-human` → `in-review` (PR open) → closed by merge. `failed` when the session dies. |
+| Task | `todo` → `running` ⇄ `needs-human` → `in-review` (PR open) → closed by merge. `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
 
-"Ready" is computed, never stored. The operator sets `approved`. The executor
-sets `needs-human` and `in-review`. The merge closes the task. The coordinator
-owns every other transition. `engine:ruling-review` is a marker, not a state:
-the executor adds it with a `med` or `high` ruling, and you remove it once
-read.
-
-## Changing the plan mid-flight
-
-- An executor may edit any task that is still `todo`.
-- It never edits a `running` or `needs-human` task. It comments on that task
-  instead, and the comment thread is that task's inbox.
-- Executors read their inbox after loading, before opening the PR, and before
-  merging.
-- A plan-level change (a new task, or one that is no longer needed) is made on
-  `todo` tasks, plus a `Deviation:` comment on the feature issue.
+"Ready" is computed, never stored. You set `approved`. The executor sets
+`needs-human`, `in-review` and the `ruling-review` marker. The merge closes the
+task. The coordinator owns every other transition.
 
 ## Merge conflicts
 
 There is no file ownership. Parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
-
-## Plan sources
-
-A plan lives in the tracker or in the repo. This doc speaks in tracker terms
-("the task's issue", "a comment"). If you are reading or writing a plan, or
-changing how a source stores one, load `plan-sources.md`: it maps every
-operation and card field to each source.

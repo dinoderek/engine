@@ -41,6 +41,10 @@ Other commands:
 - `engine ps`: every live session on every host, with how to attach.
 - `engine lint <feature>`: plan lint on its own.
 
+The coordinator's GitHub adapter and `engine lint` implement the skill's
+`references/plan-sources.md` and its lint rules (`references/plan.md`). The
+skill is the spec; the code follows it.
+
 ## Later: `engine serve`
 
 A persistent daemon over many features, with a web UI for features, sessions

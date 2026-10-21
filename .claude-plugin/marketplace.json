@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "engine",
+  "description": "Engine's agent skills: the hands-off build protocol, and task-protocol for human-gated work.",
+  "owner": {
+    "name": "dinoderek"
+  },
+  "plugins": [
+    {
+      "name": "engine",
+      "description": "Hands-off build protocol: plan a task or a feature as GitHub issues, then execute one task per session through review to a PR merged on green.",
+      "source": "./plugins/engine",
+      "category": "development"
+    }
+  ]
+}

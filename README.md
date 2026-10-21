@@ -14,11 +14,17 @@ loop unless a task asks for you.
 | --- | --- |
 | Execution protocol | The phases, roles and state machine from requirements to merged feature. |
 | Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through plan and execution, spawning sessions on local or SSH hosts. No LLM. |
-| Skills | The planner, executor and reviewer protocols, plus `task-protocol` for human-gated work. All ship from this repo, as a Claude Code plugin marketplace and with a Codex symlink installer. |
+| Skill | `engine`, in `plugins/engine`: what agents do when they plan, execute and review. This repo is a Claude Code plugin marketplace, and later also ships `task-protocol` for human-gated work and a Codex symlink installer. |
 | Plan sources | Plan and status storage behind one set of operations: GitHub Issues, which the coordinator drives, or an in-repo plan, which the operator runs one task at a time. |
-| Hosts | Config for each machine or cloud: its harnesses, session cap and capabilities. Rules for how you reach every session. |
+| Hosts | Config for each machine: its harnesses, session cap and capabilities. Rules for how you reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |
 | Project context guideline | What a repo must provide so executors can run hands-off. It is the source for a language-neutral seed prompt. |
+
+## Install the skill
+
+```text
+/plugin install engine --marketplace dinoderek/engine
+```
 
 ## Docs
 
@@ -26,12 +32,12 @@ Load only what your task needs:
 
 | If you are… | Load |
 | --- | --- |
-| changing phases, roles, task states, card fields, rulings, hard stops or merge rules | `docs/execution-protocol.md` |
-| reading or writing a plan, or changing how GitHub or an in-repo plan stores one | `docs/plan-sources.md` |
-| changing how the planner runs, its modes or the issues it writes | `docs/planner.md` |
+| changing what an agent does when it plans, executes or reviews: card fields, plan sources, ruling grades, hard stops, merge steps | `plugins/engine/skills/engine/SKILL.md` and the reference it routes to |
+| changing the principles, phases, states, or why rulings and hard stops are shaped as they are | `docs/execution-protocol.md` |
 | changing how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changing host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changing what is recorded about runs or where it is stored | `docs/telemetry.md` |
 | setting up engine's GitHub identity, tokens, notifications or harness sign-in | `docs/operator-setup.md` |
 | changing what a target repo must provide, or the seed prompt | `docs/project-context.md` |
-| deciding something not yet settled | `design/open-questions.md` and `design/prior-art.md` (ephemeral) |
+| picking up set-up work or open checks | `design/backlog.md` (ephemeral) |
+| comparing with other tools | `design/prior-art.md` (ephemeral) |

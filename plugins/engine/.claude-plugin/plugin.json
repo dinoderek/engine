@@ -1,0 +1,8 @@
+{
+  "name": "engine",
+  "description": "Hands-off build protocol: plan, execute and review engine tasks.",
+  "version": "0.1.0",
+  "author": {
+    "name": "dinoderek"
+  }
+}
