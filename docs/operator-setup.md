@@ -25,7 +25,8 @@
    stays yours.
 6. **Push from engine's clones only.** Engine clones over HTTPS and sets
    `credential.helper` to `!gh auth git-credential` in each clone's local
-   config. Your SSH-key checkouts are untouched.
+   config, after an empty value that drops any helper the host configures
+   globally, such as the keychain. Your SSH-key checkouts are untouched.
 7. **Attribute commits truthfully.** Each engine clone sets the local
    `user.name` and `user.email` to the machine user's noreply address, and the
    harness adds its `Co-Authored-By` trailer. PRs open as the machine user,

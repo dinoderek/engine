@@ -135,8 +135,14 @@ the name: tmux treats it as special.
 runs from any terminal, in any directory. It returns as soon as the session
 is up. On the target host (this machine, unless `--host` says otherwise) it:
 
-1. syncs engine's clone of the repo;
-2. creates the task worktree with the repo's own command;
+1. syncs engine's clone of the repo: clones it over HTTPS on first use,
+   fetches it, and leaves it at the remote's default branch. The clone's
+   local config makes `gh` its only credential helper, and sets the machine
+   user's name and noreply email;
+2. creates the task worktree on the branch `task/<repo>-<task>`, with the
+   repo's own `./dev worktree create` when the clone has an executable
+   `dev`, else with `git worktree add` from the default branch. It refuses
+   when that branch or worktree already exists;
 3. opens a window `<repo>-<task>` in the tmux session `engine`, in that
    worktree, so the repo's `AGENTS.md` loads;
 4. launches the harness's interactive CLI with the host's launch line, at the
