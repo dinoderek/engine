@@ -15,7 +15,9 @@ Two programs share one Go module:
   (harness hooks: `engine hook pre-tool-use`). The commands share
   `internal/hosts`, the host config: it parses `hosts.toml` with an in-house
   reader of the TOML subset the config uses, validates it and works out each
-  machine's slots.
+  machine's slots. `internal/session` (the host's session ops, through `git`
+  and `gh`: engine's clones and task worktrees) is not reachable from a
+  command yet.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →
@@ -37,7 +39,9 @@ non-test imports. The reasons:
   of the product's reach.
 - **Each package may import only what its rule lists.** `cmd/engine` sees only
   `internal/cli`. Leaf packages (`internal/version`, `internal/tracker`,
-  `internal/hook`, `internal/hosts`, `devtools/internal/repo`) import no first-party code. A new package adds its rule in the same PR.
+  `internal/hook`, `internal/hosts`, `internal/session`,
+  `devtools/internal/repo`) import no first-party code. A new package adds its
+  rule in the same PR.
 
 ## Decisions new code must respect
 
