@@ -109,8 +109,8 @@ var (
 // between them are ignored. The words "harness" and "tier" are read as labels
 // and skipped, and "none" and "default" mean the default harness. An empty or
 // absent section is the default harness, which is "", and DefaultTier. A
-// second tier or a second harness is an error, so a typo never runs a task on
-// the wrong one.
+// second tier or a second harness is an error. A misspelt tier reads as a
+// harness, which placement must reject when no host config lists it.
 func ParseHarnessTier(body string) (harness, tier string, err error) {
 	tier = DefaultTier
 	section := tierSection(body)
