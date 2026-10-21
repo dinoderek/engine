@@ -65,9 +65,38 @@
   credentials.
 - **SSH (the fallback route to any session):**
   - every host on the same Tailscale tailnet as the phone;
-  - key-based SSH between every pair of hosts, since any of them can run the
-    coordinator;
+  - plain OpenSSH with key auth, never Tailscale SSH: its check mode asks for
+    a browser approval, which an unattended coordinator cannot give;
   - on macOS, Remote Login turned on.
+
+## A remote devbox
+
+A Linux machine on the tailnet, set up from the coordinator's host (the Mac).
+
+1. **Authorize the Mac's key.** On the devbox, append the Mac's
+   `~/.ssh/id_ed25519.pub` to `~/.ssh/authorized_keys`.
+2. **Switch to OpenSSH.** On the devbox, with `openssh-server` installed.
+   Tailscale SSH goes off only once sshd is listening:
+
+   ```bash
+   sudo systemctl enable --now ssh && ss -ltn | grep -q ":22 " && { ! sudo ufw status | grep -q "Status: active" || sudo ufw allow in on tailscale0 to any port 22 proto tcp; } && sudo tailscale set --ssh=false
+   ```
+
+   If plain SSH then fails, `sudo tailscale set --ssh` from the devbox's own
+   console restores Tailscale SSH.
+3. **Check from the Mac.** `ssh -o BatchMode=yes <user>@<tailscale name> true`
+   must succeed with no prompt. That string is the devbox's `address` in
+   `hosts.toml`.
+4. **Everything else over that SSH,** from the Mac:
+   - engine without a checkout:
+     `GOBIN=~/.local/bin go install github.com/dinoderek/engine/cmd/engine@main`
+     (any directory on `PATH`);
+   - copy `hosts.toml` and `github-token` into `~/.config/engine/` with mode
+     `600`, and write `devbox` to `~/.config/engine/host`;
+   - the plugin: `claude plugin marketplace add dinoderek/engine`, then
+     `claude plugin install engine@engine`;
+   - no suspend: `sudo systemctl mask sleep.target suspend.target
+     hibernate.target hybrid-sleep.target`.
 
 ## Each target repo
 
