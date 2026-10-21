@@ -200,26 +200,37 @@ Each harness reaches the apps differently:
 
 ## tmux setup
 
-Engine owns the tmux session `engine` on each host. It sets that session's
-options itself and never edits the host's `~/.tmux.conf`:
+Engine owns the tmux session `engine` on each host, and creates it with its
+first window. It sets the options itself, on the session and on each window it
+opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
 
-- `mouse on` and `history-limit 50000`;
-- `allow-rename off` and `automatic-rename off`, so agents can't rename
-  windows;
+- `mouse on` and `history-limit 50000`, on the session;
+- on each window, `allow-rename off` and `automatic-rename off`, so agents
+  can't rename windows;
 - `window-size latest`, so the window fits whoever attached last (a phone or
   a laptop);
 - `remain-on-exit on`, so a crashed session's last screen stays readable.
 
 `pipe-pane` copies each window's output into its run directory, so the raw log
-outlives the tmux server. When engine has to type into a session, it sends the
+outlives the tmux server. Engine opens a window on a placeholder command, sets
+the options and the pipe, then swaps in the task's command, so a command that
+fails at once still leaves its log and its screen. A window name holds letters,
+digits, `_`, `.` and `-`. Because tmux reads `.` as a pane separator, a pane
+command cannot target a window whose name has one, so engine targets the
+windows it opens by id (`@3`).
+
+When engine has to type into a session, it sends the
 text with `send-keys -l`, then `Enter` as a separate call after a short delay.
 Input boxes can swallow a newline that arrives with the text.
 
 ## Keeping hosts awake
 
-tmux survives a closed terminal, but not a sleeping machine. While it has live
-sessions, a macOS host runs under `caffeinate -s`, which holds off sleep while
-it is on power. A Linux host should not suspend at all.
+tmux survives a closed terminal, but not a sleeping machine. On a macOS host,
+each window that engine opens starts `caffeinate -s -w <pid>` on its command's
+process, through tmux's `run-shell`. `-s` holds off sleep while the host is on
+power, and `-w` ends it when the command does. So the host can sleep as soon
+as the last command has ended, and nothing outlives the windows. A Linux host
+should not suspend at all.
 
 ## Lifecycle
 
