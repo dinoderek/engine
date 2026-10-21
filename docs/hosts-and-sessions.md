@@ -13,10 +13,17 @@ default_harness = "claude"
 
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
-launch = "claude --permission-mode auto --model {model}"
+launch = "claude --permission-mode auto --model {model} --effort {effort}"
+tiers.deep     = { model = "claude-opus-5-5",   effort = "high" }
+tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
+tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
+
 [harness.codex]
 max_sessions = 2
-launch = "codex --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model}"
+launch = "codex --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
+tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }
+tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
+tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 
 [host.mac]
 kind = "local"
@@ -44,6 +51,10 @@ max_sessions = 2
 capabilities = []
 enabled = false
 ```
+
+Each harness maps every tier (`execution-protocol.md`, "Models") to a model
+and an effort level. GPT-6 Astra is deliberately unmapped: GPT-6.1 Sol at high
+effort comes close to it on coding at a fraction of the cost.
 
 ## Placement
 
@@ -106,8 +117,9 @@ or URL. `engine ps` lists every live session with the same details.
 ## Lifecycle
 
 - **Start:** create the worktree, open a tmux window in it, launch the harness
-  with the model and the kickoff prompt (`Execute task <tracker ref> with the
-  engine executor protocol`), and register remote control.
+  with the tier's model and effort and the kickoff prompt (`Execute task
+  <tracker ref> with the engine executor protocol`), and register remote
+  control.
 - **tmux mechanics:**
   - Send text with `send-keys -l`, then send `Enter` as a separate call after
     a short delay. Input boxes can swallow a newline that arrives with the

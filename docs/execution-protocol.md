@@ -26,7 +26,7 @@
 
 Both live in the feature issue, or are linked from it. Prepare ends when the
 operator labels the feature `engine:approved`. This is the only approval in the
-protocol. Prepare carries more weight than in a human-gated flow: every open
+protocol, apart from a standalone task's own (`planner.md`). Prepare carries more weight than in a human-gated flow: every open
 question is either answered here, or explicitly left for the agent to decide.
 
 ### 2. Plan (agent alone, no approval)
@@ -34,7 +34,10 @@ question is either answered here, or explicitly left for the agent to decide.
 The coordinator spawns a planner session for an approved feature that has no
 tasks. The planner turns the requirements and design into task issues with
 dependencies. It also adds a final acceptance task that proves the feature's
-objectives end to end.
+objectives end to end. Each task is one PR. The planner aims to keep each one
+to about 2000 added lines; this is a best-effort target, not a lint rule. If
+you are changing how the planner runs, its modes or the issues it writes, load
+`planner.md`.
 
 A task card holds:
 
@@ -47,13 +50,13 @@ A task card holds:
 | Docs to update | The owning docs this change touches. |
 | Depends on | Blocking tasks (tracker dependencies). |
 | Requires | Host capabilities such as `ios`, `docker` or `android`. |
-| Harness / model | Optional. Defaults come from host config. |
+| Gates | The lanes this card runs beyond the repo's default. In an engine run, this is the operator's agreement wherever a repo asks for one. |
+| Harness / tier | Optional. The harness defaults to host config; the tier follows "Models". |
 
 **Plan lint** runs before anything is dispatched:
 
 - the dependency graph has no cycles;
 - every card has an outcome, tests and a requires list;
-- every task stays within the size budget (about 2000 added lines);
 - the final acceptance task exists.
 
 If lint fails, the planner fixes the plan. Once it passes, execution starts.
@@ -71,7 +74,7 @@ loads.
 4. **Review.** Spawn a fresh reviewer that did not write the diff. The verdict
    is the first line, `Verdict: APPROVED` or `Verdict: CHANGES_REQUESTED`. Fix
    every real finding, then review again. The reviewer uses the same harness by
-   default; a different harness is optional per feature.
+   default, at the `deep` tier; a different harness is optional per feature.
 5. **Gates again.**
 6. **Checkpoint.** Read new comments on the task's issue.
 7. **PR.** Write the body per the repo's template, with the gate evidence, the
@@ -86,6 +89,22 @@ loads.
    rulings, and the deviations. Update downstream tasks per "Changing the plan
    mid-flight".
 10. **Cleanup.** Run the repo's worktree-release command, then end the session.
+
+## Models
+
+Cards and roles name a **tier**, never a model. Host config maps each tier to
+a model and an effort level for each harness (`hosts-and-sessions.md`), so a
+model upgrade is one config change and no card goes stale.
+
+| Tier | Used for |
+| --- | --- |
+| `deep` | The planner, the reviewer, the acceptance task, and executor cards that have `med` or `high` risk open questions, sit next to a hard-stop class, or span several modules. |
+| `standard` | Every other executor card. The default. |
+| `light` | Docs-only or mechanical cards. |
+
+The planner sets the tier on each card. There is no automatic escalation.
+Telemetry records the tier and the model for every run, and the defaults are
+tuned from that evidence.
 
 ## Rulings and hard stops
 

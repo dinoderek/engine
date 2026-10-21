@@ -57,6 +57,9 @@ Docs cite the verbs and never restate the commands behind them.
 - **Where there is CI, it runs the same command.** A lane CI cannot run, such
   as one that needs a simulator, runs locally, and its evidence goes in the PR.
   Merge on green means local gates plus every CI check.
+- **Lane agreement in engine runs.** If the repo asks the operator to agree
+  the lanes beyond a default, `AGENTS.md` says that in an engine run the
+  card's Gates field is that agreement, and the executor does not ask.
 - Default targets:
 
 | Target | Default |

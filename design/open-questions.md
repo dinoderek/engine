@@ -38,9 +38,14 @@ when its answer lands in the owning doc.
 7. **Codex binary.** The Mac has two installs, the standalone one in
    `~/.local/bin` and an npm one under Homebrew. Engine should run a pinned
    path, not whichever comes first on `PATH`.
+8. **Model IDs.** `gpt-6.1-sol` is confirmed (it is this Mac's Codex
+   default). Check `gpt-6-luna` with a one-line `codex exec`.
+9. **Reviewer tier on Codex.** Claude Code can start a subagent on a
+   different model. Check whether a Codex session can, or whether its
+   reviewer inherits the session's model.
 
 ## Later (low priority)
 
-8. **Cloud spawning.** Can a script start a Claude cloud session or a Codex
-   cloud task against a branch? Cloud hosts stay disabled until then.
-9. **Telemetry from cloud sessions.**
+10. **Cloud spawning.** Can a script start a Claude cloud session or a Codex
+    cloud task against a branch? Cloud hosts stay disabled until then.
+11. **Telemetry from cloud sessions.**

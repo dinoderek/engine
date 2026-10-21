@@ -27,6 +27,7 @@ Load only what your task needs:
 | If you are… | Load |
 | --- | --- |
 | changing phases, roles, task states, rulings, hard stops or merge rules | `docs/execution-protocol.md` |
+| changing how the planner runs, its modes or the issues it writes | `docs/planner.md` |
 | changing how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changing host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changing what is recorded about runs or where it is stored | `docs/telemetry.md` |
