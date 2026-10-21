@@ -107,7 +107,7 @@ func commandProblem(words []string, depth int) string {
 }
 
 // stripPrefix drops leading keywords and variable assignments, and reads
-// `engine gh` as gh. After a wrapper command it skips to the first gh or
+// `engine gh` and `go run <…/engine> gh` as gh. After a wrapper command it skips to the first gh or
 // shell, since a wrapper's own flags may take values.
 func stripPrefix(words []string) []string {
 	for len(words) > 0 {
@@ -124,6 +124,8 @@ func stripPrefix(words []string) []string {
 			words = words[1:]
 		case path.Base(w) == "engine" && len(words) > 1 && words[1] == "gh":
 			return words[1:]
+		case w == "go" && len(words) > 3 && words[1] == "run" && path.Base(words[2]) == "engine" && words[3] == "gh":
+			return words[3:]
 		default:
 			return words
 		}

@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -84,6 +86,7 @@ func TestGh(t *testing.T) {
 		{"returns gh's exit code", token, 4, nil, 4, true, ""},
 		{"reports gh that cannot run", token, 1, errors.New("no gh"), 1, true, "engine gh: no gh"},
 		{"refuses without a token", none, 0, nil, 1, false, "engine gh: no GH_TOKEN and no token file"},
+		{"reads the token file", nil, 0, nil, 0, true, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -100,18 +103,47 @@ func TestGh(t *testing.T) {
 				}
 				return tt.code, tt.err
 			}
-			env := Env{In: in, Out: &out, Err: &errOut, Stream: stream, Getenv: tt.getenv, Home: t.TempDir()}
+			env := Env{In: in, Out: &out, Err: &errOut, Stream: stream, Getenv: tt.getenv, Home: ghHome(t, tt.getenv == nil)}
+			if env.Getenv == nil {
+				env.Getenv = none
+			}
 			if code := Run([]string{"gh", "pr", "view", "7"}, env); code != tt.wantCode {
 				t.Errorf("exit code %d, want %d", code, tt.wantCode)
 			}
 			if ran != tt.wantRan {
 				t.Errorf("gh ran: %v, want %v", ran, tt.wantRan)
 			}
-			if !strings.Contains(errOut.String(), tt.wantError) {
-				t.Errorf("stderr %q lacks %q", errOut.String(), tt.wantError)
-			}
+			checkGhStderr(t, errOut.String(), tt.wantError)
 		})
 	}
+}
+
+// checkGhStderr wants the expected message on stderr, and never the token.
+func checkGhStderr(t *testing.T, stderr, want string) {
+	t.Helper()
+	if !strings.Contains(stderr, want) {
+		t.Errorf("stderr %q lacks %q", stderr, want)
+	}
+	if strings.Contains(strings.ReplaceAll(stderr, "token", ""), "tok") {
+		t.Errorf("stderr %q shows the token", stderr)
+	}
+}
+
+// ghHome is a home directory, holding the token file "tok" when withToken.
+func ghHome(t *testing.T, withToken bool) string {
+	t.Helper()
+	home := t.TempDir()
+	if !withToken {
+		return home
+	}
+	path := filepath.Join(home, tracker.TokenFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("tok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home
 }
 
 func TestSystem(t *testing.T) {
