@@ -6,15 +6,15 @@ import (
 	"time"
 )
 
-const fullClaim = `Claim: engine-13
-Run: engine-13-20261021T202802Z
+const fullClaim = `Claim: a-21
+Run: a-21-20260101T000000Z
 Host: mac
 Harness: claude-code 2.1.302 (claude-sonnet-5-5)
 Mode: hands-off
 Started by: hand
 Tmux: none
 Remote Control: none
-Branch: feat/engine-13-claim-reads`
+Branch: feat/a-21-x`
 
 func TestParseClaim(t *testing.T) {
 	c, ok := ParseClaim(fullClaim)
@@ -22,9 +22,9 @@ func TestParseClaim(t *testing.T) {
 		t.Fatal("not a claim")
 	}
 	want := Claim{
-		Name: "engine-13", Run: "engine-13-20261021T202802Z", Host: "mac",
+		Name: "a-21", Run: "a-21-20260101T000000Z", Host: "mac",
 		Harness: "claude-code 2.1.302 (claude-sonnet-5-5)", Mode: "hands-off",
-		StartedBy: "hand", Tmux: "", RemoteControl: "", Branch: "feat/engine-13-claim-reads",
+		StartedBy: "hand", Tmux: "", RemoteControl: "", Branch: "feat/a-21-x",
 	}
 	if c != want {
 		t.Errorf("got  %+v\nwant %+v", c, want)
@@ -90,8 +90,8 @@ func TestLatestClaimTakesTheNewest(t *testing.T) {
 	older := strings.Replace(fullClaim, "Host: mac", "Host: devbox", 1)
 	page1 := comments("hello", older, "Ruling (risk: med): x")
 	page2 := comments(fullClaim, "done")
-	gh := &fakeGH{replies: map[string]string{commentsPath(13): page1 + "\n" + page2}}
-	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 13})
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): page1 + "\n" + page2}}
+	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21})
 	if err != nil || c == nil {
 		t.Fatalf("got %v, %v", c, err)
 	}
@@ -105,19 +105,19 @@ func TestLatestClaimTakesTheNewest(t *testing.T) {
 }
 
 func TestLatestClaimNone(t *testing.T) {
-	gh := &fakeGH{replies: map[string]string{commentsPath(13): comments("hello") + "[]"}}
-	if c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 13}); c != nil || err != nil {
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): comments("hello") + "[]"}}
+	if c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); c != nil || err != nil {
 		t.Errorf("got %v, %v", c, err)
 	}
 }
 
 func TestLatestClaimFailures(t *testing.T) {
-	gh := &fakeGH{replies: map[string]string{commentsPath(13): "<html>"}}
-	if _, err := LatestClaim(gh.run, "tok", Ref{"o/r", 13}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 13)+": unreadable") {
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): "<html>"}}
+	if _, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 21)+": unreadable") {
 		t.Errorf("bad JSON: %v", err)
 	}
 	gh = &fakeGH{}
-	if _, err := LatestClaim(gh.run, "tok", Ref{"o/r", 13}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 13)) {
+	if _, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 21)) {
 		t.Errorf("gh failure: %v", err)
 	}
 }

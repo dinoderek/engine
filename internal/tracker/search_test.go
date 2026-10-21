@@ -42,7 +42,7 @@ func TestClaimed(t *testing.T) {
 		t.Fatalf("got %d tasks: %+v", len(tasks), tasks)
 	}
 	first, second, third := tasks[0], tasks[1], tasks[2]
-	if first.Ref != (Ref{"o/r", 3}) || first.Title != "one" || !first.Has("engine:running") || first.Claim == nil || first.Claim.Name != "engine-13" {
+	if first.Ref != (Ref{"o/r", 3}) || first.Title != "one" || !first.Has("engine:running") || first.Claim == nil || first.Claim.Name != "a-21" {
 		t.Errorf("first: %+v", first)
 	}
 	if second.Ref != (Ref{"o/r", 4}) || !second.Has("engine:ruling-review") || second.Has("engine:running") || second.Claim != nil {

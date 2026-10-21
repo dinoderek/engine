@@ -48,22 +48,22 @@ func issueURL(repo string, n int) string {
 func short(repo string, n int) string { return fmt.Sprintf("%s#%d", repo, n) }
 
 var (
-	taskPath    = issuePath(13)
-	blockerPath = issuePath(13, "dependencies", "blocked_by")
-	issue13     = `{"number":13,"title":"Read task issues","state":"open",
+	taskPath    = issuePath(21)
+	blockerPath = issuePath(21, "dependencies", "blocked_by")
+	taskIssue   = `{"number":21,"title":"A task","state":"open",
  "repository_url":"https://api.github.com/repos/o/r",
- "parent_issue_url":"` + issueURL("o/r", 11) + `",
+ "parent_issue_url":"` + issueURL("o/r", 20) + `",
  "labels":[{"name":"engine:running"},{"name":"engine:ruling-review"}],
  "body":"## Outcome\n\nx\n\n## Harness / tier\n\n<!-- Optional. -->\ncodex deep\n\n## Other\n"}`
 )
 
 func TestParseRef(t *testing.T) {
-	text := short("dinoderek/engine", 13)
+	text := short("own/repo", 21)
 	ref, err := ParseRef(text)
-	if err != nil || ref != (Ref{"dinoderek/engine", 13}) || ref.String() != text {
+	if err != nil || ref != (Ref{"own/repo", 21}) || ref.String() != text {
 		t.Errorf("got %+v, %v", ref, err)
 	}
-	for _, bad := range []string{"", short("engine", 13), "o/r", "o/r#", short("o/r", 0), "o/r#x", short("o/r/s", 1), short("", 1)} {
+	for _, bad := range []string{"", short("engine", 21), "o/r", "o/r#", short("o/r", 0), "o/r#x", short("o/r/s", 1), short("", 1)} {
 		if _, err := ParseRef(bad); err == nil {
 			t.Errorf("%q parsed", bad)
 		}
@@ -72,20 +72,20 @@ func TestParseRef(t *testing.T) {
 
 func TestReadTask(t *testing.T) {
 	gh := &fakeGH{replies: map[string]string{
-		taskPath: issue13,
-		blockerPath: `[{"number":12,"state":"closed","repository_url":"https://api.github.com/repos/o/r"},
-			{"number":15,"state":"open","repository_url":"https://api.github.com/repos/o/r"}]
+		taskPath: taskIssue,
+		blockerPath: `[{"number":23,"state":"closed","repository_url":"https://api.github.com/repos/o/r"},
+			{"number":22,"state":"open","repository_url":"https://api.github.com/repos/o/r"}]
 			[{"number":4,"state":"open","repository_url":"https://api.github.com/repos/p/q"}]`,
 	}}
-	task, err := ReadTask(gh.run, "tok", Ref{"o/r", 13})
+	task, err := ReadTask(gh.run, "tok", Ref{"o/r", 21})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := Task{
-		Ref: Ref{"o/r", 13}, Title: "Read task issues", Open: true,
+		Ref: Ref{"o/r", 21}, Title: "A task", Open: true,
 		Labels:       []string{"engine:running", "engine:ruling-review"},
-		OpenBlockers: []Ref{{"o/r", 15}, {"p/q", 4}},
-		Parent:       &Ref{"o/r", 11}, Harness: "codex", Tier: "deep",
+		OpenBlockers: []Ref{{"o/r", 22}, {"p/q", 4}},
+		Parent:       &Ref{"o/r", 20}, Harness: "codex", Tier: "deep",
 	}
 	if !reflect.DeepEqual(task, want) {
 		t.Errorf("got  %+v\nwant %+v", task, want)
@@ -115,7 +115,7 @@ func TestReadTaskStandalone(t *testing.T) {
 
 func TestReadTaskFailures(t *testing.T) {
 	ok := map[string]string{
-		taskPath:    issue13,
+		taskPath:    taskIssue,
 		blockerPath: `[]`,
 	}
 	cases := []struct {
@@ -123,8 +123,8 @@ func TestReadTaskFailures(t *testing.T) {
 		mutate func(*fakeGH)
 		want   string
 	}{
-		{"issue read fails", func(f *fakeGH) { f.errs = map[string]error{taskPath: errors.New("exit 1")} }, "read " + short("o/r", 13) + ": exit 1\nHTTP 404"},
-		{"issue is not JSON", func(f *fakeGH) { f.replies[taskPath] = "oops" }, "read " + short("o/r", 13) + ": unreadable gh output"},
+		{"issue read fails", func(f *fakeGH) { f.errs = map[string]error{taskPath: errors.New("exit 1")} }, "read " + short("o/r", 21) + ": exit 1\nHTTP 404"},
+		{"issue is not JSON", func(f *fakeGH) { f.replies[taskPath] = "oops" }, "read " + short("o/r", 21) + ": unreadable gh output"},
 		{"two tiers", func(f *fakeGH) {
 			f.replies[taskPath] = `{"state":"open","body":"## Harness / tier\ndeep light"}`
 		}, "names two tiers"},
@@ -133,11 +133,11 @@ func TestReadTaskFailures(t *testing.T) {
 		}, "parent: not a repository API URL"},
 		{"blockers fail", func(f *fakeGH) {
 			f.errs = map[string]error{blockerPath: errors.New("exit 1")}
-		}, "blockers of " + short("o/r", 13) + ": exit 1"},
-		{"blockers not JSON", func(f *fakeGH) { f.replies[blockerPath] = "{" }, "blockers of " + short("o/r", 13) + ": unreadable"},
+		}, "blockers of " + short("o/r", 21) + ": exit 1"},
+		{"blockers not JSON", func(f *fakeGH) { f.replies[blockerPath] = "{" }, "blockers of " + short("o/r", 21) + ": unreadable"},
 		{"blocker without repo", func(f *fakeGH) {
 			f.replies[blockerPath] = `[{"number":1,"state":"open"}]`
-		}, "blockers of " + short("o/r", 13) + ": not a repository API URL"},
+		}, "blockers of " + short("o/r", 21) + ": not a repository API URL"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -146,7 +146,7 @@ func TestReadTaskFailures(t *testing.T) {
 				gh.replies[k] = v
 			}
 			tc.mutate(gh)
-			if _, err := ReadTask(gh.run, "tok", Ref{"o/r", 13}); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := ReadTask(gh.run, "tok", Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("got %v, want %q", err, tc.want)
 			}
 		})
@@ -169,7 +169,13 @@ func TestParseHarnessTier(t *testing.T) {
 		{"labelled", "## Harness / tier\nharness: codex\ntier: deep", "codex", "deep"},
 		{"crlf and trailing space", "## Harness / tier  \r\nlight\r\n## Next\r\ndeep", "", "light"},
 		{"stops at the next heading", "## Harness / tier\nlight\n## Requires\ncodex deep", "", "light"},
-		{"keeps subheadings", "## Harness / tier\n### why\nlight", "why", "light"},
+		{"trailing full stop", "## Harness / tier\nDeep.", "", "deep"},
+		{"harness and tier with a full stop", "## Harness / tier\ncodex, deep.", "codex", "deep"},
+		{"bullet", "## Harness / tier\n- deep", "", "deep"},
+		{"numbered", "## Harness / tier\n1. light", "", "light"},
+		{"none", "## Harness / tier\nNone.", "", "standard"},
+		{"default harness and a tier", "## Harness / tier\ndefault / light", "", "light"},
+		{"hyphenated harness", "## Harness / tier\nclaude-code light", "claude-code", "light"},
 		{"section last", "## Outcome\nx\n## Harness / tier\ndeep", "", "deep"},
 		{"heading inside a comment", "<!-- ## Harness / tier\ndeep -->\n## Outcome\nx", "", "standard"},
 		{"similar heading", "## Harness / tiers\ndeep", "", "standard"},
@@ -190,8 +196,8 @@ func TestParseHarnessTier(t *testing.T) {
 }
 
 func TestRefFromIssueURL(t *testing.T) {
-	ref, err := refFromIssueURL(issueURL("o/r", 11))
-	if err != nil || ref != (Ref{"o/r", 11}) {
+	ref, err := refFromIssueURL(issueURL("o/r", 20))
+	if err != nil || ref != (Ref{"o/r", 20}) {
 		t.Errorf("got %+v, %v", ref, err)
 	}
 	for _, bad := range []string{"", "https://api.github.com/repos/o", "https://api.github.com/repos/o/r/pulls/" + "3", "https://api.github.com/repos/o/r/issues/x"} {

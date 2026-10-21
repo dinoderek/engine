@@ -10,7 +10,11 @@ import (
 // DefaultTier is the tier of a card whose Harness / tier section is empty.
 const DefaultTier = "standard"
 
-var tiers = []string{"deep", "standard", "light"}
+var (
+	tiers = []string{"deep", "standard", "light"}
+	// skipWords are labels and "no harness" markers, none of them a harness.
+	skipWords = []string{"harness", "tier", "none", "default"}
+)
 
 // Task is a task issue as the coordinator reads it.
 type Task struct {
@@ -96,22 +100,24 @@ var (
 	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
 	tierHeading = regexp.MustCompile(`^##[ \t]+Harness / tier[ \t]*$`)
 	nextHeading = regexp.MustCompile(`^#{1,2}[ \t]`)
-	tierWord    = regexp.MustCompile(`[A-Za-z0-9._-]+`)
+	tierWord    = regexp.MustCompile(`[a-z][a-z0-9_-]*`)
 )
 
 // ParseHarnessTier reads a card's `## Harness / tier` section. The words are
 // a tier (deep, standard or light) and a harness (any other word), in either
-// order and split by spaces, commas, slashes or colons. The words "harness"
-// and "tier" are read as labels and skipped. An empty or absent section is
-// the default harness, which is "", and DefaultTier. A second tier or a
-// second harness is an error, so a typo never runs a task on the wrong one.
+// order. Words start with a letter, so punctuation, bullets and numbering
+// between them are ignored. The words "harness" and "tier" are read as labels
+// and skipped, and "none" and "default" mean the default harness. An empty or
+// absent section is the default harness, which is "", and DefaultTier. A
+// second tier or a second harness is an error, so a typo never runs a task on
+// the wrong one.
 func ParseHarnessTier(body string) (harness, tier string, err error) {
 	tier = DefaultTier
 	section := tierSection(body)
 	var sawTier bool
 	for _, word := range tierWord.FindAllString(strings.ToLower(section), -1) {
 		switch {
-		case word == "harness" || word == "tier":
+		case slices.Contains(skipWords, word):
 		case slices.Contains(tiers, word):
 			if sawTier {
 				return "", "", fmt.Errorf("the harness / tier section names two tiers (%s and %s)", tier, word)
