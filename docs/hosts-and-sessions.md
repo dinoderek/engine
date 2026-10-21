@@ -14,10 +14,12 @@ one line, in `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, a logical
 name such as `mac` or `devbox`, never a hostname or an IP. It is what claims
-and every surface show. Its `address` is how other hosts reach it over SSH
-(its Tailscale name); it stays in this file and is never posted anywhere. A
-machine (below) is local to whichever host has its name in `~/.config/engine/host`,
-and reached over SSH at its `address` from every other one.
+and every surface show. Its `address` is how other hosts reach it over plain
+SSH, `<user>@<tailscale name>`, passed to `ssh` as is, so it needs no
+`~/.ssh/config` entry. The address stays in this file and is never posted
+anywhere. A machine (below) is local to whichever host has its name in
+`~/.config/engine/host`, and reached over SSH at its `address` from every
+other one.
 
 **Machines and cloud hosts.** A host with no `kind` is a machine: it needs
 `address` and `ram_gb`. `kind = "cloud"` is the only kind; a cloud host has no
@@ -54,14 +56,14 @@ max_sessions = 2
 launch = "codex --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model}"
 
 [host.mac]              # 4 slots
-address = "<tailscale name>"
+address = "<user>@<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 48
 reserve_gb = 16         # also the operator's workstation
 capabilities = ["macos", "ios", "vm", "docker"]
 
 [host.devbox]           # 3 slots
-address = "<tailscale name>"
+address = "<user>@<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 32
 capabilities = ["linux", "vm", "docker"]
