@@ -43,7 +43,8 @@ func newFake(t *testing.T) (*Tmux, *fake) {
 	f := &fake{}
 	f.answer("has-session", "", noSession)
 	f.answer("new-session", "@0 %0\n", nil)
-	f.answer("new-window", "@1 %1\n", nil)
+	f.answer("split-window", "%1\n", nil)
+	f.answer("new-window", "@1 %2\n", nil)
 	return &Tmux{Run: f.run, Bin: "tmux"}, f
 }
 
@@ -60,7 +61,7 @@ func TestOpenCreatesTheSessionWithItsFirstWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (WindowInfo{Name: "boga3-412", ID: "@0", PaneID: "%0"}); got.WindowInfo != want || got.AwakeErr != nil {
+	if want := (WindowInfo{Name: "boga3-412", ID: "@0", PaneID: "%1"}); got.WindowInfo != want || got.AwakeErr != nil {
 		t.Errorf("got %+v", got)
 	}
 	want := []string{
@@ -68,12 +69,15 @@ func TestOpenCreatesTheSessionWithItsFirstWindow(t *testing.T) {
 		"tmux new-session -d -P -F #{window_id} #{pane_id} -s engine -n boga3-412 -c " + w.Dir + " sleep 300",
 		"tmux set-option -t =engine: mouse on",
 		"tmux set-option -t =engine: history-limit 50000",
+		// The first pane predates the session options, so it is replaced.
+		"tmux split-window -d -P -F #{pane_id} -t %0 -c " + w.Dir + " sleep 300",
+		"tmux kill-pane -t %0",
 		"tmux set-option -w -t @0 allow-rename off",
 		"tmux set-option -w -t @0 automatic-rename off",
 		"tmux set-option -w -t @0 window-size latest",
 		"tmux set-option -w -t @0 remain-on-exit on",
-		"tmux pipe-pane -t %0 cat >> '" + w.Log + "'",
-		"tmux respawn-pane -k -t %0 -c " + w.Dir + " claude --name boga3-412",
+		"tmux pipe-pane -t %1 cat >> '" + w.Log + "'",
+		"tmux respawn-pane -k -t %1 -c " + w.Dir + " claude --name boga3-412",
 	}
 	if !reflect.DeepEqual(f.calls, want) {
 		t.Errorf("calls:\n%s\nwant:\n%s", f.dump(), strings.Join(want, "\n"))
@@ -90,7 +94,7 @@ func TestOpenAddsAWindowToTheRunningSession(t *testing.T) {
 	w := window(t)
 	w.Log = ""
 	got, err := tm.Open(w)
-	if err != nil || got.ID != "@1" || got.PaneID != "%1" {
+	if err != nil || got.ID != "@1" || got.PaneID != "%2" {
 		t.Fatalf("got %+v, %v", got, err)
 	}
 	d := f.dump()
@@ -100,8 +104,8 @@ func TestOpenAddsAWindowToTheRunningSession(t *testing.T) {
 	if !strings.Contains(d, "tmux new-window -d -P -F #{window_id} #{pane_id} -t =engine: -n boga3-412 -c "+w.Dir+" sleep 300") {
 		t.Errorf("no new-window:\n%s", d)
 	}
-	if !strings.Contains(d, "set-option -t =engine: mouse on") {
-		t.Errorf("session options are applied every time:\n%s", d)
+	if strings.Index(d, "set-option -t =engine: history-limit") > strings.Index(d, "new-window") || !strings.Contains(d, "set-option -t =engine: mouse on") {
+		t.Errorf("session options are applied every time, before the pane exists:\n%s", d)
 	}
 }
 
@@ -164,7 +168,7 @@ func TestOpenRejectsUnparsableIDs(t *testing.T) {
 }
 
 func TestOpenKillsTheWindowWhenConfiguringFails(t *testing.T) {
-	for _, sub := range []string{"set-option", "pipe-pane", "respawn-pane"} {
+	for _, sub := range []string{"set-option", "split-window", "kill-pane", "pipe-pane", "respawn-pane"} {
 		tm, f := newFake(t)
 		f.answer(sub, "", &ExitError{Command: "tmux " + sub, Code: 1, Stderr: "bad"})
 		_, err := tm.Open(window(t))

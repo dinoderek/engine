@@ -248,7 +248,7 @@ func (t *Tmux) Open(w Window) (Opened, error) {
 		return Opened{}, err
 	}
 	if err := t.configure(info, w); err != nil {
-		_, _ = t.tmux("kill-window", "-t", info.ID) // best effort: report the first failure
+		t.discard(info)
 		return Opened{}, err
 	}
 	return Opened{WindowInfo: info, AwakeErr: t.keepAwake(info.PaneID)}, nil
@@ -256,24 +256,70 @@ func (t *Tmux) Open(w Window) (Opened, error) {
 
 // create starts the window running holdCommand, creating the session with it
 // when the session does not exist yet (a session always has a window).
+//
+// The session options come first: tmux fixes a pane's scrollback size when
+// the pane is created (only tmux 3.7 and later resize an existing pane), so a
+// pane made before history-limit is set would keep tmux's default.
 func (t *Tmux) create(w Window, sessionExists bool) (WindowInfo, error) {
 	format := "#{window_id} #{pane_id}"
 	dir := formatEscape(w.Dir)
 	if !sessionExists {
 		out, err := t.tmux("new-session", "-d", "-P", "-F", format, "-s", Name, "-n", w.Name, "-c", dir, holdCommand)
 		if err == nil {
-			return parseIDs(out, w.Name)
+			return t.replacePane(out, w)
 		}
 		// A concurrent start may have created the session first.
 		if again, herr := t.HasSession(); herr != nil || !again {
 			return WindowInfo{}, err
 		}
 	}
+	if err := t.setSessionOptions(); err != nil {
+		return WindowInfo{}, err
+	}
 	out, err := t.tmux("new-window", "-d", "-P", "-F", format, "-t", sessionTarget, "-n", w.Name, "-c", dir, holdCommand)
 	if err != nil {
 		return WindowInfo{}, err
 	}
 	return parseIDs(out, w.Name)
+}
+
+// replacePane is for the first window of a new session, whose pane predates
+// the session options: it sets them, then swaps the pane for a new one in the
+// same window. A failure removes the window.
+func (t *Tmux) replacePane(created string, w Window) (WindowInfo, error) {
+	info, err := parseIDs(created, w.Name)
+	if err != nil {
+		return WindowInfo{}, err
+	}
+	if err := t.setSessionOptions(); err != nil {
+		t.discard(info)
+		return WindowInfo{}, err
+	}
+	out, err := t.tmux("split-window", "-d", "-P", "-F", "#{pane_id}", "-t", info.PaneID, "-c", formatEscape(w.Dir), holdCommand)
+	if err == nil {
+		_, err = t.tmux("kill-pane", "-t", info.PaneID)
+	}
+	if err != nil {
+		t.discard(info)
+		return WindowInfo{}, err
+	}
+	info.PaneID = strings.TrimSpace(out)
+	return info, nil
+}
+
+// discard removes a window that could not be set up. It is best effort: the
+// caller reports the failure that made it necessary.
+func (t *Tmux) discard(info WindowInfo) {
+	_, _ = t.tmux("kill-window", "-t", info.ID)
+}
+
+func (t *Tmux) setSessionOptions() error {
+	for _, o := range sessionOptions {
+		if _, err := t.tmux("set-option", "-t", sessionTarget, o[0], o[1]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseIDs(out, name string) (WindowInfo, error) {
@@ -284,14 +330,9 @@ func parseIDs(out, name string) (WindowInfo, error) {
 	return WindowInfo{Name: name, ID: m[1], PaneID: m[2]}, nil
 }
 
-// configure applies engine's options and the pane log, then replaces the
+// configure applies the window's options and the pane log, then replaces the
 // holding command with the real one.
 func (t *Tmux) configure(info WindowInfo, w Window) error {
-	for _, o := range sessionOptions {
-		if _, err := t.tmux("set-option", "-t", sessionTarget, o[0], o[1]); err != nil {
-			return err
-		}
-	}
 	for _, o := range windowOptions {
 		if _, err := t.tmux("set-option", "-w", "-t", info.ID, o[0], o[1]); err != nil {
 			return err
