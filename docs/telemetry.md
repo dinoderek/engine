@@ -12,7 +12,7 @@ summarised away at capture time.
 | --- | --- | --- |
 | Metrics, logs, events (tokens, cost, tool calls, API latency) | OpenTelemetry, as OTLP JSON lines | Both CLIs export OTel natively: Claude Code via `CLAUDE_CODE_ENABLE_TELEMETRY` and `OTEL_*` env vars, Codex via `[otel]` in its config |
 | Transcripts | The harness's native JSONL, stored as-is (no standard exists) | `~/.claude/projects/…`, `~/.codex/sessions/…` |
-| Run record | `run.json`, the engine's own index for the run | The coordinator |
+| Run record | `run.json`, the engine's own index for the run | `engine start`, then the coordinator |
 | Gate output | `.test-ai-results/` copied as-is | The worktree |
 
 ## Run record
@@ -27,6 +27,17 @@ One `run.json` per session, written at spawn and finalised at exit:
 - **Process counts:** gate runs, review rounds, rulings by risk, deviations,
   conflict merges.
 - **Pointers:** paths to the transcript, the OTel files and the gate output.
+
+**On the host.** Each run has a directory,
+`~/.local/share/engine/runs/<run-id>/`, holding `run.json` and `pane.log`,
+the window's raw output. The run ID is `<repo>-<task>-<UTC
+yyyymmddThhmmssZ>`, the time it was spawned.
+
+**At spawn,** `engine start` writes the identity it knows (all but the
+harness session ID), the effort, mode, session name, tmux target (by window
+id, such as `engine:@3`), branch, worktree, the pane log's path and the spawn
+time, with `schema: 1`. `Record` in `internal/session/record.go` holds the
+field names. Whatever writes the later fields keeps these and adds its own.
 
 ## Pipeline
 

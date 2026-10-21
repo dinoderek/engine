@@ -148,7 +148,7 @@ func ghHome(t *testing.T, withToken bool) string {
 
 func TestSystem(t *testing.T) {
 	env := System()
-	if env.In == nil || env.Out == nil || env.Err == nil || env.Exec == nil || env.Stream == nil || env.Getenv == nil {
+	if env.In == nil || env.Out == nil || env.Err == nil || env.Exec == nil || env.Stream == nil || env.Getenv == nil || env.Run == nil || env.Tmux == nil || env.Now == nil {
 		t.Errorf("System left a field unset: %+v", env)
 	}
 }

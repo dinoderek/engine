@@ -12,12 +12,14 @@ Two programs share one Go module:
   tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
   of a task issue and of the claim comments on every claimed task),
   `internal/hook`
-  (harness hooks: `engine hook pre-tool-use`). The commands share
-  `internal/hosts`, the host config: it parses `hosts.toml` with an in-house
-  reader of the TOML subset the config uses, validates it and works out each
-  machine's slots. `internal/session` (the host's session ops, through `git`,
-  `gh` and `tmux`: engine's clones and task worktrees, and the tmux session,
-  windows and pane logs) is not reachable from a command yet.
+  (harness hooks: `engine hook pre-tool-use`), `internal/start`
+  (`engine start`: checks a task, then launches its session). The commands
+  share `internal/hosts`, the host config: it parses `hosts.toml` with an
+  in-house reader of the TOML subset the config uses, validates it, works out
+  each machine's slots and expands launch lines. `internal/session` holds the
+  host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
+  worktrees, the tmux session, windows and pane logs, Claude Code's folder
+  trust and the run record.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →
@@ -40,8 +42,9 @@ non-test imports. The reasons:
 - **Each package may import only what its rule lists.** `cmd/engine` sees only
   `internal/cli`. Leaf packages (`internal/version`, `internal/tracker`,
   `internal/hook`, `internal/hosts`, `internal/session`,
-  `devtools/internal/repo`) import no first-party code. A new package adds its
-  rule in the same PR.
+  `devtools/internal/repo`) import no first-party code; a command package
+  such as `internal/start` composes them. A new package adds its rule in the
+  same PR.
 
 ## Decisions new code must respect
 

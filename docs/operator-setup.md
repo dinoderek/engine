@@ -53,6 +53,12 @@
 - **Claude Code:** signed in with your claude.ai account (`/login`), with
   Remote Control working from the Claude app. Remote Control rejects API keys
   and `setup-token`, so on a remote host sign in once over SSH.
+- **Claude's one-time prompts:** before the first `engine start` on a host,
+  run `claude --permission-mode auto --remote-control` once by hand, in a
+  folder you trust, and answer every prompt it shows, such as enabling Remote
+  Control or the auto mode notice. Nobody is there to answer them in an
+  engine window. The workspace trust dialog needs nothing: `engine start`
+  trusts each task worktree (`hosts-and-sessions.md`, "Starting a session").
 - **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
   per session (`hosts-and-sessions.md`, "Permission mode").
 - **Host name:** its logical name (`mac`, `devbox`) on one line in
