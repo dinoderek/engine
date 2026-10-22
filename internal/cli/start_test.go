@@ -23,6 +23,8 @@ func TestParseStart(t *testing.T) {
 		{"no task", []string{"--tier", "deep"}, start.Options{}, "no task"},
 		{"two tasks", []string{task.String(), task.String()}, start.Options{}, "one task at a time"},
 		{"flag without a value", []string{task.String(), "--tier"}, start.Options{}, "--tier needs a value"},
+		{"empty value with =", []string{task.String(), "--mode="}, start.Options{}, "--mode= needs a value"},
+		{"empty value", []string{task.String(), "--tier", ""}, start.Options{}, "--tier needs a value"},
 		{"unknown flag", []string{task.String(), "--model", "x"}, start.Options{}, "unknown flag --model"},
 		{"bad task", []string{"o/r"}, start.Options{}, "want owner/repo#n"},
 	}

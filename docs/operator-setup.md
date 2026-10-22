@@ -58,7 +58,8 @@
   folder you trust, and answer every prompt it shows, such as enabling Remote
   Control or the auto mode notice. Nobody is there to answer them in an
   engine window. The workspace trust dialog needs nothing: `engine start`
-  trusts each task worktree (`hosts-and-sessions.md`, "Starting a session").
+  writes `hasTrustDialogAccepted` for each worktree it creates, and nothing
+  else in `~/.claude.json` (`hosts-and-sessions.md`, "Starting a session").
 - **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
   per session (`hosts-and-sessions.md`, "Permission mode").
 - **Host name:** its logical name (`mac`, `devbox`) on one line in

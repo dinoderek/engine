@@ -151,7 +151,7 @@ func TestRealStart(t *testing.T) {
 		!strings.Contains(trust, rec.Worktree) {
 		t.Errorf("the worktree is not trusted:\n%s", trust)
 	}
-	for _, want := range []string{"Started " + ref(7).String() + " as r-7", "Attach: tmux attach -t engine:" + windows[0].ID} {
+	for _, want := range []string{"Started " + ref(7).String() + " as r-7", "Attach: engine attach r-7 (once", "or: tmux attach -t '=engine:" + windows[0].ID} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}

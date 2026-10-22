@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/attach"
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/start"
@@ -23,6 +24,8 @@ commands:
   labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the Claude Code merge guard: reads the event on stdin
   gh <args...>              run gh as engine's machine user
+  ps [--json]               list the claimed tasks and the state of their sessions
+  attach <repo>-<task>      attach to a task's tmux window, here or over SSH
   start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]
                             launch an executor session for a task on this machine
 `
@@ -35,6 +38,9 @@ type Env struct {
 	Err    io.Writer
 	Exec   tracker.Runner
 	Stream tracker.Streamer
+	// Local runs the host's own CLIs (tmux, claude, git) and returns their
+	// standard output.
+	Local session.Runner
 	// Run runs git and gh for engine's clones.
 	Run    session.RunFunc
 	Tmux   *session.Tmux
@@ -48,7 +54,7 @@ func System() Env {
 	home, _ := os.UserHomeDir() // "" makes tracker.Token refuse the token file
 	return Env{
 		In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec,
-		Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now,
+		Local: session.Exec, Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now,
 	}
 }
 
@@ -72,6 +78,10 @@ func Run(args []string, env Env) int {
 		return runHook(args[1:], env)
 	case "gh":
 		return runGh(args[1:], env)
+	case "ps":
+		return runPs(args[1:], env)
+	case "attach":
+		return runAttach(args[1:], env)
 	case "start":
 		return runStart(args[1:], env)
 	case "help", "-h", "--help":
@@ -109,6 +119,20 @@ func runGh(args []string, env Env) int {
 		fmt.Fprintln(env.Err, "engine gh:", err)
 	}
 	return code
+}
+
+// runAttach connects this terminal to a task's tmux window. On success it
+// replaces this process, so it returns only on failure.
+func runAttach(args []string, env Env) int {
+	if len(args) != 1 {
+		fmt.Fprint(env.Err, "usage: engine attach <repo>-<task>\n")
+		return 2
+	}
+	if err := attach.Attach(args[0], attach.System(env.Exec, env.Getenv, env.Home)); err != nil {
+		fmt.Fprintln(env.Err, "engine attach:", err)
+		return 1
+	}
+	return 0
 }
 
 func syncLabels(repo string, env Env) int {
@@ -151,9 +175,9 @@ func parseStart(args []string) (start.Options, error) {
 		name, value, inline := strings.Cut(arg, "=")
 		dst := map[string]*string{"--tier": &opts.Tier, "--mode": &opts.Mode}[name]
 		switch {
-		case dst != nil && inline:
+		case dst != nil && inline && value != "":
 			*dst = value
-		case dst != nil && i+1 < len(args):
+		case dst != nil && !inline && i+1 < len(args) && args[i+1] != "":
 			i++
 			*dst = args[i]
 		case dst != nil:

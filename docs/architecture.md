@@ -12,14 +12,16 @@ Two programs share one Go module:
   tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
   of a task issue and of the claim comments on every claimed task),
   `internal/hook`
-  (harness hooks: `engine hook pre-tool-use`), `internal/start`
+  (harness hooks: `engine hook pre-tool-use`), `internal/attach`
+  (`engine attach`: a task's claim, then its tmux window), `internal/ps`
+  (`engine ps`: the state of each claimed task), `internal/start`
   (`engine start`: checks a task, then launches its session). The commands
   share `internal/hosts`, the host config: it parses `hosts.toml` with an
   in-house reader of the TOML subset the config uses, validates it, works out
-  each machine's slots and expands launch lines. `internal/session` holds the
-  host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
-  worktrees, the tmux session, windows and pane logs, Claude Code's folder
-  trust and the run record.
+  each machine's slots and expands launch lines. `internal/session` is the
+  host's session ops, through `git`, `gh`, `tmux` and the harness: engine's
+  clones and task worktrees, the tmux session, windows and pane logs, the live
+  Claude Code sessions, Claude Code's folder trust and the run record.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →

@@ -167,7 +167,7 @@ runs holds one). Then it:
    <deep model>. run=<run-id> tmux=engine:<name> rc=<name>`, values the
    claim records. `/bin/sh` first exports `GH_TOKEN` from the token file,
    keeping it off every command line;
-6. writes `run.json` (`telemetry.md`) and prints how to attach with tmux.
+6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
 The executor claims the task; its claim check stops a racing second start.
 Designed, not built: `--harness codex`, and `--host` (spawning over SSH).
@@ -191,19 +191,18 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps`: every claimed task, with its host, harness, state (working, waiting for input, needs-human, in review, CI) and age. Liveness comes from probing each host's tmux; state comes from the labels and the harness signals (`coordinator.md`). |
+| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. A claim on another host shows its label state, with liveness `null`. The signals are in `coordinator.md`. |
 
 ## Connecting to a session
 
 | From | How |
 | --- | --- |
-| Any terminal | `engine attach <repo>-<task>`. This runs `tmux attach` locally, or `ssh <address> -t tmux attach -t engine:<repo>-<task>` for a remote host. Detach with `Ctrl-b d`; the session keeps running. |
+| Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. Targets the window by id. Detach with `Ctrl-b d`; the session keeps running. |
 | Phone, SSH | An SSH app over Tailscale, then `tmux attach -t engine`, then `Ctrl-b w` to pick the window. Best for debugging. |
 | Phone, chat | Claude sessions: the Claude app, through Remote Control. Codex sessions: the ChatGPT app, through Codex remote control. Best for answering a question. |
 | Desktop | claude.ai/code or the Claude desktop app for Remote Control sessions; the ChatGPT or Codex desktop app for Codex. |
 
-Several clients can attach to one window at once. Everyone sees the same
-screen, and anyone can type.
+Clients share one window: all see the same screen, and anyone can type.
 
 Each harness reaches the apps differently:
 
