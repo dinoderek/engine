@@ -140,35 +140,37 @@ treats anything else (`#`, `:`, spaces) as special.
 
 ## Starting a session: `engine start`
 
-`engine start <owner/repo#n> [--host H] [--harness claude|codex] [--tier T]`
-runs from any terminal, in any directory. It returns as soon as the session
-is up. On the target host (this machine, unless `--host` says otherwise) it:
+`engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]`
+launches a Claude session on this machine from any directory, and returns
+once it is up. `--mode` defaults to `hands-off`; `--tier` replaces the card's.
 
-1. syncs engine's clone of the repo: clones it over HTTPS on first use,
-   fetches it, and leaves it at the remote's default branch. The clone's
-   local config makes `gh` its only credential helper, and sets the machine
-   user's name and noreply email;
-2. creates the task worktree on the branch `task/<repo>-<task>`, with the
-   repo's own `./dev worktree create` when the clone has an executable
-   `dev`, else with `git worktree add` from the default branch. It refuses
-   when that branch exists locally or on `origin`, or has a worktree;
-3. opens a window `<repo>-<task>` in the tmux session `engine`, in that
-   worktree, so the repo's `AGENTS.md` loads;
-4. launches the harness's interactive CLI with the host's launch line, at the
-   card's tier (`standard` when it names none), and the kickoff prompt as its
-   first message (`Execute <issue> with the engine executor, hands-off mode.
-   Reviewer model: <deep model>`, the reviewer model taken from the same
-   harness's `deep` tier), plus the `run=`, `tmux=` and `rc=` values its claim
-   comment records;
-5. makes the session reachable from the apps: the launch line already does
-   it for Claude, and Codex connects to the host's app-server (see below);
-6. prints how to attach.
+It first refuses, changing nothing, when: the token file, host file or
+`hosts.toml` is missing or lacks this host; the task is closed, has a task
+state label or an open blocker, or is standalone without `engine:approved`;
+the card's harness is unknown (a misspelt tier reads as one), not Claude, or
+not run here; its window exists; or no slot is free (a window whose command
+runs holds one). Then it:
 
-The executor claims the task itself. `engine start` only places and launches.
+1. syncs engine's clone (`operator-setup.md`, "Machine user"): clones it over
+   HTTPS on first use, fetches, and leaves it at the remote's default branch;
+2. creates the worktree on `task/<repo>-<task>`, with the clone's executable
+   `./dev worktree create` if it has one, else `git worktree add` from the
+   default branch, refusing a branch that exists locally or on `origin`;
+3. sets `projects.<worktree>.hasTrustDialogAccepted` in `~/.claude.json` (or
+   `$CLAUDE_CONFIG_DIR`'s), so Claude's trust dialog, whose default answer
+   exits, never shows;
+4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
+   so the repo's `AGENTS.md` loads;
+5. runs the host's launch line at the card's tier (default `standard`), the
+   kickoff as its last argument and Claude's first message: `Execute
+   <owner/repo#n> with the engine executor, <mode> mode. Reviewer model:
+   <deep model>. run=<run-id> tmux=engine:<name> rc=<name>`, values the
+   claim records. `/bin/sh` first exports `GH_TOKEN` from the token file,
+   keeping it off every command line;
+6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
-**Remote hosts:** with `--host devbox`, every step runs on `devbox` over SSH
-(`ssh <address> engine host spawn …`). The session lives in `devbox`'s tmux
-server, so the machine you typed on can sleep or disconnect.
+The executor claims the task; its claim check stops a racing second start.
+Designed, not built: `--harness codex`, and `--host` (spawning over SSH).
 
 **Other ways to start:** a session started any other way (Claude desktop, a
 plain `claude` in a terminal) runs the same executor. It creates its own

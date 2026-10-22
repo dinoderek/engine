@@ -12,6 +12,7 @@ import (
 	"github.com/dinoderek/engine/internal/attach"
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/session"
+	"github.com/dinoderek/engine/internal/start"
 	"github.com/dinoderek/engine/internal/tracker"
 	"github.com/dinoderek/engine/internal/version"
 )
@@ -25,10 +26,12 @@ commands:
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
+  start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]
+                            launch an executor session for a task on this machine
 `
 
 // Env is what a command reads and runs: the standard streams, the runners for
-// outside CLIs, the environment and the home directory.
+// outside CLIs, the environment, the home directory and the clock.
 type Env struct {
 	In     io.Reader
 	Out    io.Writer
@@ -37,16 +40,22 @@ type Env struct {
 	Stream tracker.Streamer
 	// Local runs the host's own CLIs (tmux, claude, git) and returns their
 	// standard output.
-	Local  session.Runner
-	Now    func() time.Time
+	Local session.Runner
+	// Run runs git and gh for engine's clones.
+	Run    session.RunFunc
+	Tmux   *session.Tmux
 	Getenv func(string) string
 	Home   string
+	Now    func() time.Time
 }
 
 // System is the Env of the running process.
 func System() Env {
 	home, _ := os.UserHomeDir() // "" makes tracker.Token refuse the token file
-	return Env{In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec, Local: session.Exec, Now: time.Now, Getenv: os.Getenv, Home: home}
+	return Env{
+		In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec,
+		Local: session.Exec, Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now,
+	}
 }
 
 // Run executes the command named by args and returns the process exit code.
@@ -73,6 +82,8 @@ func Run(args []string, env Env) int {
 		return runPs(args[1:], env)
 	case "attach":
 		return runAttach(args[1:], env)
+	case "start":
+		return runStart(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0
@@ -134,4 +145,55 @@ func syncLabels(repo string, env Env) int {
 		return 1
 	}
 	return 0
+}
+
+const startUsage = "usage: engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]\n"
+
+// runStart parses engine start's arguments, in any order, and starts the
+// task's session.
+func runStart(args []string, env Env) int {
+	opts, err := parseStart(args)
+	if err != nil {
+		fmt.Fprintf(env.Err, "engine start: %v\n%s", err, startUsage)
+		return 2
+	}
+	deps := start.Deps{GH: env.Exec, Run: env.Run, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
+	if err := start.Run(opts, deps, env.Out); err != nil {
+		fmt.Fprintln(env.Err, "engine start:", err)
+		return 1
+	}
+	return 0
+}
+
+// parseStart reads the task and the --tier and --mode flags, as `--flag
+// value` or `--flag=value`, in any order.
+func parseStart(args []string) (start.Options, error) {
+	var opts start.Options
+	var ref string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		name, value, inline := strings.Cut(arg, "=")
+		dst := map[string]*string{"--tier": &opts.Tier, "--mode": &opts.Mode}[name]
+		switch {
+		case dst != nil && inline && value != "":
+			*dst = value
+		case dst != nil && !inline && i+1 < len(args) && args[i+1] != "":
+			i++
+			*dst = args[i]
+		case dst != nil:
+			return opts, fmt.Errorf("%s needs a value", arg)
+		case strings.HasPrefix(arg, "-"):
+			return opts, fmt.Errorf("unknown flag %s", arg)
+		case ref != "":
+			return opts, fmt.Errorf("one task at a time, got %s and %s", ref, arg)
+		default:
+			ref = arg
+		}
+	}
+	if ref == "" {
+		return opts, fmt.Errorf("no task")
+	}
+	r, err := tracker.ParseRef(ref)
+	opts.Ref = r
+	return opts, err
 }
