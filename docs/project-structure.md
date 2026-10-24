@@ -9,9 +9,10 @@
 | `cmd/engine/` | the `engine` main package: one line that calls `internal/cli` |
 | `internal/` | product packages; `internal/cli` dispatches commands |
 | `internal/attach/` | `engine attach`: finds a task's claim, then replaces the process with `tmux attach` on the claim's host, locally or over `ssh` (`attach.go`) |
-| `internal/hosts/` | host config: `toml.go` parses the TOML subset, `decode.go` holds the validation rules, `hosts.go` the types, slots and loading, `launch.go` the expanded launch line |
+| `internal/hosts/` | host config: parsing (`toml.go`), validation (`decode.go`), types, slots and loading (`hosts.go`), launch lines (`launch.go`) |
 | `internal/session/` | the local host's ops: clones and worktrees (`repo.go`, `worktree.go`), tmux windows and typing (`tmux.go`), keeping a Mac awake (`awake.go`), live Claude sessions (`agents.go`), folder trust (`trust.go`), the run directory (`record.go`) |
-| `internal/ps/` | `engine ps`: `ps.go` lists the claimed tasks, `probe.go` settles each claim on this host, `render.go` prints the table and the JSON |
+| `internal/lint/` | `engine lint`: the plan rules |
+| `internal/ps/` | `engine ps`: listing (`ps.go`), each claim's probe (`probe.go`), output (`render.go`) |
 | `internal/start/` | `engine start`: the refusals, then the launch |
 | `internal/tell/` | `engine tell`: a comment on the task, then a pointer typed into its window |
 | `devtools/cmd/dev/` | the `dev` main package that `./dev` builds and runs |

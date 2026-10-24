@@ -98,7 +98,6 @@ func openBlockers(run Runner, token string, ref Ref) ([]Ref, error) {
 
 var (
 	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
-	tierHeading = regexp.MustCompile(`^##[ \t]+Harness / tier[ \t]*$`)
 	nextHeading = regexp.MustCompile(`^#{1,2}[ \t]`)
 	tierWord    = regexp.MustCompile(`[a-z][a-z0-9_-]*`)
 )
@@ -132,22 +131,8 @@ func ParseHarnessTier(body string) (harness, tier string, err error) {
 	return harness, tier, nil
 }
 
-// tierSection returns the text under the Harness / tier heading, without
-// comments, up to the next heading.
+// tierSection returns the text under the Harness / tier heading.
 func tierSection(body string) string {
-	body = htmlComment.ReplaceAllString(strings.ReplaceAll(body, "\r\n", "\n"), "")
-	lines := strings.Split(body, "\n")
-	var section []string
-	in := false
-	for _, line := range lines {
-		switch {
-		case tierHeading.MatchString(line):
-			in = true
-		case in && nextHeading.MatchString(line):
-			in = false
-		case in:
-			section = append(section, line)
-		}
-	}
-	return strings.Join(section, "\n")
+	section, _ := Section(body, "Harness / tier")
+	return section
 }

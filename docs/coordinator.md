@@ -72,7 +72,8 @@ Commands that work without `run`, and come first in the build:
   then type a pointer to the comment into its window on this host, so the
   session reads it now rather than at its next inbox check. For a session on
   another host, or with no live window, the comment stays and it exits 1.
-- `engine lint <feature>`: plan lint on its own.
+- `engine lint <feature>`: plan lint on its own, printing each broken rule;
+  it exits 1 when there is one.
 - `engine labels sync <owner/repo>`: create or update the `engine:` labels in
   a target repo.
 

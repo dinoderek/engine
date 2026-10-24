@@ -158,7 +158,8 @@ agreed.
 4. **Lint**, with `engine lint <feature>` if it is installed, otherwise by
    hand:
    - the dependency graph has no cycles;
-   - every card has an outcome, tests and a requires list;
+   - every card has an outcome, tests and a requires list, a valid
+     Harness / tier, and a card key no other card has;
    - no open question appears on more than one card;
    - the acceptance task exists.
 
