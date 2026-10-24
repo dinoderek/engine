@@ -31,9 +31,8 @@ One `run.json` per session, written at spawn and finalised at exit:
 **On the host.** Each run has a directory,
 `~/.local/share/engine/runs/<run-id>/`, holding `run.json`, `pane.log` (the
 window's raw output) and `permissions.jsonl`: one JSON line per permission
-request the hook denied and per action auto mode refused, with the time, tool,
-input and decision (`Entry` in `internal/hook/permission.go`). The run ID is `<repo>-<task>-<UTC
-yyyymmddThhmmssZ>`, the time it was spawned.
+request the hook denied and per action auto mode refused, with the time,
+tool, input and decision (`Entry` in `internal/hook/permission.go`).
 
 **At spawn,** `engine start` writes the identity it knows (all but the
 harness session ID), the effort, mode, session name, tmux target (by window

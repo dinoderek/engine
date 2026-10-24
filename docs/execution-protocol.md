@@ -149,8 +149,8 @@ The plugin ships a Claude Code `PreToolUse` hook,
 It also ships `engine hook permission`, run on `PermissionRequest` and
 `PermissionDenied`. When `ENGINE_UNATTENDED=1`, it denies every permission
 request with a message naming the Permission hard stop, instead of a prompt
-nobody would answer. Either way it logs each request it denies and each
-auto-mode refusal to the run directory (`telemetry.md`). Without
+nobody would answer. It logs each request it denies, and in any session each
+auto-mode refusal, to the run directory (`telemetry.md`). Without
 `ENGINE_UNATTENDED`, Claude Code prompts as usual.
 
 Every other hard stop rests on the skill. A guard reads the command's words;
