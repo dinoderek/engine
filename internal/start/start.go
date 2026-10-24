@@ -62,6 +62,8 @@ type Deps struct {
 	Now    func() time.Time
 	// BaseURL is where repos are cloned from; GitHub when empty.
 	BaseURL string
+	// Sleep waits between the check's polls; nil is time.Sleep.
+	Sleep func(time.Duration)
 }
 
 // RefusedError is a check that failed before engine start changed anything.
@@ -333,16 +335,21 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	kickoff := Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)
 	runDir, err := session.RunDir(d.Home, runID)
 	if err != nil {
 		return "", err
 	}
+	return launchCommand(d, line, runDir, p.opts.Mode, Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)), nil
+}
+
+// launchCommand is the window's command for a launch line, a run directory,
+// a mode and the kickoff.
+func launchCommand(d Deps, line, runDir, mode, kickoff string) string {
 	// An empty token would make gh fall back to the operator's own login.
 	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
 	// The permission hook logs to the run directory and, unattended, denies.
 	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(runDir) + " && "
-	if p.opts.Mode == HandsOff {
+	if mode == HandsOff {
 		script += "export " + session.UnattendedVar + "=1 && "
 	} else {
 		script += "unset " + session.UnattendedVar + " && "
@@ -359,7 +366,7 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 		script += " " + hosts.ShellWord(rule)
 	}
 	script += " -- " + hosts.ShellWord(kickoff)
-	return "exec /bin/sh -c " + hosts.ShellWord(script), nil
+	return "exec /bin/sh -c " + hosts.ShellWord(script)
 }
 
 func (p plan) record(s Started, log string, now time.Time) session.Record {

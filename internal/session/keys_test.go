@@ -44,3 +44,20 @@ func TestTypeFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestCaptureAndKill(t *testing.T) {
+	f := &fake{}
+	f.answer("capture-pane", "line one\nDo you want to proceed?\n\n\n", nil)
+	tm := &Tmux{Run: f.run, Bin: "tmux"}
+	got, err := tm.Capture("@4", 20)
+	if err != nil || got != "line one\nDo you want to proceed?" {
+		t.Errorf("capture %q, %v", got, err)
+	}
+	if err := tm.Kill("@4"); err != nil {
+		t.Fatal(err)
+	}
+	want := "tmux capture-pane -p -t =engine:@4 -S -20\ntmux kill-window -t =engine:@4"
+	if f.dump() != want {
+		t.Errorf("calls\n%s", f.dump())
+	}
+}
