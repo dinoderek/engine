@@ -71,26 +71,14 @@ func ReadTask(run Runner, token string, ref Ref) (Task, error) {
 
 // openBlockers lists the issues blocking ref that are not closed.
 func openBlockers(run Runner, token string, ref Ref) ([]Ref, error) {
-	path := fmt.Sprintf("repos/%s/issues/%d/dependencies/blocked_by", ref.Repo, ref.Number)
-	out, err := api(run, token, path, "--paginate")
+	all, err := blockedBy(run, token, ref)
 	if err != nil {
-		return nil, fmt.Errorf("blockers of %s: %w", ref, err)
-	}
-	pages, err := decodeAll[[]apiIssue](out)
-	if err != nil {
-		return nil, fmt.Errorf("blockers of %s: %w", ref, err)
+		return nil, err
 	}
 	var open []Ref
-	for _, page := range pages {
-		for _, blocker := range page {
-			if blocker.State != "open" {
-				continue
-			}
-			b, err := blocker.ref()
-			if err != nil {
-				return nil, fmt.Errorf("blockers of %s: %w", ref, err)
-			}
-			open = append(open, b)
+	for _, b := range all {
+		if b.Open {
+			open = append(open, b.Ref)
 		}
 	}
 	return open, nil

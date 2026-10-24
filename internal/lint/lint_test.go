@@ -50,6 +50,8 @@ func TestLintFindsEachProblem(t *testing.T) {
 	dupKey.Body = strings.Replace(dupKey.Body, "k5", "k2", 1)
 	noKey := card(6, "")
 	noKey.Body = strings.Replace(noKey.Body, "<!-- engine:card k6 -->", "", 1)
+	noOutcome := card(2, "")
+	noOutcome.Body = strings.Replace(noOutcome.Body, "## Outcome\nIt works.\n", "", 1)
 	tests := []struct {
 		name string
 		f    tracker.Feature
@@ -65,8 +67,9 @@ func TestLintFindsEachProblem(t *testing.T) {
 		{"no acceptance", feature(card(2, ""), card(3, ""), card(4, "", 2)), []string{"no acceptance task"}},
 		{"same question", feature(card(2, "- Which name?"), card(3, "1. which  name?"), card(4, "", 2, 3)), []string{
 			on(3, `open question "which name?" is also on `+ref(2).String())}},
-		{"same fact key", feature(card(2, "- Header for `muscle.family-sections`?"), card(3, "- Order of `muscle.family-sections`"), card(4, "", 2, 3)), []string{
-			on(3, "open question `muscle.family-sections` is also on "+ref(2).String())}},
+		{"same question, other grade", feature(card(2, "- Which name? (`low`)"), card(3, "- Which\n  name? (risk: med)"), card(4, "", 2, 3)), []string{
+			on(3, `open question "which name?" is also on `+ref(2).String())}},
+		{"no outcome", feature(noOutcome, card(3, "", 2)), []string{on(2, "no ## Outcome section")}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -83,8 +86,29 @@ func TestLintFindsEachProblem(t *testing.T) {
 	}
 }
 
+func TestDifferentQuestionsSharingNamesPass(t *testing.T) {
+	f := feature(card(2, "- Flag name in `hosts.toml`? (`low`)\n- None yet"), card(3, "- Order in `hosts.toml`? (`low`)\n- none so far", 2))
+	if ps := Lint(f); len(ps) != 0 {
+		t.Errorf("problems:\n%s", texts(ps))
+	}
+}
+
+func TestAcceptanceThroughOthersAndOutsideBlockers(t *testing.T) {
+	// 4 is blocked by 3, which is blocked by 2; 9 is in another feature.
+	f := feature(card(2, "", 9), card(3, "", 2), card(4, "", 3))
+	if ps := Lint(f); len(ps) != 0 {
+		t.Errorf("problems:\n%s", texts(ps))
+	}
+}
+
+func TestOneTaskIsItsOwnAcceptance(t *testing.T) {
+	if ps := Lint(feature(card(2, ""))); len(ps) != 0 {
+		t.Errorf("problems:\n%s", texts(ps))
+	}
+}
+
 func TestOneCardMayRepeatItsOwnQuestion(t *testing.T) {
-	f := feature(card(2, "- Use `x`?\n- Name `x`?"), card(3, "", 2))
+	f := feature(card(2, "- Use x?\n- Use x?"), card(3, "", 2))
 	if ps := Lint(f); len(ps) != 0 {
 		t.Errorf("problems:\n%s", texts(ps))
 	}

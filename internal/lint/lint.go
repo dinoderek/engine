@@ -13,9 +13,9 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// Required are the card sections every task must have. Requires may say
+// required are the card sections every task must have. Requires may say
 // "none"; the others must say something.
-var Required = []struct {
+var required = []struct {
 	Heading  string
 	Nonempty bool
 }{{"Outcome", true}, {"Tests", true}, {"Requires", false}}
@@ -54,7 +54,7 @@ func Lint(f tracker.Feature) []Problem {
 
 func cardProblems(c tracker.Card) []Problem {
 	var problems []Problem
-	for _, r := range Required {
+	for _, r := range required {
 		text, ok := tracker.Section(c.Body, r.Heading)
 		switch {
 		case !ok:
@@ -138,10 +138,12 @@ func Upstream(edges map[tracker.Ref][]tracker.Ref, from tracker.Ref) []tracker.R
 }
 
 // acceptanceProblems needs one task blocked, directly or not, by every other.
+// A feature of one task is its own acceptance task.
 func acceptanceProblems(tasks []tracker.Card) []Problem {
 	edges := blockers(tasks)
 	for _, c := range tasks {
-		if len(Upstream(edges, c.Ref)) >= len(tasks)-1 && !slices.Contains(Upstream(edges, c.Ref), c.Ref) {
+		up := Upstream(edges, c.Ref)
+		if len(up) >= len(tasks)-1 && !slices.Contains(up, c.Ref) {
 			return nil
 		}
 	}
@@ -150,44 +152,53 @@ func acceptanceProblems(tasks []tracker.Card) []Problem {
 
 var (
 	listMark = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+`)
-	code     = regexp.MustCompile("`([^`]+)`")
-	space    = regexp.MustCompile(`\s+`)
+	// grade is a trailing risk grade, such as "(`low`)" or "(risk: med)".
+	grade = regexp.MustCompile("\\s*\\((?:risk:\\s*)?`?(?:low|med|high)`?\\)\\s*$")
+	space = regexp.MustCompile(`\s+`)
 )
 
-// sharedQuestions finds an open question on more than one card: the same
-// item, or the same `name` in backticks (such as a fact's key) in the Open
-// sections of two cards. Each question has one owner card.
+// sharedQuestions finds an open question on more than one card, by its text
+// with case, spacing and a trailing grade ignored. Each question has one
+// owner card.
 func sharedQuestions(tasks []tracker.Card) []Problem {
 	owner := map[string]tracker.Ref{}
 	var problems []Problem
 	for _, c := range tasks {
 		text, _ := tracker.Section(c.Body, "Open")
-		for _, q := range questionKeys(text) {
+		for _, q := range questions(text) {
 			prev, ok := owner[q]
 			switch {
 			case !ok:
 				owner[q] = c.Ref
 			case prev != c.Ref:
-				problems = append(problems, Problem{c.Ref, fmt.Sprintf("open question %s is also on %s: give it one owner card", q, prev)})
+				problems = append(problems, Problem{c.Ref, fmt.Sprintf("open question %q is also on %s: give it one owner card", q, prev)})
 			}
 		}
 	}
 	return problems
 }
 
-// questionKeys returns what identifies each open question: its normalised
-// text, quoted, and each name in backticks.
-func questionKeys(section string) []string {
-	var keys []string
+// questions returns the section's list items, normalised. A line with no
+// list marker continues the item before it. An item starting with "none"
+// is no question.
+func questions(section string) []string {
+	var items []string
 	for _, line := range strings.Split(section, "\n") {
 		item := strings.TrimSpace(listMark.ReplaceAllString(line, ""))
-		if item == "" || strings.EqualFold(item, "none") || strings.EqualFold(item, "none.") {
-			continue
-		}
-		keys = append(keys, fmt.Sprintf("%q", strings.ToLower(space.ReplaceAllString(item, " "))))
-		for _, m := range code.FindAllStringSubmatch(item, -1) {
-			keys = append(keys, "`"+m[1]+"`")
+		switch {
+		case item == "":
+		case !listMark.MatchString(line) && len(items) > 0:
+			items[len(items)-1] += " " + item
+		default:
+			items = append(items, item)
 		}
 	}
-	return keys
+	var qs []string
+	for _, item := range items {
+		q := strings.ToLower(grade.ReplaceAllString(space.ReplaceAllString(item, " "), ""))
+		if !strings.HasPrefix(q, "none") {
+			qs = append(qs, q)
+		}
+	}
+	return qs
 }

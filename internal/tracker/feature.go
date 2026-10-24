@@ -78,25 +78,34 @@ func readCard(run Runner, token string, issue apiIssue) (Card, error) {
 		return Card{}, fmt.Errorf("a task: %w", err)
 	}
 	c := Card{Ref: ref, Title: issue.Title, Open: issue.State == "open", Labels: issue.labelNames(), Body: issue.Body}
+	if c.BlockedBy, err = blockedBy(run, token, ref); err != nil {
+		return Card{}, err
+	}
+	return c, nil
+}
+
+// blockedBy lists every issue ref is blocked by, open or closed.
+func blockedBy(run Runner, token string, ref Ref) ([]Blocker, error) {
 	path := fmt.Sprintf("repos/%s/issues/%d/dependencies/blocked_by", ref.Repo, ref.Number)
 	out, err := api(run, token, path, "--paginate")
 	if err != nil {
-		return Card{}, fmt.Errorf("blockers of %s: %w", ref, err)
+		return nil, fmt.Errorf("blockers of %s: %w", ref, err)
 	}
 	pages, err := decodeAll[[]apiIssue](out)
 	if err != nil {
-		return Card{}, fmt.Errorf("blockers of %s: %w", ref, err)
+		return nil, fmt.Errorf("blockers of %s: %w", ref, err)
 	}
+	var all []Blocker
 	for _, page := range pages {
 		for _, b := range page {
 			bref, err := b.ref()
 			if err != nil {
-				return Card{}, fmt.Errorf("blockers of %s: %w", ref, err)
+				return nil, fmt.Errorf("blockers of %s: %w", ref, err)
 			}
-			c.BlockedBy = append(c.BlockedBy, Blocker{Ref: bref, Open: b.State == "open"})
+			all = append(all, Blocker{Ref: bref, Open: b.State == "open"})
 		}
 	}
-	return c, nil
+	return all, nil
 }
 
 var cardKey = regexp.MustCompile(`<!--\s*engine:card\s+(\S+)\s*-->`)
