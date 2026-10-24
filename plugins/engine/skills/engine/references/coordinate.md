@@ -54,7 +54,7 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
 6. **Dead sessions.** An open task with a claim state label (`running`,
    `needs-human`, `in-review`) whose session is dead gets `engine:failed` in
    place of that label, loses `engine:merging` if it holds the lock, and gets
-   a comment saying so. Its worktree stays.
+   a comment saying so that @mentions the operator. Its worktree stays.
 7. **Reap.** A hands-off executor closes its own window after its report.
    Close a window, or archive a cloud session, you started in hands-off
    mode only when its task is closed, carries no `engine:` state label, and
