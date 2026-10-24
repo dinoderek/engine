@@ -89,6 +89,10 @@ standalone task, as `<repo rule> → <what this plan does instead>`. A card
 inherits its feature's overrides and may add its own, agreed the same way.
 Never invent an override the operator has not agreed.
 
+`plan breakdown` cannot ask. If it finds a blocking rule that no override
+covers, comment on the feature with the question and your recommendation,
+@mention the operator, and wait in the session.
+
 ## Budget headroom
 
 For each doc the work will update, read its word budget and its current
@@ -97,9 +101,8 @@ the design. A doc the work would push over its budget is a question with two
 options: a trim task first, or a raise the operator agrees. Recommend the
 trim.
 
-`plan breakdown` cannot ask. If it finds a blocking rule that no override
-covers, comment on the feature with the question and your recommendation,
-@mention the operator, and wait in the session.
+In `plan breakdown`, a budget that would overflow is asked the same way as a
+blocking rule.
 
 ## Writing a card
 

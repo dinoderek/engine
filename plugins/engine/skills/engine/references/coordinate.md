@@ -30,8 +30,7 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
 
    Skip a task whose session you started and that has not claimed yet,
    while that session is alive. If it died before claiming, the task is
-   ready again. Set `engine:executing` on the first start, and
-   `engine:verifying` when only the acceptance task is open.
+   ready again.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is not
@@ -41,10 +40,10 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    last 20 screen lines (`tmux capture-pane -p -S -20`, or the cloud session's
    last message). Once per wait: skip it if your stall comment is newer than
    the wait.
-5. **Hard stops.** While any task is `engine:needs-human`, the feature is
-   `engine:blocked`. When a blocked feature has none left, recompute its
-   label: `engine:verifying` if only the acceptance task is open, else
-   `engine:executing`.
+5. **Feature label.** Once a task has started, the feature's label is the
+   first that holds: `engine:blocked` while any task is
+   `engine:needs-human`; `engine:verifying` while only the acceptance task
+   is open; else `engine:executing`. Change it only when it differs.
 6. **Dead sessions.** A claimed task whose session is dead gets
    `engine:failed` in place of its state label, loses `engine:merging` if it
    holds the lock, and gets a comment saying so. Its worktree stays.
@@ -68,7 +67,7 @@ host, tmux or `hosts.toml` is involved.
   source, permission mode `dontAsk`, title `<repo>-<task>`, environment
   variable `ENGINE_UNATTENDED=1`, and the kickoff `Execute <ref> with the
   engine executor, hands-off mode. host=cloud run=<repo>-<task>-<UTC
-  yyyymmddThhmmssZ>`. Its claim says `Started by: coordinator`.
+  yyyymmddThhmmssZ> started=coordinator`.
 - **The environment** must give the session `GH_TOKEN` and an `engine` on
   `PATH`, for the merge guard. Without them the executor stops
   (**Environment**).

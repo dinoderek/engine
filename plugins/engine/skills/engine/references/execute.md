@@ -121,15 +121,15 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
 Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
 when you resume after a stop.
 
-**Unattended sessions.** When the kickoff came from `engine start` or a
-coordinator, nobody watches your screen. Treat any denied permission request
-as the **Permission** hard stop (`rulings.md`).
+**Unattended sessions.** When `ENGINE_UNATTENDED=1` is in your environment,
+nobody watches your screen. Treat any denied permission request as the
+**Permission** hard stop (`rulings.md`).
 
 ## Claim comment
 
 The first line is fixed, so claims can be searched. Never invent a value: use
 `none` when one is unknown. Values in the kickoff (`run=`, `tmux=`, `rc=`,
-`host=`) override these. Branch is the one step 2 opens, or the one you are on.
+`host=`, `started=`) override these. Branch is the one step 2 opens, or the one you are on.
 
 ```text
 Claim: <repo>-<task>
