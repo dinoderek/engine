@@ -87,10 +87,13 @@ one. The other placeholders: `{name}` is the session name (`<repo>-<task>`),
 `{model}` and `{effort}` come from the tier, and `{clone}` is engine's clone of
 the repo.
 
-**Validation.** `internal/hosts` parses the TOML subset above strictly. It
-rejects an unknown key, a duplicate and any broken rule on this page, and
-reports the first with its line number. A launch line starts with `{bin}`,
-contains `{model}` and uses only these placeholders.
+**Validation.** `internal/hosts` reads the file with a strict parser for the
+TOML subset above: tables, dotted keys, single-line strings, integers, arrays
+of strings, one-line inline tables and comments. It rejects anything else, an
+unknown key, a duplicate, and any broken rule on this page, and reports the
+first violation with its line number. A launch line must start with `{bin}`,
+contain `{model}` and use only the placeholders listed here. A host's `bin`
+names exactly the harnesses it runs. Every tier is mapped for every harness.
 
 ## Placement
 
