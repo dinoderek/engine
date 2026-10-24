@@ -84,16 +84,18 @@ an agent to involve the operator:
 Also check that every lane the work needs can run on some host, and record
 the capability in **Requires**. A lane no host can run is a question too.
 
-**Budget headroom.** For each doc the work will update, read its word budget
-and its current count (the repo's budget registry and its doc check), and put
-the headroom in the design. A doc the work would push over its budget is a
-question with two options: a trim task first, or a raise the operator agrees.
-Recommend the trim.
-
 Record each agreed override under `## Overrides` on the feature, or on a
 standalone task, as `<repo rule> → <what this plan does instead>`. A card
 inherits its feature's overrides and may add its own, agreed the same way.
 Never invent an override the operator has not agreed.
+
+## Budget headroom
+
+For each doc the work will update, read its word budget and its current
+count (the repo's budget registry and its doc check), and put the headroom in
+the design. A doc the work would push over its budget is a question with two
+options: a trim task first, or a raise the operator agrees. Recommend the
+trim.
 
 `plan breakdown` cannot ask. If it finds a blocking rule that no override
 covers, comment on the feature with the question and your recommendation,
@@ -108,8 +110,8 @@ Write the fields from `plan-sources.md`, "Card fields". For each one:
 - **Open:** only questions an executor can answer without the operator. A
   product question belongs in the feature's `## Questions`, not here. Each
   open question has one owner card. Any other card that depends on the answer
-  lists it under **Decided** as `<question>: per #<owner>`, and is blocked
-  by the owner.
+  lists it under **Decided** as `<question>: per <owner card>`, and depends
+  on the owner.
 - **Gates:** from the repo's lane rules and the paths the card touches.
 - **Overrides:** only those this card adds to its feature's.
 - **Size:** each task is one PR. Aim for about 2000 added lines at most.

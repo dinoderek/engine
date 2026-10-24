@@ -38,7 +38,7 @@ pass, so an agent coordinator and `engine run` behave the same. A pass can:
 - on `done`, post a summary and close the feature issue;
 - gather and upload telemetry for runs that have ended.
 
-**Supervised.** While engine is young, an agent can watch `engine run`
+**Supervised.** An agent can watch `engine run`
 (the skill's `supervise` mode). It acts only through `engine` commands, may
 rebuild and restart `engine run` between passes, and records each gap it
 fills as a comment on the feature.
@@ -136,8 +136,9 @@ hand can run anywhere, so its liveness is unknown unless listed. A failed
 probe also leaves it unknown. A session in `needs-human` or `in-review` keeps
 that state while alive.
 
-**Stalls.** A window the coordinator opened whose task has no claim 5 minutes
-later is stalled before the claim, for example on a prompt. A session whose
+**Stalls.** A window the coordinator opened whose task has not claimed in
+time is stalled before the claim, for example on a prompt (the skill's
+`coordinate` mode sets the time). A session whose
 `waiting-since` is 10 minutes old while its task is not `needs-human` has
 stopped outside the protocol, for example on a
 question asked in the session rather than on the issue. The coordinator

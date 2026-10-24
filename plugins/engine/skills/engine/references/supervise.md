@@ -24,9 +24,9 @@ first comment on the feature. Then check every 10 minutes: its log,
 
 ## You never
 
-Label, start, close or kill anything; claim a task; edit the target repo; or
-answer a hard stop. Those belong to `engine run`, the executors and the
-operator.
+Label, start, close or kill anything, except stopping `engine run` itself to
+restart it; claim a task; edit the target repo; or answer a hard stop. Those
+belong to `engine run`, the executors and the operator.
 
 ## Recording
 

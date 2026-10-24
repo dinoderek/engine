@@ -47,7 +47,7 @@
 
 - **Tools:** `tmux`, `gh` and `git`, plus `go` to build engine.
 - **engine on `PATH`:** `GOBIN=~/.local/bin go install ./cmd/engine` from a
-  checkout, so it lands in a directory already on `PATH`. The plugin's merge guard runs it on every Bash
+  checkout, with `~/.local/bin` on `PATH`. The plugin's merge guard runs it on every Bash
   call; without it, or with a binary too old for the plugin's hooks, the guard
   fails open. Update `engine` on each host before taking a plugin update.
 - **Claude Code:** signed in with your claude.ai account (`/login`), with

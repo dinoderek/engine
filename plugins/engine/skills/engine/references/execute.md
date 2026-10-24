@@ -87,12 +87,15 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
 10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
     - **Merge lock.** First take the feature's lock, so no sibling moves
       the default branch under your last gate run. If no sibling task
-      carries `engine:merging`, add it to yours, then re-read the siblings.
-      If another also holds it, the lower issue number keeps it and the
-      other removes its own. Without the lock, wait and check every 5
-      minutes. Hold it through the default-branch merge, the gates, the
-      checks and the merge, and remove it after the merge or when you stop.
-      A standalone task needs no lock.
+      carries `engine:merging`, add it to yours. The holder is the task
+      whose `engine:merging` was added first (its `labeled` event in
+      `gh api repos/<o>/<r>/issues/<n>/events`). Re-check that you are the
+      holder after adding it and again just before merging; if you are not,
+      remove yours and wait. Without the lock, check every 5 minutes. Hold
+      it through the default-branch merge, the gates, the checks and the
+      merge. Remove it after the merge, at a hard stop, while a gated run
+      waits for approval, and when a fix needs a new review; take it again
+      to resume. A standalone task needs no lock.
     - On a failure, read the logs, fix, and go back to step 5.
     - If the default branch moved or conflicts, merge it in and go back to
       step 5.
@@ -118,9 +121,8 @@ Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
 when you resume after a stop.
 
 **Unattended sessions.** When the kickoff came from `engine start` or a
-coordinator, nobody watches your screen. A permission request there is
-denied, not shown; the denial names the **Permission** hard stop
-(`rulings.md`).
+coordinator, nobody watches your screen. Treat any denied permission request
+as the **Permission** hard stop (`rulings.md`).
 
 ## Claim comment
 
@@ -134,7 +136,7 @@ Run: <repo>-<task>-<UTC yyyymmddThhmmssZ>
 Host: <logical host name>
 Harness: <harness> <version> (<model>)
 Mode: hands-off|gated
-Started by: hand|engine start
+Started by: hand|engine start|coordinator
 Tmux: <session:window>|none
 Remote Control: <name>|none
 Branch: <branch>

@@ -28,9 +28,10 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    2. then `deep` before `standard` before `light`;
    3. then the lowest issue number.
 
-   Skip a task whose session you already started and that has not claimed
-   yet. Set `engine:executing` on the first start, and `engine:verifying`
-   when only the acceptance task is open.
+   Skip a task whose session you started and that has not claimed yet,
+   while that session is alive. If it died before claiming, the task is
+   ready again. Set `engine:executing` on the first start, and
+   `engine:verifying` when only the acceptance task is open.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is not
@@ -41,20 +42,21 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    last message). Once per wait: skip it if your stall comment is newer than
    the wait.
 5. **Hard stops.** While any task is `engine:needs-human`, the feature is
-   `engine:blocked`. Restore its previous label when none is.
+   `engine:blocked`. When none is, recompute its label: `engine:verifying`
+   if only the acceptance task is open, else `engine:executing`.
 6. **Dead sessions.** A claimed task whose session is dead gets
-   `engine:failed` in place of its state label, and a comment saying so. Its
-   worktree stays.
-7. **Reap.** Close any window you opened whose task is closed, and say so in
-   the pass's log line.
+   `engine:failed` in place of its state label, loses `engine:merging` if it
+   holds the lock, and gets a comment saying so. Its worktree stays.
+7. **Reap.** Close any window, or archive any cloud session, you started
+   whose task is closed, and say so in the pass's log line.
 8. **Done.** When every sub-issue is closed, comment on the feature: each
    task with its PR, the acceptance result, the tasks still carrying
    `engine:ruling-review`, and the deviations. Set `engine:done`, close the
    feature as completed, and end the session.
 
 Log one line per pass in the session: what you started, flagged, marked and
-closed. Move the feature's labels only as above; executors own the task
-labels.
+closed. Move the feature's labels only as above. Executors own the task
+labels, except `engine:failed` and clearing a dead holder's `engine:merging`.
 
 ## Native sessions
 
@@ -65,12 +67,13 @@ host, tmux or `hosts.toml` is involved.
   source, permission mode `dontAsk`, title `<repo>-<task>`, environment
   variable `ENGINE_UNATTENDED=1`, and the kickoff `Execute <ref> with the
   engine executor, hands-off mode. host=cloud run=<repo>-<task>-<UTC
-  yyyymmddThhmmssZ>`.
+  yyyymmddThhmmssZ>`. Its claim says `Started by: coordinator`.
 - **The environment** must give the session `GH_TOKEN` and an `engine` on
   `PATH`, for the merge guard. Without them the executor stops
   (**Environment**).
-- **Slots:** 3 at once, unless the operator says otherwise.
+- **Slots:** 3 live sessions at once, unless the operator says otherwise. A
+  session whose task has closed holds no slot.
 - **Liveness:** the session's status. A failed or archived session is dead,
   and a blocked one is waiting.
-- **Answers:** a comment on the task's issue, then a message to the session
-  pointing at it.
+- **Answers:** when the operator answers on the task's issue, message the
+  session pointing at the comment.

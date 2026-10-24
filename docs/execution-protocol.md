@@ -1,6 +1,6 @@
 # Execution protocol
 
-> **Owns:** the principles, the phases at a glance, the run modes, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, why the coordinator is a role, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 The skill is the single source for agent behaviour. This doc explains the
 design around it and never restates a rule the skill holds. If you are
@@ -57,21 +57,14 @@ the commit that was reviewed and gated.
 
 ## Run modes
 
-The coordinator is a role, filled by a program or by an agent. The skill's
-`coordinate` mode is its single spec: one reconcile pass. `engine run`
-implements that pass in code, and the code follows the skill.
+The coordinator is a role, filled by a program or by an agent; the skill
+lists the five run modes. Its `coordinate` mode is the single spec for one
+reconcile pass, which `engine run` implements in code, so an agent
+coordinator and the program behave the same.
 
-| Run mode | Coordinator | Executors start through | Supervisor |
-| --- | --- | --- | --- |
-| Single task | You | Your session | None |
-| Coordinator, native sessions | An agent, `coordinate native` | Claude Code cloud sessions | None |
-| Coordinator, engine | An agent, `coordinate engine` | `engine start` | None |
-| Supervisor | `engine run` | `engine start` | An agent, `supervise` |
-| Engine only | `engine run` | `engine start` | None |
-
-The supervisor exists while engine itself is young. It acts only through
-`engine` commands and records every gap it fills, so each one becomes an
-`engine run` fix and the last mode needs no agent.
+The supervisor mode exists because `engine run` is new. The supervisor acts
+only through `engine` commands and records every gap it fills, so each one
+becomes an `engine run` fix, until the engine-only mode needs no agent.
 
 ## Models
 
@@ -86,9 +79,8 @@ the tier and the model for every run, and the defaults are tuned from that.
 
 - **You read only what is costly to undo.** Decisions are graded by what
   undoing them costs. `low` ones stay in a collapsed PR section that you never
-  have to read. `med` ones are on the issue and in the PR. Only `high` ones
-  queue under `engine:ruling-review`, so the label stays rare. You read them
-  and remove the label, so "what needs my review" is one saved search across
+  have to read. Only `high` ones queue under `engine:ruling-review`, so the
+  label stays rare. You read them and remove the label, so "what needs my review" is one saved search across
   every repo: `is:issue label:engine:ruling-review`.
 - **Rulings are written for you, not the code.** Each says what a user would
   notice and what the alternative was.
@@ -110,8 +102,8 @@ creates or updates them all; the set is `internal/tracker`.
 
 "Ready" is computed, never stored. The planner sets `feature` and `prepare`.
 You set `approved` and clear `ruling-review`. The executor sets `running`,
-`needs-human`, `in-review`, `merging` and `ruling-review`, and clears `in-review` once
-the merge closes the task.
+`needs-human`, `in-review`, `merging` and `ruling-review`, and clears
+`in-review` and `merging` once the merge closes the task.
 The coordinator owns the other feature labels and `failed`.
 
 Feature status at a glance: the feature issue's state label and its sub-issue
