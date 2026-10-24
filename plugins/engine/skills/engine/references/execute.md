@@ -103,15 +103,14 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
     worktree, and say what it removed. If the PR closed without merging, ask
     first. Then end the session. In hands-off mode, when the kickoff names
     `tmux=`, your last action is `cd "$HOME" && tmux kill-window -t
-    "$TMUX_PANE"`: it closes your window and frees its slot. If the shell
-    says its working directory was deleted, run it again. In gated mode the
-    operator is reading, so leave it open.
+    "$TMUX_PANE"`, which frees its slot; if the shell says its working
+    directory was deleted, run it again. A gated window stays open.
 
 Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
 when you resume after a stop.
 
 **Unattended sessions.** When `ENGINE_UNATTENDED=1` is in your environment,
-nobody watches your screen. Treat any denied permission request as the
+nobody watches your screen. A denied permission request may be the
 **Permission** hard stop (`rulings.md`).
 
 ## Merge lock
@@ -121,7 +120,9 @@ branch under your last gate run. To take the lock, add `engine:merging` to
 your task if no sibling carries it. The holder is the carrier whose latest
 `engine:merging` `labeled` event (`gh api repos/<o>/<r>/issues/<n>/events`)
 is oldest; check after adding it and just before merging, and if it is not
-you, remove yours. Without the lock, check every 5 minutes.
+you, remove yours. Without the lock, check every 5 minutes. Once you hold
+it, fetch: if the default branch moved since your last gate run, merge it in
+and go back to step 5.
 
 Remove it after the merge, at a hard stop, while a gated run waits for
 approval, while you make a fix, and when the PR closes unmerged. Take it
@@ -166,9 +167,8 @@ Branch: <branch>
   `engine:approved`.
 - `engine:needs-human` during a hard stop. It replaces `engine:running` or
   `engine:in-review`, and you restore that label when the stop is answered.
-- `engine:in-review` when the PR opens, removed once the merge closes the
-  task, so a closed task carries no state label.
-- `engine:merging` while you hold the merge lock (step 10).
+- `engine:in-review` when the PR opens, removed after the merge.
+- `engine:merging` while you hold the merge lock.
 - `engine:ruling-review` with a `high` ruling. The operator clears it.
 
 Leave every other label to the coordinator.

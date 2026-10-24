@@ -18,7 +18,7 @@ session through to a merged PR. The operator is pulled in only by a hard stop.
 | `plan feature [--with-tasks]` | Planning a feature with the operator | `references/plan.md`, `references/plan-sources.md` |
 | `plan breakdown <feature>` | Splitting an approved feature into tasks, alone | `references/plan.md`, `references/plan-sources.md` |
 | `execute <task ref> [hands-off \| gated]` | The executor of one task | `references/execute.md`, `references/rulings.md`, `references/plan-sources.md` |
-| `coordinate <feature> [engine \| native]` | The coordinator: you start executors and watch them | `references/coordinate.md`, `references/plan-sources.md` |
+| `coordinate <feature> [engine \| native]` | The coordinator: you start executors and watch them | `references/coordinate.md`, `references/plan.md`, `references/plan-sources.md` |
 | `supervise <feature>` | Watching `engine run`, which coordinates | `references/supervise.md` |
 | `review` | A reviewer spawned by an executor | `references/review.md` |
 
