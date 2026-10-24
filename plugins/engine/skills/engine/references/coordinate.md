@@ -42,8 +42,9 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    last message). Once per wait: skip it if your stall comment is newer than
    the wait.
 5. **Hard stops.** While any task is `engine:needs-human`, the feature is
-   `engine:blocked`. When none is, recompute its label: `engine:verifying`
-   if only the acceptance task is open, else `engine:executing`.
+   `engine:blocked`. When a blocked feature has none left, recompute its
+   label: `engine:verifying` if only the acceptance task is open, else
+   `engine:executing`.
 6. **Dead sessions.** A claimed task whose session is dead gets
    `engine:failed` in place of its state label, loses `engine:merging` if it
    holds the lock, and gets a comment saying so. Its worktree stays.

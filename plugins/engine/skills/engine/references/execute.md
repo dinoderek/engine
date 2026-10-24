@@ -87,15 +87,16 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
 10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
     - **Merge lock.** First take the feature's lock, so no sibling moves
       the default branch under your last gate run. If no sibling task
-      carries `engine:merging`, add it to yours. The holder is the task
-      whose `engine:merging` was added first (its `labeled` event in
-      `gh api repos/<o>/<r>/issues/<n>/events`). Re-check that you are the
+      carries `engine:merging`, add it to yours. Of the tasks that carry
+      it, the holder is the one whose latest `engine:merging` `labeled`
+      event (`gh api repos/<o>/<r>/issues/<n>/events`) is oldest. Re-check that you are the
       holder after adding it and again just before merging; if you are not,
       remove yours and wait. Without the lock, check every 5 minutes. Hold
       it through the default-branch merge, the gates, the checks and the
       merge. Remove it after the merge, at a hard stop, while a gated run
-      waits for approval, and when a fix needs a new review; take it again
-      to resume. A standalone task needs no lock.
+      waits for approval, when a fix needs a new review, and when the PR
+      closes unmerged; take it again to resume. A gated run whose head
+      changes while it waits asks for approval again. A standalone task needs no lock.
     - On a failure, read the logs, fix, and go back to step 5.
     - If the default branch moved or conflicts, merge it in and go back to
       step 5.

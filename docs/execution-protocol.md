@@ -62,9 +62,9 @@ lists the five run modes. Its `coordinate` mode is the single spec for one
 reconcile pass, which `engine run` implements in code, so an agent
 coordinator and the program behave the same.
 
-The supervisor mode exists because `engine run` is new. The supervisor acts
-only through `engine` commands and records every gap it fills, so each one
-becomes an `engine run` fix, until the engine-only mode needs no agent.
+The supervisor mode exists to find the gaps in `engine run`. It acts only
+through `engine` commands and records every gap it fills, so each one becomes
+an `engine run` fix, until the engine-only mode needs no agent.
 
 ## Models
 
@@ -80,8 +80,9 @@ the tier and the model for every run, and the defaults are tuned from that.
 - **You read only what is costly to undo.** Decisions are graded by what
   undoing them costs. `low` ones stay in a collapsed PR section that you never
   have to read. Only `high` ones queue under `engine:ruling-review`, so the
-  label stays rare. You read them and remove the label, so "what needs my review" is one saved search across
-  every repo: `is:issue label:engine:ruling-review`.
+  label stays rare. You read them and remove the label, so "what needs my
+  review" is one saved search across every repo:
+  `is:issue label:engine:ruling-review`.
 - **Rulings are written for you, not the code.** Each says what a user would
   notice and what the alternative was.
 - **Hard stops are the only interruptions.** The list grows or shrinks from
@@ -104,7 +105,8 @@ creates or updates them all; the set is `internal/tracker`.
 You set `approved` and clear `ruling-review`. The executor sets `running`,
 `needs-human`, `in-review`, `merging` and `ruling-review`, and clears
 `in-review` and `merging` once the merge closes the task.
-The coordinator owns the other feature labels and `failed`.
+The coordinator owns the other feature labels and `failed`, and clears a
+dead holder's `merging`.
 
 Feature status at a glance: the feature issue's state label and its sub-issue
 progress.

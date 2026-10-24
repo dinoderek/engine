@@ -61,7 +61,7 @@ type Label struct {
 }
 
 // Labels is every engine: label: the feature states, the task states, and
-// the ruling-review flag. A task still to do has no state label.
+// the merging and ruling-review flags. A task still to do has no state label.
 var Labels = []Label{
 	{"engine:feature", "1d76db", "An engine feature: its tasks are sub-issues"},
 	{"engine:prepare", "c5def5", "Feature: requirements and design with the operator"},
