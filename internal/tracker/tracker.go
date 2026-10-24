@@ -75,7 +75,8 @@ var Labels = []Label{
 	{"engine:needs-human", "d93f0b", "Task: stopped at a hard stop, waiting for the operator"},
 	{"engine:in-review", "0052cc", "Task: PR open"},
 	{"engine:failed", "e11d21", "Task: its session died"},
-	{"engine:ruling-review", "f9a825", "Task: has medium- or high-risk rulings for the operator to read"},
+	{"engine:merging", "006b75", "Task: holds its feature's merge lock"},
+	{"engine:ruling-review", "f9a825", "Task: has high-risk rulings for the operator to read"},
 }
 
 var repoName = regexp.MustCompile(`^[\w.-]+/[\w.-]+$`)

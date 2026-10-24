@@ -24,7 +24,8 @@ there and never also in the issue body.
 | Claim | `engine:running` plus the claim comment (`execute.md`). | None: the session and its branch are the claim. |
 | Inbox | Comments on the task's issue. | The live session, and the PR's comments. |
 | `med` and `high` rulings, deviations, outcome | Comments on the task's issue, repeated in the PR body. | The PR body only. |
-| Ruling review | The `engine:ruling-review` label. | Not used. |
+| Ruling review (`high` only) | The `engine:ruling-review` label. | Not used. |
+| Merge lock | The `engine:merging` label on the task that holds it. | Not used: the operator merges one at a time. |
 | Close on merge | `Closes #<task>` in the PR body. | The PR deletes the card and marks it completed in the milestone. The last card's PR deletes the milestone. |
 
 ## Card fields

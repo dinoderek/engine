@@ -46,8 +46,8 @@
 ## Each host
 
 - **Tools:** `tmux`, `gh` and `git`, plus `go` to build engine.
-- **engine on `PATH`:** `go install ./cmd/engine` from a checkout, with Go's
-  install directory on `PATH`. The plugin's merge guard runs it on every Bash
+- **engine on `PATH`:** `GOBIN=~/.local/bin go install ./cmd/engine` from a
+  checkout, so it lands in a directory already on `PATH`. The plugin's merge guard runs it on every Bash
   call; without it, or with a binary too old for the plugin's hooks, the guard
   fails open. Update `engine` on each host before taking a plugin update.
 - **Claude Code:** signed in with your claude.ai account (`/login`), with
@@ -73,7 +73,9 @@
   `.claude/settings.json`, as this repo does; or install it for yourself with
   `/plugin install engine --marketplace dinoderek/engine` in a session, or
   from a shell with `claude plugin marketplace add dinoderek/engine` and
-  `claude plugin install engine@engine`. Codex has no install yet.
+  `claude plugin install engine@engine`. Update it with `claude plugin update
+  engine@engine --scope user`: without `--scope`, in a checkout that enables
+  the plugin, it updates the project's copy instead. Codex has no install yet.
 - **Sessions started by hand** run their `gh` calls as `engine gh …`, which
   reads the token file, so their @mentions reach you. Their `git push` uses the checkout's own
   credentials.

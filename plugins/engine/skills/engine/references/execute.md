@@ -36,7 +36,7 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
      `engine:approved`, not `engine:prepare`;
    - every blocker is closed
      (`gh api repos/<o>/<r>/issues/<n>/dependencies/blocked_by`);
-   - the host file and the token exist;
+   - the host file and the token exist, unless the kickoff names `host=`;
    - the repo has the `engine:` labels (`engine labels sync`).
 
    If a check fails, say so in the session only. Otherwise add
@@ -85,6 +85,14 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    Push and open the PR. Swap `engine:running` for `engine:in-review`.
    Release any local resources the repo says to stop when a PR opens.
 10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
+    - **Merge lock.** First take the feature's lock, so no sibling moves
+      the default branch under your last gate run. If no sibling task
+      carries `engine:merging`, add it to yours, then re-read the siblings.
+      If another also holds it, the lower issue number keeps it and the
+      other removes its own. Without the lock, wait and check every 5
+      minutes. Hold it through the default-branch merge, the gates, the
+      checks and the merge, and remove it after the merge or when you stop.
+      A standalone task needs no lock.
     - On a failure, read the logs, fix, and go back to step 5.
     - If the default branch moved or conflicts, merge it in and go back to
       step 5.
@@ -109,11 +117,16 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
 Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
 when you resume after a stop.
 
+**Unattended sessions.** When the kickoff came from `engine start` or a
+coordinator, nobody watches your screen. A permission request there is
+denied, not shown; the denial names the **Permission** hard stop
+(`rulings.md`).
+
 ## Claim comment
 
 The first line is fixed, so claims can be searched. Never invent a value: use
-`none` when one is unknown. Values in the kickoff (`run=`, `tmux=`, `rc=`)
-override these. Branch is the one step 2 opens, or the one you are on.
+`none` when one is unknown. Values in the kickoff (`run=`, `tmux=`, `rc=`,
+`host=`) override these. Branch is the one step 2 opens, or the one you are on.
 
 ```text
 Claim: <repo>-<task>
@@ -149,7 +162,8 @@ Branch: <branch>
   `engine:in-review`, and you restore that label when the stop is answered.
 - `engine:in-review` when the PR opens, removed once the merge closes the
   task, so a closed task carries no state label.
-- `engine:ruling-review` with a `med` or `high` ruling. The operator clears it.
+- `engine:merging` while you hold the merge lock (step 10).
+- `engine:ruling-review` with a `high` ruling. The operator clears it.
 
 Leave every other label to the coordinator.
 

@@ -1,6 +1,6 @@
 # Execution protocol
 
-> **Owns:** the principles, the phases at a glance, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, the run modes, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 The skill is the single source for agent behaviour. This doc explains the
 design around it and never restates a rule the skill holds. If you are
@@ -55,6 +55,24 @@ the commit that was reviewed and gated.
 - **Starters:** `engine start`, the coordinator, or you by hand. The steps
   are the same whichever starts it.
 
+## Run modes
+
+The coordinator is a role, filled by a program or by an agent. The skill's
+`coordinate` mode is its single spec: one reconcile pass. `engine run`
+implements that pass in code, and the code follows the skill.
+
+| Run mode | Coordinator | Executors start through | Supervisor |
+| --- | --- | --- | --- |
+| Single task | You | Your session | None |
+| Coordinator, native sessions | An agent, `coordinate native` | Claude Code cloud sessions | None |
+| Coordinator, engine | An agent, `coordinate engine` | `engine start` | None |
+| Supervisor | `engine run` | `engine start` | An agent, `supervise` |
+| Engine only | `engine run` | `engine start` | None |
+
+The supervisor exists while engine itself is young. It acts only through
+`engine` commands and records every gap it fills, so each one becomes an
+`engine run` fix and the last mode needs no agent.
+
 ## Models
 
 Cards and roles name a tier (`deep`, `standard`, `light`), never a model.
@@ -68,9 +86,12 @@ the tier and the model for every run, and the defaults are tuned from that.
 
 - **You read only what is costly to undo.** Decisions are graded by what
   undoing them costs. `low` ones stay in a collapsed PR section that you never
-  have to read. `med` and `high` ones queue under `engine:ruling-review`.
-  You read them and remove the label, so "what needs my review" is one saved
-  search across every repo: `is:issue label:engine:ruling-review`.
+  have to read. `med` ones are on the issue and in the PR. Only `high` ones
+  queue under `engine:ruling-review`, so the label stays rare. You read them
+  and remove the label, so "what needs my review" is one saved search across
+  every repo: `is:issue label:engine:ruling-review`.
+- **Rulings are written for you, not the code.** Each says what a user would
+  notice and what the alternative was.
 - **Hard stops are the only interruptions.** The list grows or shrinks from
   evidence. Telemetry counts rulings per task by risk, and a class of `high`
   rulings that keeps being reversed becomes a hard stop.
@@ -89,7 +110,7 @@ creates or updates them all; the set is `internal/tracker`.
 
 "Ready" is computed, never stored. The planner sets `feature` and `prepare`.
 You set `approved` and clear `ruling-review`. The executor sets `running`,
-`needs-human`, `in-review` and `ruling-review`, and clears `in-review` once
+`needs-human`, `in-review`, `merging` and `ruling-review`, and clears `in-review` once
 the merge closes the task.
 The coordinator owns the other feature labels and `failed`.
 
@@ -114,6 +135,11 @@ executor reads the inbox.
 There is no file ownership. Parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
+
+**One merge at a time.** Each sibling merge moves the default branch and
+forces a re-gate on every other open PR. So a feature has one merge lock,
+the `engine:merging` label: its holder merges the default branch, gates and
+merges, while the others wait before their last gate run.
 
 ## Enforced by hook
 

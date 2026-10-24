@@ -29,7 +29,8 @@ for rules.**
    target with tests, a split function or moved code.
 4. **Hard stops.** Stop and ask the operator for:
    - the protocol's classes: product, data, security, contract, gates,
-     outward or costly, drift, objectives, review, environment, repo rule
+     outward or costly, drift, objectives, review, environment, repo rule,
+     permission
      (defined in `plugins/engine/skills/engine/references/rulings.md`);
    - **loosening a gate:** a lower threshold, a baseline row, a `//nolint`, a
      linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,

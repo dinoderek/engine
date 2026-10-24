@@ -24,14 +24,24 @@ is done, you stop it, or the machine goes down.
 | Task | Runs only that task. It refuses to start while any blocker is open. |
 
 **The reconcile loop.** Each pass reads state, works out what to do, and does
-it. A pass can:
+it. The skill's `coordinate` mode
+(`plugins/engine/skills/engine/references/coordinate.md`) is the spec for a
+pass, so an agent coordinator and `engine run` behave the same. A pass can:
 
 - spawn the planner and lint the plan;
-- place and spawn ready tasks, which is `engine start` for each one;
+- place and spawn ready tasks in the skill's order (most downstream tasks
+  first), which is `engine start` for each one;
 - mark dead sessions `failed`;
 - update the feature's label;
 - @mention you about a stalled session;
+- close the windows of tasks that have closed;
+- on `done`, post a summary and close the feature issue;
 - gather and upload telemetry for runs that have ended.
+
+**Supervised.** While engine is young, an agent can watch `engine run`
+(the skill's `supervise` mode). It acts only through `engine` commands, may
+rebuild and restart `engine run` between passes, and records each gap it
+fills as a comment on the feature.
 
 Each webhook event starts a pass: `gh webhook forward` sends repo events to a
 localhost endpoint without needing a public URL. A backstop pass runs every 5
@@ -126,8 +136,10 @@ hand can run anywhere, so its liveness is unknown unless listed. A failed
 probe also leaves it unknown. A session in `needs-human` or `in-review` keeps
 that state while alive.
 
-**Stalls.** A session whose `waiting-since` is 10 minutes old while its task
-is not `needs-human` has stopped outside the protocol, for example on a
+**Stalls.** A window the coordinator opened whose task has no claim 5 minutes
+later is stalled before the claim, for example on a prompt. A session whose
+`waiting-since` is 10 minutes old while its task is not `needs-human` has
+stopped outside the protocol, for example on a
 question asked in the session rather than on the issue. The coordinator
 @mentions you on the task's issue, once per wait: it skips the mention when
 its own stall comment is newer than `waiting-since`.
