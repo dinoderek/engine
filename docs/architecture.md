@@ -18,7 +18,8 @@ Two programs share one Go module:
   (`engine ps`: the state of each claimed task), `internal/start`
   (`engine start`: checks a task, then launches its session), `internal/tell`
   (`engine tell`: comments on a task and points its session at it),
-  `internal/lint` (`engine lint`: a feature's plan rules). The commands
+  `internal/lint` (`engine lint`: a feature's plan rules), `internal/run`
+  (`engine run`: the coordinator's loop, on top of the others). The commands
   share `internal/hosts`, the host config: it parses `hosts.toml` with an
   in-house reader of the TOML subset the config uses, validates it, works out
   each machine's slots and expands launch lines. `internal/session` is the

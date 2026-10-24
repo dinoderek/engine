@@ -87,6 +87,9 @@ type plan struct {
 	tier     hosts.Tier
 	model    hosts.TierModel
 	reviewer string
+	// planner is true for a feature's planner session, whose kickoff is a
+	// breakdown rather than a task.
+	planner bool
 }
 
 // Started is a session engine start launched.
@@ -331,7 +334,11 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	return launchCommand(d, line, runDir, p.opts.Mode, Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)), nil
+	kickoff := Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)
+	if p.planner {
+		kickoff = PlannerKickoff(p.opts.Ref, runID, p.name)
+	}
+	return launchCommand(d, line, runDir, p.opts.Mode, kickoff), nil
 }
 
 // launchCommand is a window's shell command. It runs under /bin/sh, whatever
@@ -379,6 +386,9 @@ func (p plan) record(s Started, log string, now time.Time) session.Record {
 	}
 	if p.task.Parent != nil {
 		rec.Feature = p.task.Parent.String()
+	}
+	if p.planner {
+		rec.Feature = p.opts.Ref.String()
 	}
 	return rec
 }

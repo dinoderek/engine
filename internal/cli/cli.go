@@ -31,6 +31,8 @@ commands:
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
   tell <repo>-<task> <text> comment on a task's issue and point its session at it
+  run <owner/repo#n>        coordinate a feature, or one task, on this host until
+                            it is done
   lint <owner/repo#n>       check a feature's plan: card sections, keys, cycles,
                             the acceptance task and shared open questions
   start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]
@@ -97,6 +99,8 @@ func Run(args []string, env Env) int {
 		return runTell(args[1:], env)
 	case "lint":
 		return runLint(args[1:], env)
+	case "run":
+		return runRun(args[1:], env, time.Sleep)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0

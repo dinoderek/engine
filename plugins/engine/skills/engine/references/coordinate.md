@@ -1,7 +1,7 @@
 # Coordinate a feature
 
-You drive one approved feature to `done` by starting executors and watching
-them. `engine run` runs this same pass as code. You never edit code, merge,
+You drive one approved feature to `done`, starting executors and watching
+them; `engine run` runs this pass as code. You never edit code, merge,
 claim a task, or answer a hard stop: hard stops go to the operator.
 
 | Kickoff | Executors start through |
@@ -21,12 +21,13 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    each cloud session's status); and the sessions you started, with when.
 2. **Plan if needed.** An `engine:approved` feature with no sub-issues gets a
    planner session, kickoff `Plan breakdown <feature>`, unless one you
-   started for it is still alive. When the feature is `engine:approved`,
+   started for it is alive or has ended. When the feature is `engine:approved`,
    has sub-issues and no planner is alive, lint the plan (`engine lint
    <feature>`, else by hand with `plan.md`'s lint list). If it passes, set
    `engine:planned`; if not, comment the failures on the feature and
-   @mention the operator, once. Steps 3 to 8 run only on a feature that is
-   `engine:planned` or later.
+   @mention the operator, once. A planner that waits for input for 10
+   minutes, or ends with no tasks written, gets one @mention on the feature.
+   Steps 3 to 8 run only on a feature that is `engine:planned` or later.
 3. **Start ready tasks.** A task is ready when it is open, has no `engine:`
    state label, and every blocker is closed. While a slot is free, start
    them in this order:
@@ -36,15 +37,16 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    3. then the lowest issue number.
 
    Skip a task whose session you started and that has not claimed yet,
-   while that session is alive. If it died before claiming, the task is
-   ready again.
+   while that session is alive. If it died before claiming, close its
+   window and start it again. A start that fails gets one @mention on the
+   task, and no retry for 30 minutes, holding no slot.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is open and
      not `engine:needs-human`.
 
-   @mention the operator on the task's issue with the stall and the session's
-   last 20 screen lines (`tmux capture-pane -p -S -20`, or the cloud session's
+   @mention the operator on the task with the stall and the session's last
+   20 screen lines (`tmux capture-pane -p -S -20`, or the cloud session's
    last message). Once per wait: skip it if your stall comment is newer than
    the wait.
 5. **Feature label.** Once a task has started, the feature's label is the
@@ -65,8 +67,8 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    `engine:ruling-review`, and the deviations. Set `engine:done`, close the
    feature as completed, and end the session.
 
-Log one line per pass in the session: what you started, flagged, marked and
-closed. Move the feature's labels only as above. Executors own the task
+Log what each pass started, flagged, marked and closed. Move the feature's
+labels only as above. Executors own the task
 labels, except `engine:failed` and clearing a dead holder's `engine:merging`.
 
 ## Native sessions
