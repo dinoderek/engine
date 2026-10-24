@@ -168,10 +168,10 @@ func TestLaunchCommand(t *testing.T) {
 		} else {
 			script += `unset CLAUDE_CONFIG_DIR && `
 		}
-		// The skill's directory is a working directory, and -- keeps the
-		// variadic --add-dir from taking the kickoff as a second directory.
+		// The skill's directory and /tmp are working directories, and --
+		// keeps the variadic --add-dir from taking the kickoff as another.
 		script += `exec ` + h.bin + ` --permission-mode auto --model opus-x --effort high -n r-7 --remote-control r-7 ` +
-			`--add-dir ` + plugin + ` -- ` +
+			`--add-dir ` + plugin + ` /tmp -- ` +
 			`'Execute ` + ref(7).String() + ` with the engine executor, hands-off mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`
 		if want := "exec /bin/sh -c " + hosts.ShellWord(script); got != want {
 			t.Errorf("command\n got %s\nwant %s", got, want)

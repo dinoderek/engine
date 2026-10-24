@@ -162,9 +162,9 @@ runs holds one). Then it:
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
    so the repo's `AGENTS.md` loads;
 5. runs the host's launch line at the card's tier (default `standard`), plus
-   `--add-dir <engine's plugin directory>`, without which Claude's file tools
-   ask before reading the skill. After `--` comes the kickoff, Claude's first
-   message: `Execute <owner/repo#n> with the engine executor, <mode> mode.
+   `--add-dir <engine's plugin directory> /tmp`, without which Claude's file
+   tools ask before reading the skill or a test's screenshots. Then `--` and
+   the kickoff, Claude's first message: `Execute <owner/repo#n> with the engine executor, <mode> mode.
    Reviewer model: <deep model>. run=<run-id> tmux=engine:<name>
    rc=<name>`, values the claim records. `/bin/sh` first exports `GH_TOKEN`
    from the token file, keeping it off every command line;
@@ -175,8 +175,8 @@ Designed, not built: `--harness codex`, and `--host` (spawning over SSH).
 
 **Other ways to start:** a session started any other way (Claude desktop, a
 plain `claude` in a terminal) runs the same executor. It creates its own
-worktree, and it shows up wherever its claim comment does. It can only be
-reached from wherever it was started.
+worktree, and it shows up wherever its claim comment does. It is reachable
+only where it was started.
 
 ## The claim comment is the registry
 
@@ -200,10 +200,10 @@ hand and one started by the coordinator look the same.
 | --- | --- |
 | Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. Targets the window by id. Detach with `Ctrl-b d`; the session keeps running. |
 | Phone, SSH | An SSH app over Tailscale, then `tmux attach -t engine`, then `Ctrl-b w` to pick the window. Best for debugging. |
-| Phone, chat | Claude sessions: the Claude app, through Remote Control. Codex sessions: the ChatGPT app, through Codex remote control. Best for answering a question. |
+| Phone, chat | Claude sessions: the Claude app, through Remote Control. Codex sessions: the ChatGPT app, through Codex remote control. Best for answering questions. |
 | Desktop | claude.ai/code or the Claude desktop app for Remote Control sessions; the ChatGPT or Codex desktop app for Codex. |
 
-Clients share one window: all see the same screen, and anyone can type.
+Clients share one window: everyone sees the same screen and can type.
 
 Each harness reaches the apps differently:
 
