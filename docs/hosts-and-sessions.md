@@ -161,12 +161,13 @@ runs holds one). Then it:
    exits, never shows;
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
    so the repo's `AGENTS.md` loads;
-5. runs the host's launch line at the card's tier (default `standard`), the
-   kickoff as its last argument and Claude's first message: `Execute
-   <owner/repo#n> with the engine executor, <mode> mode. Reviewer model:
-   <deep model>. run=<run-id> tmux=engine:<name> rc=<name>`, values the
-   claim records. `/bin/sh` first exports `GH_TOKEN` from the token file,
-   keeping it off every command line;
+5. runs the host's launch line at the card's tier (default `standard`), plus
+   `--add-dir <engine's plugin directory>`, without which Claude's file tools
+   ask before reading the skill. After `--` comes the kickoff, Claude's first
+   message: `Execute <owner/repo#n> with the engine executor, <mode> mode.
+   Reviewer model: <deep model>. run=<run-id> tmux=engine:<name>
+   rc=<name>`, values the claim records. `/bin/sh` first exports `GH_TOKEN`
+   from the token file, keeping it off every command line;
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
 The executor claims the task; its claim check stops a racing second start.
@@ -240,18 +241,17 @@ newline that arrives with the text.
 
 ## Keeping hosts awake
 
-tmux survives a closed terminal, but not a sleeping machine. On a macOS host,
-each window that engine opens starts `caffeinate -s -w <pid>` on its command's
-process, through tmux's `run-shell`. `-s` holds off sleep while on power, and
-`-w` ends it when the command does, so nothing outlives the last command. A
-Linux host should not suspend at all.
+tmux survives a closed terminal, but not a sleeping machine. On a
+macOS host, each window engine opens starts `caffeinate -s -w <pid>` on its
+command's process: `-s` holds off sleep while on power, `-w` ends it with the
+command. A Linux host should not suspend at all.
 
 ## Lifecycle
 
 - **Questions:** the executor sets `needs-human` and waits in the live session.
   Answer from any surface. A comment on the task's issue also works, because
   the executor reads its inbox when it resumes.
-- **End:** after cleanup, the executor exits and engine closes the window.
+- **End:** after cleanup, a hands-off executor closes its own window; a gated
+  one leaves it for the operator.
 - **Crash:** the window has died but the task is still `running`. `engine ps`
-  shows it as dead. The coordinator, when one is running, marks it `failed`
-  and keeps the worktree for debugging.
+  shows it dead; a running coordinator marks it `failed`, keeping the worktree.

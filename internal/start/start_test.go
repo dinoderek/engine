@@ -161,12 +161,17 @@ func TestLaunchCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `
+		plugin := filepath.Join(h.dir, ".claude/plugins/cache/engine")
 		if configDir != "" {
 			script += `export CLAUDE_CONFIG_DIR='/cfg dir' && `
+			plugin = `'/cfg dir/plugins/cache/engine'`
 		} else {
 			script += `unset CLAUDE_CONFIG_DIR && `
 		}
+		// The skill's directory is a working directory, and -- keeps the
+		// variadic --add-dir from taking the kickoff as a second directory.
 		script += `exec ` + h.bin + ` --permission-mode auto --model opus-x --effort high -n r-7 --remote-control r-7 ` +
+			`--add-dir ` + plugin + ` -- ` +
 			`'Execute ` + ref(7).String() + ` with the engine executor, hands-off mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`
 		if want := "exec /bin/sh -c " + hosts.ShellWord(script); got != want {
 			t.Errorf("command\n got %s\nwant %s", got, want)
