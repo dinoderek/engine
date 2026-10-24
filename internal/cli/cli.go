@@ -12,6 +12,7 @@ import (
 
 	"github.com/dinoderek/engine/internal/attach"
 	"github.com/dinoderek/engine/internal/hook"
+	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/start"
 	"github.com/dinoderek/engine/internal/tell"
@@ -30,6 +31,8 @@ commands:
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
   tell <repo>-<task> <text> comment on a task's issue and point its session at it
+  lint <owner/repo#n>       check a feature's plan: card sections, keys, cycles,
+                            the acceptance task and shared open questions
   start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]
                             launch an executor session for a task on this machine
 `
@@ -90,6 +93,8 @@ func Run(args []string, env Env) int {
 		return runStart(args[1:], env)
 	case "tell":
 		return runTell(args[1:], env)
+	case "lint":
+		return runLint(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0
@@ -157,6 +162,39 @@ func runTell(args []string, env Env) int {
 		return 1
 	}
 	fmt.Fprintf(env.Out, "commented on %s: %s\ntyped a pointer into %s\n", told.Task, told.URL, told.Window)
+	return 0
+}
+
+// runLint lints a feature's plan and exits 1 when it breaks a rule.
+func runLint(args []string, env Env) int {
+	if len(args) != 1 {
+		fmt.Fprint(env.Err, "usage: engine lint <owner/repo#n>\n")
+		return 2
+	}
+	ref, err := tracker.ParseRef(args[0])
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine lint:", err)
+		return 2
+	}
+	token, err := tracker.Token(env.Getenv, env.Home)
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine lint:", err)
+		return 1
+	}
+	f, err := tracker.ReadFeature(env.Exec, token, ref)
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine lint:", err)
+		return 1
+	}
+	problems := lint.Lint(f)
+	for _, p := range problems {
+		fmt.Fprintln(env.Out, p)
+	}
+	if len(problems) > 0 {
+		fmt.Fprintf(env.Out, "%s: %d problem(s)\n", ref, len(problems))
+		return 1
+	}
+	fmt.Fprintf(env.Out, "%s: the plan passes, %d tasks\n", ref, len(f.Tasks))
 	return 0
 }
 

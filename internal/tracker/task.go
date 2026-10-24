@@ -71,26 +71,14 @@ func ReadTask(run Runner, token string, ref Ref) (Task, error) {
 
 // openBlockers lists the issues blocking ref that are not closed.
 func openBlockers(run Runner, token string, ref Ref) ([]Ref, error) {
-	path := fmt.Sprintf("repos/%s/issues/%d/dependencies/blocked_by", ref.Repo, ref.Number)
-	out, err := api(run, token, path, "--paginate")
+	all, err := blockedBy(run, token, ref)
 	if err != nil {
-		return nil, fmt.Errorf("blockers of %s: %w", ref, err)
-	}
-	pages, err := decodeAll[[]apiIssue](out)
-	if err != nil {
-		return nil, fmt.Errorf("blockers of %s: %w", ref, err)
+		return nil, err
 	}
 	var open []Ref
-	for _, page := range pages {
-		for _, blocker := range page {
-			if blocker.State != "open" {
-				continue
-			}
-			b, err := blocker.ref()
-			if err != nil {
-				return nil, fmt.Errorf("blockers of %s: %w", ref, err)
-			}
-			open = append(open, b)
+	for _, b := range all {
+		if b.Open {
+			open = append(open, b.Ref)
 		}
 	}
 	return open, nil
@@ -98,7 +86,6 @@ func openBlockers(run Runner, token string, ref Ref) ([]Ref, error) {
 
 var (
 	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
-	tierHeading = regexp.MustCompile(`^##[ \t]+Harness / tier[ \t]*$`)
 	nextHeading = regexp.MustCompile(`^#{1,2}[ \t]`)
 	tierWord    = regexp.MustCompile(`[a-z][a-z0-9_-]*`)
 )
@@ -132,22 +119,8 @@ func ParseHarnessTier(body string) (harness, tier string, err error) {
 	return harness, tier, nil
 }
 
-// tierSection returns the text under the Harness / tier heading, without
-// comments, up to the next heading.
+// tierSection returns the text under the Harness / tier heading.
 func tierSection(body string) string {
-	body = htmlComment.ReplaceAllString(strings.ReplaceAll(body, "\r\n", "\n"), "")
-	lines := strings.Split(body, "\n")
-	var section []string
-	in := false
-	for _, line := range lines {
-		switch {
-		case tierHeading.MatchString(line):
-			in = true
-		case in && nextHeading.MatchString(line):
-			in = false
-		case in:
-			section = append(section, line)
-		}
-	}
-	return strings.Join(section, "\n")
+	section, _ := Section(body, "Harness / tier")
+	return section
 }
