@@ -163,12 +163,13 @@ runs holds one). Then it:
    so the repo's `AGENTS.md` loads;
 5. runs the host's launch line at the card's tier (default `standard`), plus
    `--add-dir <engine's plugin directory>` and a read-only rule for `/tmp`
-   (an added directory's skills load, and anyone writes to `/tmp`). Without
-   them Claude asks before reading the skill or a test's screenshots. Then
-   `--` and the kickoff, Claude's first message: `Execute <owner/repo#n> with
-   the engine executor, <mode> mode. Reviewer model: <deep model>.
-   run=<run-id> tmux=engine:<name> rc=<name>`, values the claim records. `/bin/sh` first exports `GH_TOKEN`
-   from the token file, keeping it off every command line;
+   (an added directory's skills load, and anyone can write to `/tmp`).
+   Without them Claude asks before reading the skill or a test's
+   screenshots. Then `--` and the kickoff, Claude's first message: `Execute
+   <owner/repo#n> with the engine executor, <mode> mode. Reviewer model:
+   <deep model>. run=<run-id> tmux=engine:<name> rc=<name>`, values the
+   claim records. `/bin/sh` first exports `GH_TOKEN` from the token file,
+   keeping it off every command line;
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
 The executor claims the task; its claim check stops a racing second start.
