@@ -5,10 +5,10 @@
 ## What
 
 engine is a hands-off feature build protocol for agent-driven repos, plus the
-tooling that runs it. An operator and an agent agree on the *what* and the
-*how*. An agent plans the work. A coordinator then runs each task in its own
-agent session, on whichever host and harness fits, through to a merged PR. The
-operator is out of the loop unless a task asks for them.
+tooling that runs it. An operator and an agent agree the *what* and the
+*how*, an agent plans the work, and a coordinator runs each task in its own
+session through to a merged PR. The operator is pulled in only when a task
+asks.
 
 | Part | What it is |
 | --- | --- |
@@ -16,7 +16,7 @@ operator is out of the loop unless a task asks for them.
 | Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through planning and execution, spawning sessions on local or SSH hosts. No LLM. |
 | Skill | `engine`: what agents do when they plan, execute (hands-off or gated) and review. It ships from this repo as a Claude Code plugin. |
 | Plan sources | Plan and status storage behind one set of operations: GitHub Issues, which the coordinator drives, or an in-repo plan. |
-| Hosts | Config for each machine: its harnesses, memory (which sets its session slots) and capabilities, plus how to reach every session. |
+| Hosts | Each machine's harnesses, session slots and capabilities, and how to reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |
 | Project context guideline | What a repo must provide so executors can run hands-off. It is the source for a language-neutral seed prompt. |
 

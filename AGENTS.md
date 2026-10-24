@@ -2,8 +2,8 @@
 
 > **Owns:** the rules every session in this repo follows, and the index of every doc. **Not here:** the protocol a task follows (`docs/execution-protocol.md`), how each gate works (`docs/quality-gates.md`).
 
-The single agent entrypoint; `CLAUDE.md` is a symlink to it. The rules are in
-this file on purpose: **links are for depth, never for rules.**
+The agent entrypoint (`CLAUDE.md` links to it). **Links are for depth, never
+for rules.**
 
 ## Non-negotiables
 
@@ -25,8 +25,8 @@ this file on purpose: **links are for depth, never for rules.**
    - gofmt, go vet, golangci-lint, the docs check, and version pins that agree.
 
    Existing violations live in the shrink-only baselines
-   (`scripts/*-baseline.tsv`, all empty). A `//nolint` counts as a violation.
-   Meet a target with tests, a split function or moved code.
+   (`scripts/*-baseline.tsv`, all empty); a `//nolint` counts as one. Meet a
+   target with tests, a split function or moved code.
 4. **Hard stops.** Stop and ask the operator for:
    - the protocol's classes: product, data, security, contract, gates,
      outward or costly, drift, objectives, review, environment, repo rule
