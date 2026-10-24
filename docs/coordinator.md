@@ -88,7 +88,7 @@ It reads JSON from stdout. If you are changing host names or addresses, load
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), opens the tmux window and launches the harness. |
 | `status` | Reports whether the window is alive and whether the harness is waiting for input. |
 | `collect` | Returns the run directory for telemetry. |
-| `release` | Closes the window, and keeps the worktree when the run failed. |
+| `release` | Closes the window if it is still open (a gated or failed run), and keeps the worktree when the run failed. |
 
 - **Repos.** Each host keeps engine's own clone at
   `~/.local/share/engine/repos/<owner>/<repo>`, which acts as the main

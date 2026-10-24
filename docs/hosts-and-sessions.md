@@ -241,9 +241,9 @@ newline that arrives with the text.
 
 ## Keeping hosts awake
 
-tmux does not survive a sleeping machine. On a macOS host, each window engine
-opens starts `caffeinate -s -w <pid>` on its command's process, through tmux's
-`run-shell`: `-s` holds off sleep while on power, `-w` ends it with the
+tmux survives a closed terminal, but not a sleeping machine. On a
+macOS host, each window engine opens starts `caffeinate -s -w <pid>` on its
+command's process: `-s` holds off sleep while on power, `-w` ends it with the
 command. A Linux host should not suspend at all.
 
 ## Lifecycle
