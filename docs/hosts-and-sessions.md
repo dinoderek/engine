@@ -89,8 +89,8 @@ the repo.
 
 **Validation.** `internal/hosts` parses the TOML subset above strictly. It
 rejects an unknown key, a duplicate and any broken rule on this page, and
-reports the first with its line number. A launch line starts with `{bin}` and
-contains `{model}`.
+reports the first with its line number. A launch line starts with `{bin}`,
+contains `{model}` and uses only these placeholders.
 
 ## Placement
 
@@ -218,9 +218,8 @@ opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
 
 - on the session: `mouse on` and `history-limit 50000`;
 - on each window: `allow-rename off` and `automatic-rename off`, so agents
-  can't rename them;
-  `window-size latest`, to fit whoever attached last; `remain-on-exit on`,
-  so a crashed session's last screen stays readable.
+  can't rename them; `window-size latest`, to fit whoever attached last; and
+  `remain-on-exit on`, so a crashed session's last screen stays readable.
 
 `pipe-pane` copies each window's output into its run directory, so the raw log
 outlives the tmux server. Engine opens a window on a placeholder command, sets
