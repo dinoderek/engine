@@ -15,7 +15,7 @@ type Claim struct {
 	Host          string // the host's logical name
 	Harness       string // the raw line: <harness> <version> (<model>)
 	Mode          string
-	StartedBy     string // hand or engine start
+	StartedBy     string // hand, engine start or coordinator
 	Tmux          string // session:window
 	RemoteControl string
 	Branch        string

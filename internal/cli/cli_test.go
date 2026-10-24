@@ -38,7 +38,7 @@ func TestRun(t *testing.T) {
 		{"unknown", []string{"frobnicate"}, "", none, false, 2, "", `unknown command "frobnicate"`},
 		{"labels without sync", []string{"labels", "o/r"}, "", none, false, 2, "", "usage: engine labels sync <owner/repo>"},
 		{"labels sync without repo", []string{"labels", "sync"}, "", none, false, 2, "", "usage: engine labels sync <owner/repo>"},
-		{"labels sync", []string{"labels", "sync", "o/r"}, "", token, false, 0, "13 engine labels in o/r", ""},
+		{"labels sync", []string{"labels", "sync", "o/r"}, "", token, false, 0, "14 engine labels in o/r", ""},
 		{"labels sync, gh fails", []string{"labels", "sync", "o/r"}, "", token, true, 1, "", "HTTP 403"},
 		{"labels sync, no token", []string{"labels", "sync", "o/r"}, "", none, false, 1, "", "no GH_TOKEN and no token file"},
 		{"hook blocks", []string{"hook", "pre-tool-use"}, `{"tool_name":"Bash","tool_input":{"command":"gh pr merge --auto"}}`, none, false, 2, "", "merge guard"},

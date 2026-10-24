@@ -1,6 +1,6 @@
 # Execution protocol
 
-> **Owns:** the principles, the phases at a glance, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, why the coordinator is a role, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 The skill is the single source for agent behaviour. This doc explains the
 design around it and never restates a rule the skill holds. If you are
@@ -11,10 +11,10 @@ changing what an agent does, change the skill.
 - **Hands-off when dispatched, stops by rule.** A dispatched executor decides
   open questions itself, and logs as rulings only the decisions worth your
   review. It stops only for a hard-stop class.
-- **Enforce in code, not prompts.** The coordinator is a program. Merging is a
-  scripted check of the reviewed head commit against green checks. In Claude
-  Code, the plugin's merge guard (below) blocks an unpinned, auto or admin
-  merge through `gh`.
+- **Enforce in code, not prompts.** The coordinator's pass is specified once
+  and implemented in code (`engine run`). Merging is a scripted check of the
+  reviewed head commit against green checks. In Claude Code, the plugin's
+  merge guard (below) blocks an unpinned, auto or admin merge through `gh`.
 - **One task = one session = one worktree = one PR.**
 - **One plan source per feature:** the tracker, or an in-repo plan that the
   operator points the executor at. The coordinator drives only the tracker.
@@ -55,6 +55,17 @@ the commit that was reviewed and gated.
 - **Starters:** `engine start`, the coordinator, or you by hand. The steps
   are the same whichever starts it.
 
+## Run modes
+
+The coordinator is a role, filled by a program or by an agent; the skill
+lists the five run modes. Its `coordinate` mode is the single spec for one
+reconcile pass, which `engine run` implements in code, so an agent
+coordinator and the program behave the same.
+
+The supervisor mode exists to find the gaps in `engine run`. It acts only
+through `engine` commands and records every gap it fills, so each one becomes
+an `engine run` fix, until the engine-only mode needs no agent.
+
 ## Models
 
 Cards and roles name a tier (`deep`, `standard`, `light`), never a model.
@@ -68,9 +79,12 @@ the tier and the model for every run, and the defaults are tuned from that.
 
 - **You read only what is costly to undo.** Decisions are graded by what
   undoing them costs. `low` ones stay in a collapsed PR section that you never
-  have to read. `med` and `high` ones queue under `engine:ruling-review`.
-  You read them and remove the label, so "what needs my review" is one saved
-  search across every repo: `is:issue label:engine:ruling-review`.
+  have to read. Only `high` ones queue under `engine:ruling-review`, so the
+  label stays rare. You read them and remove the label, so "what needs my
+  review" is one saved search across every repo:
+  `is:issue label:engine:ruling-review`.
+- **Rulings are written for you, not the code.** Each says what a user would
+  notice and what the alternative was.
 - **Hard stops are the only interruptions.** The list grows or shrinks from
   evidence. Telemetry counts rulings per task by risk, and a class of `high`
   rulings that keeps being reversed becomes a hard stop.
@@ -89,9 +103,10 @@ creates or updates them all; the set is `internal/tracker`.
 
 "Ready" is computed, never stored. The planner sets `feature` and `prepare`.
 You set `approved` and clear `ruling-review`. The executor sets `running`,
-`needs-human`, `in-review` and `ruling-review`, and clears `in-review` once
-the merge closes the task.
-The coordinator owns the other feature labels and `failed`.
+`needs-human`, `in-review`, `merging` and `ruling-review`, and clears
+`in-review` and `merging` once the merge closes the task.
+The coordinator owns the other feature labels and `failed`, and clears a
+dead holder's `merging`.
 
 Feature status at a glance: the feature issue's state label and its sub-issue
 progress.
@@ -114,6 +129,11 @@ executor reads the inbox.
 There is no file ownership. Parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
+
+**One merge at a time.** Each sibling merge moves the default branch and
+forces a re-gate on every other open PR. So a feature has one merge lock,
+the `engine:merging` label: its holder merges the default branch, gates and
+merges, while the others wait before their last gate run.
 
 ## Enforced by hook
 

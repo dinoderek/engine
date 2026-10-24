@@ -36,7 +36,7 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
      `engine:approved`, not `engine:prepare`;
    - every blocker is closed
      (`gh api repos/<o>/<r>/issues/<n>/dependencies/blocked_by`);
-   - the host file and the token exist;
+   - the token exists, and the host file unless the kickoff names `host=`;
    - the repo has the `engine:` labels (`engine labels sync`).
 
    If a check fails, say so in the session only. Otherwise add
@@ -85,35 +85,55 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    Push and open the PR. Swap `engine:running` for `engine:in-review`.
    Release any local resources the repo says to stop when a PR opens.
 10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
+    - Take the merge lock (below) first. A standalone task needs none.
     - On a failure, read the logs, fix, and go back to step 5.
-    - If the default branch moved or conflicts, merge it in and go back to
-      step 5.
+    - If the default branch moved, merge it in and go back to step 5. Keep
+      the lock if it merged cleanly; a conflict you resolved is a fix.
     - Before merging, read the task's comments once more.
     - When every check is green, merge with the repo's merge method and
       `--match-head-commit <sha>`, where `<sha>` is the commit you reviewed
       and gated.
     - A repo with no CI merges on the local gates alone.
     - In gated mode, wait for the operator's approval before merging.
-11. **Report.** Remove `engine:in-review`: the merge closed the task. Comment
-    on the task's issue: what shipped, the `med` and `high` rulings, and the
+11. **Report.** Remove `engine:in-review` and `engine:merging`: the merge
+    closed the task. Comment on the task's issue: what shipped, the `med` and `high` rulings, and the
     deviations. Update downstream tasks that are still to do if your work
     changed what they assume (below).
 12. **Clean up.** Run the repo's worktree-release command from outside the
     worktree, and say what it removed. If the PR closed without merging, ask
     first. Then end the session. In hands-off mode, when the kickoff names
     `tmux=`, your last action is `cd "$HOME" && tmux kill-window -t
-    "$TMUX_PANE"`: it closes your window and frees its slot. If the shell
-    says its working directory was deleted, run it again. In gated mode the
-    operator is reading, so leave it open.
+    "$TMUX_PANE"`, which frees its slot; if the shell says its working
+    directory was deleted, run it again. A gated window stays open.
 
 Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
 when you resume after a stop.
 
+**Unattended sessions.** When `ENGINE_UNATTENDED=1` is in your environment,
+nobody watches your screen. A denied permission request may be the
+**Permission** hard stop (`rulings.md`).
+
+## Merge lock
+
+One task per feature merges at a time, so no sibling moves the default
+branch under your last gate run. To take the lock, add `engine:merging` to
+your task if no open sibling carries it. The holder is the carrier whose latest
+`engine:merging` `labeled` event (`gh api repos/<o>/<r>/issues/<n>/events`)
+is oldest; check after adding it and just before merging, and if it is not
+you, remove yours. Without the lock, check every 5 minutes. Once you hold
+it, fetch: if the default branch moved since your last gate run, merge it in
+and go back to step 5.
+
+Remove it after the merge, at a hard stop, while a gated run waits for
+approval, while you make a fix, and when the PR closes unmerged. Take it
+again to resume. A gated run whose head changed meanwhile asks for
+approval again.
+
 ## Claim comment
 
 The first line is fixed, so claims can be searched. Never invent a value: use
-`none` when one is unknown. Values in the kickoff (`run=`, `tmux=`, `rc=`)
-override these. Branch is the one step 2 opens, or the one you are on.
+`none` when one is unknown. Values in the kickoff (`run=`, `tmux=`, `rc=`,
+`host=`, `started=`) override these. Branch is the one step 2 opens, or the one you are on.
 
 ```text
 Claim: <repo>-<task>
@@ -121,15 +141,15 @@ Run: <repo>-<task>-<UTC yyyymmddThhmmssZ>
 Host: <logical host name>
 Harness: <harness> <version> (<model>)
 Mode: hands-off|gated
-Started by: hand|engine start
+Started by: hand|engine start|coordinator
 Tmux: <session:window>|none
 Remote Control: <name>|none
 Branch: <branch>
 ```
 
 - **Host** is the logical name in `~/.config/engine/host` (such as `mac` or
-  `devbox`), never a hostname or an address. If the file is missing, stop
-  (**Environment**).
+  `devbox`), never a hostname or an address. If the file is missing and the
+  kickoff names no `host=`, stop (**Environment**).
 - **Tmux** comes from `tmux display-message -p '#S:#W'` when `$TMUX` is set.
 
 ## Changing the plan mid-flight
@@ -147,9 +167,9 @@ Branch: <branch>
   `engine:approved`.
 - `engine:needs-human` during a hard stop. It replaces `engine:running` or
   `engine:in-review`, and you restore that label when the stop is answered.
-- `engine:in-review` when the PR opens, removed once the merge closes the
-  task, so a closed task carries no state label.
-- `engine:ruling-review` with a `med` or `high` ruling. The operator clears it.
+- `engine:in-review` when the PR opens, removed after the merge.
+- `engine:merging` while you hold the merge lock.
+- `engine:ruling-review` with a `high` ruling. The operator clears it.
 
 Leave every other label to the coordinator.
 

@@ -1,7 +1,7 @@
 ---
 name: engine
-description: Engine's build protocol. Use when the operator asks you to plan work for engine (one task, or a feature, as GitHub issues), when you are started to break an approved feature into tasks, when you are told to execute a task with the engine executor (a GitHub task issue, owner/repo#<n>, or an in-repo card), hands-off or gated, or when you are spawned as an engine reviewer.
-argument-hint: "plan task [<issue>] | plan feature [--with-tasks] | plan breakdown <feature> | execute <task ref> [hands-off | gated] | review"
+description: Engine's build protocol. Use when the operator asks you to plan work for engine (one task, or a feature, as GitHub issues), when you are started to break an approved feature into tasks, when you are told to execute a task with the engine executor (a GitHub task issue, owner/repo#<n>, or an in-repo card), hands-off or gated, when you are told to coordinate a feature or supervise engine run, or when you are spawned as an engine reviewer.
+argument-hint: "plan task [<issue>] | plan feature [--with-tasks] | plan breakdown <feature> | execute <task ref> [hands-off | gated] | coordinate <feature> [engine | native] | supervise <feature> | review"
 ---
 
 # Engine
@@ -18,10 +18,25 @@ session through to a merged PR. The operator is pulled in only by a hard stop.
 | `plan feature [--with-tasks]` | Planning a feature with the operator | `references/plan.md`, `references/plan-sources.md` |
 | `plan breakdown <feature>` | Splitting an approved feature into tasks, alone | `references/plan.md`, `references/plan-sources.md` |
 | `execute <task ref> [hands-off \| gated]` | The executor of one task | `references/execute.md`, `references/rulings.md`, `references/plan-sources.md` |
+| `coordinate <feature> [engine \| native]` | The coordinator: you start executors and watch them | `references/coordinate.md`, `references/plan.md`, `references/plan-sources.md` |
+| `supervise <feature>` | Watching `engine run`, which coordinates | `references/supervise.md` |
 | `review` | A reviewer spawned by an executor | `references/review.md` |
 
-The kickoff prompt `Execute <ref> with the engine executor, <mode> mode` means
-`execute <ref> <mode>`.
+Kickoffs: `Execute <ref> with the engine executor, <mode> mode` means
+`execute <ref> <mode>`; `Coordinate <feature> with engine` or `with native
+sessions` means `coordinate`; `Supervise <feature>` means `supervise`.
+
+## Run modes
+
+| Run mode | Coordinator | Executors |
+| --- | --- | --- |
+| Single task | The operator | This session (`execute`) |
+| Coordinator, native sessions | You (`coordinate native`) | Claude Code cloud sessions |
+| Coordinator, engine | You (`coordinate engine`) | `engine start` |
+| Supervisor | `engine run`, watched by you (`supervise`) | `engine start` |
+| Engine only | `engine run` | `engine start` |
+
+The executor's steps are the same in every run mode.
 
 ## Rules in every mode
 

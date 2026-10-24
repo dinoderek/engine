@@ -1,7 +1,7 @@
 {
   "name": "engine",
   "description": "The engine skill: plan, execute and review engine tasks, hands-off or gated, with a merge guard.",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "author": {
     "name": "dinoderek"
   }

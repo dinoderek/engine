@@ -58,7 +58,7 @@ func TestLabelsAreWellFormed(t *testing.T) {
 		}
 		seen[l.Name] = true
 	}
-	for _, state := range []string{"running", "needs-human", "in-review", "failed", "ruling-review", "approved", "blocked"} {
+	for _, state := range []string{"running", "needs-human", "in-review", "failed", "merging", "ruling-review", "approved", "blocked"} {
 		if !seen["engine:"+state] {
 			t.Errorf("no engine:%s label", state)
 		}
@@ -82,7 +82,7 @@ func TestSyncLabels(t *testing.T) {
 	if calls[0] != want {
 		t.Errorf("first call %q, want %q", calls[0], want)
 	}
-	if !strings.Contains(out.String(), "13 engine labels in o/r") {
+	if !strings.Contains(out.String(), "14 engine labels in o/r") {
 		t.Errorf("output:\n%s", out.String())
 	}
 }
