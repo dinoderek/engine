@@ -21,10 +21,12 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    each cloud session's status); and the sessions you started, with when.
 2. **Plan if needed.** An `engine:approved` feature with no sub-issues gets a
    planner session, kickoff `Plan breakdown <feature>`, unless one you
-   started for it is still alive. When no planner is alive and the feature
-   has sub-issues, lint the plan (`engine lint <feature>`, else by hand with
-   `plan.md`'s lint list) and set `engine:planned` once it passes. Steps 3
-   to 8 run only on a feature that is `engine:planned` or later.
+   started for it is still alive. When the feature is `engine:approved`,
+   has sub-issues and no planner is alive, lint the plan (`engine lint
+   <feature>`, else by hand with `plan.md`'s lint list). If it passes, set
+   `engine:planned`; if not, comment the failures on the feature and
+   @mention the operator, once. Steps 3 to 8 run only on a feature that is
+   `engine:planned` or later.
 3. **Start ready tasks.** A task is ready when it is open, has no `engine:`
    state label, and every blocker is closed. While a slot is free, start
    them in this order:
