@@ -45,6 +45,8 @@ func TestRun(t *testing.T) {
 		{"hook allows", []string{"hook", "pre-tool-use"}, `{"tool_name":"Read","tool_input":{}}`, none, false, 0, "", ""},
 		{"unknown hook fails open", []string{"hook", "stop"}, "", none, false, 1, "", `unknown hook "stop"`},
 		{"hook without a name fails open", []string{"hook"}, "", none, false, 1, "", "unknown hook"},
+		{"tell without text", []string{"tell", "r-7"}, "", token, false, 2, "", "usage: engine tell"},
+		{"tell an unclaimed task", []string{"tell", "nope-1", "hi"}, "", token, false, 1, "", "engine tell: no claimed task named nope-1"},
 		{"attach without a task", []string{"attach"}, "", token, false, 2, "", "usage: engine attach <repo>-<task>"},
 		{"attach with two names", []string{"attach", "a-1", "b-2"}, "", token, false, 2, "", "usage: engine attach <repo>-<task>"},
 		{"attach an unclaimed task", []string{"attach", "nope-1"}, "", token, false, 1, "", "engine attach: no claimed task named nope-1"},

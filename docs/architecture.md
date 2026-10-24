@@ -10,12 +10,14 @@ Two programs share one Go module:
   command. `internal/cli` parses arguments and dispatches. Today:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
   tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
-  of a task issue and of the claim comments on every claimed task),
+  of a task issue and of the claim comments on every claimed task, and
+  posting a comment),
   `internal/hook`
   (harness hooks: `engine hook pre-tool-use`), `internal/attach`
   (`engine attach`: a task's claim, then its tmux window), `internal/ps`
   (`engine ps`: the state of each claimed task), `internal/start`
-  (`engine start`: checks a task, then launches its session). The commands
+  (`engine start`: checks a task, then launches its session), `internal/tell`
+  (`engine tell`: comments on a task and points its session at it). The commands
   share `internal/hosts`, the host config: it parses `hosts.toml` with an
   in-house reader of the TOML subset the config uses, validates it, works out
   each machine's slots and expands launch lines. `internal/session` is the

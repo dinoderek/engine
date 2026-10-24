@@ -68,6 +68,10 @@ Commands that work without `run`, and come first in the build:
   liveness probe of each host.
 - `engine attach <repo>-<task>`: attach to a session's tmux window, locally or
   over SSH.
+- `engine tell <repo>-<task> <text>`: comment the text on the task's issue,
+  then type a pointer to the comment into its window on this host, so the
+  session reads it now rather than at its next inbox check. For a session on
+  another host, or with no live window, the comment stays and it exits 1.
 - `engine lint <feature>`: plan lint on its own.
 - `engine labels sync <owner/repo>`: create or update the `engine:` labels in
   a target repo.

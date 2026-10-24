@@ -14,6 +14,7 @@ import (
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/start"
+	"github.com/dinoderek/engine/internal/tell"
 	"github.com/dinoderek/engine/internal/tracker"
 	"github.com/dinoderek/engine/internal/version"
 )
@@ -28,6 +29,7 @@ commands:
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
+  tell <repo>-<task> <text> comment on a task's issue and point its session at it
   start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]
                             launch an executor session for a task on this machine
 `
@@ -86,6 +88,8 @@ func Run(args []string, env Env) int {
 		return runAttach(args[1:], env)
 	case "start":
 		return runStart(args[1:], env)
+	case "tell":
+		return runTell(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0
@@ -137,6 +141,22 @@ func runAttach(args []string, env Env) int {
 		fmt.Fprintln(env.Err, "engine attach:", err)
 		return 1
 	}
+	return 0
+}
+
+// runTell comments on a task and types a pointer into its window. A failure
+// after the comment landed still prints the comment's address.
+func runTell(args []string, env Env) int {
+	if len(args) < 2 {
+		fmt.Fprint(env.Err, "usage: engine tell <repo>-<task> <text...>\n")
+		return 2
+	}
+	told, err := tell.Tell(args[0], strings.Join(args[1:], " "), tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Getenv: env.Getenv, Home: env.Home})
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine tell:", err)
+		return 1
+	}
+	fmt.Fprintf(env.Out, "commented on %s: %s\ntyped a pointer into %s\n", told.Task, told.URL, told.Window)
 	return 0
 }
 
