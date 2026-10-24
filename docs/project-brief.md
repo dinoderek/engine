@@ -24,7 +24,7 @@ asks.
 
 The parts are designed, in `docs/`. Built so far: `engine version`,
 `engine labels sync`, `engine gh`, `engine start` (one Claude session on
-this machine), `engine ps`, `engine attach`, the host config reader
+this machine), `engine ps`, `engine attach`, `engine tell`, the host config reader
 (`internal/hosts`), the `engine` skill and its merge guard (a Claude Code
 plugin this repo publishes), and the repo's own tooling: `./dev` and its
 quality gates.

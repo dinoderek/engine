@@ -63,10 +63,11 @@ func Attach(name string, d Deps) error {
 	if err != nil {
 		return err
 	}
-	claim, ok := latestClaim(tasks, name)
+	task, ok := tracker.FindClaim(tasks, name)
 	if !ok {
 		return fmt.Errorf("no claimed task named %s", name)
 	}
+	claim := task.Claim
 	if claim.Host == "" {
 		return fmt.Errorf("the claim of %s names no host", name)
 	}
@@ -82,22 +83,6 @@ func Attach(name string, d Deps) error {
 		return fmt.Errorf("host %q of %s is not in hosts.toml", claim.Host, name)
 	}
 	return d.attachRemote(name, host)
-}
-
-// latestClaim returns the claim the task named name posted last. A task that
-// ran twice has two claims under one name.
-func latestClaim(tasks []tracker.ClaimedTask, name string) (tracker.Claim, bool) {
-	var latest tracker.Claim
-	found := false
-	for _, t := range tasks {
-		if t.Claim.Name != name {
-			continue
-		}
-		if !found || t.Claim.PostedAt.After(latest.PostedAt) {
-			latest, found = t.Claim, true
-		}
-	}
-	return latest, found
 }
 
 // attachLocal replaces the process with tmux on this host. Inside tmux it
