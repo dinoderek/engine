@@ -57,7 +57,7 @@ tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
 [harness.codex]
 max_sessions = 2
 launch = "{bin} --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
-tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }
+tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }   # not Astra: Sol at high is close on coding, far cheaper
 tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
 tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 
@@ -78,8 +78,7 @@ bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 ```
 
 Each harness maps every tier (`execution-protocol.md`, "Models") to a model
-and an effort level. GPT-6 Astra is deliberately unmapped: GPT-6.1 Sol at high
-effort comes close to it on coding at a fraction of the cost.
+and an effort level.
 
 Each host pins the path of every harness binary (`bin`), and `{bin}` in the
 launch line expands to it. Engine never runs whichever install comes first on
@@ -175,10 +174,9 @@ runs holds one). Then it:
 The executor claims the task; its claim check stops a racing second start.
 Designed, not built: `--harness codex`, and `--host` (spawning over SSH).
 
-**Other ways to start:** a session started any other way (Claude desktop, a
-plain `claude` in a terminal) runs the same executor. It creates its own
-worktree, and it shows up wherever its claim comment does. It is reachable
-only where it was started.
+**Other ways to start:** a session started any other way runs the same
+executor, creates its own worktree, and is reachable only where it was
+started.
 
 ## The claim comment is the registry
 
@@ -200,9 +198,8 @@ hand and one started by the coordinator look the same.
 | From | How |
 | --- | --- |
 | Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. Targets the window by id. Detach with `Ctrl-b d`; the session keeps running. |
-| Phone, SSH | An SSH app over Tailscale, then `tmux attach -t engine`, then `Ctrl-b w` to pick the window. Best for debugging. |
-| Phone, chat | Claude sessions: the Claude app, through Remote Control. Codex sessions: the ChatGPT app, through Codex remote control. Best for answering questions. |
-| Desktop | claude.ai/code or the Claude desktop app for Remote Control sessions; the ChatGPT or Codex desktop app for Codex. |
+| Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
+| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT or Codex apps, through Codex remote control. |
 
 Clients share one window: everyone sees the same screen and can type.
 
@@ -224,11 +221,8 @@ opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
 
 - on the session: `mouse on` and `history-limit 50000`;
 - on each window: `allow-rename off` and `automatic-rename off`, so agents
-  can't rename windows;
-- on each window: `window-size latest`, so it fits whoever attached last (a
-  phone or a laptop);
-- on each window: `remain-on-exit on`, so a crashed session's last screen
-  stays readable.
+  can't rename them; `window-size latest`, to fit whoever attached last; and
+  `remain-on-exit on`, so a crashed session's last screen stays readable.
 
 `pipe-pane` copies each window's output into its run directory, so the raw log
 outlives the tmux server. Engine opens a window on a placeholder command, sets
