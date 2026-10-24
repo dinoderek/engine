@@ -72,7 +72,12 @@ func Check(d Deps, out io.Writer) (CheckResult, error) {
 	if err := session.TrustFolder(session.ClaudeConfig(d.Getenv, d.Home), work); err != nil {
 		return CheckResult{}, fmt.Errorf("trust %s for Claude Code: %w", work, err)
 	}
+	// A marker left by anyone else must not read as this session's.
 	marker := filepath.Join(checkTmp, "engine-"+runID)
+	if err := os.Remove(marker); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return CheckResult{}, err
+	}
+	defer func() { _ = os.Remove(marker) }()
 	line, err := p.cfg.LaunchLine(p.host, hosts.Launch{Harness: Harness, Tier: hosts.Light, Name: CheckName, Clone: work, Home: d.Home})
 	if err != nil {
 		return CheckResult{}, err
@@ -85,18 +90,18 @@ func Check(d Deps, out io.Writer) (CheckResult, error) {
 	}
 	fmt.Fprintf(out, "checking in %s:%s (run directory %s); this takes a few minutes\n", session.Name, opened.ID, runDir)
 	r := CheckResult{RunDir: runDir}
-	if r.Closed, err = waitClosed(d, opened.ID); err != nil {
-		return r, err
-	}
+	r.Closed, err = waitClosed(d, opened.ID)
 	if !r.Closed {
 		r.Screen, _ = d.Tmux.Capture(opened.ID, stallLines)
-		if err := d.Tmux.Kill(opened.ID); err != nil {
-			fmt.Fprintf(out, "could not close %s:%s: %v\n", session.Name, opened.ID, err)
+		if kerr := d.Tmux.Kill(opened.ID); kerr != nil {
+			fmt.Fprintf(out, "could not close %s:%s: %v\n", session.Name, opened.ID, kerr)
 		}
+	}
+	if err != nil {
+		return r, err
 	}
 	data, _ := os.ReadFile(marker)
 	r.Finished = strings.Contains(string(data), "done")
-	_ = os.Remove(marker)
 	if r.Denied, err = readDenied(filepath.Join(runDir, session.PermissionLog)); err != nil {
 		return r, err
 	}
@@ -138,7 +143,9 @@ func CheckKickoff(skill, marker string) string {
 		"If a step is denied, skip it and go on."
 }
 
-// waitClosed polls until the window with id is gone, or CheckTimeout.
+// waitClosed polls until the window with id is gone, or CheckTimeout. A
+// window whose command has exited, as when Claude cannot start, ends the
+// wait at once, as not closed.
 func waitClosed(d Deps, id string) (bool, error) {
 	sleep := d.Sleep
 	if sleep == nil {
@@ -150,20 +157,24 @@ func waitClosed(d Deps, id string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if !hasID(windows, id) {
+		w, ok := find(windows, id)
+		if !ok {
 			return true, nil
+		}
+		if w.Dead {
+			return false, nil
 		}
 	}
 	return false, nil
 }
 
-func hasID(windows []session.WindowInfo, id string) bool {
+func find(windows []session.WindowInfo, id string) (session.WindowInfo, bool) {
 	for _, w := range windows {
 		if w.ID == id {
-			return true
+			return w, true
 		}
 	}
-	return false
+	return session.WindowInfo{}, false
 }
 
 // readDenied reads permissions.jsonl, if any, as one line per entry.

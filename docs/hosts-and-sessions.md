@@ -137,9 +137,8 @@ All Codex settings are passed per session with `-c`. The host's own
 
 Every surface uses one name per session, `<repo>-<task>`, such as
 `boga3-412`: the tmux window, the remote-control name and part of the
-branch. The name
-holds letters, digits, `_`, `.` and `-`, and does not start with `-`: tmux
-treats anything else (`#`, `:`, spaces) as special.
+branch. It holds letters, digits, `_`, `.` and `-`, and does not start with
+`-`: tmux treats anything else (`#`, `:`, spaces) as special.
 
 ## Starting a session: `engine start`
 
@@ -147,8 +146,8 @@ treats anything else (`#`, `:`, spaces) as special.
 launches a Claude session on this machine from any directory, and returns
 once it is up. `--mode` defaults to `hands-off`; `--tier` replaces the card's.
 
-It first refuses, changing nothing, when: the token file, host file or this
-host's entry is missing; the task is closed, has a task state label or an
+It first refuses, changing nothing, when: the token file, host file,
+`hosts.toml` or this host's entry is missing; the task is closed, has a task state label or an
 open blocker, or is standalone without `engine:approved`; the card's harness
 is unknown (as a misspelt tier is), not Claude, or not run here; its window
 exists; or no slot is free (a live window holds one). Then it:
@@ -159,17 +158,18 @@ exists; or no slot is free (a live window holds one). Then it:
    `./dev worktree create` if it has one, else `git worktree add` from the
    default branch, refusing a branch that exists locally or on `origin`;
 3. sets `projects.<worktree>.hasTrustDialogAccepted` in `~/.claude.json` (or
-   `$CLAUDE_CONFIG_DIR`'s), so the trust dialog never shows;
+   `$CLAUDE_CONFIG_DIR`'s), so the trust dialog, whose default exits, never
+   shows;
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
    so the repo's `AGENTS.md` loads;
 5. runs the host's launch line at the card's tier (default `standard`), plus
    `--add-dir <engine's plugin directory>` and a read-only rule for `/tmp`
    (an added directory's skills load, and anyone can write to `/tmp`), so
-   reading the skill or a test's screenshots needs no prompt. Then `--` and the kickoff, Claude's first message: `Execute
-   <owner/repo#n> with the engine executor, <mode> mode. Reviewer model:
-   <deep model>. run=<run-id> tmux=engine:<name> rc=<name>`. `/bin/sh` first
-   exports `GH_TOKEN` from the token file,
-   keeping it off every command line, `ENGINE_RUN_DIR` (the run directory),
+   reading the skill or a test's screenshots needs no prompt. Then `--` and
+   the kickoff, Claude's first message: `Execute <owner/repo#n> with the
+   engine executor, <mode> mode. Reviewer model: <deep model>. run=<run-id>
+   tmux=engine:<name> rc=<name>`. `/bin/sh` first exports `GH_TOKEN` from the
+   token file, off every command line, `ENGINE_RUN_DIR` (the run directory),
    and `ENGINE_UNATTENDED=1` in hands-off mode;
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
@@ -177,9 +177,10 @@ The executor claims the task; its claim check stops a racing second start.
 Designed, not built: `--harness codex`, and `--host` (spawning over SSH).
 
 **Preflight:** `engine start --check` opens a throwaway hands-off session,
-`engine-check`, that reads the skill, reads a file it wrote in `/tmp`, runs
-`gh` and `engine`, and closes its window. It exits 1, printing what it met,
-when the session hit a permission request, stalled or skipped a step.
+`engine-check`, at the light tier, that reads the skill, reads a file it
+wrote in `/tmp`, runs `gh` and `engine`, and closes its window. It exits 1,
+printing what it met, when the session hit a permission request, stalled or
+skipped a step.
 
 **Other ways to start:** a session started any other way runs the same
 executor, creates its own worktree, and is reachable only where it was

@@ -2,6 +2,7 @@ package start
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,8 @@ import (
 // window stays listed for openPolls polls.
 type checkTmux struct {
 	openPolls int
+	dead      bool  // the window's command has exited
+	listErr   error // list-windows fails once the session runs
 	screen    string
 	act       func()
 	polls     int
@@ -37,7 +40,13 @@ func (f *checkTmux) run(_ string, args ...string) (string, error) {
 		if !f.started {
 			return "@1 %1 0 other\n", nil
 		}
+		if f.listErr != nil {
+			return "", f.listErr
+		}
 		f.polls++
+		if f.dead {
+			return "@7 %7 1 " + CheckName + "\n", nil
+		}
 		if f.polls <= f.openPolls {
 			return "@1 %1 0 other\n@7 %7 0 " + CheckName + "\n", nil
 		}
@@ -150,4 +159,35 @@ func TestCheckRefusals(t *testing.T) {
 			t.Errorf("got %v", err)
 		}
 	})
+}
+
+func TestCheckIgnoresAStaleMarker(t *testing.T) {
+	f := &checkTmux{}
+	d, _, _ := checkDeps(t, f)
+	write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600)
+	r, err := Check(d, &bytes.Buffer{})
+	if err != nil || r.Finished || r.OK() {
+		t.Errorf("result %+v, %v", r, err)
+	}
+}
+
+func TestCheckStopsWaitingForADeadWindow(t *testing.T) {
+	f := &checkTmux{dead: true, screen: "Error: not logged in"}
+	d, _, sleeps := checkDeps(t, f)
+	r, err := Check(d, &bytes.Buffer{})
+	if err != nil || r.Closed || *sleeps != 1 || r.Screen != "Error: not logged in" || !f.killed {
+		t.Errorf("result %+v, %v, sleeps %d, killed %v", r, err, *sleeps, f.killed)
+	}
+}
+
+func TestCheckClosesTheWindowWhenPollingFails(t *testing.T) {
+	f := &checkTmux{listErr: errors.New("tmux died")}
+	d, _, _ := checkDeps(t, f)
+	f.act = func() { write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\n", 0o600) }
+	if _, err := Check(d, &bytes.Buffer{}); err == nil || !f.killed {
+		t.Errorf("err %v, killed %v", err, f.killed)
+	}
+	if _, err := os.Stat(filepath.Join(checkTmp, "engine-"+checkRun)); !os.IsNotExist(err) {
+		t.Errorf("marker left behind: %v", err)
+	}
 }

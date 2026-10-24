@@ -243,10 +243,15 @@ func runCheck(env Env) int {
 		return 1
 	}
 	start.ReportCheck(env.Out, r)
-	if !r.OK() {
-		return 1
+	return checkCode(r)
+}
+
+// checkCode is the exit code of a check: 1 when a session would stop.
+func checkCode(r start.CheckResult) int {
+	if r.OK() {
+		return 0
 	}
-	return 0
+	return 1
 }
 
 // parseStart reads the task and the --tier and --mode flags, as `--flag
