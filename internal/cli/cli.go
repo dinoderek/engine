@@ -35,6 +35,8 @@ commands:
                             the acceptance task and shared open questions
   start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]
                             launch an executor session for a task on this machine
+  start --check             launch a throwaway session to find prompts that would
+                            stop an unattended one
 `
 
 // Env is what a command reads and runs: the standard streams, the runners for
@@ -210,11 +212,14 @@ func syncLabels(repo string, env Env) int {
 	return 0
 }
 
-const startUsage = "usage: engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]\n"
+const startUsage = "usage: engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]\n       engine start --check\n"
 
 // runStart parses engine start's arguments, in any order, and starts the
 // task's session.
 func runStart(args []string, env Env) int {
+	if len(args) == 1 && args[0] == "--check" {
+		return runCheck(env)
+	}
 	opts, err := parseStart(args)
 	if err != nil {
 		fmt.Fprintf(env.Err, "engine start: %v\n%s", err, startUsage)
@@ -226,6 +231,27 @@ func runStart(args []string, env Env) int {
 		return 1
 	}
 	return 0
+}
+
+// runCheck runs the preflight check and exits 1 when an unattended session
+// here would stop.
+func runCheck(env Env) int {
+	deps := start.Deps{GH: env.Exec, Run: env.Run, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
+	r, err := start.Check(deps, env.Out)
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine start --check:", err)
+		return 1
+	}
+	start.ReportCheck(env.Out, r)
+	return checkCode(r)
+}
+
+// checkCode is the exit code of a check: 1 when a session would stop.
+func checkCode(r start.CheckResult) int {
+	if r.OK() {
+		return 0
+	}
+	return 1
 }
 
 // parseStart reads the task and the --tier and --mode flags, as `--flag

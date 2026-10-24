@@ -62,6 +62,8 @@ type Deps struct {
 	Now    func() time.Time
 	// BaseURL is where repos are cloned from; GitHub when empty.
 	BaseURL string
+	// Sleep waits between the check's polls; nil is time.Sleep.
+	Sleep func(time.Duration)
 }
 
 // RefusedError is a check that failed before engine start changed anything.
@@ -316,16 +318,8 @@ func (p plan) launch(d Deps) (Started, error) {
 	return s, nil
 }
 
-// command is the window's shell command. It runs under /bin/sh, whatever
-// tmux's default shell is: export the machine user's token from its file, so
-// it never appears on a command line, and the CLAUDE_CONFIG_DIR engine trusted
-// the worktree in, then run the launch line. Claude's file tools ask before
-// reading outside the worktree, which would stop an unattended executor, so it
-// adds the engine plugin's directory with --add-dir and allows reads in /tmp
-// with --allowedTools. /tmp only gets a read rule: Claude loads skills from
-// every --add-dir directory, and anyone on the host can write to /tmp. The
-// kickoff comes last, after --, because both options take every argument up
-// to the next option.
+// command is the task window's shell command: the host's launch line at the
+// task's tier, with the executor's kickoff.
 func (p plan) command(d Deps, clone session.Clone, runID string) (string, error) {
 	line, err := p.cfg.LaunchLine(p.host, hosts.Launch{
 		Harness: Harness, Tier: p.tier, Name: p.name, Clone: clone.Path, Home: d.Home,
@@ -333,16 +327,30 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	kickoff := Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)
 	runDir, err := session.RunDir(d.Home, runID)
 	if err != nil {
 		return "", err
 	}
+	return launchCommand(d, line, runDir, p.opts.Mode, Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)), nil
+}
+
+// launchCommand is a window's shell command. It runs under /bin/sh, whatever
+// tmux's default shell is: export the machine user's token from its file, so
+// it never appears on a command line, the run directory and, hands-off, the
+// unattended mark, and the CLAUDE_CONFIG_DIR engine trusted the folder in,
+// then run the launch line. Claude's file tools ask before reading outside
+// the worktree, which would stop an unattended executor, so it adds the
+// engine plugin's directory with --add-dir and allows reads in /tmp with
+// --allowedTools. /tmp only gets a read rule: Claude loads skills from every
+// --add-dir directory, and anyone on the host can write to /tmp. The kickoff
+// comes last, after --, because both options take every argument up to the
+// next option.
+func launchCommand(d Deps, line, runDir, mode, kickoff string) string {
 	// An empty token would make gh fall back to the operator's own login.
 	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
 	// The permission hook logs to the run directory and, unattended, denies.
 	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(runDir) + " && "
-	if p.opts.Mode == HandsOff {
+	if mode == HandsOff {
 		script += "export " + session.UnattendedVar + "=1 && "
 	} else {
 		script += "unset " + session.UnattendedVar + " && "
@@ -359,7 +367,7 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 		script += " " + hosts.ShellWord(rule)
 	}
 	script += " -- " + hosts.ShellWord(kickoff)
-	return "exec /bin/sh -c " + hosts.ShellWord(script), nil
+	return "exec /bin/sh -c " + hosts.ShellWord(script)
 }
 
 func (p plan) record(s Started, log string, now time.Time) session.Record {

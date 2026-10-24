@@ -58,8 +58,10 @@
   folder you trust, and answer every prompt it shows, such as enabling Remote
   Control or the auto mode notice. Nobody is there to answer them in an
   engine window. The workspace trust dialog needs nothing: `engine start`
-  writes `hasTrustDialogAccepted` for each worktree it creates, and nothing
-  else in `~/.claude.json` (`hosts-and-sessions.md`, "Starting a session").
+  writes `hasTrustDialogAccepted` for each worktree it creates (and
+  `--check` for its scratch folder), and nothing else in `~/.claude.json`
+  (`hosts-and-sessions.md`, "Starting a session"). Then run `engine start --check`, and again after updating Claude Code, the
+  plugin or `engine`: it finds a prompt before an unattended session meets it.
 - **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
   per session (`hosts-and-sessions.md`, "Permission mode").
 - **Host name:** its logical name (`mac`, `devbox`) on one line in
