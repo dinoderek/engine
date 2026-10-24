@@ -138,13 +138,12 @@ that state while alive.
 
 **Stalls.** A window the coordinator opened whose task has not claimed in
 time is stalled before the claim, for example on a prompt (the skill's
-`coordinate` mode sets the time). A session whose
-`waiting-since` is 10 minutes old while its task is open and not
-`needs-human` has
-stopped outside the protocol, for example on a
-question asked in the session rather than on the issue. The coordinator
-@mentions you on the task's issue, once per wait: it skips the mention when
-its own stall comment is newer than `waiting-since`.
+`coordinate` mode sets the time). A session whose `waiting-since` is 10
+minutes old while its task is open and not `needs-human` has stopped outside
+the protocol, for example on a question asked in the session rather than on
+the issue. The coordinator @mentions you on the task's issue, once per wait:
+it skips the mention when its own stall comment is newer than
+`waiting-since`.
 
 ## Identity and notifications
 
