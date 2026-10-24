@@ -94,12 +94,13 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
       remove yours and wait. Without the lock, check every 5 minutes. Hold
       it through the default-branch merge, the gates, the checks and the
       merge. Remove it after the merge, at a hard stop, while a gated run
-      waits for approval, when a fix needs a new review, and when the PR
-      closes unmerged; take it again to resume. A gated run whose head
-      changes while it waits asks for approval again. A standalone task needs no lock.
+      waits for approval, while you go back to step 5 for a fix, and when
+      the PR closes unmerged; take it again to resume. A gated run whose
+      head changes while it waits asks for approval again. A standalone task needs no lock.
     - On a failure, read the logs, fix, and go back to step 5.
-    - If the default branch moved or conflicts, merge it in and go back to
-      step 5.
+    - If the default branch moved, merge it in. Without conflicts, re-run
+      the gates (step 5), push and keep watching: no new review. If you
+      resolved conflicts, that is a fix: go back to step 5.
     - Before merging, read the task's comments once more.
     - When every check is green, merge with the repo's merge method and
       `--match-head-commit <sha>`, where `<sha>` is the commit you reviewed

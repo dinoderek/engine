@@ -47,8 +47,11 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
 6. **Dead sessions.** A claimed task whose session is dead gets
    `engine:failed` in place of its state label, loses `engine:merging` if it
    holds the lock, and gets a comment saying so. Its worktree stays.
-7. **Reap.** Close any window, or archive any cloud session, you started
-   whose task is closed, and say so in the pass's log line.
+7. **Reap.** A hands-off executor closes its own window after its report.
+   Close a window, or archive a cloud session, you started in hands-off
+   mode only when its task is closed, carries no `engine:` state label, and
+   the session has been waiting for 10 minutes. Leave a gated run's window
+   for the operator. Say what you closed in the pass's log line.
 8. **Done.** When every sub-issue is closed, comment on the feature: each
    task with its PR, the acceptance result, the tasks still carrying
    `engine:ruling-review`, and the deviations. Set `engine:done`, close the

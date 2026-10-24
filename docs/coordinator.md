@@ -34,7 +34,7 @@ pass, so an agent coordinator and `engine run` behave the same. A pass can:
 - mark dead sessions `failed`;
 - update the feature's label;
 - @mention you about a stalled session;
-- close the windows of tasks that have closed;
+- close the windows of finished hands-off tasks that did not close their own;
 - on `done`, post a summary and close the feature issue;
 - gather and upload telemetry for runs that have ended.
 
