@@ -55,6 +55,7 @@ type world struct {
 	refuse   func(tracker.Ref) error
 	failNext map[string]error // the next call of a write fails: "comment", "close"
 	killed   []string
+	attempts int      // planner starts tried, refused or not
 	history  []string // the labels set on the feature, in order
 	do       map[int]behaviour
 	execs    map[tracker.Ref]*executor
@@ -194,6 +195,7 @@ func (w *world) Start(r tracker.Ref) error {
 }
 
 func (w *world) StartPlanner(r tracker.Ref) error {
+	w.attempts++
 	if w.refuse != nil {
 		if err := w.refuse(r); err != nil {
 			return err

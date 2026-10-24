@@ -294,6 +294,8 @@ func startTask(w World, v View, a Action) error {
 	if derr != nil {
 		return errors.Join(err, derr)
 	}
+	// The note is written first, so a failed comment is not posted again by
+	// the next try; the mention goes out once per session start.
 	prev, seen := v.StartFailed[a.Ref]
 	if werr := session.WriteNote(dir, StartFailed, v.Now); werr != nil {
 		return errors.Join(err, werr)
@@ -415,7 +417,11 @@ func finish(w World, v View) error {
 	if err != nil {
 		return err
 	}
-	if _, posted, err := session.ReadNote(dir, FinishNoted); err != nil || !posted {
+	_, posted, err := session.ReadNote(dir, FinishNoted)
+	if err != nil {
+		return err
+	}
+	if !posted {
 		if err := w.Comment(f.Ref, b.String()); err != nil {
 			return err
 		}

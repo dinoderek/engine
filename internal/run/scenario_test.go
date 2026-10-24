@@ -338,6 +338,23 @@ func TestAFailedPlannerStartIsReportedOnce(t *testing.T) {
 	if len(c) != 1 || !strings.HasPrefix(c[0], "@op ") || !strings.Contains(c[0], "no free slot") {
 		t.Errorf("comments %q", c)
 	}
+	// 40 minutes of passes: a try at 0 and one after the 30-minute rest.
+	if w.attempts != 2 {
+		t.Errorf("%d planner starts tried, want 2", w.attempts)
+	}
+}
+
+func TestThePlannerWaitsForAFreeSlot(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Approved})
+	v := gather(t, w)
+	v.FreeSlots = 0
+	if acts := Decide(v); len(acts) != 0 {
+		t.Errorf("no slot: %+v", acts)
+	}
+	v.FreeSlots = 1
+	if acts := Decide(v); len(acts) != 1 || acts[0].Kind != StartPlanner {
+		t.Errorf("a slot: %+v", acts)
+	}
 }
 
 func TestTheSummaryIsPostedOnce(t *testing.T) {
