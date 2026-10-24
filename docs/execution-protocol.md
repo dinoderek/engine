@@ -137,7 +137,7 @@ merges, while the others wait before their last gate run.
 
 ## Enforced by hook
 
-The plugin ships one Claude Code `PreToolUse` hook,
+The plugin ships a Claude Code `PreToolUse` hook,
 `engine hook pre-tool-use`. It blocks a Bash call that:
 
 - runs `gh pr merge` without `--match-head-commit`, or with `--auto` or
@@ -145,6 +145,13 @@ The plugin ships one Claude Code `PreToolUse` hook,
 - merges through `gh api`, REST or GraphQL.
 
 `engine gh …` counts as `gh` for both.
+
+It also ships `engine hook permission`, run on `PermissionRequest` and
+`PermissionDenied`. When `ENGINE_UNATTENDED=1`, it denies every permission
+request with a message naming the Permission hard stop, instead of a prompt
+nobody would answer. Either way it logs each request it denies and each
+auto-mode refusal to the run directory (`telemetry.md`). Without
+`ENGINE_UNATTENDED`, Claude Code prompts as usual.
 
 Every other hard stop rests on the skill. A guard reads the command's words;
 it catches mistakes, not a session set on getting round it. Codex sessions

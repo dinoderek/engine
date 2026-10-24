@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ commands:
   version                   print the engine version
   labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the Claude Code merge guard: reads the event on stdin
+  hook permission           deny and log permission requests in unattended sessions
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
@@ -99,6 +101,9 @@ func Run(args []string, env Env) int {
 func runHook(args []string, env Env) int {
 	if len(args) == 1 && args[0] == "pre-tool-use" {
 		return hook.PreToolUse(env.In, env.Err)
+	}
+	if len(args) == 1 && args[0] == "permission" {
+		return permissionHook(env)
 	}
 	fmt.Fprintf(env.Err, "engine hook: unknown hook %q; update engine (go install ./cmd/engine)\n", strings.Join(args, " "))
 	return 1
@@ -196,4 +201,24 @@ func parseStart(args []string) (start.Options, error) {
 	r, err := tracker.ParseRef(ref)
 	opts.Ref = r
 	return opts, err
+}
+
+// permissionHook runs the permission hook, logging to the run directory that
+// engine start exported, when there is one.
+func permissionHook(env Env) int {
+	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: env.Getenv(session.UnattendedVar) == "1", Now: env.Now()}
+	if dir := env.Getenv(session.RunDirVar); dir != "" {
+		f, err := os.OpenFile(filepath.Join(dir, session.PermissionLog), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err != nil {
+			fmt.Fprintln(env.Err, "engine hook: open the permission log:", err)
+		} else {
+			h.Log = f
+			code := h.Handle(env.In)
+			if err := f.Close(); err != nil {
+				fmt.Fprintln(env.Err, "engine hook: close the permission log:", err)
+			}
+			return code
+		}
+	}
+	return h.Handle(env.In)
 }
