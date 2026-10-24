@@ -32,9 +32,9 @@ const Harness = "claude"
 // badly: a task carrying one is not started again.
 var stateLabels = append(slices.Clone(tracker.ClaimLabels), "engine:failed")
 
-// tmpDir is where tests and tools leave files an executor reads back, such
-// as screenshots.
-const tmpDir = "/tmp"
+// tmpReads lets an executor read back what it or its tests wrote to /tmp,
+// such as screenshots, without a prompt. macOS resolves /tmp to /private/tmp.
+var tmpReads = []string{"Read(//tmp/**)", "Read(//private/tmp/**)"}
 
 // approved is the label a standalone task needs before it runs.
 const approved = "engine:approved"
@@ -319,12 +319,13 @@ func (p plan) launch(d Deps) (Started, error) {
 // command is the window's shell command. It runs under /bin/sh, whatever
 // tmux's default shell is: export the machine user's token from its file, so
 // it never appears on a command line, and the CLAUDE_CONFIG_DIR engine trusted
-// the worktree in, then run the launch line. It adds the engine plugin's
-// directory and /tmp with --add-dir: Claude's file tools otherwise ask before
-// reading outside the worktree, which stops an unattended executor reading
-// the skill's references or a screenshot a test wrote to /tmp. The kickoff
-// comes last, after --, because --add-dir takes every argument up to the next
-// option.
+// the worktree in, then run the launch line. Claude's file tools ask before
+// reading outside the worktree, which would stop an unattended executor, so it
+// adds the engine plugin's directory with --add-dir and allows reads in /tmp
+// with --allowedTools. /tmp only gets a read rule: Claude loads skills from
+// every --add-dir directory, and anyone on the host can write to /tmp. The
+// kickoff comes last, after --, because both options take every argument up
+// to the next option.
 func (p plan) command(d Deps, clone session.Clone, runID string) (string, error) {
 	line, err := p.cfg.LaunchLine(p.host, hosts.Launch{
 		Harness: Harness, Tier: p.tier, Name: p.name, Clone: clone.Path, Home: d.Home,
@@ -342,7 +343,11 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 		script += "unset CLAUDE_CONFIG_DIR && "
 	}
 	plugin := session.PluginDir(d.Getenv, d.Home)
-	script += "exec " + line + " --add-dir " + hosts.ShellWord(plugin) + " " + tmpDir + " -- " + hosts.ShellWord(kickoff)
+	script += "exec " + line + " --add-dir " + hosts.ShellWord(plugin) + " --allowedTools"
+	for _, rule := range tmpReads {
+		script += " " + hosts.ShellWord(rule)
+	}
+	script += " -- " + hosts.ShellWord(kickoff)
 	return "exec /bin/sh -c " + hosts.ShellWord(script), nil
 }
 

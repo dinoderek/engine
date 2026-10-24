@@ -162,11 +162,12 @@ runs holds one). Then it:
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
    so the repo's `AGENTS.md` loads;
 5. runs the host's launch line at the card's tier (default `standard`), plus
-   `--add-dir <engine's plugin directory> /tmp`, without which Claude's file
-   tools ask before reading the skill or a test's screenshots. Then `--` and
-   the kickoff, Claude's first message: `Execute <owner/repo#n> with the engine executor, <mode> mode.
-   Reviewer model: <deep model>. run=<run-id> tmux=engine:<name>
-   rc=<name>`, values the claim records. `/bin/sh` first exports `GH_TOKEN`
+   `--add-dir <engine's plugin directory>` and a read-only rule for `/tmp`
+   (an added directory's skills load, and anyone writes to `/tmp`). Without
+   them Claude asks before reading the skill or a test's screenshots. Then
+   `--` and the kickoff, Claude's first message: `Execute <owner/repo#n> with
+   the engine executor, <mode> mode. Reviewer model: <deep model>.
+   run=<run-id> tmux=engine:<name> rc=<name>`, values the claim records. `/bin/sh` first exports `GH_TOKEN`
    from the token file, keeping it off every command line;
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
@@ -180,9 +181,8 @@ only where it was started.
 
 ## The claim comment is the registry
 
-The executor's claim comment on the task issue records the run ID, the
-host's logical name, the harness and model, the mode, the tmux target, the
-Remote Control name and the branch. The `engine` skill owns its format.
+The executor's claim comment on the task issue records where and how its
+session runs. The `engine` skill owns its format.
 
 Everything that lists sessions reads these comments, so a task started by
 hand and one started by the coordinator look the same.
