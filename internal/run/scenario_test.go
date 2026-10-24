@@ -2,6 +2,7 @@ package run
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -376,5 +377,20 @@ func TestTheSummaryIsPostedOnce(t *testing.T) {
 	}
 	if c := w.comments[ref(1)]; len(c) != 1 || !w.closed {
 		t.Errorf("closed %v, comments %q", w.closed, c)
+	}
+}
+
+func TestAnUnreadableSummaryNoteStopsTheFinish(t *testing.T) {
+	done := card(2, "standard")
+	done.Open = false
+	w := newWorld(t, []string{"engine:feature", Executing}, done)
+	dir, _ := w.NoteDir(ref(1))
+	if err := os.WriteFile(filepath.Join(dir, FinishNoted), []byte("soon"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v := gather(t, w)
+	Apply(w, v, Decide(v))
+	if len(w.comments[ref(1)]) != 0 || w.closed {
+		t.Errorf("comments %q, closed %v", w.comments[ref(1)], w.closed)
 	}
 }
