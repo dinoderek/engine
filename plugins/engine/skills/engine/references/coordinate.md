@@ -49,9 +49,10 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    first that holds: `engine:blocked` while any task is
    `engine:needs-human`; `engine:verifying` while only the acceptance task
    is open; else `engine:executing`. Change it only when it differs.
-6. **Dead sessions.** A claimed task whose session is dead gets
-   `engine:failed` in place of its state label, loses `engine:merging` if it
-   holds the lock, and gets a comment saying so. Its worktree stays.
+6. **Dead sessions.** An open task with a claim state label (`running`,
+   `needs-human`, `in-review`) whose session is dead gets `engine:failed` in
+   place of that label, loses `engine:merging` if it holds the lock, and gets
+   a comment saying so. Its worktree stays.
 7. **Reap.** A hands-off executor closes its own window after its report.
    Close a window, or archive a cloud session, you started in hands-off
    mode only when its task is closed, carries no `engine:` state label, and

@@ -95,8 +95,8 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
       and gated.
     - A repo with no CI merges on the local gates alone.
     - In gated mode, wait for the operator's approval before merging.
-11. **Report.** Remove `engine:in-review`: the merge closed the task. Comment
-    on the task's issue: what shipped, the `med` and `high` rulings, and the
+11. **Report.** Remove `engine:in-review` and `engine:merging`: the merge
+    closed the task. Comment on the task's issue: what shipped, the `med` and `high` rulings, and the
     deviations. Update downstream tasks that are still to do if your work
     changed what they assume (below).
 12. **Clean up.** Run the repo's worktree-release command from outside the
@@ -117,7 +117,7 @@ nobody watches your screen. A denied permission request may be the
 
 One task per feature merges at a time, so no sibling moves the default
 branch under your last gate run. To take the lock, add `engine:merging` to
-your task if no sibling carries it. The holder is the carrier whose latest
+your task if no open sibling carries it. The holder is the carrier whose latest
 `engine:merging` `labeled` event (`gh api repos/<o>/<r>/issues/<n>/events`)
 is oldest; check after adding it and just before merging, and if it is not
 you, remove yours. Without the lock, check every 5 minutes. Once you hold
