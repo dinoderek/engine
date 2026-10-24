@@ -158,9 +158,9 @@ func TestTellCommentsAndTypes(t *testing.T) {
 func TestTellFailures(t *testing.T) {
 	tests := []struct {
 		name, task, self, claimHost, windows string
-		commentErr, typeErr            error
-		want                           string
-		commented                      bool
+		commentErr, typeErr                  error
+		want                                 string
+		commented                            bool
 	}{
 		{"no such task", "r-8", "mac", "mac", "", nil, nil, "no claimed task named r-8", false},
 		{"other host", "r-7", "mac", "devbox", "", nil, nil, `runs on "devbox", not this host ("mac")`, true},

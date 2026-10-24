@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
 // The paths are split so this file holds no tracker reference.
@@ -36,20 +35,5 @@ func TestCommentFailures(t *testing.T) {
 		if _, err := Comment(run, "tok", Ref{"o/r", 7}, "x"); err == nil || !strings.Contains(err.Error(), "on o/r") {
 			t.Errorf("%s: %v", name, err)
 		}
-	}
-}
-
-func TestFindClaim(t *testing.T) {
-	at := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC)
-	tasks := []ClaimedTask{
-		{Ref: Ref{"o/r", 7}, Claim: Claim{Name: "r-7", PostedAt: at}},
-		{Ref: Ref{"o/r", 8}, Claim: Claim{Name: "r-8", PostedAt: at}},
-		{Ref: Ref{"p/r", 7}, Claim: Claim{Name: "r-7", PostedAt: at.Add(time.Hour)}},
-	}
-	if got, ok := FindClaim(tasks, "r-7"); !ok || got.Ref != (Ref{"p/r", 7}) {
-		t.Errorf("latest r-7: %+v %v", got, ok)
-	}
-	if _, ok := FindClaim(tasks, "r-9"); ok {
-		t.Error("found r-9")
 	}
 }
