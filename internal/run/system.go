@@ -38,16 +38,20 @@ func (s System) Feature(ref tracker.Ref) (tracker.Feature, error) {
 }
 
 // Task reads one task as a Card. Only its open blockers are known.
-func (s System) Task(ref tracker.Ref) (tracker.Card, error) {
+func (s System) Task(ref tracker.Ref) (tracker.Card, tracker.Ref, error) {
 	t, err := tracker.ReadTask(s.Gh, s.Token, ref)
 	if err != nil {
-		return tracker.Card{}, err
+		return tracker.Card{}, tracker.Ref{}, err
 	}
 	c := tracker.Card{Ref: ref, Title: t.Title, Open: t.Open, Labels: t.Labels}
 	for _, b := range t.OpenBlockers {
 		c.BlockedBy = append(c.BlockedBy, tracker.Blocker{Ref: b, Open: true})
 	}
-	return c, nil
+	op := ref
+	if t.Parent != nil {
+		op = *t.Parent
+	}
+	return c, op, nil
 }
 
 func (s System) Rows() ([]ps.Row, error)                  { return s.ListRows() }

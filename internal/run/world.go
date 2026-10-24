@@ -1,6 +1,7 @@
 package run
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,15 +12,20 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// LintNoted is the coordinator's note that it has reported the plan's lint
-// failures.
-const LintNoted = "lint-noted"
+// The coordinator's own notes: that it has reported the plan's lint
+// failures, and when a task's start last failed.
+const (
+	LintNoted   = "lint-noted"
+	StartFailed = "start-failed"
+)
 
 // World is what a pass reads and changes: the tracker, the host's sessions
 // and the clock. System gives the real one; tests play it.
 type World interface {
 	Feature(ref tracker.Ref) (tracker.Feature, error)
-	Task(ref tracker.Ref) (tracker.Card, error)
+	// Task reads one task, and the issue whose operator it @mentions: its
+	// feature, or the task itself when it has none.
+	Task(ref tracker.Ref) (tracker.Card, tracker.Ref, error)
 	// Rows are every claimed task, settled as engine ps settles them.
 	Rows() ([]ps.Row, error)
 	Windows() ([]session.WindowInfo, error)
@@ -45,15 +51,18 @@ type World interface {
 
 // Gather reads one pass's View of ref: a feature, or one task when taskOnly.
 func Gather(w World, ref tracker.Ref, taskOnly bool) (View, error) {
-	v := View{TaskOnly: taskOnly, Now: w.Now()}
+	v := View{TaskOnly: taskOnly, Now: w.Now(), Operator: ref}
 	var err error
 	if taskOnly {
-		c, err := w.Task(ref)
+		c, op, err := w.Task(ref)
 		if err != nil {
 			return View{}, err
 		}
-		v.Feature = tracker.Feature{Ref: ref, Open: true, Tasks: []tracker.Card{c}}
+		v.Feature, v.Operator = tracker.Feature{Ref: ref, Open: true, Tasks: []tracker.Card{c}}, op
 	} else if v.Feature, err = w.Feature(ref); err != nil {
+		return View{}, err
+	}
+	if v.StartFailed, err = startFailures(w, v.Feature); err != nil {
 		return View{}, err
 	}
 	if v.Rows, err = rows(w, v.Feature); err != nil {
@@ -80,6 +89,28 @@ func Gather(w World, ref tracker.Ref, taskOnly bool) (View, error) {
 		err = lintState(w, &v)
 	}
 	return v, err
+}
+
+// startFailures reads when each open task's last start failed.
+func startFailures(w World, f tracker.Feature) (map[tracker.Ref]time.Time, error) {
+	out := map[tracker.Ref]time.Time{}
+	for _, c := range f.Tasks {
+		if !c.Open {
+			continue
+		}
+		dir, err := w.NoteDir(c.Ref)
+		if err != nil {
+			return nil, err
+		}
+		at, ok, err := session.ReadNote(dir, StartFailed)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out[c.Ref] = at
+		}
+	}
+	return out, nil
 }
 
 func rows(w World, f tracker.Feature) (map[tracker.Ref]ps.Row, error) {
@@ -199,11 +230,11 @@ func lintState(w World, v *View) error {
 func Apply(w World, v View, acts []Action) bool {
 	over := false
 	for _, a := range acts {
-		w.Logf("%s %s: %s", a.Kind, a.Ref, cmpText(a))
+		w.Logf("%s %s: %s", a.Kind, a.Ref, logText(a))
 		var err error
 		switch a.Kind {
 		case StartTask:
-			err = w.Start(a.Ref)
+			err = startTask(w, v, a)
 		case StartPlanner:
 			err = w.StartPlanner(a.Ref)
 		case SetLabel:
@@ -229,11 +260,41 @@ func Apply(w World, v View, acts []Action) bool {
 	return over
 }
 
-func cmpText(a Action) string {
+func logText(a Action) string {
 	if a.Label != "" {
 		return a.Label
 	}
 	return a.Text
+}
+
+// startTask starts a ready task. A dead window left by its last session is
+// closed first, since engine start refuses a name in use. A failed start is
+// noted, holds no slot until StartRetry, and @mentions the operator the
+// first time after a session start.
+func startTask(w World, v View, a Action) error {
+	if s, ok := v.Sessions[a.Ref]; ok && !s.Live && s.WindowID != "" {
+		if err := w.Kill(s.WindowID); err != nil {
+			w.Logf("close the dead window of %s: %v", a.Ref, err)
+		}
+	}
+	err := w.Start(a.Ref)
+	if err == nil {
+		return nil
+	}
+	dir, derr := w.NoteDir(a.Ref)
+	if derr != nil {
+		return errors.Join(err, derr)
+	}
+	prev, seen := v.StartFailed[a.Ref]
+	if werr := session.WriteNote(dir, StartFailed, v.Now); werr != nil {
+		return errors.Join(err, werr)
+	}
+	if seen && prev.After(v.Sessions[a.Ref].Spawned) {
+		return err
+	}
+	body := mention(w, v.Operator) + "engine run: starting this task failed, so it waits " + StartRetry.String() +
+		" before the next try:\n\n```text\n" + err.Error() + "\n```"
+	return errors.Join(err, w.Comment(a.Ref, body))
 }
 
 // setFeatureLabel moves the feature to label, removing its other states.
@@ -262,7 +323,7 @@ func mention(w World, ref tracker.Ref) string {
 }
 
 func reportLint(w World, v View) error {
-	body := mention(w, v.Feature.Ref) + "engine run: the plan fails lint, so no task starts:\n\n- " +
+	body := mention(w, v.Operator) + "engine run: the plan fails lint, so no task starts:\n\n- " +
 		strings.Join(v.LintProblems, "\n- ") + "\n\nFix the cards; the next pass lints again."
 	if err := w.Comment(v.Feature.Ref, body); err != nil {
 		return err
@@ -278,7 +339,7 @@ func reportLint(w World, v View) error {
 const stallLines = 20
 
 func stall(w World, v View, a Action) error {
-	body := mention(w, a.Ref) + "engine run: " + a.Text + "."
+	body := mention(w, v.Operator) + "engine run: " + a.Text + "."
 	if a.Session.Live {
 		if screen, err := w.Capture(a.Session.WindowID, stallLines); err == nil && screen != "" {
 			body += " Its last screen:\n\n```text\n" + screen + "\n```"
@@ -308,7 +369,7 @@ func fail(w World, v View, a Action) error {
 			}
 		}
 	}
-	return w.Comment(a.Ref, mention(w, a.Ref)+"engine run: "+a.Text+", so the task is engine:failed. Its worktree is kept.")
+	return w.Comment(a.Ref, mention(w, v.Operator)+"engine run: "+a.Text+", so the task is engine:failed. Its worktree is kept.")
 }
 
 // finish posts the feature's summary, marks it done and closes it.
@@ -336,11 +397,13 @@ func finish(w World, v View) error {
 		b.WriteString("\nStill carrying engine:ruling-review: " + strings.Join(review, ", ") + ".\n")
 	}
 	b.WriteString("\nDeviations are in each task's report comment.")
-	if err := w.Comment(f.Ref, b.String()); err != nil {
-		return err
-	}
+	// The comment goes last: a failed label or close is retried by the next
+	// pass, and the summary is posted once.
 	if err := setFeatureLabel(w, f, Done); err != nil {
 		return err
 	}
-	return w.Close(f.Ref)
+	if err := w.Close(f.Ref); err != nil {
+		return err
+	}
+	return w.Comment(f.Ref, b.String())
 }

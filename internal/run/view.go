@@ -20,6 +20,9 @@ const (
 	ClaimWait = 5 * time.Minute
 	// StallWait is how long a session may wait for input outside a hard stop.
 	StallWait = 10 * time.Minute
+	// StartRetry is how long a task whose start failed waits to be tried
+	// again; until then it holds no slot.
+	StartRetry = 30 * time.Minute
 )
 
 // Labels the pass reads and writes.
@@ -43,6 +46,9 @@ var featureStates = []string{"engine:prepare", Approved, Planned, Executing, Ver
 
 // claimStates are the task labels an executor sets while it holds the task.
 var claimStates = []string{Running, NeedsHuman, InReview}
+
+// takenStates are the task labels that keep a task from starting.
+var takenStates = append(slices.Clone(claimStates), Failed)
 
 // Session is the newest run engine started on this host for a task, or for
 // a feature's planner.
@@ -79,6 +85,11 @@ type View struct {
 	LintProblems []string
 	// LintNoted is true once the coordinator has reported them.
 	LintNoted bool
+	// StartFailed is when each task's last start failed, if it did.
+	StartFailed map[tracker.Ref]time.Time
+	// Operator is the issue whose assignee, else author, is @mentioned:
+	// the feature, or a lone task's feature.
+	Operator  tracker.Ref
 	FreeSlots int
 	Now       time.Time
 }
@@ -108,6 +119,8 @@ type Action struct {
 	// Text says why, for the log and for the comment the action posts.
 	Text    string
 	Session Session
+	// Failure marks an Exit that ends the run short of done.
+	Failure bool
 }
 
 func hasAny(labels []string, set []string) bool {

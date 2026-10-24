@@ -18,8 +18,8 @@
 `engine run <owner/repo#n>` is started by hand, on one host, and drives Claude
 sessions there through `engine start`. It stays alive until the work is done,
 you stop it, or the machine goes down, and logs one timestamped line per
-action. `internal/run` holds it: `decide.go` is the pass, `world.go` reads the
-view and acts, `loop.go` paces the passes.
+action. It exits 1 when the run ends short of done: a feature that is not
+approved, or a lone task that failed.
 
 | Issue | Behaviour |
 | --- | --- |
@@ -61,7 +61,7 @@ signals"). Its own notes, such as having reported a failing lint, live in
 
 The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it
-skips any task whose tmux window already exists.
+skips any task whose session is still alive.
 
 Commands that work without `run`, and come first in the build:
 

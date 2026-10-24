@@ -29,7 +29,10 @@ func runRun(args []string, env Env, sleep func(time.Duration)) int {
 		fmt.Fprintln(env.Err, "engine run:", err)
 		return 1
 	}
-	run.Loop(sys, ref, taskOnly, sleep)
+	if err := run.Loop(sys, ref, taskOnly, sleep); err != nil {
+		fmt.Fprintln(env.Err, "engine run:", err)
+		return 1
+	}
 	return 0
 }
 

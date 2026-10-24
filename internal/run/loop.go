@@ -1,6 +1,7 @@
 package run
 
 import (
+	"errors"
 	"slices"
 	"time"
 
@@ -18,8 +19,9 @@ const (
 // Loop runs passes over ref until the feature, or the task, is over. Between
 // passes it checks this host's sessions every CheckEvery, and passes again
 // early when one has died, closed, or crossed a wait. A pass that cannot read
-// its view is logged and tried again at the next check.
-func Loop(w World, ref tracker.Ref, taskOnly bool, sleep func(time.Duration)) {
+// its view is logged and tried again at the next check. It returns an error
+// when the run ends short of done.
+func Loop(w World, ref tracker.Ref, taskOnly bool, sleep func(time.Duration)) error {
 	for {
 		v, err := Gather(w, ref, taskOnly)
 		if err != nil {
@@ -27,9 +29,15 @@ func Loop(w World, ref tracker.Ref, taskOnly bool, sleep func(time.Duration)) {
 			sleep(CheckEvery)
 			continue
 		}
-		if Apply(w, v, Decide(v)) {
+		acts := Decide(v)
+		if Apply(w, v, acts) {
+			for _, a := range acts {
+				if a.Kind == Exit && a.Failure {
+					return errors.New(a.Text)
+				}
+			}
 			w.Logf("done: %s", ref)
-			return
+			return nil
 		}
 		waitForPass(w, v, sleep)
 	}

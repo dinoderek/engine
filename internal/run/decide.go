@@ -29,8 +29,11 @@ func Decide(v View) []Action {
 	starts := ready(v)
 	acts = append(acts, starts...)
 	if v.TaskOnly {
-		if !f.Tasks[0].Open {
-			acts = append(acts, Action{Kind: Exit, Ref: f.Tasks[0].Ref, Text: f.Tasks[0].Ref.String() + " is closed"})
+		switch t := f.Tasks[0]; {
+		case !t.Open:
+			acts = append(acts, Action{Kind: Exit, Ref: t.Ref, Text: t.Ref.String() + " is closed"})
+		case t.Has(Failed):
+			acts = append(acts, Action{Kind: Exit, Ref: t.Ref, Text: t.Ref.String() + " is " + Failed, Failure: true})
 		}
 		return acts
 	}
@@ -53,7 +56,7 @@ func planStep(v View) ([]Action, bool) {
 	case later:
 		return nil, false
 	case !f.Has(Approved):
-		return []Action{{Kind: Exit, Ref: f.Ref, Text: f.Ref.String() + " is not approved"}}, true
+		return []Action{{Kind: Exit, Ref: f.Ref, Text: f.Ref.String() + " is not approved", Failure: true}}, true
 	case started && planner.Live:
 		if planner.waited(v.Now, StallWait) && planner.StallNoted.Before(planner.WaitingSince) {
 			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner,
@@ -113,7 +116,7 @@ func reaps(v View) []Action {
 	var acts []Action
 	for _, c := range v.Feature.Tasks {
 		s, ok := v.Sessions[c.Ref]
-		if ok && !c.Open && s.Mode == "hands-off" && !hasAny(c.Labels, append(slices.Clone(claimStates), Failed, Merging)) && s.waited(v.Now, StallWait) {
+		if ok && !c.Open && s.Mode == "hands-off" && !hasAny(c.Labels, append(slices.Clone(takenStates), Merging)) && s.waited(v.Now, StallWait) {
 			acts = append(acts, Action{Kind: Reap, Ref: c.Ref, Session: s, Text: "its task is closed"})
 		}
 	}
@@ -124,9 +127,11 @@ func reaps(v View) []Action {
 func ready(v View) []Action {
 	var cands []tracker.Card
 	for _, c := range v.Feature.Tasks {
-		live := v.Sessions[c.Ref].Live
+		s := v.Sessions[c.Ref]
 		blocked := slices.ContainsFunc(c.BlockedBy, func(b tracker.Blocker) bool { return b.Open })
-		if c.Open && !blocked && !hasAny(c.Labels, append(slices.Clone(claimStates), Failed)) && !live {
+		failed, ok := v.StartFailed[c.Ref]
+		resting := ok && failed.After(s.Spawned) && v.Now.Sub(failed) < StartRetry
+		if c.Open && !blocked && !hasAny(c.Labels, takenStates) && !s.Live && !resting {
 			cands = append(cands, c)
 		}
 	}
@@ -181,7 +186,7 @@ func featureLabel(v View, starting bool) string {
 	open := 0
 	var last tracker.Card
 	for _, c := range f.Tasks {
-		if !c.Open || hasAny(c.Labels, append(slices.Clone(claimStates), Failed)) {
+		if !c.Open || hasAny(c.Labels, takenStates) {
 			started = true
 		}
 		if c.Open {
@@ -208,11 +213,23 @@ func featureLabel(v View, starting bool) string {
 // isAcceptance reports whether c is blocked, directly or not, by every other
 // task.
 func isAcceptance(all []tracker.Card, c tracker.Card) bool {
+	in := map[tracker.Ref]bool{}
+	for _, t := range all {
+		in[t.Ref] = true
+	}
 	edges := map[tracker.Ref][]tracker.Ref{}
 	for _, t := range all {
 		for _, b := range t.BlockedBy {
-			edges[t.Ref] = append(edges[t.Ref], b.Ref)
+			if in[b.Ref] {
+				edges[t.Ref] = append(edges[t.Ref], b.Ref)
+			}
 		}
 	}
-	return len(lint.Upstream(edges, c.Ref)) >= len(all)-1
+	up := 0
+	for _, r := range lint.Upstream(edges, c.Ref) {
+		if r != c.Ref {
+			up++
+		}
+	}
+	return len(all) > 1 && up == len(all)-1
 }

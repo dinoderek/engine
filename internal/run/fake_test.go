@@ -52,6 +52,8 @@ type world struct {
 	feature  tracker.Feature
 	slots    int
 	plans    func(w *world) // the planner's work, when it is started
+	refuse   func(tracker.Ref) error
+	history  []string // the labels set on the feature, in order
 	do       map[int]behaviour
 	execs    map[tracker.Ref]*executor
 	nextID   int
@@ -100,7 +102,9 @@ func (w *world) Feature(tracker.Ref) (tracker.Feature, error) {
 	return f, nil
 }
 
-func (w *world) Task(r tracker.Ref) (tracker.Card, error) { return *w.card(r), nil }
+func (w *world) Task(r tracker.Ref) (tracker.Card, tracker.Ref, error) {
+	return *w.card(r), w.feature.Ref, nil
+}
 
 func (w *world) Rows() ([]ps.Row, error) {
 	var rows []ps.Row
@@ -163,7 +167,26 @@ func (w *world) launch(r tracker.Ref, do behaviour) error {
 		Mode: "hands-off", Tmux: "engine:" + e.window.ID, Spawned: w.now})
 }
 
+// Start refuses as engine start does: a window of that name, live or dead,
+// or no free slot.
 func (w *world) Start(r tracker.Ref) error {
+	live := 0
+	for _, e := range w.execs {
+		if e.window.ID != "" && e.window.Name == fmt.Sprintf("r-%d", r.Number) {
+			return fmt.Errorf("the tmux session engine already has a window r-%d", r.Number)
+		}
+		if e.window.ID != "" && !e.window.Dead {
+			live++
+		}
+	}
+	if live >= w.slots {
+		return fmt.Errorf("no free slot")
+	}
+	if w.refuse != nil {
+		if err := w.refuse(r); err != nil {
+			return err
+		}
+	}
 	w.starts = append(w.starts, r)
 	return w.launch(r, w.do[r.Number])
 }
@@ -174,6 +197,9 @@ func (w *world) StartPlanner(r tracker.Ref) error {
 }
 
 func (w *world) AddLabels(r tracker.Ref, labels ...string) error {
+	if r == w.feature.Ref {
+		w.history = append(w.history, labels...)
+	}
 	c := w.labels(r)
 	for _, l := range labels {
 		if !slices.Contains(*c, l) {
@@ -203,7 +229,14 @@ func (w *world) Comment(r tracker.Ref, body string) error {
 
 func (w *world) Close(tracker.Ref) error { w.closed, w.feature.Open = true, false; return nil }
 
-func (w *world) Operator(tracker.Ref) (string, error) { return "op", nil }
+// Operator is "op" on the feature and the planner's machine user on a task,
+// which the planner wrote.
+func (w *world) Operator(r tracker.Ref) (string, error) {
+	if r == w.feature.Ref {
+		return "op", nil
+	}
+	return "bot", nil
+}
 
 func (w *world) PullRequests(r tracker.Ref) ([]string, error) {
 	return []string{fmt.Sprintf("https://example.test/o/r/pull/%d", 100+r.Number)}, nil
@@ -253,6 +286,9 @@ func (w *world) step(e *executor) {
 	}
 	at := int(w.now.Sub(e.started) / time.Minute)
 	c := w.card(e.ref)
+	if !c.Open {
+		return
+	}
 	switch {
 	case e.do.dieAt != 0 && at >= e.do.dieAt:
 		e.window.Dead = true
