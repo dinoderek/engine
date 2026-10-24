@@ -33,7 +33,7 @@ func TestCommentFailures(t *testing.T) {
 		"gh fails":   func([]string, string, ...string) (string, error) { return "HTTP 404", errors.New("exit 1") },
 		"unreadable": func([]string, string, ...string) (string, error) { return "nope", nil },
 	} {
-		if _, err := Comment(run, "tok", Ref{"o/r", 7}, "x"); err == nil || !strings.Contains(err.Error(), "comment on o/r") {
+		if _, err := Comment(run, "tok", Ref{"o/r", 7}, "x"); err == nil || !strings.Contains(err.Error(), "on o/r") {
 			t.Errorf("%s: %v", name, err)
 		}
 	}

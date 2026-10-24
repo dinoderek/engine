@@ -46,6 +46,9 @@ func Tell(name, text string, d Deps) (Told, error) {
 	if !ok {
 		return Told{}, fmt.Errorf("no claimed task named %s", name)
 	}
+	if task.Claim.Host == "" {
+		return Told{}, fmt.Errorf("the claim of %s names no host", name)
+	}
 	_, local, err := hosts.Open(hosts.ConfigDir(d.Home))
 	if err != nil {
 		return Told{}, err

@@ -105,3 +105,19 @@ func LatestClaim(run Runner, token string, ref Ref) (*Claim, error) {
 	}
 	return latest, nil
 }
+
+// FindClaim returns the claimed task whose session is named name, by the
+// claim posted last: a task that ran twice has two claims under one name.
+func FindClaim(tasks []ClaimedTask, name string) (ClaimedTask, bool) {
+	var latest ClaimedTask
+	found := false
+	for _, t := range tasks {
+		if t.Claim.Name != name {
+			continue
+		}
+		if !found || t.Claim.PostedAt.After(latest.Claim.PostedAt) {
+			latest, found = t, true
+		}
+	}
+	return latest, found
+}

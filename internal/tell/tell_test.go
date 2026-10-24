@@ -116,7 +116,7 @@ type tmux struct {
 
 func (f *tmux) run(_ string, args ...string) (string, error) {
 	switch args[0] {
-	case "has-session":
+	case "has-session", "display-message":
 		return "", nil
 	case "list-windows":
 		return f.windows, nil
@@ -157,28 +157,25 @@ func TestTellCommentsAndTypes(t *testing.T) {
 
 func TestTellFailures(t *testing.T) {
 	tests := []struct {
-		name, self, claimHost, windows string
+		name, task, self, claimHost, windows string
 		commentErr, typeErr            error
 		want                           string
 		commented                      bool
 	}{
-		{"no such task", "mac", "mac", "", nil, nil, "no claimed task named r-8", false},
-		{"other host", "mac", "devbox", "", nil, nil, `runs on "devbox", not this host ("mac")`, true},
-		{"no window", "mac", "mac", "@1 %1 0 other\n", nil, nil, "no live tmux window named r-7", true},
-		{"dead window", "mac", "mac", "@4 %9 1 r-7\n", nil, nil, "no live tmux window named r-7", true},
-		{"comment fails", "mac", "mac", "@4 %9 0 r-7\n", errors.New("exit 1"), nil, "comment on o/r", false},
-		{"typing fails", "mac", "mac", "@4 %9 0 r-7\n", nil, errors.New("tmux died"), "typing into the window failed", true},
+		{"no such task", "r-8", "mac", "mac", "", nil, nil, "no claimed task named r-8", false},
+		{"other host", "r-7", "mac", "devbox", "", nil, nil, `runs on "devbox", not this host ("mac")`, true},
+		{"no window", "r-7", "mac", "mac", "@1 %1 0 other\n", nil, nil, "no live tmux window named r-7", true},
+		{"dead window", "r-7", "mac", "mac", "@4 %9 1 r-7\n", nil, nil, "no live tmux window named r-7", true},
+		{"comment fails", "r-7", "mac", "mac", "@4 %9 0 r-7\n", errors.New("exit 1"), nil, "comment on o/r", false},
+		{"claim names no host", "r-7", "mac", "", "@4 %9 0 r-7\n", nil, nil, "names no host", false},
+		{"typing fails", "r-7", "mac", "mac", "@4 %9 0 r-7\n", nil, errors.New("tmux died"), "typing into the window failed", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tm := &tmux{windows: tt.windows, typeErr: tt.typeErr}
 			d, g, _ := rig(t, tt.self, tt.claimHost, tm)
 			g.commentErr = tt.commentErr
-			name := "r-7"
-			if tt.name == "no such task" {
-				name = "r-8"
-			}
-			_, err := Tell(name, "hi", d)
+			_, err := Tell(tt.task, "hi", d)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("error %v, want %q", err, tt.want)
 			}
