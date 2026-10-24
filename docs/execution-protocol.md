@@ -85,11 +85,12 @@ creates or updates them all; the set is `internal/tracker`.
 | Entity | States |
 | --- | --- |
 | Feature | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`. `blocked` while any task is `needs-human`. |
-| Task | `todo` → `running` → `in-review` (PR open) → closed by merge. `needs-human` replaces `running` or `in-review` during a hard stop. `failed` when the session dies. `todo` is the absence of a state label, never a label. A standalone task starts at `prepare` → `approved`. |
+| Task | `todo` → `running` → `in-review` (PR open) → closed by merge, with no state label. `needs-human` replaces `running` or `in-review` during a hard stop. `failed` when the session dies. `todo` is the absence of a state label, never a label. A standalone task starts at `prepare` → `approved`. |
 
 "Ready" is computed, never stored. The planner sets `feature` and `prepare`.
 You set `approved` and clear `ruling-review`. The executor sets `running`,
-`needs-human`, `in-review` and `ruling-review`. The merge closes the task.
+`needs-human`, `in-review` and `ruling-review`, and clears `in-review` once
+the merge closes the task.
 The coordinator owns the other feature labels and `failed`.
 
 Feature status at a glance: the feature issue's state label and its sub-issue

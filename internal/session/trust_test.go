@@ -20,6 +20,33 @@ func TestClaudeConfig(t *testing.T) {
 	}
 }
 
+func TestPluginDir(t *testing.T) {
+	none := func(string) string { return "" }
+	if got := PluginDir(none, "/home/me"); got != "/home/me/.claude/plugins/cache/engine" {
+		t.Errorf("default: %s", got)
+	}
+	dir := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": "/cfg"}[k] }
+	if got := PluginDir(dir, "/home/me"); got != "/cfg/plugins/cache/engine" {
+		t.Errorf("CLAUDE_CONFIG_DIR: %s", got)
+	}
+}
+
+// A renamed marketplace would point --add-dir at a missing directory, which
+// Claude accepts silently, so the name is pinned to the marketplace file.
+func TestMarketplaceMatchesItsFile(t *testing.T) {
+	data, err := os.ReadFile("../../.claude-plugin/marketplace.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct{ Name string }
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Name != Marketplace {
+		t.Errorf("marketplace.json names %q; session.Marketplace is %q", m.Name, Marketplace)
+	}
+}
+
 func trusted(t *testing.T, config, dir string) bool {
 	t.Helper()
 	var c struct {

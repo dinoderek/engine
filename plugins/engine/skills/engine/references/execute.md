@@ -42,7 +42,7 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    If a check fails, say so in the session only. Otherwise add
    `engine:running` and post the claim comment (below). Then re-read the
    comments. If an earlier claim from another run exists, delete your claim
-   comment, say so, and end the session.
+   comment, say so, and end the session (step 12's last action).
 2. **Open.**
    - `engine version` must run, because the merge guard calls `engine`
      (**Environment**).
@@ -94,12 +94,17 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
       and gated.
     - A repo with no CI merges on the local gates alone.
     - In gated mode, wait for the operator's approval before merging.
-11. **Report.** Comment on the task's issue: what shipped, the `med` and
-    `high` rulings, and the deviations. Update downstream tasks that are still
-    to do if your work changed what they assume (below).
-12. **Clean up.** Run the repo's worktree-release command, and say what it
-    removed. If the PR closed without merging, ask first. Then end the
-    session.
+11. **Report.** Remove `engine:in-review`: the merge closed the task. Comment
+    on the task's issue: what shipped, the `med` and `high` rulings, and the
+    deviations. Update downstream tasks that are still to do if your work
+    changed what they assume (below).
+12. **Clean up.** Run the repo's worktree-release command from outside the
+    worktree, and say what it removed. If the PR closed without merging, ask
+    first. Then end the session. In hands-off mode, when the kickoff names
+    `tmux=`, your last action is `cd "$HOME" && tmux kill-window -t
+    "$TMUX_PANE"`: it closes your window and frees its slot. If the shell
+    says its working directory was deleted, run it again. In gated mode the
+    operator is reading, so leave it open.
 
 Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
 when you resume after a stop.
@@ -142,10 +147,11 @@ Branch: <branch>
   `engine:approved`.
 - `engine:needs-human` during a hard stop. It replaces `engine:running` or
   `engine:in-review`, and you restore that label when the stop is answered.
-- `engine:in-review` when the PR opens.
-- `engine:ruling-review` with a `med` or `high` ruling.
+- `engine:in-review` when the PR opens, removed once the merge closes the
+  task, so a closed task carries no state label.
+- `engine:ruling-review` with a `med` or `high` ruling. The operator clears it.
 
-The merge closes the task. Leave every other label to the coordinator.
+Leave every other label to the coordinator.
 
 ## Next ready tasks (gated)
 
