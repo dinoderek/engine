@@ -11,10 +11,10 @@ changing what an agent does, change the skill.
 - **Hands-off when dispatched, stops by rule.** A dispatched executor decides
   open questions itself, and logs as rulings only the decisions worth your
   review. It stops only for a hard-stop class.
-- **Enforce in code, not prompts.** The coordinator is a program. Merging is a
-  scripted check of the reviewed head commit against green checks. In Claude
-  Code, the plugin's merge guard (below) blocks an unpinned, auto or admin
-  merge through `gh`.
+- **Enforce in code, not prompts.** The coordinator's pass is specified once
+  and implemented in code (`engine run`). Merging is a scripted check of the
+  reviewed head commit against green checks. In Claude Code, the plugin's
+  merge guard (below) blocks an unpinned, auto or admin merge through `gh`.
 - **One task = one session = one worktree = one PR.**
 - **One plan source per feature:** the tracker, or an in-repo plan that the
   operator points the executor at. The coordinator drives only the tracker.

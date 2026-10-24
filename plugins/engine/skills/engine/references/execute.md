@@ -144,8 +144,8 @@ Branch: <branch>
 ```
 
 - **Host** is the logical name in `~/.config/engine/host` (such as `mac` or
-  `devbox`), never a hostname or an address. If the file is missing, stop
-  (**Environment**).
+  `devbox`), never a hostname or an address. If the file is missing and the
+  kickoff names no `host=`, stop (**Environment**).
 - **Tmux** comes from `tmux display-message -p '#S:#W'` when `$TMUX` is set.
 
 ## Changing the plan mid-flight
