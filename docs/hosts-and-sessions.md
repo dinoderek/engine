@@ -147,10 +147,11 @@ launches a Claude session on this machine from any directory, and returns
 once it is up. `--mode` defaults to `hands-off`; `--tier` replaces the card's.
 
 It first refuses, changing nothing, when: the token file, host file,
-`hosts.toml` or this host's entry is missing; the task is closed, has a task state label or an
-open blocker, or is standalone without `engine:approved`; the card's harness
-is unknown (as a misspelt tier is), not Claude, or not run here; its window
-exists; or no slot is free (a live window holds one). Then it:
+`hosts.toml` or this host's entry is missing; the task is closed, has a task
+state label or an open blocker, or is standalone without `engine:approved`;
+the card's harness is unknown (as a misspelt tier is), not Claude, or not run
+here; its window exists; or no slot is free (a live window holds one). Then
+it:
 
 1. syncs engine's clone (`operator-setup.md`, "Machine user"): clones it over
    HTTPS on first use, fetches, and leaves it at the remote's default branch;
