@@ -164,7 +164,8 @@ agreed.
    - the acceptance task exists.
 
    Fix the plan and lint again until it passes.
-5. End the session. The coordinator sees the passing lint and starts
+5. End the session; when the kickoff names `tmux=`, close your window as
+   `execute.md` step 12 does. The coordinator sees the passing lint and starts
    dispatching.
 
 ## In-repo plans

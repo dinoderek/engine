@@ -12,6 +12,7 @@
 | `internal/hosts/` | host config: parsing (`toml.go`), validation (`decode.go`), types, slots and loading (`hosts.go`), launch lines (`launch.go`) |
 | `internal/session/` | the local host's ops: clones and worktrees (`repo.go`, `worktree.go`), tmux windows and typing (`tmux.go`), keeping a Mac awake (`awake.go`), live Claude sessions (`agents.go`), folder trust (`trust.go`), the run directory (`record.go`) |
 | `internal/lint/` | `engine lint`: the plan rules |
+| `internal/run/` | `engine run`: the coordinator loop (`coordinator.md`) |
 | `internal/ps/` | `engine ps`: listing (`ps.go`), each claim's probe (`probe.go`), output (`render.go`) |
 | `internal/start/` | `engine start`: the refusals, then the launch |
 | `internal/tell/` | `engine tell`: a comment on the task, then a pointer typed into its window |

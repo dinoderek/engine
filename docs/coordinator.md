@@ -15,8 +15,11 @@
 
 ## V1: `engine run`
 
-`engine run <owner/repo#n>` is started by hand. It stays alive until the work
-is done, you stop it, or the machine goes down.
+`engine run <owner/repo#n>` is started by hand, on one host, and drives Claude
+sessions there through `engine start`. It stays alive until the work is done,
+you stop it, or the machine goes down, and logs one timestamped line per
+action. `internal/run` holds it: `decide.go` is the pass, `world.go` reads the
+view and acts, `loop.go` paces the passes.
 
 | Issue | Behaviour |
 | --- | --- |
@@ -28,7 +31,9 @@ it. The skill's `coordinate` mode
 (`plugins/engine/skills/engine/references/coordinate.md`) is the spec for a
 pass, so an agent coordinator and `engine run` behave the same. A pass can:
 
-- spawn the planner and lint the plan;
+- spawn the planner and lint the plan (the planner is started as
+  `engine start` starts a task: hands-off, at `deep`, with the kickoff
+  `Plan breakdown <feature> with the engine planner`);
 - place and spawn ready tasks in the skill's order (most downstream tasks
   first), which is `engine start` for each one;
 - mark dead sessions `failed`;
@@ -36,25 +41,23 @@ pass, so an agent coordinator and `engine run` behave the same. A pass can:
 - @mention you about a stalled session;
 - close the windows of finished hands-off tasks that did not close their own;
 - on `done`, post a summary and close the feature issue;
-- gather and upload telemetry for runs that have ended.
+- gather and upload telemetry for runs that have ended (designed, not built).
 
 **Supervised.** An agent can watch `engine run`
 (the skill's `supervise` mode). It acts only through `engine` commands, may
 rebuild and restart `engine run` between passes, and records each gap it
 fills as a comment on the feature.
 
-Each webhook event starts a pass: `gh webhook forward` sends repo events to a
-localhost endpoint without needing a public URL. A backstop pass runs every 5
-minutes. Events that arrive while a pass is pending or running coalesce into
-one more pass. An event never carries state, so a missed one costs at most the
-backstop interval.
-
-Session death raises no webhook, so a session check runs every 60 seconds
-between passes. It reads only the hosts, never GitHub. The first time it sees
+A pass runs every 5 minutes. Between passes, a session check runs every 60
+seconds. It reads only the host, never GitHub, and starts a pass early when a
+session has started, ended or changed between working and waiting, or has
+waited long enough to stall. Designed, not built: a pass on each webhook event
+(`gh webhook forward` to a localhost endpoint), coalescing events that arrive
+mid-pass, and SSH hosts. The first time it sees
 a session waiting, it writes the time to the session's run directory as
-`waiting-since`, and clears it when the session works again. It starts a pass
-when a session has died or has been waiting for 10 minutes ("Session
-signals").
+`waiting-since`, and clears it when the session works again ("Session
+signals"). Its own notes, such as having reported a failing lint, live in
+`<repo>-<n>-coordinator` beside the run directories.
 
 The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it

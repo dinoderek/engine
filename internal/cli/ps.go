@@ -48,21 +48,31 @@ func listClaimed(env Env) (ps.Listing, error) {
 	if err != nil {
 		return ps.Listing{}, err
 	}
+	return ps.List(psSource(env, host, token))
+}
+
+// psSource is where engine ps, and engine run's view of claims, read from.
+func psSource(env Env, host hosts.Host, token string) ps.Source {
 	tmux := &session.Tmux{Run: env.Local, Bin: "tmux"}
-	claude := expandHome(host.Bin["claude"], env.Home)
-	return ps.List(ps.Source{
-		Claimed: func() ([]tracker.ClaimedTask, error) { return tracker.Claimed(env.Exec, token) },
-		Local:   host.Name,
-		Windows: tmux.Windows,
-		Agents: func() ([]session.Agent, error) {
-			if claude == "" {
-				return nil, fmt.Errorf("host %s has no claude binary in hosts.toml", host.Name)
-			}
-			return session.ListAgents(env.Local, claude)
-		},
+	return ps.Source{
+		Claimed:  func() ([]tracker.ClaimedTask, error) { return tracker.Claimed(env.Exec, token) },
+		Local:    host.Name,
+		Windows:  tmux.Windows,
+		Agents:   agents(env, host),
 		Checkout: func(dir string) (session.Checkout, error) { return session.ProbeCheckout(env.Local, dir) },
 		Now:      env.Now,
-	})
+	}
+}
+
+// agents lists the live Claude Code sessions on host.
+func agents(env Env, host hosts.Host) func() ([]session.Agent, error) {
+	claude := expandHome(host.Bin["claude"], env.Home)
+	return func() ([]session.Agent, error) {
+		if claude == "" {
+			return nil, fmt.Errorf("host %s has no claude binary in hosts.toml", host.Name)
+		}
+		return session.ListAgents(env.Local, claude)
+	}
 }
 
 // expandHome turns a leading ~ into the home directory.
