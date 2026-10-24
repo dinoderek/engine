@@ -36,7 +36,7 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
      `engine:approved`, not `engine:prepare`;
    - every blocker is closed
      (`gh api repos/<o>/<r>/issues/<n>/dependencies/blocked_by`);
-   - the host file and the token exist, unless the kickoff names `host=`;
+   - the token exists, and the host file unless the kickoff names `host=`;
    - the repo has the `engine:` labels (`engine labels sync`).
 
    If a check fails, say so in the session only. Otherwise add

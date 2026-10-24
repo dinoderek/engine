@@ -9,6 +9,8 @@ claim a task, or answer a hard stop: hard stops go to the operator.
 | `Coordinate <feature> with engine` | `engine start`, read back with `engine ps --json` |
 | `Coordinate <feature> with native sessions` | Claude Code cloud sessions (below) |
 
+With neither named, use `engine` if `engine ps` runs here, else ask.
+
 ## The pass
 
 Run a pass, then wait about 5 minutes, and repeat until the feature is
@@ -18,7 +20,8 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    state, labels and blockers; every live session (`engine ps --json`, or
    each cloud session's status); and the sessions you started, with when.
 2. **Plan if needed.** An `engine:approved` feature with no sub-issues gets a
-   planner session, kickoff `Plan breakdown <feature>`. When its lint
+   planner session, kickoff `Plan breakdown <feature>`, unless one you
+   started for it is still alive. When its lint
    passes, set `engine:planned`.
 3. **Start ready tasks.** A task is ready when it is open, has no `engine:`
    state label, and every blocker is closed. While a slot is free, start
@@ -33,8 +36,8 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    ready again.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
-   - it has been waiting for input for 10 minutes and its task is not
-     `engine:needs-human`.
+   - it has been waiting for input for 10 minutes and its task is open and
+     not `engine:needs-human`.
 
    @mention the operator on the task's issue with the stall and the session's
    last 20 screen lines (`tmux capture-pane -p -S -20`, or the cloud session's

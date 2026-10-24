@@ -75,7 +75,7 @@ session.
 11. **Repo rule:** a repo rule tells you to involve the operator, and no
     override on the card or its feature covers it.
 12. **Permission:** an unattended session's permission request was denied,
-    and no other route needs no new permission (for example `cat` in place of
+    and no route without a new permission works (for example `cat` in place of
     a denied Read). Comment with the tool, its exact input, why you need it,
     and the permission rule that would allow it. The operator adds the rule
     in the session and tells you to retry.
