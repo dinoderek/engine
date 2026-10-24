@@ -7,14 +7,13 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// required are the card sections every task must have. Requires may say
-// "none"; the others must say something.
+// required are the card sections every task must have. Requires may be
+// empty or say "none"; the others must say something.
 var required = []struct {
 	Heading  string
 	Nonempty bool
@@ -41,7 +40,12 @@ func Lint(f tracker.Feature) []Problem {
 		return []Problem{{Text: "the feature has no tasks"}}
 	}
 	tasks := slices.Clone(f.Tasks)
-	sort.Slice(tasks, func(i, j int) bool { return tasks[i].Ref.Number < tasks[j].Ref.Number })
+	slices.SortStableFunc(tasks, func(a, b tracker.Card) int {
+		if c := strings.Compare(a.Ref.Repo, b.Ref.Repo); c != 0 {
+			return c
+		}
+		return a.Ref.Number - b.Ref.Number
+	})
 	var problems []Problem
 	for _, c := range tasks {
 		problems = append(problems, cardProblems(c)...)
@@ -153,8 +157,9 @@ func acceptanceProblems(tasks []tracker.Card) []Problem {
 var (
 	listMark = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+`)
 	// grade is a trailing risk grade, such as "(`low`)" or "(risk: med)".
-	grade = regexp.MustCompile("\\s*\\((?:risk:\\s*)?`?(?:low|med|high)`?\\)\\s*$")
-	space = regexp.MustCompile(`\s+`)
+	grade    = regexp.MustCompile("\\s*\\((?:risk:\\s*)?`?(?:low|med|high)`?\\)\\s*$")
+	space    = regexp.MustCompile(`\s+`)
+	noneItem = regexp.MustCompile(`^none\b`)
 )
 
 // sharedQuestions finds an open question on more than one card, by its text
@@ -196,7 +201,7 @@ func questions(section string) []string {
 	var qs []string
 	for _, item := range items {
 		q := strings.ToLower(grade.ReplaceAllString(space.ReplaceAllString(item, " "), ""))
-		if !strings.HasPrefix(q, "none") {
+		if !noneItem.MatchString(q) {
 			qs = append(qs, q)
 		}
 	}

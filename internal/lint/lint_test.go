@@ -69,6 +69,8 @@ func TestLintFindsEachProblem(t *testing.T) {
 			on(3, `open question "which name?" is also on `+ref(2).String())}},
 		{"same question, other grade", feature(card(2, "- Which name? (`low`)"), card(3, "- Which\n  name? (risk: med)"), card(4, "", 2, 3)), []string{
 			on(3, `open question "which name?" is also on `+ref(2).String())}},
+		{"nonempty is a question", feature(card(2, "- Nonempty names?"), card(3, "- nonempty names?"), card(4, "", 2, 3)), []string{
+			on(3, `open question "nonempty names?" is also on `+ref(2).String())}},
 		{"no outcome", feature(noOutcome, card(3, "", 2)), []string{on(2, "no ## Outcome section")}},
 	}
 	for _, tt := range tests {
