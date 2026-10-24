@@ -315,8 +315,11 @@ func (p plan) launch(d Deps) (Started, error) {
 // command is the window's shell command. It runs under /bin/sh, whatever
 // tmux's default shell is: export the machine user's token from its file, so
 // it never appears on a command line, and the CLAUDE_CONFIG_DIR engine trusted
-// the worktree in, then run the launch line with the kickoff as its last
-// argument.
+// the worktree in, then run the launch line. It adds the engine plugin's
+// directory with --add-dir, so the executor can read the skill's references
+// with Claude's file tools, which otherwise ask before reading outside the
+// worktree. The kickoff comes last, after --, because --add-dir takes every
+// argument up to the next option.
 func (p plan) command(d Deps, clone session.Clone, runID string) (string, error) {
 	line, err := p.cfg.LaunchLine(p.host, hosts.Launch{
 		Harness: Harness, Tier: p.tier, Name: p.name, Clone: clone.Path, Home: d.Home,
@@ -333,7 +336,8 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 	} else {
 		script += "unset CLAUDE_CONFIG_DIR && "
 	}
-	script += "exec " + line + " " + hosts.ShellWord(kickoff)
+	plugin := session.PluginDir(d.Getenv, d.Home)
+	script += "exec " + line + " --add-dir " + hosts.ShellWord(plugin) + " -- " + hosts.ShellWord(kickoff)
 	return "exec /bin/sh -c " + hosts.ShellWord(script), nil
 }
 

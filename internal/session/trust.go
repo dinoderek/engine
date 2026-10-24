@@ -20,6 +20,20 @@ func ClaudeConfig(getenv func(string) string, home string) string {
 	return filepath.Join(home, ".claude.json")
 }
 
+// Marketplace is the name of the plugin marketplace engine publishes
+// (.claude-plugin/marketplace.json).
+const Marketplace = "engine"
+
+// PluginDir is where Claude Code keeps the plugins it installed from engine's
+// marketplace: under $CLAUDE_CONFIG_DIR when that is set, else under ~/.claude.
+func PluginDir(getenv func(string) string, home string) string {
+	dir := getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		dir = filepath.Join(home, ".claude")
+	}
+	return filepath.Join(dir, "plugins", "cache", Marketplace)
+}
+
 // TrustFolder marks dir as trusted in the Claude Code state file at config,
 // so a session started there skips the workspace trust dialog, which would
 // otherwise stop an unattended launch (its default answer exits). It sets

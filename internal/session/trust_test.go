@@ -20,6 +20,17 @@ func TestClaudeConfig(t *testing.T) {
 	}
 }
 
+func TestPluginDir(t *testing.T) {
+	none := func(string) string { return "" }
+	if got := PluginDir(none, "/home/me"); got != "/home/me/.claude/plugins/cache/engine" {
+		t.Errorf("default: %s", got)
+	}
+	dir := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": "/cfg"}[k] }
+	if got := PluginDir(dir, "/home/me"); got != "/cfg/plugins/cache/engine" {
+		t.Errorf("CLAUDE_CONFIG_DIR: %s", got)
+	}
+}
+
 func trusted(t *testing.T, config, dir string) bool {
 	t.Helper()
 	var c struct {
