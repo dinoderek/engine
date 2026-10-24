@@ -60,6 +60,10 @@ type Session struct {
 	Spawned  time.Time
 	// Live is true while its window is open and its command runs.
 	Live bool
+	// DeadWindow is true when its window, by id and name, is still open with
+	// its command exited. Only then is the window its own to close: tmux
+	// reuses ids after a restart.
+	DeadWindow bool
 	// Waiting is true when Claude Code says it waits for input.
 	Waiting      bool
 	WaitingSince time.Time

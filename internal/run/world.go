@@ -17,6 +17,7 @@ import (
 const (
 	LintNoted   = "lint-noted"
 	StartFailed = "start-failed"
+	FinishNoted = "finish-noted"
 )
 
 // World is what a pass reads and changes: the tracker, the host's sessions
@@ -91,14 +92,18 @@ func Gather(w World, ref tracker.Ref, taskOnly bool) (View, error) {
 	return v, err
 }
 
-// startFailures reads when each open task's last start failed.
+// startFailures reads when the last start of each open task, and of the
+// feature's planner, failed.
 func startFailures(w World, f tracker.Feature) (map[tracker.Ref]time.Time, error) {
 	out := map[tracker.Ref]time.Time{}
+	refs := []tracker.Ref{f.Ref}
 	for _, c := range f.Tasks {
-		if !c.Open {
-			continue
+		if c.Open {
+			refs = append(refs, c.Ref)
 		}
-		dir, err := w.NoteDir(c.Ref)
+	}
+	for _, r := range refs {
+		dir, err := w.NoteDir(r)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +112,7 @@ func startFailures(w World, f tracker.Feature) (map[tracker.Ref]time.Time, error
 			return nil, err
 		}
 		if ok {
-			out[c.Ref] = at
+			out[r] = at
 		}
 	}
 	return out, nil
@@ -171,8 +176,8 @@ func readSession(w World, ref tracker.Ref, windows []session.WindowInfo, agents 
 	_, id, _ := strings.Cut(r.Record.Tmux, ":")
 	s := Session{Name: name, WindowID: id, RunDir: r.Dir, Mode: r.Record.Mode, Spawned: r.Record.Spawned}
 	for _, win := range windows {
-		if win.ID == id && win.Name == name && !win.Dead {
-			s.Live = true
+		if win.ID == id && win.Name == name {
+			s.Live, s.DeadWindow = !win.Dead, win.Dead
 		}
 	}
 	for _, a := range agents {
@@ -236,7 +241,7 @@ func Apply(w World, v View, acts []Action) bool {
 		case StartTask:
 			err = startTask(w, v, a)
 		case StartPlanner:
-			err = w.StartPlanner(a.Ref)
+			err = startTask(w, v, a)
 		case SetLabel:
 			err = setFeatureLabel(w, v.Feature, a.Label)
 		case ReportLint:
@@ -272,12 +277,16 @@ func logText(a Action) string {
 // noted, holds no slot until StartRetry, and @mentions the operator the
 // first time after a session start.
 func startTask(w World, v View, a Action) error {
-	if s, ok := v.Sessions[a.Ref]; ok && !s.Live && s.WindowID != "" {
+	if s, ok := v.Sessions[a.Ref]; ok && s.DeadWindow {
 		if err := w.Kill(s.WindowID); err != nil {
 			w.Logf("close the dead window of %s: %v", a.Ref, err)
 		}
 	}
-	err := w.Start(a.Ref)
+	start := w.Start
+	if a.Kind == StartPlanner {
+		start = w.StartPlanner
+	}
+	err := start(a.Ref)
 	if err == nil {
 		return nil
 	}
@@ -292,7 +301,7 @@ func startTask(w World, v View, a Action) error {
 	if seen && prev.After(v.Sessions[a.Ref].Spawned) {
 		return err
 	}
-	body := mention(w, v.Operator) + "engine run: starting this task failed, so it waits " + StartRetry.String() +
+	body := mention(w, v.Operator) + "engine run: starting a session for this issue failed, so it waits " + StartRetry.String() +
 		" before the next try:\n\n```text\n" + err.Error() + "\n```"
 	return errors.Join(err, w.Comment(a.Ref, body))
 }
@@ -390,20 +399,29 @@ func finish(w World, v View) error {
 	}
 	for _, c := range f.Tasks {
 		if len(f.Tasks) > 1 && isAcceptance(f.Tasks, c) {
-			fmt.Fprintf(&b, "\nAcceptance: %s merged, so every objective it proves holds.\n", c.Ref)
+			fmt.Fprintf(&b, "\nAcceptance: %s is closed.\n", c.Ref)
 		}
 	}
 	if len(review) > 0 {
 		b.WriteString("\nStill carrying engine:ruling-review: " + strings.Join(review, ", ") + ".\n")
 	}
 	b.WriteString("\nDeviations are in each task's report comment.")
-	// The comment goes last: a failed label or close is retried by the next
-	// pass, and the summary is posted once.
+	// A step that fails is retried by the next pass; the note keeps the
+	// summary to one post.
 	if err := setFeatureLabel(w, f, Done); err != nil {
 		return err
 	}
-	if err := w.Close(f.Ref); err != nil {
+	dir, err := w.NoteDir(f.Ref)
+	if err != nil {
 		return err
 	}
-	return w.Comment(f.Ref, b.String())
+	if _, posted, err := session.ReadNote(dir, FinishNoted); err != nil || !posted {
+		if err := w.Comment(f.Ref, b.String()); err != nil {
+			return err
+		}
+		if err := session.WriteNote(dir, FinishNoted, v.Now); err != nil {
+			return err
+		}
+	}
+	return w.Close(f.Ref)
 }

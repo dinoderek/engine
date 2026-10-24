@@ -70,6 +70,9 @@ func planStep(v View) ([]Action, bool) {
 		}
 		return nil, true
 	case len(f.Tasks) == 0:
+		if failed, ok := v.StartFailed[f.Ref]; ok && v.Now.Sub(failed) < StartRetry || v.FreeSlots < 1 {
+			return nil, true
+		}
 		return []Action{{Kind: StartPlanner, Ref: f.Ref, Text: "no tasks yet"}}, true
 	case len(v.LintProblems) > 0 && !v.LintNoted:
 		return []Action{{Kind: ReportLint, Ref: f.Ref, Text: "the plan fails lint"}}, true

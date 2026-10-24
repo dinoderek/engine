@@ -53,6 +53,8 @@ type world struct {
 	slots    int
 	plans    func(w *world) // the planner's work, when it is started
 	refuse   func(tracker.Ref) error
+	failNext map[string]error // the next call of a write fails: "comment", "close"
+	killed   []string
 	history  []string // the labels set on the feature, in order
 	do       map[int]behaviour
 	execs    map[tracker.Ref]*executor
@@ -192,6 +194,11 @@ func (w *world) Start(r tracker.Ref) error {
 }
 
 func (w *world) StartPlanner(r tracker.Ref) error {
+	if w.refuse != nil {
+		if err := w.refuse(r); err != nil {
+			return err
+		}
+	}
 	w.starts = append(w.starts, r)
 	return w.launch(r, behaviour{})
 }
@@ -222,12 +229,27 @@ func (w *world) labels(r tracker.Ref) *[]string {
 	return &w.card(r).Labels
 }
 
+func (w *world) fails(call string) error {
+	err := w.failNext[call]
+	delete(w.failNext, call)
+	return err
+}
+
 func (w *world) Comment(r tracker.Ref, body string) error {
+	if err := w.fails("comment"); err != nil {
+		return err
+	}
 	w.comments[r] = append(w.comments[r], body)
 	return nil
 }
 
-func (w *world) Close(tracker.Ref) error { w.closed, w.feature.Open = true, false; return nil }
+func (w *world) Close(tracker.Ref) error {
+	if err := w.fails("close"); err != nil {
+		return err
+	}
+	w.closed, w.feature.Open = true, false
+	return nil
+}
 
 // Operator is "op" on the feature and the planner's machine user on a task,
 // which the planner wrote.
@@ -245,6 +267,7 @@ func (w *world) PullRequests(r tracker.Ref) ([]string, error) {
 func (w *world) Capture(string, int) (string, error) { return "Do you want to proceed?", nil }
 
 func (w *world) Kill(id string) error {
+	w.killed = append(w.killed, id)
 	for _, e := range w.execs {
 		if e.window.ID == id {
 			e.window = session.WindowInfo{}

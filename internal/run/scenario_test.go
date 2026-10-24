@@ -309,3 +309,55 @@ func TestACheckTriggersAnEarlyPass(t *testing.T) {
 		t.Error("not due after the session began to wait")
 	}
 }
+
+func TestAReusedWindowIDIsNotKilled(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Executing}, card(2, "standard"), card(3, "standard"))
+	w.do[2], w.do[3] = behaviour{dieAt: 1}, behaviour{claim: 1}
+	v := gather(t, w)
+	Apply(w, v, Decide(v))
+	w.sleep(2 * CheckEvery)
+	// The server restarted: 2's window is gone, and its id now names 3's.
+	e2, e3 := w.execs[ref(2)], w.execs[ref(3)]
+	e3.window.ID, e2.window = e2.window.ID, session.WindowInfo{}
+	v = gather(t, w)
+	Apply(w, v, Decide(v))
+	if slices.Contains(w.killed, e3.window.ID) {
+		t.Errorf("killed %v, which is 3's live window", w.killed)
+	}
+}
+
+func TestAFailedPlannerStartIsReportedOnce(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Approved})
+	w.refuse = func(tracker.Ref) error { return errors.New("no free slot") }
+	for range 8 {
+		v := gather(t, w)
+		Apply(w, v, Decide(v))
+		w.now = w.now.Add(PassEvery)
+	}
+	c := w.comments[ref(1)]
+	if len(c) != 1 || !strings.HasPrefix(c[0], "@op ") || !strings.Contains(c[0], "no free slot") {
+		t.Errorf("comments %q", c)
+	}
+}
+
+func TestTheSummaryIsPostedOnce(t *testing.T) {
+	done := card(2, "standard")
+	done.Open = false
+	w := newWorld(t, []string{"engine:feature", Executing}, done)
+	w.failNext = map[string]error{"comment": errors.New("HTTP 502")}
+	for range 2 {
+		v := gather(t, w)
+		Apply(w, v, Decide(v))
+	}
+	w.failNext = map[string]error{"close": errors.New("HTTP 502")}
+	w.feature.Open = true
+	v := gather(t, w)
+	Apply(w, v, Decide(v))
+	if !w.closed {
+		v = gather(t, w)
+		Apply(w, v, Decide(v))
+	}
+	if c := w.comments[ref(1)]; len(c) != 1 || !w.closed {
+		t.Errorf("closed %v, comments %q", w.closed, c)
+	}
+}
