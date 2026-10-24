@@ -85,22 +85,10 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    Push and open the PR. Swap `engine:running` for `engine:in-review`.
    Release any local resources the repo says to stop when a PR opens.
 10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
-    - **Merge lock.** First take the feature's lock, so no sibling moves
-      the default branch under your last gate run. If no sibling task
-      carries `engine:merging`, add it to yours. Of the tasks that carry
-      it, the holder is the one whose latest `engine:merging` `labeled`
-      event (`gh api repos/<o>/<r>/issues/<n>/events`) is oldest. Re-check that you are the
-      holder after adding it and again just before merging; if you are not,
-      remove yours and wait. Without the lock, check every 5 minutes. Hold
-      it through the default-branch merge, the gates, the checks and the
-      merge. Remove it after the merge, at a hard stop, while a gated run
-      waits for approval, while you go back to step 5 for a fix, and when
-      the PR closes unmerged; take it again to resume. A gated run whose
-      head changes while it waits asks for approval again. A standalone task needs no lock.
+    - Take the merge lock (below) first. A standalone task needs none.
     - On a failure, read the logs, fix, and go back to step 5.
-    - If the default branch moved, merge it in. Without conflicts, re-run
-      the gates (step 5), push and keep watching: no new review. If you
-      resolved conflicts, that is a fix: go back to step 5.
+    - If the default branch moved, merge it in and go back to step 5. Keep
+      the lock if it merged cleanly; a conflict you resolved is a fix.
     - Before merging, read the task's comments once more.
     - When every check is green, merge with the repo's merge method and
       `--match-head-commit <sha>`, where `<sha>` is the commit you reviewed
@@ -125,6 +113,20 @@ when you resume after a stop.
 **Unattended sessions.** When `ENGINE_UNATTENDED=1` is in your environment,
 nobody watches your screen. Treat any denied permission request as the
 **Permission** hard stop (`rulings.md`).
+
+## Merge lock
+
+One task per feature merges at a time, so no sibling moves the default
+branch under your last gate run. To take the lock, add `engine:merging` to
+your task if no sibling carries it. The holder is the carrier whose latest
+`engine:merging` `labeled` event (`gh api repos/<o>/<r>/issues/<n>/events`)
+is oldest; check after adding it and just before merging, and if it is not
+you, remove yours. Without the lock, check every 5 minutes.
+
+Remove it after the merge, at a hard stop, while a gated run waits for
+approval, while you make a fix, and when the PR closes unmerged. Take it
+again to resume. A gated run whose head changed meanwhile asks for
+approval again.
 
 ## Claim comment
 
