@@ -57,7 +57,7 @@ tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
 [harness.codex]
 max_sessions = 2
 launch = "{bin} --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
-tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }
+tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }   # not Astra: Sol at high is close on coding, far cheaper
 tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
 tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 
@@ -217,7 +217,8 @@ first window. It sets the options itself, on the session and on each window it
 opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
 
 - on the session: `mouse on` and `history-limit 50000`;
-- on each window: `allow-rename off` and `automatic-rename off`;
+- on each window: `allow-rename off` and `automatic-rename off`, so agents
+  can't rename them;
   `window-size latest`, to fit whoever attached last; `remain-on-exit on`,
   so a crashed session's last screen stays readable.
 
