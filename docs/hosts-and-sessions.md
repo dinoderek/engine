@@ -110,10 +110,14 @@ host is in `coordinator.md`.
 
 ## Permission mode
 
-Sessions default to **auto mode**, so they never stop for a permission prompt.
-Only hard stops pause them.
+Sessions default to **auto mode**, whose classifier approves or refuses most
+actions without a prompt. Some still prompt, such as a read outside the
+working directories.
 
-- **Claude Code:** `--permission-mode auto`.
+- **Claude Code:** `--permission-mode auto`. In a hands-off session the
+  plugin's permission hook denies every prompt instead of showing it
+  (`execution-protocol.md`, "Enforced by hook"), so the executor finds
+  another route or raises the Permission hard stop.
 - **Codex:** the `workspace-write` sandbox, with Codex's auto-review deciding
   any action that crosses the sandbox boundary. With
   `approval_policy = "never"` there would be nothing for it to review.
@@ -168,7 +172,8 @@ runs holds one). Then it:
    <owner/repo#n> with the engine executor, <mode> mode. Reviewer model:
    <deep model>. run=<run-id> tmux=engine:<name> rc=<name>`, values the
    claim records. `/bin/sh` first exports `GH_TOKEN` from the token file,
-   keeping it off every command line;
+   keeping it off every command line, `ENGINE_RUN_DIR` (the run directory),
+   and `ENGINE_UNATTENDED=1` in hands-off mode;
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
 The executor claims the task; its claim check stops a racing second start.

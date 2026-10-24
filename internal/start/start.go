@@ -334,8 +334,19 @@ func (p plan) command(d Deps, clone session.Clone, runID string) (string, error)
 		return "", err
 	}
 	kickoff := Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)
+	runDir, err := session.RunDir(d.Home, runID)
+	if err != nil {
+		return "", err
+	}
 	// An empty token would make gh fall back to the operator's own login.
 	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
+	// The permission hook logs to the run directory and, unattended, denies.
+	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(runDir) + " && "
+	if p.opts.Mode == HandsOff {
+		script += "export " + session.UnattendedVar + "=1 && "
+	} else {
+		script += "unset " + session.UnattendedVar + " && "
+	}
 	// The tmux server's environment may differ from engine start's.
 	if dir := d.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
 		script += "export CLAUDE_CONFIG_DIR=" + hosts.ShellWord(dir) + " && "

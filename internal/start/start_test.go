@@ -149,10 +149,11 @@ func TestTierFlagReplacesTheCard(t *testing.T) {
 func TestLaunchCommand(t *testing.T) {
 	h := newHome(t, "mac")
 	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3, body: card("deep")}}
-	for _, configDir := range []string{"", "/cfg dir"} {
+	for _, c := range []struct{ configDir, mode string }{{"", HandsOff}, {"/cfg dir", HandsOff}, {"", Gated}} {
+		configDir := c.configDir
 		env := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": configDir}[k] }
 		d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: (&tmuxFake{}).run, Bin: "tmux"}, Home: h.dir, Getenv: env}
-		p, err := check(Options{Ref: ref(7)}, d)
+		p, err := check(Options{Ref: ref(7), Mode: c.mode}, d)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -161,6 +162,14 @@ func TestLaunchCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `
+		// The permission hook logs to the run directory, and denies only
+		// when nobody watches: in hands-off mode.
+		script += `export ENGINE_RUN_DIR=` + filepath.Join(h.dir, ".local/share/engine/runs/r-7-20260102T030405Z") + ` && `
+		if c.mode == HandsOff {
+			script += `export ENGINE_UNATTENDED=1 && `
+		} else {
+			script += `unset ENGINE_UNATTENDED && `
+		}
 		plugin := filepath.Join(h.dir, ".claude/plugins/cache/engine")
 		if configDir != "" {
 			script += `export CLAUDE_CONFIG_DIR='/cfg dir' && `
@@ -172,7 +181,7 @@ func TestLaunchCommand(t *testing.T) {
 		// only, and -- keeps the variadic options from taking the kickoff.
 		script += `exec ` + h.bin + ` --permission-mode auto --model opus-x --effort high -n r-7 --remote-control r-7 ` +
 			`--add-dir ` + plugin + ` --allowedTools 'Read(//tmp/**)' 'Read(//private/tmp/**)' -- ` +
-			`'Execute ` + ref(7).String() + ` with the engine executor, hands-off mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`
+			`'Execute ` + ref(7).String() + ` with the engine executor, ` + c.mode + ` mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`
 		if want := "exec /bin/sh -c " + hosts.ShellWord(script); got != want {
 			t.Errorf("command\n got %s\nwant %s", got, want)
 		}

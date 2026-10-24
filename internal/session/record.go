@@ -14,10 +14,18 @@ import (
 // pane log.
 const RunsDir = ".local/share/engine/runs"
 
-// RecordFile and PaneLog are the files in a run directory.
+// RecordFile, PaneLog and PermissionLog are the files in a run directory.
 const (
-	RecordFile = "run.json"
-	PaneLog    = "pane.log"
+	RecordFile    = "run.json"
+	PaneLog       = "pane.log"
+	PermissionLog = "permissions.jsonl"
+)
+
+// RunDirVar gives a session its run directory, and UnattendedVar set to "1"
+// marks a session nobody is watching: engine start sets it in hands-off mode.
+const (
+	RunDirVar     = "ENGINE_RUN_DIR"
+	UnattendedVar = "ENGINE_UNATTENDED"
 )
 
 // RunID names one run of a task: <repo>-<task>-<UTC yyyymmddThhmmssZ>.
