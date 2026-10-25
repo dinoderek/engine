@@ -27,7 +27,8 @@ and needs `address` and `ram_gb`. Engine does not spawn cloud sessions.
 **Slots from memory.** RAM stands in for how many sessions a machine runs at
 once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. Both values
 are set at the top and may be set again per host. A host's `max_sessions`
-replaces the derived count.
+replaces the derived count. Only a live window with a run recorded under
+its name takes a slot.
 
 **Capabilities:**
 
@@ -107,13 +108,12 @@ reaches each host is in `coordinator.md`.
 ## Permission mode
 
 Sessions default to **auto mode**, whose classifier approves or refuses most
-actions without a prompt. Some still prompt, such as a read outside the
-working directories.
+actions without a prompt. Some still prompt.
 
 - **Claude Code:** `--permission-mode auto`. In a hands-off session the
   plugin's permission hook denies every prompt instead of showing it
   (`execution-protocol.md`, "Enforced by hook"), so the executor finds
-  another route or raises the Permission hard stop.
+  another route or raises a hard stop.
 - **Codex:** the `workspace-write` sandbox, with Codex's auto-review deciding
   any action that crosses the sandbox boundary. With
   `approval_policy = "never"` there would be nothing for it to review.
@@ -134,7 +134,7 @@ All Codex settings are passed per session with `-c`. The host's own
 Every surface uses one name per session, `<repo>-<task>`, such as
 `boga3-412`: the tmux window, the remote-control name and part of the
 branch. It holds letters, digits, `_`, `.` and `-`, and does not start with
-`-`: tmux treats anything else (`#`, `:`, spaces) as special.
+`-`: tmux treats anything else as special.
 
 ## Starting a session: `engine start`
 
@@ -149,7 +149,7 @@ It first refuses, changing nothing, when: the token file, host file,
 state label or an open blocker, or is standalone without `engine:approved`;
 the card's harness is unknown (as a misspelt tier is), not Claude, or not run
 on the host; the host lacks a capability in the card's `## Requires`, even when
-named; its window exists; or no slot is free (a live window holds one). Then
+named; its window exists; or no slot is free. Then
 it:
 
 1. syncs engine's clone (`operator-setup.md`, "Machine user"): clones it over

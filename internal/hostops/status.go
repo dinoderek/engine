@@ -14,7 +14,8 @@ const ScreenLines = 20
 // Status is status's reply: what this host's sessions are doing now.
 type Status struct {
 	// Slots is how many sessions the host runs at once, and FreeSlots how
-	// many more it can start: a window whose command has exited holds none.
+	// many more it can start: only a live window with a run recorded under
+	// its name holds one.
 	Slots     int      `json:"slots"`
 	FreeSlots int      `json:"free_slots"`
 	Windows   []Window `json:"windows"`
@@ -70,6 +71,10 @@ func ReadStatus(d Deps) (Status, error) {
 	if host.Runs(Harness) {
 		s.listAgents(d, host)
 	}
+	runs, err := session.LatestRuns(d.Home)
+	if err != nil {
+		s.RunsError = err.Error()
+	}
 	live := 0
 	for _, w := range windows {
 		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
@@ -80,16 +85,12 @@ func ReadStatus(d Deps) (Status, error) {
 			// A window can close between the list and the capture.
 			out.Screen, _ = d.Tmux.Capture(w.ID, ScreenLines)
 		}
-		if !w.Dead {
+		if session.HoldsSlot(w, runs) {
 			live++
 		}
 		s.Windows = append(s.Windows, out)
 	}
 	s.FreeSlots = max(s.Slots-live, 0)
-	runs, err := session.LatestRuns(d.Home)
-	if err != nil {
-		s.RunsError = err.Error()
-	}
 	for name, r := range runs {
 		s.Runs = append(s.Runs, Run{Name: name, Dir: r.Dir, Record: r.Record})
 	}

@@ -130,6 +130,7 @@ func TestStartHostThatIsThisOne(t *testing.T) {
 	h := newHome(t, "mac")
 	f := &hostFake{}
 	d := remoteDeps(t, h, &ghFake{issue: startable}, f)
+	writeRuns(t, h, "r-1", "r-2")
 	tm := &tmuxFake{windows: []string{"@1 %1 0 r-1", "@2 %2 0 r-2"}}
 	d.Tmux = &session.Tmux{Run: tm.run, Bin: "tmux"}
 	err := Run(Options{Ref: ref(7), Host: "mac"}, d, &bytes.Buffer{})
