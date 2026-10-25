@@ -104,9 +104,9 @@ func stalls(v View) []Action {
 			continue
 		}
 		if !s.Live {
-			if !hasAny(c.Labels, claimStates) && s.StallNoted.Before(s.Spawned) {
+			if !hasAny(c.Labels, takenStates) && s.StallNoted.Before(s.Spawned) {
 				acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
-					Text: s.Name + " ended before it claimed the task; it starts again"})
+					Text: s.Name + " ended before it claimed the task; it will be started again"})
 			}
 			continue
 		}

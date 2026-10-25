@@ -36,17 +36,17 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    2. then `deep` before `standard` before `light`;
    3. then the lowest issue number.
 
-   Skip a task whose session you started and has not claimed yet,
-   while that session is alive. If it died before claiming, @mention the
-   operator once with its last screen, close its window and start again. A start that fails gets one @mention on the
-   task, and no retry for 30 minutes, holding no slot.
+   Skip a task while the session you started for it is alive and has not
+   claimed. If it died before claiming, @mention the operator once with its
+   last screen, close its window and start again. A start that fails gets
+   one @mention on the task, and no retry for 30 minutes, holding no slot.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is open and
      not `engine:needs-human`.
 
-   @mention the operator on the task with the session's last 20 screen
-   lines (`tmux capture-pane -p -S -20`, or the cloud session's
+   @mention the operator on the task with the stall and the session's last
+   20 screen lines (`tmux capture-pane -p -S -20`, or the cloud session's
    last message). Once per wait: skip it if your stall comment is newer than
    the wait.
 5. **Feature label.** Once a task has started, the feature's label is the

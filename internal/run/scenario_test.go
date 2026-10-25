@@ -131,8 +131,13 @@ func TestADeadSessionFails(t *testing.T) {
 	if !c.Has(Failed) || c.Has(Running) || c.Has(Merging) || len(w.comments[ref(2)]) != 1 {
 		t.Errorf("labels %v, comments %q", c.Labels, w.comments[ref(2)])
 	}
-	if acts := Decide(gather(t, w)); slices.ContainsFunc(acts, func(a Action) bool { return a.Kind == StartTask }) {
-		t.Errorf("restarted a failed task: %+v", acts)
+	v = gather(t, w)
+	if acts := Decide(v); slices.ContainsFunc(acts, func(a Action) bool { return a.Kind == StartTask || a.Kind == Stall }) {
+		t.Errorf("restarted or flagged a failed task: %+v", acts)
+	}
+	Apply(w, v, Decide(v))
+	if c := w.comments[ref(2)]; len(c) != 1 {
+		t.Errorf("comments after the fail %q", c)
 	}
 }
 
