@@ -133,8 +133,11 @@ is waiting for input. Three sources:
 3. **tmux.** If the window exists and its command has not exited, the
    session is alive.
 
-On this host, `engine ps` calls a session alive when its tmux window is live
-or `claude agents` lists it. It calls one dead only when its claim names a
+On every host that holds a claim, `engine ps` calls a session alive when its
+tmux window is live or `claude agents` lists it, reading another host's from
+its `status` reply. That reply carries no git state, so there a session is
+matched by name only: one started by hand is unknown unless listed under its
+claim's name. It calls one dead only when its claim names a
 window of engine's session, that window is gone or its command exited,
 `claude agents` does not list it and no probe failed: a session started by
 hand can run anywhere, so its liveness is unknown unless listed. A failed

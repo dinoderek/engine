@@ -110,7 +110,7 @@ func TestRemoteFailedCallIsUnknown(t *testing.T) {
 	if l.Rows[0].State != Running || l.Rows[1].State != InReview || alive(l.Rows[0]) != "unknown" || alive(l.Rows[1]) != "unknown" {
 		t.Errorf("rows %+v", l.Rows)
 	}
-	if len(l.Warnings) != 1 || !strings.Contains(l.Warnings[0], "host devbox: host devbox is unreachable") {
+	if len(l.Warnings) != 1 || !strings.Contains(l.Warnings[0], "status of devbox: host devbox is unreachable") {
 		t.Errorf("warnings %q", l.Warnings)
 	}
 	if len(r.calls) != 1 {

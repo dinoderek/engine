@@ -250,7 +250,7 @@ func TestPsUnreachableHostIsUnknown(t *testing.T) {
 	if rows[1].State != ps.InReview || rows[1].Alive != nil {
 		t.Errorf("row 1 is on the unreachable devbox: %+v", rows[1])
 	}
-	if !strings.Contains(e.errOut.String(), "warning: host devbox: host devbox is unreachable over ssh") {
+	if !strings.Contains(e.errOut.String(), "warning: status of devbox: host devbox is unreachable over ssh") {
 		t.Errorf("stderr: %q", e.errOut.String())
 	}
 }

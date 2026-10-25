@@ -2,7 +2,6 @@ package ps
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 	"sync"
 
@@ -92,7 +91,7 @@ func (p *probes) statuses(names []string) map[string]view {
 	for i, name := range names {
 		views[i].p, views[i].host = p, name
 		if views[i].err != nil {
-			p.warn(fmt.Sprintf("host %s", name), views[i].err)
+			p.warn("status of "+name, views[i].err)
 		}
 		out[name] = views[i]
 	}
