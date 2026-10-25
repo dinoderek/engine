@@ -209,6 +209,17 @@ func readDenied(path string) ([]string, error) {
 	return lines, scan.Err()
 }
 
+// RunCheck runs the check, prints its report to out, and reports whether an
+// unattended session here would run without a prompt.
+func RunCheck(d Deps, out io.Writer) (bool, error) {
+	r, err := Check(d, out)
+	if err != nil {
+		return false, err
+	}
+	ReportCheck(out, r)
+	return r.OK(), nil
+}
+
 // ReportCheck prints the check's findings.
 func ReportCheck(out io.Writer, r CheckResult) {
 	mark := map[bool]string{true: "ok  ", false: "FAIL"}

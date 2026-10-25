@@ -22,8 +22,11 @@ type Status struct {
 	// Claude Code could not list them, what they would show is unknown.
 	Agents      []session.Agent `json:"agents"`
 	AgentsError string          `json:"agents_error,omitempty"`
-	// Runs is the newest run of each session name, by name.
-	Runs []Run `json:"runs"`
+	// Runs is the newest run of each session name, by name. RunsError
+	// names the run.json files that could not be read: those runs are
+	// unknown.
+	Runs      []Run  `json:"runs"`
+	RunsError string `json:"runs_error,omitempty"`
 }
 
 // Window is a window of the tmux session engine.
@@ -85,7 +88,7 @@ func ReadStatus(d Deps) (Status, error) {
 	s.FreeSlots = max(s.Slots-live, 0)
 	runs, err := session.LatestRuns(d.Home)
 	if err != nil {
-		return Status{}, err
+		s.RunsError = err.Error()
 	}
 	for name, r := range runs {
 		s.Runs = append(s.Runs, Run{Name: name, Dir: r.Dir, Record: r.Record})

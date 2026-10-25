@@ -1,8 +1,8 @@
 // Package hostops is the work one host does on itself for a caller on any
 // host: `engine host <op> --json`. Each op does one job and returns one
 // reply, and the command prints it as one JSON object inside the envelope.
-// The ops never read GitHub: the caller has already decided, and passes what
-// it decided, such as the model and the kickoff.
+// The ops never read the tracker: the caller has already decided, and passes
+// what it decided, such as the model and the kickoff.
 package hostops
 
 import (

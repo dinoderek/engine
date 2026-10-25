@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,11 +34,13 @@ func LatestRun(home, name string) (Run, bool, error) {
 }
 
 // LatestRuns returns the newest run on this host of every session name, by
-// name.
+// name. A run.json it cannot read is left out and named in the error, so one
+// bad file hides only its own run.
 func LatestRuns(home string) (map[string]Run, error) { return latestRuns(home, "*") }
 
 // latestRuns reads the run.json of every run directory matching pattern, and
-// keeps the newest run of each session name.
+// keeps the newest run of each session name. The runs it could read come
+// back with the error of those it could not.
 func latestRuns(home, pattern string) (map[string]Run, error) {
 	if home == "" {
 		return nil, errors.New("no home directory to read run records from")
@@ -47,21 +50,23 @@ func latestRuns(home, pattern string) (map[string]Run, error) {
 		return nil, err
 	}
 	latest := map[string]Run{}
+	var bad []error
 	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
 		var rec Record
-		if err := json.Unmarshal(data, &rec); err != nil {
-			return nil, err
+		data, err := os.ReadFile(path)
+		if err == nil {
+			err = json.Unmarshal(data, &rec)
+		}
+		if err != nil {
+			bad = append(bad, fmt.Errorf("%s: %w", path, err))
+			continue
 		}
 		if prev, ok := latest[rec.Name]; ok && !rec.Spawned.After(prev.Record.Spawned) {
 			continue
 		}
 		latest[rec.Name] = Run{Dir: filepath.Dir(path), Record: rec}
 	}
-	return latest, nil
+	return latest, errors.Join(bad...)
 }
 
 // ReadNote returns the time a note holds, and whether it is there.

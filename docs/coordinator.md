@@ -59,10 +59,11 @@ reconcile core, which stays a package with no CLI assumptions.
 ## Reaching hosts
 
 A host does its own work through `engine host <op> --json`: one job, one
-JSON object on stdout, and exit 0, or 1 for a failure. The caller decides
-everything that reads GitHub or `hosts.toml`, such as the refusals, the
-model, the effort and the kickoff, and passes it in. The host does what
-touches its own disk, tmux and token. `engine start` calls its own host's
+JSON object on stdout, and exit 0, or 1 for a failure. The caller makes
+every decision that reads the tracker, and picks the model, the effort and
+the kickoff, and passes them in. The host does what touches its own disk,
+tmux and token, and reads only its own entry in `hosts.toml`: its launch
+line, harness binary and slots. `engine start` calls its own host's
 ops in-process. Designed, not built: calling another machine's as
 `ssh <address> engine host <op> --json`. The coordinator refuses to run
 unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
@@ -74,7 +75,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it, opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
 | `status` | Lists the windows of the session `engine` (alive, exit code), `claude agents --json`, the newest run of each session name, the free slots, and the last 20 screen lines of each window whose session is not busy. |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
-| `release` | Closes the session's window if it is open, and removes its worktree unless the run failed. The branch stays. |
+| `release` | Closes the session's window if it is open, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
 **The envelope.** Every reply, a failure too, carries `protocol` (the wire
 format's version, an integer), `engine` (the build) and `host` (the host's

@@ -157,7 +157,8 @@ func (f *tmuxFake) readOnly(t *testing.T) {
 	}
 }
 
-// gitFake plays git and gh for engine's clone of o/r: worktree add creates
+// gitFake plays git and gh for engine's clone of o/r, which GitHub serves:
+// worktree add creates
 // the worktree's directory, and worktree list shows it afterwards. Every call
 // is recorded, and fail fails the calls whose line contains its key.
 type gitFake struct {
@@ -177,6 +178,8 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 	switch {
 	case name == "gh":
 		return "testbot 42\n", nil
+	case strings.Contains(line, "get-url") || strings.Contains(line, "config --get remote.origin.url"):
+		return "https://github.com/o/r.git\n", nil
 	case strings.Contains(line, "symbolic-ref"):
 		return "origin/main\n", nil
 	case strings.Contains(line, "rev-parse --verify"):

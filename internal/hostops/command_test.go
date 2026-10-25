@@ -3,6 +3,7 @@ package hostops
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,6 +40,7 @@ func TestEveryReplyCarriesTheEnvelope(t *testing.T) {
 		{"collect", "--run-id", "r-7-a", "--json"},
 		{"release", "--json", "--name", "r-7", "--failed"},
 		{"sync-repo", "--repo", "o", "--json"}, // a failure is a reply too
+		{"sync-repo", "--repo", "o/r", "--json"},
 	} {
 		_, reply, _ := call(t, d, "", args...)
 		if reply["protocol"] != 1.0 || reply["engine"] != engine || reply["host"] != "mac" {
@@ -50,6 +52,10 @@ func TestEveryReplyCarriesTheEnvelope(t *testing.T) {
 		if _, ok := reply[key]; !ok {
 			t.Errorf("status lacks %s: %v", key, reply)
 		}
+	}
+	code, reply, _ := call(t, d, "", "sync-repo", "--repo", "o/r", "--json")
+	if clone := filepath.Join(h.dir, ".local/share/engine/repos/o/r"); code != 0 || reply["clone"] != clone || reply["default_branch"] != "main" {
+		t.Errorf("sync-repo: exit %d, reply %v", code, reply)
 	}
 }
 
@@ -100,7 +106,7 @@ func TestSpawnReadsTheKickoffFromStdin(t *testing.T) {
 	args := []string{"spawn", "--json", "--repo", "o/r", "--task", "7", "--mode", "gated", "--model", "opus-x", "--effort", "high",
 		"--run-id", "r-7-20260102T030405Z", "--tier", "deep", "--feature", ref(3)}
 	code, reply, _ := call(t, d, "it's the kickoff\n", args...)
-	if code != 0 || reply["window"] != "@9" || reply["name"] != "r-7" || !strings.Contains(tm.command, "s the kickoff") || strings.Contains(tm.command, "kickoff\n") {
+	if code != 0 || reply["window"] != "@9" || reply["name"] != "r-7" || reply["protocol"] != 1.0 || reply["host"] != "mac" || !strings.Contains(tm.command, "s the kickoff") || strings.Contains(tm.command, "kickoff\n") {
 		t.Errorf("exit %d, reply %v, command %s", code, reply, tm.command)
 	}
 	code, reply, _ = call(t, d, "", args...)

@@ -191,3 +191,25 @@ func TestCheckClosesTheWindowWhenPollingFails(t *testing.T) {
 		t.Errorf("marker left behind: %v", err)
 	}
 }
+
+func TestRunCheckPrintsTheReportAndItsVerdict(t *testing.T) {
+	f := &checkTmux{openPolls: 1}
+	d, _, _ := checkDeps(t, f)
+	f.act = func() { write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600) }
+	var out bytes.Buffer
+	if ok, err := RunCheck(d, &out); !ok || err != nil || !strings.Contains(out.String(), "ok   the session did every step") {
+		t.Errorf("a clean check: %v, %v\n%s", ok, err, out.String())
+	}
+	stalled := &checkTmux{openPolls: 1 << 30}
+	d, _, _ = checkDeps(t, stalled)
+	out.Reset()
+	if ok, err := RunCheck(d, &out); ok || err != nil || !strings.Contains(out.String(), "would stop") {
+		t.Errorf("a stalled check: %v, %v\n%s", ok, err, out.String())
+	}
+	if err := os.Remove(filepath.Join(d.Home, ".config/engine/github-token")); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := RunCheck(d, &bytes.Buffer{}); ok || !isRefusal(err) {
+		t.Errorf("a check that cannot run: %v, %v", ok, err)
+	}
+}

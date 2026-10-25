@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -47,6 +48,9 @@ func TestLatestRun(t *testing.T) {
 	}
 	if _, _, err := LatestRun(home, "r-9"); err == nil {
 		t.Error("bad run.json: no error")
+	}
+	if all, err := LatestRuns(home); err == nil || !strings.Contains(err.Error(), "r-9-x") || len(all) != 2 {
+		t.Errorf("a bad run.json hides only its run: %v, %v", all, err)
 	}
 }
 

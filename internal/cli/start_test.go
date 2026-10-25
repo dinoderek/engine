@@ -42,6 +42,15 @@ func TestParseStart(t *testing.T) {
 	}
 }
 
+func TestCheckCode(t *testing.T) {
+	if c := checkCode(true); c != 0 {
+		t.Errorf("a clean check exits %d", c)
+	}
+	if c := checkCode(false); c != 1 {
+		t.Errorf("a check where a session would stop exits %d", c)
+	}
+}
+
 func TestStartCommandLine(t *testing.T) {
 	none := func(string) string { return "" }
 	task := tracker.Ref{Repo: "o/r", Number: 1}.String()

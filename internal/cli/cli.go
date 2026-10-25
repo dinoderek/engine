@@ -255,10 +255,15 @@ func runCheck(env Env) int {
 		fmt.Fprintln(env.Err, "engine start --check:", err)
 		return 1
 	}
-	if !ok {
-		return 1
+	return checkCode(ok)
+}
+
+// checkCode is the exit code of a check: 1 when a session would stop.
+func checkCode(ok bool) int {
+	if ok {
+		return 0
 	}
-	return 0
+	return 1
 }
 
 // startDeps is what engine start, and engine run's starts, launch with.

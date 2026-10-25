@@ -104,8 +104,15 @@ func TestStatusFailures(t *testing.T) {
 	if _, err := ReadStatus(Deps{Tmux: (&tmuxFake{}).tmux(), Home: t.TempDir()}); !isRefusal(err) {
 		t.Errorf("no host config: %v", err)
 	}
+}
+
+// A run.json that cannot be read hides only its own run.
+func TestStatusWithABadRunRecord(t *testing.T) {
+	h := newHome(t, "mac")
+	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Spawned: fixedNow()})
 	write(t, h.dir+"/.local/share/engine/runs/r-9-x/run.json", "{", 0o644)
-	if _, err := ReadStatus(Deps{Tmux: (&tmuxFake{}).tmux(), Home: h.dir, Exec: agentsFake("[]", nil)}); err == nil {
-		t.Error("a bad run.json: want an error")
+	got, err := ReadStatus(Deps{Tmux: (&tmuxFake{}).tmux(), Home: h.dir, Exec: agentsFake("[]", nil)})
+	if err != nil || len(got.Runs) != 1 || got.Runs[0].Name != "r-1" || !strings.Contains(got.RunsError, "r-9-x/run.json") {
+		t.Errorf("status %+v, %v", got, err)
 	}
 }
