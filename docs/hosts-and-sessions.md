@@ -9,7 +9,7 @@ many sessions it holds, and its capabilities. Capabilities are declared, never i
 
 **One file, every host.** The host config is `~/.config/engine/hosts.toml`,
 the same file on every host, because any host can run the coordinator. Edit
-it on one host and copy it to the others. Each host also keeps its own name,
+it on one host; `engine setup --host <name>` copies it to another. Each host also keeps its own name,
 one line, in `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, a logical
@@ -181,7 +181,8 @@ The executor claims the task; its claim check stops a racing second start.
 With `--host`, the caller makes the task, harness, tier and `requires`
 refusals, and reads the window and free slots from the host's `status`; the
 host's own `spawn` refuses anything else, such as a missing harness binary.
-An unreachable host is an error, not a refusal. Designed, not built:
+An unreachable host is an error, not a refusal. A host on another protocol
+is refused, naming `engine setup --host <name>` (`operator-setup.md`). Designed, not built:
 `--harness codex`.
 
 **Preflight:** `engine start --check [--host <name>]` opens a throwaway hands-off session,

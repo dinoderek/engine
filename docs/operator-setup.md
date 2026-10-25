@@ -40,48 +40,50 @@
 
 ## Each host
 
-- **Tools:** `tmux`, `gh` and `git`, plus `go` to build engine.
-- **engine on `PATH`:** `GOBIN=~/.local/bin go install ./cmd/engine` from a
-  checkout, with `~/.local/bin` on `PATH`. The plugin's merge guard runs it on every Bash
-  call; without it, or with a binary too old for the plugin's hooks, the guard
-  fails open. Update `engine` on each host before taking a plugin update.
-- **Claude Code:** signed in with your claude.ai account (`/login`), with
-  Remote Control working from the Claude app. Remote Control rejects API keys
-  and `setup-token`, so on a remote host sign in once over SSH.
-- **Claude's one-time prompts:** before the first `engine start` on a host,
-  run `claude --permission-mode auto --remote-control` once by hand, in a
-  folder you trust, and answer every prompt it shows, such as enabling Remote
-  Control or the auto mode notice. Nobody is there to answer them in an
-  engine window. Then run `engine start --check`, and again after updating Claude
-  Code, the plugin or `engine`: it finds a prompt before an unattended
-  session meets it.
-- **Codex:** signed in.
-- **Host name:** its logical name (`mac`, `devbox`) on one line in
-  `~/.config/engine/host`. Claims post this name, never the hostname
-  (`hosts-and-sessions.md`, "Hosts").
-- **Host config:** the same `~/.config/engine/hosts.toml` as every other
-  host, with an entry for this host as `hosts-and-sessions.md`, "Hosts",
-  specifies. You write both files by hand.
-- **Skills (Claude Code):** the `engine` plugin from this repo's marketplace,
-  `.claude-plugin/marketplace.json`. A target repo enables it in its
-  `.claude/settings.json`, as this repo does; or install it for yourself with
-  `/plugin install engine --marketplace dinoderek/engine` in a session, or
-  from a shell with `claude plugin marketplace add dinoderek/engine` and
-  `claude plugin install engine@engine`. Update it with `claude plugin update
-  engine@engine --scope user`: without `--scope`, in a checkout that enables
-  the plugin, it updates the project's copy instead.
-- **SSH (the fallback route to any session):**
-  - every host on the same Tailscale tailnet as the phone;
-  - plain OpenSSH, never Tailscale SSH: its check mode asks for a browser
-    approval, which an unattended coordinator cannot give. The keys of the
-    coordinator's host and the phone's SSH app go in every other machine's
-    `authorized_keys`;
-  - on macOS, Remote Login turned on.
+**The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude`, and put
+`~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
+name, one line, as claims post it: `hosts-and-sessions.md`, "Hosts") and
+`~/.config/engine/hosts.toml` (the same file on every host). Install engine
+with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
+plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
+`claude plugin install engine@engine --scope user`. Sign in to Claude Code
+with your claude.ai account (`/login`): Remote Control rejects API keys and
+`setup-token`. Sign in to Codex. Setup copies the Mac's engine commit and
+plugin version to the other hosts, so update both here first.
+
+**Every other host: `engine setup --host <name>`**, run from the Mac and safe
+to rerun. It brings the host to the Mac's pushed engine commit, plugin and
+config, and ends with `engine start --check --host <name>`. It changes only
+engine's own files (`~/.config/engine/`, `~/.local/bin/engine`) and Claude's
+plugin. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one exact
+command, and it exits 1 while any item is open. It refuses a build that is
+dirty or not on GitHub, and a name that is not a machine in `hosts.toml`.
+With no `--host` it only checks this host.
+
+**Claude's one-time prompts.** Nobody is there to answer them in an engine
+window. When the preflight finds one, run `claude --permission-mode auto
+--remote-control` once by hand on that host, in a folder you trust, and
+answer every prompt, such as enabling Remote Control or the auto mode notice.
+Run `engine setup` again after updating Claude Code, the plugin or `engine`.
+
+**The plugin in a target repo.** A repo enables the `engine` plugin in its
+`.claude/settings.json`, as this repo does. Update the user's copy with
+`claude plugin update engine@engine --scope user`: without `--scope`, in a
+checkout that enables the plugin, it updates the project's copy instead.
+
+**SSH, the route to any session:**
+
+- every host on the same Tailscale tailnet as the phone;
+- plain OpenSSH, never Tailscale SSH: its check mode asks for a browser
+  approval, which an unattended coordinator cannot give. The keys of the
+  coordinator's host and the phone's SSH app go in every other machine's
+  `authorized_keys`;
+- on macOS, Remote Login turned on.
 
 ## A remote devbox
 
-A Linux machine on the tailnet, set up from the coordinator's host (the Mac).
-It gets every "Each host" item above; these steps are what differs.
+A Linux machine on the tailnet, set up from the Mac. Do these by hand once,
+then run `engine setup --host devbox`.
 
 1. **Authorize keys.** On the devbox, append to `~/.ssh/authorized_keys` the
    Mac's `~/.ssh/id_ed25519.pub` and the phone SSH app's key.
@@ -101,21 +103,11 @@ It gets every "Each host" item above; these steps are what differs.
    `ssh-keygen -R <tailscale name>`. Then
    `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
    prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
-   "Names and addresses").
-4. **Devbox-only details:**
-   - engine needs no checkout: `GOBIN=~/.local/bin go install
-     github.com/dinoderek/engine/cmd/engine@main`;
-   - the non-interactive `PATH` must include `~/.local/bin` (and any tool
-     manager's shims), so export it at the top of `~/.bashrc`, above the
-     line that returns for non-interactive shells;
-   - copy `hosts.toml` and `github-token` from the Mac over SSH, with mode
-     `600`;
-   - no suspend: `sudo systemctl mask sleep.target suspend.target
-     hibernate.target hybrid-sleep.target`.
-5. **Check the coordinator's view.** From the Mac,
-   `ssh -o BatchMode=yes <address> 'command -v engine tmux gh claude codex'`
-   must list every tool: it runs in the non-interactive shell the coordinator
-   uses.
+   "Names and addresses"), which goes in `hosts.toml` on the Mac.
+4. **Install the tools** `go`, `tmux`, `gh`, `git` and `claude` on the devbox.
+   `engine setup` lists what is missing and prints the `PATH` line for
+   `~/.bashrc`, and the `sudo systemctl mask` line that stops the devbox
+   suspending. Sign in once over SSH: `ssh -t <address> claude /login`.
 
 ## Each target repo
 

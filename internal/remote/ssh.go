@@ -81,7 +81,7 @@ func (s SSH) Check(out io.Writer) (bool, error) {
 	if _, _, _, err := s.exchange(probeOp, nil, ""); err != nil {
 		return false, err
 	}
-	code, err := s.run(nil, out, out, ShellJoin([]string{"engine", "start", "--check"}))
+	code, err := s.Run(nil, out, out, ShellJoin([]string{"engine", "start", "--check"}))
 	if err != nil {
 		return false, err
 	}
@@ -94,8 +94,10 @@ func (s SSH) Check(out io.Writer) (bool, error) {
 	return false, fmt.Errorf("host %s: engine start --check exited %d", s.Name, code)
 }
 
-// run runs one remote command line over ssh and returns its exit code.
-func (s SSH) run(in io.Reader, out, errOut io.Writer, command string) (int, error) {
+// Run runs one remote command line over ssh, with the options every call has,
+// and returns its exit code. An exit code of 255 is ssh failing to connect, not
+// the command's own.
+func (s SSH) Run(in io.Reader, out, errOut io.Writer, command string) (int, error) {
 	args := append(append([]string{}, sshOptions...), s.Address, command)
 	return s.Exec(in, out, errOut, "ssh", args...)
 }
@@ -134,7 +136,7 @@ func (s SSH) exchange(op string, args []string, stdin string) ([]byte, int, host
 	}
 	var out, errOut bytes.Buffer
 	command := ShellJoin(append([]string{"engine", "host", op, "--json"}, args...))
-	code, err := s.run(in, &out, &errOut, command)
+	code, err := s.Run(in, &out, &errOut, command)
 	if err != nil {
 		return nil, 0, hostops.Envelope{}, err
 	}
