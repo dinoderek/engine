@@ -70,7 +70,9 @@ session.
    releases, paid services, or sending messages.
 7. **Drift:** the default branch has moved in a way that invalidates the card.
 8. **Objectives:** the feature's requirements would have to change.
-9. **Review:** two review rounds that don't converge.
+9. **Review:** a finding you and the reviewer still disagree on after a
+   round, or a finding that asks for a change against the card or the
+   feature's design.
 10. **Environment:** a required gate, tool or setting this host lacks.
 11. **Repo rule:** a repo rule tells you to involve the operator, and no
     override on the card or its feature covers it.
