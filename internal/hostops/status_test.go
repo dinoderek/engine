@@ -166,8 +166,9 @@ func TestStatusSlotsFollowSessions(t *testing.T) {
 }
 
 func TestStatusOnAQuietHost(t *testing.T) {
-	// A host that runs no Claude lists no agents, and no tmux session
-	// means no windows: every slot is free.
+	// A host that runs no Claude never asks for its sessions, so it has
+	// none and no error to report, and no tmux session means no windows:
+	// every slot is free.
 	h := newHome(t, "box")
 	got, err := ReadStatus(Deps{Tmux: (&tmuxFake{}).tmux(), Home: h.dir, Exec: agentsFake("", errors.New("never asked"))})
 	if err != nil || got.AgentsError != "" || got.FreeSlots != 2 || len(got.Windows) != 0 || got.Runs == nil || got.Agents == nil {

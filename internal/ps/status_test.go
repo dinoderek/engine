@@ -101,7 +101,8 @@ func TestRemoteAgentsErrorIsUnknown(t *testing.T) {
 }
 
 // A session started by hand cannot be found on another host by its worktree,
-// so a status that does not list it by name leaves it unknown.
+// so a status that does not list it by name leaves it unknown. That is no
+// failure: a host that runs no Claude lists nothing and says no more.
 func TestRemoteHandStartedSessionIsUnknownUnlessListed(t *testing.T) {
 	f := &fake{
 		tasks: []tracker.ClaimedTask{
@@ -115,8 +116,8 @@ func TestRemoteHandStartedSessionIsUnknownUnlessListed(t *testing.T) {
 	if l.Rows[0].State != Working || alive(l.Rows[0]) != "alive" || l.Rows[1].State != Running || alive(l.Rows[1]) != "unknown" {
 		t.Errorf("rows %+v", l.Rows)
 	}
-	if len(f.checkoutCalls) != 0 {
-		t.Errorf("this host's git was asked about another's directories: %q", f.checkoutCalls)
+	if len(f.checkoutCalls) != 0 || len(l.Warnings) != 0 {
+		t.Errorf("this host's git was asked about another's directories: %q; warnings %q", f.checkoutCalls, l.Warnings)
 	}
 }
 
