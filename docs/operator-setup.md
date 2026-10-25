@@ -53,9 +53,11 @@ plugin version to the other hosts, so update both here first.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
-config, and ends with `engine start --check --host <name>`. It changes only
-engine's own files (`~/.config/engine/`, `~/.local/bin/engine`) and Claude's
-plugin. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one exact
+config, and ends with `engine start --check --host <name>`. The engine is built
+with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
+from GitHub, and counts as current only on that commit and that Go. It changes
+only engine's own files (`~/.config/engine/`, `~/.local/bin/engine`) and
+Claude's plugin; Go's own cache holds the toolchain download. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one exact
 command, and it exits 1 while any item is open. It refuses a build that is
 dirty or not on GitHub, and a name that is not a machine in `hosts.toml`.
 With no `--host` it only checks this host.

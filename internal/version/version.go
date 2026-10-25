@@ -98,6 +98,9 @@ var stringRe = regexp.MustCompile(`^engine (\S+)(?: \(([^)]*)\))?`)
 // shortRevRe is the revision String prints, with "-dirty" when modified.
 var shortRevRe = regexp.MustCompile(`^([0-9a-f]{7,40})(-dirty)?$`)
 
+// goRe is the toolchain String prints.
+var goRe = regexp.MustCompile(`^go\d\S*$`)
+
 // Parse reads what String printed, which another engine's `engine version`
 // prints. A line that is not engine's yields an Info with no version.
 func Parse(output string) Info {
@@ -110,6 +113,8 @@ func Parse(output string) Info {
 	for _, detail := range strings.Split(m[2], ", ") {
 		if r := shortRevRe.FindStringSubmatch(detail); r != nil {
 			info.Revision, info.Modified = r[1], r[2] != ""
+		} else if goRe.MatchString(detail) {
+			info.Go = detail
 		}
 	}
 	return info

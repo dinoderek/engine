@@ -28,7 +28,7 @@ func TestSetupBringsAStaleHostToTheCallersBuild(t *testing.T) {
 	}
 	out := r.out.String()
 	for _, want := range []string{
-		"1. tools: ok", "2. engine: changed (2a08a0c, was d8c1744)", "3. plugin: changed (0.7.1, was 0.2.0)",
+		"1. tools: ok", "2. engine: changed (2a08a0c go1.27.3, was d8c1744 go1.27.2)", "3. plugin: changed (0.7.1, was 0.2.0)",
 		"4. config: changed (wrote host, hosts.toml, github-token)", "5. sign-in: ok (claude.ai)",
 		"6. no suspend: ok (masked)", "7. preflight: ok", "the check report", "box is set up",
 	} {
@@ -40,7 +40,7 @@ func TestSetupBringsAStaleHostToTheCallersBuild(t *testing.T) {
 	if b.files["host"] != "box\n" || b.files["github-token"] != secret+"\n" || b.files["hosts.toml"] != hostsTOML {
 		t.Errorf("files on the host: %q", b.files)
 	}
-	wantInstall := `GOBIN="$HOME/.local/bin" go install github.com/dinoderek/engine/cmd/engine@` + callerRev
+	wantInstall := `GOBIN="$HOME/.local/bin" GOTOOLCHAIN=go1.27.3 go install github.com/dinoderek/engine/cmd/engine@` + callerRev
 	if b.mutations[0] != wantInstall {
 		t.Errorf("first change %q, want %q", b.mutations[0], wantInstall)
 	}
@@ -94,7 +94,7 @@ func TestEachStepFailsOpenWithItsCommand(t *testing.T) {
 		{"missing tools", "1. tools: OPEN", func(r *rig) { r.box.missing = []string{"tmux", "gh"} },
 			"missing: tmux, gh", `ssh dev@box 'grep -qs "^export PATH=.HOME/.local/bin" ~/.bashrc || { { echo "export PATH=\$HOME/.local/bin:\$PATH"; { cat ~/.bashrc 2>/dev/null || :; }; } > ~/.bashrc.new && mv ~/.bashrc.new ~/.bashrc; }'`},
 		{"go install fails", "2. engine: OPEN", func(r *rig) { r.box.rev, r.box.installFail = "d8c1744", true },
-			"go install failed: go: network is unreachable", `ssh dev@box 'GOBIN="$HOME/.local/bin" go install github.com/dinoderek/engine/cmd/engine@` + callerRev + `'`},
+			"go install failed: go: network is unreachable", `ssh dev@box 'GOBIN="$HOME/.local/bin" GOTOOLCHAIN=go1.27.3 go install github.com/dinoderek/engine/cmd/engine@` + callerRev + `'`},
 		{"another engine first on the PATH", "2. engine: OPEN", func(r *rig) { r.box.rev, r.box.installTo = "d8c1744", "d8c1744" },
 			"the engine on the PATH is d8c1744", "~/.bashrc.new"},
 		{"no engine at all and none installed", "2. engine: OPEN", func(r *rig) { r.box.rev, r.box.installTo = "", "-dirty" },
@@ -344,7 +344,7 @@ func TestSetupFromAGoInstallBuild(t *testing.T) {
 	if !mustRun(t, r, "box") {
 		t.Fatalf("open:\n%s", r.out.String())
 	}
-	want := `GOBIN="$HOME/.local/bin" go install github.com/dinoderek/engine/cmd/engine@` + callerRev[:12]
+	want := `GOBIN="$HOME/.local/bin" GOTOOLCHAIN=go1.27.3 go install github.com/dinoderek/engine/cmd/engine@` + callerRev[:12]
 	if r.box.mutations[0] != want {
 		t.Errorf("first change %q, want %q", r.box.mutations[0], want)
 	}
@@ -355,11 +355,73 @@ func TestSetupFromAGoInstallBuild(t *testing.T) {
 	}
 }
 
+// go install module@commit ignores the module's toolchain line, so the install
+// line pins it, and a right commit built with another Go is not current.
+func TestAHostOnTheRightCommitWithAnotherGoIsReinstalled(t *testing.T) {
+	r := newRig(t)
+	r.box = settledBox(r.home)
+	r.box.goVer = "go1.27.1"
+	if !mustRun(t, r, "box") {
+		t.Fatalf("open:\n%s", r.out.String())
+	}
+	if !strings.Contains(r.out.String(), "2. engine: changed (2a08a0c go1.27.3, was 2a08a0c go1.27.1)") {
+		t.Errorf("not reported changed:\n%s", r.out.String())
+	}
+	want := `GOBIN="$HOME/.local/bin" GOTOOLCHAIN=go1.27.3 go install github.com/dinoderek/engine/cmd/engine@` + callerRev
+	if len(r.box.mutations) != 1 || r.box.mutations[0] != want {
+		t.Errorf("changes %q, want only %q", r.box.mutations, want)
+	}
+}
+
+func TestAHostOnTheRightCommitAndGoIsNotReinstalled(t *testing.T) {
+	r := newRig(t)
+	r.box = settledBox(r.home)
+	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "2. engine: ok (2a08a0c go1.27.3)") || len(r.box.mutations) != 0 {
+		t.Errorf("changes %q:\n%s", r.box.mutations, r.out.String())
+	}
+}
+
+func TestAToolchainThatCannotBeReadLeavesTheEngineOpen(t *testing.T) {
+	cases := []struct {
+		name  string
+		tweak func(r *rig)
+		want  string
+	}{
+		{"no toolchain line", func(r *rig) { r.goMod = "module x\n\ngo 1.27.0\n" }, "go.mod at 2a08a0c has no toolchain line"},
+		{"not a Go release", func(r *rig) { r.goMod = "module x\n\ntoolchain local\n" }, "is not a Go release"},
+		{"GitHub cannot serve go.mod", func(r *rig) {
+			gh := r.gh
+			r.gh = func(env []string, name string, args ...string) (string, error) {
+				if strings.Contains(strings.Join(args, " "), "go.mod") {
+					return "", errors.New("gh: Not Found (HTTP 404)")
+				}
+				return gh(env, name, args...)
+			}
+		}, "could not read go.mod at 2a08a0c (dinoderek/engine): gh: Not Found (HTTP 404)"},
+	}
+	for _, c := range cases {
+		r := newRig(t)
+		c.tweak(r)
+		if mustRun(t, r, "box") {
+			t.Errorf("%s: closed", c.name)
+		}
+		out := r.out.String()
+		if !strings.Contains(out, "2. engine: OPEN (") || !strings.Contains(out, c.want) || !strings.Contains(out, "2. engine: engine setup --host box") {
+			t.Errorf("%s: want %q open with the rerun command:\n%s", c.name, c.want, out)
+		}
+		for _, m := range r.box.mutations {
+			if strings.Contains(m, "go install") {
+				t.Errorf("%s: installed without a toolchain: %q", c.name, m)
+			}
+		}
+	}
+}
+
 func TestADirtyEngineOnTheHostIsReplaced(t *testing.T) {
 	r := newRig(t)
 	r.box = settledBox(r.home)
 	r.box.rev = "d8c1744-dirty"
-	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "2. engine: changed (2a08a0c, was d8c1744-dirty)") {
+	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "2. engine: changed (2a08a0c go1.27.3, was d8c1744-dirty go1.27.3)") {
 		t.Errorf("open or unchanged:\n%s", r.out.String())
 	}
 }

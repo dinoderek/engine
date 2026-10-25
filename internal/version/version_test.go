@@ -86,17 +86,19 @@ func TestParseReadsWhatStringPrints(t *testing.T) {
 		out    string
 		commit string
 		dirty  bool
+		goVer  string
 	}{
-		{"engine v0.0.0-20261025105230-2a08a0c1f2a2 (2a08a0c, go1.27.2)\n", "2a08a0c", false},
-		{"engine dev (2a08a0c-dirty, go1.27.2)", "2a08a0c", true},
-		{"engine v0.0.0-20261025174939-41147c301cf5 (go1.27.1)\n", "41147c301cf5", false},
-		{"engine v1.2.3 (go1.27.1)", "", false},
-		{"engine dev", "", false},
+		{"engine v0.0.0-20261025105230-2a08a0c1f2a2 (2a08a0c, go1.27.2)\n", "2a08a0c", false, "go1.27.2"},
+		{"engine dev (2a08a0c-dirty, go1.27.2)", "2a08a0c", true, "go1.27.2"},
+		{"engine v0.0.0-20261025174939-41147c301cf5 (go1.27.1)\n", "41147c301cf5", false, "go1.27.1"},
+		{"engine v1.2.3 (go1.27.1)", "", false, "go1.27.1"},
+		{"engine dev (2a08a0c)", "2a08a0c", false, ""},
+		{"engine dev", "", false, ""},
 	}
 	for _, c := range cases {
 		info := Parse(c.out)
-		if info.Commit() != c.commit || info.Dirty() != c.dirty {
-			t.Errorf("%q: commit %q dirty %v, want %q %v", c.out, info.Commit(), info.Dirty(), c.commit, c.dirty)
+		if info.Commit() != c.commit || info.Dirty() != c.dirty || info.Go != c.goVer {
+			t.Errorf("%q: commit %q dirty %v go %q, want %q %v %q", c.out, info.Commit(), info.Dirty(), info.Go, c.commit, c.dirty, c.goVer)
 		}
 	}
 	for _, out := range []string{"", "engine: command not found", "bash: engine: not found"} {
