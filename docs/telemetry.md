@@ -19,8 +19,9 @@ summarised away at capture time.
 
 One `run.json` per session, written at spawn and finalised at exit:
 
-- **Identity:** run ID, repo, feature, task, host, harness, tier, model, and the
-  harness session ID.
+- **Identity:** run ID, repo, feature, task, host, harness, tier, model,
+  whether it is heavy (`hosts-and-sessions.md`, "Hosts"), and the harness
+  session ID.
 - **Times:** spawned, started, needs-human waits (each one, with duration),
   PR opened, merged, ended.
 - **Outcome:** merged, failed, or abandoned. Plus the PR URL.

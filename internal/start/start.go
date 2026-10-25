@@ -131,6 +131,9 @@ type plan struct {
 	// planner is true for a feature's planner session, whose kickoff is a
 	// breakdown rather than a task.
 	planner bool
+	// heavy is true when the card requires a heavy capability, so the
+	// session takes one of the host's heavy slots.
+	heavy bool
 }
 
 // Started is a session engine start launched.
@@ -268,6 +271,7 @@ func (p *plan) checkRequires(Deps) error {
 	if len(lacks) > 0 {
 		return refuse("host %s lacks %s, which %s requires (it has: %s)", p.host.Name, strings.Join(lacks, ", "), p.task.Ref, orNone(p.host.Capabilities))
 	}
+	p.heavy = p.cfg.Heavy(p.task.Requires)
 	return nil
 }
 
@@ -331,8 +335,8 @@ func (p *plan) checkBin(d Deps) error {
 }
 
 // checkTmux refuses a task that already has a window, and a host whose slots
-// are full. Only a live window with a run recorded under its name holds a
-// slot.
+// are full, or whose heavy slots are when the task is heavy. Only a live
+// window with a run recorded under its name holds a slot.
 func (p *plan) checkTmux(d Deps) error {
 	if p.remote {
 		return p.checkStatus(d)
@@ -345,17 +349,17 @@ func (p *plan) checkTmux(d Deps) error {
 	if err != nil {
 		return refuse("cannot read the run records: %v", err)
 	}
-	live := 0
 	for _, w := range windows {
 		if w.Name == p.name {
 			return refuse("the tmux session %s already has a window %s (%s)", session.Name, p.name, w.ID)
 		}
-		if session.HoldsSlot(w, runs) {
-			live++
-		}
 	}
+	live, heavy := session.SlotsHeld(windows, runs)
 	if slots := p.host.Slots(); live >= slots {
 		return refuse("host %s has no free slot: %d sessions running, %d slots", p.host.Name, live, slots)
+	}
+	if slots := p.host.HeavySlots(); p.heavy && heavy >= slots {
+		return refuse("host %s has no free heavy slot for %s: %d heavy sessions running, %d heavy slots", p.host.Name, p.task.Ref, heavy, slots)
 	}
 	return nil
 }
@@ -374,6 +378,9 @@ func (p *plan) checkStatus(d Deps) error {
 	}
 	if st.FreeSlots < 1 {
 		return refuse("host %s has no free slot: %d slots", p.host.Name, st.Slots)
+	}
+	if p.heavy && st.FreeHeavySlots < 1 {
+		return refuse("host %s has no free heavy slot for %s: %d heavy slots", p.host.Name, p.task.Ref, st.HeavySlots)
 	}
 	return nil
 }
@@ -417,7 +424,7 @@ func (p plan) launch(d Deps) (Started, error) {
 func (p plan) spawnRequest(runID string) hostops.SpawnRequest {
 	r := hostops.SpawnRequest{
 		Repo: p.repo.String(), Task: p.opts.Ref.Number, Mode: p.opts.Mode, Tier: string(p.tier),
-		Model: p.model.Model, Effort: p.model.Effort, RunID: runID,
+		Model: p.model.Model, Effort: p.model.Effort, RunID: runID, Heavy: p.heavy,
 		Kickoff: Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name),
 	}
 	if p.task.Parent != nil {

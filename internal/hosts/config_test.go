@@ -63,6 +63,9 @@ func TestDocExample(t *testing.T) {
 	if mac.Slots() != 4 || devbox.Slots() != 3 {
 		t.Errorf("slots: mac %d, devbox %d; want 4 and 3", mac.Slots(), devbox.Slots())
 	}
+	if mac.HeavySlots() != 2 || devbox.HeavySlots() != 3 || !c.Heavy([]string{"vm"}) || c.Heavy([]string{"docker"}) {
+		t.Errorf("heavy: mac %d, devbox %d slots; capabilities %v", mac.HeavySlots(), devbox.HeavySlots(), c.HeavyCapabilities)
+	}
 }
 
 const base = `default_harness = "claude"
@@ -161,6 +164,12 @@ gb`, "default_harness", "must not be empty"},
 		{"negative host reserve_gb", "reserve_gb = 16", "reserve_gb = -2", "reserve_gb = -2", "at least 0"},
 		{"zero host gb_per_session", "reserve_gb = 16", "reserve_gb = 16\ngb_per_session = 0", "gb_per_session = 0", "at least 1"},
 		{"zero host max_sessions", "reserve_gb = 16", "reserve_gb = 16\nmax_sessions = 0", "max_sessions = 0", "at least 1"},
+		{"unknown heavy capability", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = [\"ios\", \"gpu\"]", "heavy_capabilities", `top level: unknown capability "gpu"`},
+		{"duplicate heavy capability", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = [\"vm\", \"vm\"]", "heavy_capabilities", `heavy_capabilities lists "vm" twice`},
+		{"heavy capabilities not an array", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = \"ios\"", "heavy_capabilities", "must be an array of strings"},
+		{"zero max_heavy_sessions", "ram_gb = 48", "ram_gb = 48\nmax_heavy_sessions = 0", "max_heavy_sessions", "at least 1"},
+		{"max_heavy_sessions above the derived slots", "ram_gb = 48", "ram_gb = 48\nmax_heavy_sessions = 5", "max_heavy_sessions", "host.mac: max_heavy_sessions (5) must not exceed the host's 4 sessions"},
+		{"max_heavy_sessions above max_sessions", "ram_gb = 48", "ram_gb = 48\nmax_sessions = 6\nmax_heavy_sessions = 7", "max_heavy_sessions", "max_heavy_sessions (7) must not exceed the host's 6 sessions"},
 		{"unknown capability", `["macos"]`, `["macos", "gpu"]`, "capabilities", `unknown capability "gpu"`},
 		{"duplicate capability", `["macos"]`, `["macos", "macos"]`, "capabilities", `"macos" twice`},
 		{"capabilities not an array", `["macos"]`, `"macos"`, "capabilities", "must be an array of strings"},

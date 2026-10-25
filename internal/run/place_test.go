@@ -217,3 +217,50 @@ func TestAFeatureRunsToDoneAcrossTwoHosts(t *testing.T) {
 		t.Errorf("placed %v, want %v", w.placed, want)
 	}
 }
+
+func TestAHeavyTaskWaitsForAHeavySlotWhileALightOneStarts(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Planned}, needs(2, "deep", "ios"), needs(3, "standard", "ios"), card(4, "standard"))
+	w.hosts = []fakeHost{{name: "mac", slots: 3, heavy: 1, caps: []string{"macos", "ios"}, harnesses: []string{"claude"}}}
+	for pass := 1; pass <= 2; pass++ {
+		acts := passOf(t, w)
+		if got := waits(acts); !slices.Equal(got, []string{"3: no free heavy slot on mac (0 free)"}) {
+			t.Errorf("pass %d waits %q", pass, got)
+		}
+		// ready logs the task it holds back, every pass.
+		if !slices.Contains(w.log, "wait "+ref(3).String()+": no free heavy slot on mac (0 free)") {
+			t.Errorf("pass %d did not log the held-back task:\n%s", pass, strings.Join(w.log, "\n"))
+		}
+		w.log = nil
+	}
+	if want := []string{"2@mac", "4@mac"}; !slices.Equal(w.placed, want) {
+		t.Errorf("placed %v, want %v", w.placed, want)
+	}
+	if len(w.comments[ref(3)]) != 0 {
+		t.Errorf("a task waiting for a heavy slot was commented on: %q", w.comments[ref(3)])
+	}
+}
+
+func TestHeavyTasksGoWhereAHeavySlotIsFree(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Planned},
+		needs(2, "deep", "vm"), needs(3, "standard", "vm"), needs(4, "standard", "vm"), needs(5, "standard", "vm"), card(6, "standard"))
+	twoHosts(w, 3, 2)
+	w.hosts[0].heavy = 1
+	acts := passOf(t, w)
+	// The Mac has the most free slots, but one heavy slot: heavy tasks
+	// count only heavy slots, and fill the devbox first.
+	if want := []string{"2@devbox", "3@devbox", "4@mac", "6@mac"}; !slices.Equal(w.placed, want) {
+		t.Errorf("placed %v, want %v", w.placed, want)
+	}
+	if got := waits(acts); !slices.Equal(got, []string{"5: no free heavy slot on devbox (0 free), mac (0 free)"}) {
+		t.Errorf("waits %q", got)
+	}
+}
+
+func TestALightTaskHeldBackForSlotsIsLogged(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Planned}, card(2, "standard"), card(3, "standard"))
+	w.slots = 1
+	passOf(t, w)
+	if !slices.Contains(w.log, "wait "+ref(3).String()+": no free slot on mac (0 free)") {
+		t.Errorf("log:\n%s", strings.Join(w.log, "\n"))
+	}
+}
