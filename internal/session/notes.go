@@ -82,8 +82,11 @@ func ReadNote(dir, note string) (time.Time, bool, error) {
 	return t, err == nil, err
 }
 
-// WriteNote sets a note to at.
+// WriteNote sets a note to at, making dir if it is not there yet.
 func WriteNote(dir, note string, at time.Time) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
 	return os.WriteFile(filepath.Join(dir, note), []byte(at.UTC().Format(time.RFC3339)+"\n"), 0o644)
 }
 

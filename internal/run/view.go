@@ -20,6 +20,9 @@ const (
 	ClaimWait = 5 * time.Minute
 	// StallWait is how long a session may wait for input outside a hard stop.
 	StallWait = 10 * time.Minute
+	// DoneWait is how long the run, once the work is done, waits for the
+	// hands-off windows of closed tasks to go quiet before it exits.
+	DoneWait = 15 * time.Minute
 	// StartRetry is how long a task whose start failed waits to be tried
 	// again; until then it holds no slot.
 	StartRetry = 30 * time.Minute

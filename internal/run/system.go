@@ -3,7 +3,6 @@ package run
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -66,14 +65,14 @@ func (s System) LatestRun(name string) (session.Run, bool, error) {
 	return session.LatestRun(s.Home, name)
 }
 
-// NoteDir is <runs>/<repo>-<n>-coordinator, beside the runs it watches.
+// NoteDir is <runs>/<repo>-<n>-coordinator, beside the runs it watches. It
+// is made by the first note written there, not by asking for the path.
 func (s System) NoteDir(ref tracker.Ref) (string, error) {
 	repo, err := session.ParseRepo(ref.Repo)
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(s.Home, filepath.FromSlash(session.RunsDir), session.TaskName(repo, ref.Number)+"-coordinator")
-	return dir, os.MkdirAll(dir, 0o755)
+	return filepath.Join(s.Home, filepath.FromSlash(session.RunsDir), session.TaskName(repo, ref.Number)+"-coordinator"), nil
 }
 
 func (s System) Start(task tracker.Ref) error {

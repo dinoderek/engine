@@ -62,7 +62,11 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
 8. **Done.** When the feature has sub-issues and all are closed, comment
    on the feature: each task with its PR, the acceptance result, the tasks still carrying
    `engine:ruling-review`, and the deviations. Set `engine:done`, close the
-   feature as completed, and end the session.
+   feature as completed. Before you end the session, reap what is left:
+   close each hands-off window, or archive each cloud session, of a closed
+   task as soon as the session is waiting, with no 10-minute wait. Check again
+   about every minute, and stop waiting for a busy one after 15 minutes. Leave
+   gated sessions.
 
 Log each pass's actions. Move only the feature's labels, as above; executors
 own the task labels, except `engine:failed` and a dead holder's `engine:merging`.

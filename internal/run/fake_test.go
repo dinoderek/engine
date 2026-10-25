@@ -29,6 +29,11 @@ func cardBody(n int, tier string) string {
 type behaviour struct {
 	claim, review, merge int
 	dieAt, waitAt        int
+	// linger keeps the window open after the merge, as an executor does that
+	// reports instead of closing it; waitAt then says when it goes quiet.
+	linger bool
+	// gated starts the session in gated mode.
+	gated bool
 }
 
 var smooth = behaviour{claim: 1, review: 3, merge: 4}
@@ -152,7 +157,7 @@ func (w *world) LatestRun(name string) (session.Run, bool, error) {
 func (w *world) Slots() (int, error) { return w.slots, nil }
 
 func (w *world) NoteDir(r tracker.Ref) (string, error) {
-	return filepath.Join(w.home, "notes", fmt.Sprint(r.Number)), mkdir(filepath.Join(w.home, "notes", fmt.Sprint(r.Number)))
+	return filepath.Join(w.home, "notes", fmt.Sprint(r.Number)), nil
 }
 
 func (w *world) launch(r tracker.Ref, do behaviour) error {
@@ -166,8 +171,12 @@ func (w *world) launch(r tracker.Ref, do behaviour) error {
 	}
 	e.dir = dir
 	w.execs[r] = e
+	mode := "hands-off"
+	if do.gated {
+		mode = "gated"
+	}
 	return session.WriteRecord(dir, session.Record{RunID: filepath.Base(dir), Task: r.String(), Name: name,
-		Mode: "hands-off", Tmux: "engine:" + e.window.ID, Spawned: w.now})
+		Mode: mode, Tmux: "engine:" + e.window.ID, Spawned: w.now})
 }
 
 // Start refuses as engine start does: a window of that name, live or dead,
@@ -312,6 +321,9 @@ func (w *world) step(e *executor) {
 	at := int(w.now.Sub(e.started) / time.Minute)
 	c := w.card(e.ref)
 	if !c.Open {
+		if e.do.waitAt != 0 && at >= e.do.waitAt {
+			e.status = session.AgentWaiting
+		}
 		return
 	}
 	switch {
@@ -321,7 +333,9 @@ func (w *world) step(e *executor) {
 		e.status = session.AgentWaiting
 	case e.do.merge != 0 && at >= e.do.merge && c.Open:
 		w.merge(c)
-		e.window = session.WindowInfo{}
+		if !e.do.linger {
+			e.window = session.WindowInfo{}
+		}
 	case e.do.review != 0 && at >= e.do.review && !c.Has(InReview):
 		_ = w.RemoveLabel(c.Ref, Running)
 		_ = w.AddLabels(c.Ref, InReview)
