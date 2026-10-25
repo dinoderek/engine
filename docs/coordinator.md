@@ -138,28 +138,17 @@ is waiting for input. Three sources:
 1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
 2. **The harness**, for "waiting for input". `status` gives each window of
    session `engine` a `harness` and a `state`, `working` or `waiting`, from
-   the probe of the harness its newest `run.json` names. Anything else,
-   including a window with no run, is unknown, never dead:
-   - **Claude Code:** `claude agents --json` on the host lists every live
-     session, including those in tmux, with its `pid`, `cwd`, `name`,
-     `sessionId` and `status`, matched to a window by name. `busy` is
-     working; `waiting` and `idle` are waiting for input, because only a
-     prompt moves the session on.
-   - **Codex:** its hooks write `harness-state.json` to the run directory:
-     the state (`working`, `waiting` or `ended`), the event, the time and
-     Codex's session ID. A missing or unreadable file is unknown, and so is
-     `ended` while the window lives. Codex's `notify` is not used, because
-     it holds a single program and other tools already claim it (Computer
-     Use on the Mac).
+   the probe of the harness its newest `run.json` names, as each harness doc
+   says (`claude.md`, "Session list"; `codex.md`, "Session signals").
+   Anything else, including a window with no run, is unknown, never dead.
 3. **tmux.** If the window exists and its command has not exited, the
    session is alive. A dead window is dead whatever its harness says.
 
 `engine ps` and `engine run`'s session check read only `state`, from the
 `status` of the host a claim names, this host's too. A claim in engine's tmux
 session is alive while its window's command runs, and dead once the window
-is gone or its command exited. For a Claude session started by hand, `ps`
-matches the reply's `claude agents` list by name (`<repo>-<task>`), then, on
-this host only, by worktree (its branch, in the claim's repo); unless listed,
+is gone or its command exited. A session started by hand is alive only when
+the reply's harness list shows it (`claude.md`, "Session list"); otherwise
 its liveness is unknown. A failed call leaves it unknown too. A session in
 `needs-human` or `in-review` keeps that state while alive.
 

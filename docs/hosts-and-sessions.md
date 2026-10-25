@@ -1,6 +1,6 @@
 # Hosts and sessions
 
-> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (the `engine` skill, `plugins/engine/skills/engine/`), what it records (`telemetry.md`).
+> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (the `engine` skill, `plugins/engine/skills/engine/`), what it records (`telemetry.md`), each harness's launch line, tiers, permissions and apps (`claude.md`, `codex.md`).
 
 ## Hosts
 
@@ -48,20 +48,6 @@ default_harness = "claude"
 gb_per_session = 8      # RAM one session and its gates need
 reserve_gb = 8          # RAM kept back for the host itself
 
-[harness.claude]
-max_sessions = 8        # across all hosts: a budget lever
-launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {name} --remote-control {name}"
-tiers.deep     = { model = "claude-opus-5-5",   effort = "high" }
-tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
-tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
-
-[harness.codex]
-max_sessions = 2
-launch = "{bin} --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
-tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }   # not Astra: Sol at high is close on coding, far cheaper
-tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
-tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
-
 [host.mac]              # 4 slots
 address = "<user>@<tailscale name>"
 harnesses = ["claude", "codex"]
@@ -78,15 +64,14 @@ capabilities = ["linux", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 ```
 
-Each harness maps every tier (`execution-protocol.md`, "Models") to a model
-and an effort level.
+Each harness's launch line and tier models are in its own doc, `claude.md`
+and `codex.md`. Each harness maps every tier (`execution-protocol.md`, "Models")
+to a model and an effort level.
 
 Each host pins the path of every harness binary (`bin`), and `{bin}` in the
 launch line expands to it. Engine never runs whichever install comes first on
 `PATH`: this Mac has a second Codex under Homebrew that shadows the standalone
-one. The other placeholders: `{name}` is the session name (`<repo>-<task>`),
-`{model}` and `{effort}` come from the tier, and `{clone}` is engine's clone of
-the repo.
+one.
 
 ## Placement
 
@@ -104,30 +89,6 @@ An unplaced task stays ready, logged with the reason each pass. If no host
 could take it with every slot free, the coordinator comments the reason on
 it once. The planner starts on the coordinator's host. How the coordinator
 reaches each host is in `coordinator.md`.
-
-## Permission mode
-
-Sessions default to **auto mode**, whose classifier approves or refuses most
-actions without a prompt. Some still prompt.
-
-- **Claude Code:** `--permission-mode auto`. In a hands-off session the
-  plugin's permission hook denies every prompt instead of showing it
-  (`execution-protocol.md`, "Enforced by hook"), so the executor finds
-  another route or raises a hard stop.
-- **Codex:** the `workspace-write` sandbox, with Codex's auto-review deciding
-  any action that crosses the sandbox boundary. With
-  `approval_policy = "never"` there would be nothing for it to review.
-
-The Codex sandbox needs two exceptions for executors:
-
-- **Network access** (`sandbox_workspace_write.network_access`), for `gh`
-  and `git push`.
-- **Engine's clone as a writable root**
-  (`sandbox_workspace_write.writable_roots`), because a worktree's git
-  metadata lives in the main clone's `.git/worktrees/`, outside the worktree.
-
-All Codex settings are passed per session with `-c`. The host's own
-`~/.codex/config.toml` is never edited.
 
 ## Naming
 
@@ -158,16 +119,13 @@ it:
    `./dev worktree create` if it has one, else `git worktree add` from the
    default branch, refusing a branch on `origin`, or a local one with
    commits (one without is remade);
-3. sets `projects.<worktree>.hasTrustDialogAccepted` in `~/.claude.json` (or
-   `$CLAUDE_CONFIG_DIR`'s), so the trust dialog, whose default exits, never
-   shows;
+3. makes the worktree trusted by its harness, so no trust dialog blocks the
+   start (`claude.md`, "Starting");
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
    so the repo's `AGENTS.md` loads;
-5. runs the host's launch line at the card's tier (default `standard`), plus
-   `--add-dir <engine's plugin directory>` and a read-only rule for `/tmp`
-   (an added directory's skills load, and anyone can write to `/tmp`), so
-   reading the skill or a test's screenshots needs no prompt. Then `--` and
-   the kickoff, Claude's first message: `Execute <owner/repo#n> with the
+5. runs the host's launch line at the card's tier (default `standard`), with
+   the flags the harness adds at start (`claude.md`, "Starting"). Then `--` and
+   the kickoff, the session's first message: `Execute <owner/repo#n> with the
    engine executor, <mode> mode. Reviewer model: <deep model>. run=<run-id>
    tmux=engine:<name> rc=<name>`. `/bin/sh` first exports `GH_TOKEN` from the
    token file, off every command line, `ENGINE_RUN_DIR` (the run directory),
@@ -209,7 +167,7 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. A claim on another host is settled from that host's `status`, one call per host with a claim, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
+| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. Each claim is settled from the `status` of the host it names, this one's read in process, one call per host with a claim, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
 
 ## Connecting to a session
 
@@ -221,15 +179,7 @@ hand and one started by the coordinator look the same.
 
 Clients share one window: everyone sees the same screen and can type.
 
-Each harness reaches the apps differently:
-
-- **Claude:** the launch line's `-n {name} --remote-control {name}` sets the
-  session's name, `<repo>-<task>`, and shows it in the apps under that name.
-  Remote Control needs the host signed in with a claude.ai account
-  (`operator-setup.md`).
-- **Codex:** the host runs the remote-control app-server
-  (`codex remote-control start`), and the session's TUI connects to it with
-  `--remote`.
+Each harness's apps are set up in its own doc: `claude.md` and `codex.md`.
 
 ## tmux setup
 
