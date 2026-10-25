@@ -122,16 +122,42 @@ func stalls(v View) []Action {
 	return acts
 }
 
-// reaps is step 7: close a finished hands-off session that left its window.
+// reaps is step 7: close a finished hands-off session that left its window,
+// once it has waited StallWait.
 func reaps(v View) []Action {
 	var acts []Action
 	for _, c := range v.Feature.Tasks {
 		s, ok := v.Sessions[c.Ref]
-		if ok && !c.Open && s.Mode == "hands-off" && !hasAny(c.Labels, append(slices.Clone(takenStates), Merging)) && s.waited(v.Now, StallWait) {
+		if ok && finished(c, s) && s.waited(v.Now, StallWait) {
 			acts = append(acts, Action{Kind: Reap, Ref: c.Ref, Session: s, Text: "its task is closed"})
 		}
 	}
 	return acts
+}
+
+// finished reports whether c is a closed task with no state label whose
+// hands-off session s is the one to close. A gated window is never closed.
+func finished(c tracker.Card, s Session) bool {
+	return !c.Open && s.Mode == "hands-off" && !hasAny(c.Labels, append(slices.Clone(takenStates), Merging))
+}
+
+// doneReaps is step 8's reaping, once the work is done: it closes every
+// finished hands-off window that is waiting for input at once, and reports
+// how many hands-off windows of closed tasks are still live, whether they
+// are finished or not.
+func doneReaps(v View) (acts []Action, live int) {
+	for _, c := range v.Feature.Tasks {
+		s, ok := v.Sessions[c.Ref]
+		if !ok || c.Open || !s.Live || s.Mode != "hands-off" {
+			continue
+		}
+		if finished(c, s) && s.Waiting {
+			acts = append(acts, Action{Kind: Reap, Ref: c.Ref, Session: s, Text: "its task is closed and the work is done"})
+			continue
+		}
+		live++
+	}
+	return acts, live
 }
 
 // ready is step 3: the ready tasks, in start order, while slots last.

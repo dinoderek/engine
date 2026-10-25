@@ -40,7 +40,13 @@ mid-pass, and SSH hosts. The first time it sees
 a session waiting, it writes the time to the session's run directory as
 `waiting-since`, and clears it when the session works again ("Session
 signals"). Its own notes, such as having reported a failing lint, live in
-`<repo>-<n>-coordinator` beside the run directories.
+`<repo>-<n>-coordinator` beside the run directories; the first note written
+makes the directory.
+
+At done, `engine run` posts the summary and closes the feature (a lone task
+has neither), then re-reads the work and the host's sessions each minute. It closes each hands-off window of a
+closed task as soon as the session is waiting, with no 10-minute wait, and
+exits when none is left or after 15 minutes. Gated windows are never closed.
 
 The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it

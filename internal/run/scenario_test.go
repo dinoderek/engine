@@ -390,6 +390,9 @@ func TestAnUnreadableSummaryNoteStopsTheFinish(t *testing.T) {
 	done.Open = false
 	w := newWorld(t, []string{"engine:feature", Executing}, done)
 	dir, _ := w.NoteDir(ref(1))
+	if err := mkdir(dir); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, FinishNoted), []byte("soon"), 0o644); err != nil {
 		t.Fatal(err)
 	}
