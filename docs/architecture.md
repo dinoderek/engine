@@ -34,8 +34,8 @@ Two programs share one Go module:
   runner) and `checks` (the lanes that are not one external command) →
   `baseline` and `repo` (git, go and file helpers).
 
-The designed components are the coordinator's reconcile loop over every host,
-the rest of the tracker adapter and the telemetry collector.
+The designed components are the coordinator's session check over every
+host, the rest of the tracker adapter and the telemetry collector.
 If you are building one, load its doc from the index in `AGENTS.md`.
 
 ## Layers and import rules

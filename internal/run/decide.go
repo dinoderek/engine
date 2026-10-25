@@ -7,6 +7,7 @@ import (
 
 	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/ps"
+	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
@@ -26,8 +27,8 @@ func Decide(v View) []Action {
 	acts = append(acts, deadSessions(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, reaps(v)...)
-	starts := ready(v)
-	acts = append(acts, starts...)
+	placed := place(v, ready(v))
+	acts = append(acts, placed...)
 	if v.TaskOnly {
 		switch t := f.Tasks[0]; {
 		case !t.Open:
@@ -37,7 +38,8 @@ func Decide(v View) []Action {
 		}
 		return acts
 	}
-	if l := featureLabel(v, len(starts) > 0); l != "" {
+	starting := slices.ContainsFunc(placed, func(a Action) bool { return a.Kind == StartTask })
+	if l := featureLabel(v, starting); l != "" {
 		acts = append(acts, Action{Kind: SetLabel, Ref: f.Ref, Label: l})
 	}
 	if len(f.Tasks) > 0 && !slices.ContainsFunc(f.Tasks, func(c tracker.Card) bool { return c.Open }) {
@@ -70,7 +72,7 @@ func planStep(v View) ([]Action, bool) {
 		}
 		return nil, true
 	case len(f.Tasks) == 0:
-		if failed, ok := v.StartFailed[f.Ref]; ok && v.Now.Sub(failed) < StartRetry || v.FreeSlots < 1 {
+		if failed, ok := v.StartFailed[f.Ref]; ok && v.Now.Sub(failed) < StartRetry || v.Fleet.localFree() < 1 {
 			return nil, true
 		}
 		return []Action{{Kind: StartPlanner, Ref: f.Ref, Text: "no tasks yet"}}, true
@@ -160,24 +162,30 @@ func doneReaps(v View) (acts []Action, live int) {
 	return acts, live
 }
 
-// ready is step 3: the ready tasks, in start order, while slots last.
-func ready(v View) []Action {
+// ready is step 3: the ready tasks, in start order. A task whose window is
+// live on any host is not ready: its session has not claimed yet.
+func ready(v View) []tracker.Card {
 	var cands []tracker.Card
 	for _, c := range v.Feature.Tasks {
 		s := v.Sessions[c.Ref]
 		blocked := slices.ContainsFunc(c.BlockedBy, func(b tracker.Blocker) bool { return b.Open })
 		failed, ok := v.StartFailed[c.Ref]
 		resting := ok && failed.After(s.Spawned) && v.Now.Sub(failed) < StartRetry
-		if c.Open && !blocked && !hasAny(c.Labels, takenStates) && !s.Live && !resting {
+		if c.Open && !blocked && !hasAny(c.Labels, takenStates) && !s.Live && !resting && !v.Fleet.liveAnywhere(windowName(c.Ref)) {
 			cands = append(cands, c)
 		}
 	}
 	order(v.Feature.Tasks, cands)
-	var acts []Action
-	for _, c := range cands[:min(len(cands), max(0, v.FreeSlots))] {
-		acts = append(acts, Action{Kind: StartTask, Ref: c.Ref, Text: "ready"})
+	return cands
+}
+
+// windowName is the session name of ref's task, or "" for a bad repo.
+func windowName(ref tracker.Ref) string {
+	repo, err := session.ParseRepo(ref.Repo)
+	if err != nil {
+		return ""
 	}
-	return acts
+	return session.TaskName(repo, ref.Number)
 }
 
 // order sorts cands for starting: most open tasks downstream first, then

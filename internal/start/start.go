@@ -74,9 +74,9 @@ type Deps struct {
 	SSH remote.Exec
 }
 
-// client is the host the session starts on: host, reached over SSH when
+// HostClient is the host the session starts on: host, reached over SSH when
 // remote is set, else this host, in process.
-func (d Deps) client(host hosts.Host, remoteHost bool) remote.Client {
+func (d Deps) HostClient(host hosts.Host, remoteHost bool) remote.Client {
 	switch {
 	case d.Client != nil:
 		return d.Client
@@ -358,7 +358,7 @@ func (p *plan) checkTmux(d Deps) error {
 // checkStatus is checkTmux for another machine, from its status: one call
 // gives both the windows and the free slots.
 func (p *plan) checkStatus(d Deps) error {
-	st, err := d.client(p.host, true).Status()
+	st, err := d.HostClient(p.host, true).Status()
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func Kickoff(task tracker.Ref, mode, reviewer, runID, name string) string {
 // launch has the host sync engine's clone, then spawn the session with the
 // model, effort and kickoff decided here.
 func (p plan) launch(d Deps) (Started, error) {
-	host := d.client(p.host, p.remote)
+	host := d.HostClient(p.host, p.remote)
 	if _, err := host.SyncRepo(p.repo.String()); err != nil {
 		return Started{}, err
 	}
@@ -449,7 +449,7 @@ func report(out io.Writer, s Started) {
 // prompt.
 func Check(d Deps, host string, out io.Writer) (bool, error) {
 	if host == "" {
-		return d.client(hosts.Host{}, false).Check(out)
+		return d.HostClient(hosts.Host{}, false).Check(out)
 	}
 	cfg, local, err := hosts.Open(hosts.ConfigDir(d.Home))
 	if err != nil {
@@ -459,5 +459,5 @@ func Check(d Deps, host string, out io.Writer) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return d.client(target, isRemote).Check(out)
+	return d.HostClient(target, isRemote).Check(out)
 }

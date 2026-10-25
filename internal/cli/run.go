@@ -6,13 +6,15 @@ import (
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/ps"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/run"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
 const runUsage = "usage: engine run <owner/repo#n>\n"
 
-// runRun coordinates a feature, or one task, on this host until it is over.
+// runRun coordinates a feature, or one task, across the hosts until it is
+// over.
 func runRun(args []string, env Env, sleep func(time.Duration)) int {
 	if len(args) != 1 {
 		fmt.Fprint(env.Err, runUsage)
@@ -42,7 +44,7 @@ func runSystem(ref tracker.Ref, env Env) (run.System, bool, error) {
 	if err != nil {
 		return run.System{}, false, err
 	}
-	_, host, err := hosts.Open(hosts.ConfigDir(env.Home))
+	cfg, host, err := hosts.Open(hosts.ConfigDir(env.Home))
 	if err != nil {
 		return run.System{}, false, err
 	}
@@ -55,14 +57,16 @@ func runSystem(ref tracker.Ref, env Env) (run.System, bool, error) {
 		return run.System{}, false, fmt.Errorf("%s is blocked by open %v", ref, issue.OpenBlockers)
 	}
 	src := psSource(env, host, token)
+	starts := startDeps(env)
 	return run.System{
-		Gh: env.Exec, Token: token, Home: env.Home, Host: host, Tmux: env.Tmux,
+		Gh: env.Exec, Token: token, Home: env.Home, Config: cfg, Host: host, Tmux: env.Tmux,
+		Client:     func(h hosts.Host) remote.Client { return starts.HostClient(h, h.Name != host.Name) },
 		ListAgents: agents(env, host),
 		ListRows: func() ([]ps.Row, error) {
 			l, err := ps.List(src)
 			return l.Rows, err
 		},
-		Starts: startDeps(env),
+		Starts: starts,
 		Out:    env.Out, Clock: env.Now,
 	}, taskOnly, nil
 }

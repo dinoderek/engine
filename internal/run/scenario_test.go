@@ -353,11 +353,11 @@ func TestAFailedPlannerStartIsReportedOnce(t *testing.T) {
 func TestThePlannerWaitsForAFreeSlot(t *testing.T) {
 	w := newWorld(t, []string{"engine:feature", Approved})
 	v := gather(t, w)
-	v.FreeSlots = 0
+	v.Fleet.Hosts[0].FreeSlots = 0
 	if acts := Decide(v); len(acts) != 0 {
 		t.Errorf("no slot: %+v", acts)
 	}
-	v.FreeSlots = 1
+	v.Fleet.Hosts[0].FreeSlots = 1
 	if acts := Decide(v); len(acts) != 1 || acts[0].Kind != StartPlanner {
 		t.Errorf("a slot: %+v", acts)
 	}

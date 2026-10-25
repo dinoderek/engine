@@ -92,6 +92,7 @@ func TestReadTask(t *testing.T) {
 		Labels:       []string{"engine:running", "engine:ruling-review"},
 		OpenBlockers: []Ref{{"o/r", 22}, {"p/q", 4}},
 		Parent:       &Ref{"o/r", 20}, Harness: "codex", Tier: "deep",
+		Body: "## Outcome\n\nx\n\n## Harness / tier\n\n<!-- Optional. -->\ncodex deep\n\n## Other\n",
 	}
 	if !reflect.DeepEqual(task, want) {
 		t.Errorf("got  %+v\nwant %+v", task, want)
