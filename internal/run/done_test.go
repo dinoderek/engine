@@ -44,6 +44,32 @@ func TestDoneWaitsForABusyWindowThenReapsIt(t *testing.T) {
 	if len(w.killed) != 1 || w.execs[ref(2)].window.ID != "" {
 		t.Errorf("killed %v, window %+v", w.killed, w.execs[ref(2)].window)
 	}
+	if got := w.now.Sub(t0); got > 16*time.Minute {
+		t.Errorf("the run lasted %s: the reap did not follow the wait", got)
+	}
+}
+
+func TestDoneKeepsAWindowWhoseTaskStillHoldsALabel(t *testing.T) {
+	w := finishedFeature(t, behaviour{waitAt: 5})
+	for range 2 {
+		v := gather(t, w)
+		Apply(w, v, Decide(v))
+		w.sleep(PassEvery)
+	}
+	w.sleep(PassEvery)
+	c := w.card(ref(2))
+	if c.Open {
+		t.Fatalf("the task has not merged:\n%s", strings.Join(w.log, "\n"))
+	}
+	c.Labels = []string{InReview}
+	acts, live := doneReaps(gather(t, w))
+	if len(acts) != 0 || live != 1 {
+		t.Errorf("reaps %v, live %d", acts, live)
+	}
+	c.Labels = nil
+	if acts, live = doneReaps(gather(t, w)); len(acts) != 1 || live != 0 {
+		t.Errorf("a finished task: reaps %v, live %d", acts, live)
+	}
 }
 
 func TestDoneGivesUpOnAWindowThatStaysBusy(t *testing.T) {

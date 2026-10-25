@@ -43,8 +43,8 @@ signals"). Its own notes, such as having reported a failing lint, live in
 `<repo>-<n>-coordinator` beside the run directories; the first note written
 makes the directory.
 
-At done, `engine run` posts the summary and closes the feature, then keeps
-checking the host's sessions each minute. It closes each hands-off window of a
+At done, `engine run` posts the summary and closes the feature (a lone task
+has neither), then re-reads the work and the host's sessions each minute. It closes each hands-off window of a
 closed task as soon as the session is waiting, with no 10-minute wait, and
 exits when none is left or after 15 minutes. Gated windows are never closed.
 
