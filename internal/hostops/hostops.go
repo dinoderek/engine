@@ -19,7 +19,7 @@ import (
 
 // Protocol is the version of the ops' wire format. A caller refuses a reply
 // that carries another.
-const Protocol = 2
+const Protocol = 3
 
 // The executor's modes. The kickoff names one, and a hands-off session is
 // marked unattended.
@@ -30,6 +30,10 @@ const (
 
 // Harness is the only harness the ops launch.
 const Harness = "claude"
+
+// Codex is a harness whose sessions status can read, from the state file its
+// hooks write to the run directory.
+const Codex = "codex"
 
 // Deps are the outside world: the CLIs, the home directory, the environment
 // and the clock. Tests replace each one.

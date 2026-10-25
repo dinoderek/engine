@@ -44,9 +44,12 @@ Codex sessions have no guard yet. The merge and permission guards in
 
 ## Session signals
 
-Codex's hooks write to the run directory. Codex's `notify` is not used,
-because it holds a single program and other tools already claim it (Computer
-Use on the Mac).
+Codex's hooks write `harness-state.json` to the run directory, atomically:
+the state (`working`, `waiting` or `ended`), the event that set it, the time
+and Codex's session ID. `status` reads it for a window whose newest run is
+Codex's. A missing or unreadable file is unknown, never dead, and so is
+`ended` while the window lives. Codex's `notify` is not used, because it holds
+a single program and other tools already claim it (Computer Use on the Mac).
 
 ## Apps
 

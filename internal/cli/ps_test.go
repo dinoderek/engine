@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/ps"
+	"github.com/dinoderek/engine/internal/session"
 )
 
 const psHosts = `default_harness = "claude"
@@ -80,9 +81,10 @@ type psEnv struct {
 func newPsEnv(t *testing.T, host string) *psEnv {
 	t.Helper()
 	e := &psEnv{t: t, home: t.TempDir(), claude: `[{"pid":1,"cwd":"/w","name":"r-1","status":"busy"}]`, status: map[string]string{
-		"me@devbox": `{"protocol":2,"engine":"x","host":"devbox","slots":3,"free_slots":2,"windows":[{"name":"r-2","id":"@1","alive":true}],"agents":[],"runs":[]}`,
-		"me@mac":    `{"protocol":2,"engine":"x","host":"mac","slots":4,"free_slots":3,"windows":[{"name":"r-1","id":"@1","alive":true}],"agents":[{"pid":1,"cwd":"/w","name":"r-1","status":"waiting"}],"runs":[]}`,
+		"me@devbox": `{"protocol":3,"engine":"x","host":"devbox","slots":3,"free_slots":2,"windows":[{"name":"r-2","id":"@1","alive":true,"harness":"codex"}],"agents":[],"runs":[]}`,
+		"me@mac":    `{"protocol":3,"engine":"x","host":"mac","slots":4,"free_slots":3,"windows":[{"name":"r-1","id":"@1","alive":true,"harness":"claude","state":"waiting"}],"agents":[{"pid":1,"cwd":"/w","name":"r-1","status":"waiting"}],"runs":[]}`,
 	}}
+	e.spawned("r-1", "claude", time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC))
 	if err := os.MkdirAll(filepath.Join(e.home, ".config", "engine"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -97,6 +99,21 @@ func (e *psEnv) write(name, body string) {
 	if err := os.WriteFile(filepath.Join(e.home, ".config", "engine", name), []byte(body), 0o600); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+// spawned writes run.json for a run of session name on this host, as spawn
+// does, and returns its run directory.
+func (e *psEnv) spawned(name, harness string, at time.Time) string {
+	e.t.Helper()
+	rec := session.Record{RunID: name + "-" + at.Format("20060102T150405Z"), Name: name, Harness: harness, Spawned: at}
+	dir, err := session.RunDir(e.home, rec.RunID)
+	if err == nil {
+		err = session.WriteRecord(dir, rec)
+	}
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return dir
 }
 
 func (e *psEnv) drop(name string) {
@@ -164,7 +181,7 @@ func (e *psEnv) ssh(_ io.Reader, out, errOut io.Writer, name string, args ...str
 func (e *psEnv) run(args ...string) int {
 	e.t.Helper()
 	env := Env{
-		Out: &e.out, Err: &e.errOut, Exec: e.gh, Local: e.local, SSH: e.ssh, Home: e.home,
+		Out: &e.out, Err: &e.errOut, Exec: e.gh, Local: e.local, SSH: e.ssh, Home: e.home, Tmux: &session.Tmux{Run: e.local, Bin: "tmux"},
 		Getenv: func(string) string { return "" },
 		Now:    func() time.Time { return time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC) },
 	}
@@ -269,15 +286,12 @@ func TestPsHostNotInConfigIsUnknown(t *testing.T) {
 
 func TestPsWarnsAndStillLists(t *testing.T) {
 	e := newPsEnv(t, "mac")
-	e.claude = "not json"
 	e.tmuxErr = errors.New("tmux broke")
 	if code := e.run(); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.errOut.String())
 	}
-	for _, want := range []string{"engine ps: warning: tmux: tmux broke", "engine ps: warning: ", "agents --json: unreadable output"} {
-		if !strings.Contains(e.errOut.String(), want) {
-			t.Errorf("stderr %q lacks %q", e.errOut.String(), want)
-		}
+	if want := "engine ps: warning: status of mac: "; !strings.Contains(e.errOut.String(), want) || !strings.Contains(e.errOut.String(), "tmux broke") {
+		t.Errorf("stderr %q lacks %q", e.errOut.String(), want)
 	}
 	if !strings.Contains(e.out.String(), "running") {
 		t.Errorf("stdout: %s", e.out.String())
@@ -314,14 +328,27 @@ func TestPsFailures(t *testing.T) {
 	}
 }
 
-func TestPsHostWithoutAClaudeBinaryWarns(t *testing.T) {
-	e := newPsEnv(t, "devbox")
-	// A claude-code claim on a host that runs only codex.
-	if code := e.run(); code != 0 {
-		t.Fatalf("exit %d: %s", code, e.errOut.String())
-	}
-	if !strings.Contains(e.errOut.String(), "host devbox has no claude binary in hosts.toml") {
-		t.Errorf("stderr: %q", e.errOut.String())
+// This host's rows come from its own status, read in process: a Codex
+// window shows the state its hooks wrote, and Claude Code's list, which says
+// nothing of it, is not what settles it.
+func TestPsReadsALocalCodexWindowsState(t *testing.T) {
+	for _, state := range []string{session.StateWorking, session.StateWaiting} {
+		e := newPsEnv(t, "mac")
+		dir := e.spawned("r-1", "codex", time.Date(2026, 10, 21, 11, 0, 0, 0, time.UTC))
+		if err := session.WriteHarnessState(dir, session.HarnessState{State: state, Event: "Stop"}); err != nil {
+			t.Fatal(err)
+		}
+		e.claude = `[]`
+		if code := e.run("--json"); code != 0 {
+			t.Fatalf("exit %d: %s", code, e.errOut.String())
+		}
+		var rows []ps.Row
+		if err := json.Unmarshal(e.out.Bytes(), &rows); err != nil || len(rows) != 2 {
+			t.Fatalf("%v: %s", err, e.out.String())
+		}
+		if rows[0].State != state || rows[0].Alive == nil || !*rows[0].Alive {
+			t.Errorf("%s: row 0 %+v", state, rows[0])
+		}
 	}
 }
 
@@ -330,14 +357,5 @@ func TestPsUsageListsIt(t *testing.T) {
 	Run([]string{"help"}, Env{Out: &out})
 	if !strings.Contains(out.String(), "ps [--json]") {
 		t.Errorf("usage: %s", out.String())
-	}
-}
-
-func TestExpandHome(t *testing.T) {
-	cases := map[string]string{"~/bin/claude": "/h/bin/claude", "~": "/h", "/usr/bin/claude": "/usr/bin/claude", "~other/x": "~other/x", "": ""}
-	for in, want := range cases {
-		if got := expandHome(in, "/h"); got != want {
-			t.Errorf("expandHome(%q) = %q, want %q", in, got, want)
-		}
 	}
 }

@@ -241,8 +241,12 @@ func syncLabels(repo string, env Env) int {
 // runHost runs one of this host's ops for a caller, which may be on another
 // host.
 func runHost(args []string, env Env) int {
-	d := hostops.Deps{Run: env.Run, Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
-	return hostops.Main(args, d, env.In, env.Out, env.Err)
+	return hostops.Main(args, hostDeps(env), env.In, env.Out, env.Err)
+}
+
+// hostDeps is what this host's ops run with.
+func hostDeps(env Env) hostops.Deps {
+	return hostops.Deps{Run: env.Run, Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
 }
 
 // permissionHook runs the permission hook, logging to the run directory that
