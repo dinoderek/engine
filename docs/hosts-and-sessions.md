@@ -89,16 +89,20 @@ the repo.
 
 ## Placement
 
-The coordinator places a ready task on a host that meets all of these:
+In start order, the coordinator gives each ready task a host that meets all
+of these, preferring the most free slots, then the fewest capabilities, then
+the lowest name:
 
-- the host has a free slot (its slots are under "Hosts");
-- the host lists the harness (the card's, or the default), and that harness
-  is under its own cap;
-- the host's capabilities include everything in the card's `requires`.
+- a free slot, from the host's `status` (a host whose `status` fails takes
+  no task);
+- the task's harness (the card's, or the default), under its cap across
+  hosts;
+- every capability in the card's `requires`.
 
-Ties go to the host with the most free slots. A task that no host can take
-stays ready, and the coordinator reports why. How the coordinator reaches each
-host is in `coordinator.md`.
+An unplaced task stays ready, logged with the reason each pass. If no host
+could take it with every slot free, the coordinator comments the reason on
+it once. The planner starts on the coordinator's host. How the coordinator
+reaches each host is in `coordinator.md`.
 
 ## Permission mode
 

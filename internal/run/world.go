@@ -20,7 +20,7 @@ const (
 	FinishNoted = "finish-noted"
 )
 
-// World is what a pass reads and changes: the tracker, the host's sessions
+// World is what a pass reads and changes: the tracker, the hosts' sessions
 // and the clock. System gives the real one; tests play it.
 type World interface {
 	Feature(ref tracker.Ref) (tracker.Feature, error)
@@ -32,11 +32,13 @@ type World interface {
 	Windows() ([]session.WindowInfo, error)
 	Agents() ([]session.Agent, error)
 	LatestRun(name string) (session.Run, bool, error)
-	// Slots is how many sessions this host runs at once.
-	Slots() (int, error)
+	// Fleet reads every host's load for placement. A host that cannot be
+	// read is in it, marked unreachable.
+	Fleet() Fleet
 	// NoteDir is where the coordinator keeps its own notes for ref.
 	NoteDir(ref tracker.Ref) (string, error)
-	Start(task tracker.Ref) error
+	// Start starts the task's session on the named host.
+	Start(task tracker.Ref, host string) error
 	StartPlanner(feature tracker.Ref) error
 	AddLabels(ref tracker.Ref, labels ...string) error
 	RemoveLabel(ref tracker.Ref, label string) error
@@ -63,7 +65,7 @@ func Gather(w World, ref tracker.Ref, taskOnly bool) (View, error) {
 	} else if v.Feature, err = w.Feature(ref); err != nil {
 		return View{}, err
 	}
-	if v.StartFailed, err = startFailures(w, v.Feature); err != nil {
+	if v.StartFailed, v.PlaceNoted, err = taskNotes(w, v.Feature); err != nil {
 		return View{}, err
 	}
 	if v.Rows, err = rows(w, v.Feature); err != nil {
@@ -76,14 +78,10 @@ func Gather(w World, ref tracker.Ref, taskOnly bool) (View, error) {
 	if v.Sessions, err = sessions(w, v.Feature, taskOnly, windows, v.Now); err != nil {
 		return View{}, err
 	}
-	slots, err := w.Slots()
-	if err != nil {
-		return View{}, err
-	}
-	v.FreeSlots = slots
-	for _, win := range windows {
-		if !win.Dead {
-			v.FreeSlots--
+	v.Fleet = w.Fleet()
+	for _, h := range v.Fleet.Hosts {
+		if h.Unreachable != "" {
+			w.Logf("host %s takes no task: %s", h.Name, h.Unreachable)
 		}
 	}
 	if !taskOnly {
@@ -92,10 +90,10 @@ func Gather(w World, ref tracker.Ref, taskOnly bool) (View, error) {
 	return v, err
 }
 
-// startFailures reads when the last start of each open task, and of the
-// feature's planner, failed.
-func startFailures(w World, f tracker.Feature) (map[tracker.Ref]time.Time, error) {
-	out := map[tracker.Ref]time.Time{}
+// taskNotes reads when the last start of each open task, and of the
+// feature's planner, failed, and which tasks have been said to fit no host.
+func taskNotes(w World, f tracker.Feature) (failed map[tracker.Ref]time.Time, placeNoted map[tracker.Ref]bool, err error) {
+	failed, placeNoted = map[tracker.Ref]time.Time{}, map[tracker.Ref]bool{}
 	refs := []tracker.Ref{f.Ref}
 	for _, c := range f.Tasks {
 		if c.Open {
@@ -105,17 +103,20 @@ func startFailures(w World, f tracker.Feature) (map[tracker.Ref]time.Time, error
 	for _, r := range refs {
 		dir, err := w.NoteDir(r)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		at, ok, err := session.ReadNote(dir, StartFailed)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if ok {
-			out[r] = at
+			failed[r] = at
+		}
+		if _, placeNoted[r], err = session.ReadNote(dir, PlaceNoted); err != nil {
+			return nil, nil, err
 		}
 	}
-	return out, nil
+	return failed, placeNoted, nil
 }
 
 func rows(w World, f tracker.Feature) (map[tracker.Ref]ps.Row, error) {
@@ -242,6 +243,8 @@ func Apply(w World, v View, acts []Action) bool {
 			err = startTask(w, v, a)
 		case StartPlanner:
 			err = startTask(w, v, a)
+		case Wait:
+			err = placeComment(w, v, a)
 		case SetLabel:
 			err = setFeatureLabel(w, v.Feature, a.Label)
 		case ReportLint:
@@ -282,7 +285,7 @@ func startTask(w World, v View, a Action) error {
 			w.Logf("close the dead window of %s: %v", a.Ref, err)
 		}
 	}
-	start := w.Start
+	start := func(r tracker.Ref) error { return w.Start(r, a.Host) }
 	if a.Kind == StartPlanner {
 		start = w.StartPlanner
 	}
@@ -306,6 +309,22 @@ func startTask(w World, v View, a Action) error {
 	body := mention(w, v.Operator) + "engine run: starting a session for this issue failed, so it waits " + StartRetry.String() +
 		" before the next try:\n\n```text\n" + err.Error() + "\n```"
 	return errors.Join(err, w.Comment(a.Ref, body))
+}
+
+// placeComment says on a task, once, that no host can take it, and why.
+func placeComment(w World, v View, a Action) error {
+	if !a.Notify {
+		return nil
+	}
+	body := mention(w, v.Operator) + "engine run: " + a.Text + ". The task stays ready; it starts once hosts.toml or its card lets a host take it."
+	if err := w.Comment(a.Ref, body); err != nil {
+		return err
+	}
+	dir, err := w.NoteDir(a.Ref)
+	if err != nil {
+		return err
+	}
+	return session.WriteNote(dir, PlaceNoted, v.Now)
 }
 
 // setFeatureLabel moves the feature to label, removing its other states.
