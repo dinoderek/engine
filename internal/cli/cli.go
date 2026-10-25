@@ -12,6 +12,7 @@ import (
 
 	"github.com/dinoderek/engine/internal/attach"
 	"github.com/dinoderek/engine/internal/hook"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/start"
@@ -40,6 +41,8 @@ commands:
                             launch an executor session for a task on this machine
   start --check             launch a throwaway session to find prompts that would
                             stop an unattended one
+  host <op> --json          run one of this host's ops for a caller on any host:
+                            sync-repo, spawn, status, collect or release
 `
 
 // Env is what a command reads and runs: the standard streams, the runners for
@@ -102,6 +105,8 @@ func Run(args []string, env Env) int {
 		return runLint(args[1:], env)
 	case "run":
 		return runRun(args[1:], env, time.Sleep)
+	case "host":
+		return runHost(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0
@@ -235,8 +240,7 @@ func runStart(args []string, env Env) int {
 		fmt.Fprintf(env.Err, "engine start: %v\n%s", err, startUsage)
 		return 2
 	}
-	deps := start.Deps{GH: env.Exec, Run: env.Run, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
-	if err := start.Run(opts, deps, env.Out); err != nil {
+	if err := start.Run(opts, startDeps(env), env.Out); err != nil {
 		fmt.Fprintln(env.Err, "engine start:", err)
 		return 1
 	}
@@ -246,22 +250,32 @@ func runStart(args []string, env Env) int {
 // runCheck runs the preflight check and exits 1 when an unattended session
 // here would stop.
 func runCheck(env Env) int {
-	deps := start.Deps{GH: env.Exec, Run: env.Run, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
-	r, err := start.Check(deps, env.Out)
+	ok, err := start.Check(startDeps(env), env.Out)
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine start --check:", err)
 		return 1
 	}
-	start.ReportCheck(env.Out, r)
-	return checkCode(r)
+	return checkCode(ok)
 }
 
 // checkCode is the exit code of a check: 1 when a session would stop.
-func checkCode(r start.CheckResult) int {
-	if r.OK() {
+func checkCode(ok bool) int {
+	if ok {
 		return 0
 	}
 	return 1
+}
+
+// startDeps is what engine start, and engine run's starts, launch with.
+func startDeps(env Env) start.Deps {
+	return start.Deps{GH: env.Exec, Run: env.Run, Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
+}
+
+// runHost runs one of this host's ops for a caller, which may be on another
+// host.
+func runHost(args []string, env Env) int {
+	d := hostops.Deps{Run: env.Run, Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
+	return hostops.Main(args, d, env.In, env.Out, env.Err)
 }
 
 // parseStart reads the task and the --tier and --mode flags, as `--flag

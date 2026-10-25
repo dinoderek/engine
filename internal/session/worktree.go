@@ -70,6 +70,16 @@ func (r Repos) CreateWorktree(clone Clone, task int) (Worktree, error) {
 	return Worktree{Path: path, Branch: branch}, nil
 }
 
+// BranchTakenError is a worktree CreateWorktree did not create, changing
+// nothing, because its branch is already in use.
+type BranchTakenError struct{ Reason string }
+
+func (e *BranchTakenError) Error() string { return e.Reason }
+
+func taken(format string, args ...any) error {
+	return &BranchTakenError{Reason: fmt.Sprintf(format, args...)}
+}
+
 // refuseExisting stops when the branch is already taken, saying where.
 func (r Repos) refuseExisting(clone Clone, branch string) error {
 	path, err := r.worktreeOf(clone, branch)
@@ -77,13 +87,13 @@ func (r Repos) refuseExisting(clone Clone, branch string) error {
 		return err
 	}
 	if path != "" {
-		return fmt.Errorf("branch %s already has a worktree at %s; release it first", branch, path)
+		return taken("branch %s already has a worktree at %s; release it first", branch, path)
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
-		return fmt.Errorf("branch %s already exists in %s with no worktree; delete it or check it out first", branch, clone.Path)
+		return taken("branch %s already exists in %s with no worktree; delete it or check it out first", branch, clone.Path)
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch); err == nil {
-		return fmt.Errorf("origin already has branch %s, from an earlier run; delete it or continue that work by hand", branch)
+		return taken("origin already has branch %s, from an earlier run; delete it or continue that work by hand", branch)
 	}
 	return nil
 }

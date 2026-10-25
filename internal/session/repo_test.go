@@ -295,3 +295,27 @@ func TestRunCommandAddsEnvAndWrapsFailures(t *testing.T) {
 		t.Errorf("err = %v, want the command's output in it", err)
 	}
 }
+
+func TestOpenReadsTheSyncedClone(t *testing.T) {
+	f := &gitFake{replies: syncReplies()}
+	r := newRepos(t, f)
+	repo := mustRepo(t, "o/r")
+	if _, err := r.Open(repo); err == nil || !strings.Contains(err.Error(), "sync it first") || len(f.calls) != 0 {
+		t.Errorf("no clone: err %v, commands %v", err, f.lines())
+	}
+	path := filepath.Join(r.Home, ".local/share/engine/repos/o/r")
+	if err := os.MkdirAll(filepath.Join(path, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	clone, err := r.Open(repo)
+	if err != nil || clone != (Clone{Repo: repo, Path: path, Default: "main"}) {
+		t.Errorf("clone %+v, %v", clone, err)
+	}
+	if want := []string{"git symbolic-ref --short refs/remotes/origin/HEAD"}; !reflect.DeepEqual(f.lines(), want) {
+		t.Errorf("Open fetches nothing: %v", f.lines())
+	}
+	f.replies = []reply{{key: "symbolic-ref", err: errBoom}}
+	if _, err := r.Open(repo); err == nil || !strings.Contains(err.Error(), "no default branch") {
+		t.Errorf("no origin/HEAD: %v", err)
+	}
+}

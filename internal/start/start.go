@@ -1,8 +1,9 @@
 // Package start is `engine start`: it launches one executor session for a
-// task on this machine. It checks everything it can before it changes
-// anything, so a refusal leaves the host and the tracker as they were. Then it
-// syncs engine's clone, creates the task worktree, opens the task's tmux
-// window running the harness with the kickoff prompt, and writes run.json.
+// task. It checks everything it can before it changes anything, so a refusal
+// leaves the host and the tracker as they were. It decides the model, the
+// effort and the kickoff, then has the host sync engine's clone and spawn the
+// session (internal/hostops), through a remote.Client: this host's, in
+// process, unless Deps names another.
 package start
 
 import (
@@ -14,27 +15,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // The executor's modes. The kickoff names one.
 const (
-	HandsOff = "hands-off"
-	Gated    = "gated"
+	HandsOff = hostops.HandsOff
+	Gated    = hostops.Gated
 )
 
 // Harness is the only harness engine start launches.
-const Harness = "claude"
+const Harness = hostops.Harness
 
 // stateLabels are the task states that mean the task is taken or finished
 // badly: a task carrying one is not started again.
 var stateLabels = append(slices.Clone(tracker.ClaimLabels), "engine:failed")
-
-// tmpReads lets an executor read back what it or its tests wrote to /tmp,
-// such as screenshots, without a prompt. macOS resolves /tmp to /private/tmp.
-var tmpReads = []string{"Read(//tmp/**)", "Read(//private/tmp/**)"}
 
 // approved is the label a standalone task needs before it runs.
 const approved = "engine:approved"
@@ -64,6 +63,21 @@ type Deps struct {
 	BaseURL string
 	// Sleep waits between the check's polls; nil is time.Sleep.
 	Sleep func(time.Duration)
+	// Exec runs the host's own CLIs, such as claude agents.
+	Exec session.Runner
+	// Client is the host the session starts on; nil is this host, in
+	// process, through the fields above.
+	Client remote.Client
+}
+
+// client is the host the session starts on.
+func (d Deps) client() remote.Client {
+	if d.Client != nil {
+		return d.Client
+	}
+	return remote.Local{Deps: hostops.Deps{
+		Run: d.Run, Exec: d.Exec, Tmux: d.Tmux, Home: d.Home, Getenv: d.Getenv, Now: d.Now, BaseURL: d.BaseURL, Sleep: d.Sleep,
+	}}
 }
 
 // RefusedError is a check that failed before engine start changed anything.
@@ -99,9 +113,13 @@ type Started struct {
 	RunID    string
 	RunDir   string
 	Worktree session.Worktree
-	Window   session.WindowInfo
-	// AwakeErr is why the host could not be kept awake; the session runs.
-	AwakeErr error
+	// WindowID is the tmux window's id, such as @3.
+	WindowID string
+	// Attach is the command that attaches to the window on its host.
+	Attach string
+	// Warning is a problem the session runs despite, such as a host that
+	// may sleep.
+	Warning string
 }
 
 // Run starts the task's session and prints how to reach it.
@@ -283,118 +301,47 @@ func Kickoff(task tracker.Ref, mode, reviewer, runID, name string) string {
 		task, mode, reviewer, runID, session.Name, name, name)
 }
 
-// launch does the work: clone, worktree, trust, window, record.
+// launch has the host sync engine's clone, then spawn the session with the
+// model, effort and kickoff decided here.
 func (p plan) launch(d Deps) (Started, error) {
-	repos := session.Repos{Run: d.Run, Home: d.Home, Token: p.token, BaseURL: d.BaseURL}
-	clone, err := repos.Sync(p.repo)
+	host := d.client()
+	if _, err := host.SyncRepo(p.repo.String()); err != nil {
+		return Started{}, err
+	}
+	// Taken once the clone is synced, so the run ID and run.json's spawn
+	// time stay seconds apart.
+	runID := session.RunID(p.repo, p.opts.Ref.Number, d.Now())
+	sp, err := host.Spawn(p.spawnRequest(runID))
 	if err != nil {
 		return Started{}, err
 	}
-	wt, err := repos.CreateWorktree(clone, p.opts.Ref.Number)
-	if err != nil {
-		return Started{}, err
-	}
-	now := d.Now() // the run ID and run.json's spawn time are one moment
-	s := Started{Task: p.opts.Ref, Name: p.name, Worktree: wt, RunID: session.RunID(p.repo, p.opts.Ref.Number, now)}
-	left := fmt.Sprintf("the worktree is left in place; before starting again, remove it with "+
-		"git -C %s worktree remove --force %s && git -C %s branch -D %s",
-		hosts.ShellWord(clone.Path), hosts.ShellWord(wt.Path), hosts.ShellWord(clone.Path), wt.Branch)
-	if err := session.TrustFolder(session.ClaudeConfig(d.Getenv, d.Home), wt.Path); err != nil {
-		return Started{}, fmt.Errorf("trust %s for Claude Code: %w; %s", wt.Path, err, left)
-	}
-	if s.RunDir, err = session.RunDir(d.Home, s.RunID); err != nil {
-		return Started{}, fmt.Errorf("%w; %s", err, left)
-	}
-	command, err := p.command(d, clone, s.RunID)
-	if err != nil {
-		return Started{}, fmt.Errorf("%w; %s", err, left)
-	}
-	log := filepath.Join(s.RunDir, session.PaneLog)
-	opened, err := d.Tmux.Open(session.Window{Name: p.name, Dir: wt.Path, Command: command, Log: log})
-	if err != nil {
-		return Started{}, fmt.Errorf("open the tmux window: %w; %s", err, left)
-	}
-	s.Window, s.AwakeErr = opened.WindowInfo, opened.AwakeErr
-	if err := session.WriteRecord(s.RunDir, p.record(s, log, now)); err != nil {
-		return Started{}, fmt.Errorf("the session is running in %s:%s, but run.json was not written: %w", session.Name, s.Window.ID, err)
-	}
-	return s, nil
+	return Started{
+		Task: p.opts.Ref, Name: sp.Name, RunID: runID, RunDir: sp.RunDir,
+		Worktree: session.Worktree{Path: sp.Worktree, Branch: sp.Branch},
+		WindowID: sp.Window, Attach: sp.Attach, Warning: sp.Warning,
+	}, nil
 }
 
-// command is the task window's shell command: the host's launch line at the
-// task's tier, with the executor's kickoff.
-func (p plan) command(d Deps, clone session.Clone, runID string) (string, error) {
-	line, err := p.cfg.LaunchLine(p.host, hosts.Launch{
-		Harness: Harness, Tier: p.tier, Name: p.name, Clone: clone.Path, Home: d.Home,
-	})
-	if err != nil {
-		return "", err
-	}
-	runDir, err := session.RunDir(d.Home, runID)
-	if err != nil {
-		return "", err
-	}
-	kickoff := Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name)
-	if p.planner {
-		kickoff = PlannerKickoff(p.opts.Ref, runID, p.name)
-	}
-	return launchCommand(d, line, runDir, p.opts.Mode, kickoff), nil
-}
-
-// launchCommand is a window's shell command. It runs under /bin/sh, whatever
-// tmux's default shell is: export the machine user's token from its file, so
-// it never appears on a command line, the run directory and, hands-off, the
-// unattended mark, and the CLAUDE_CONFIG_DIR engine trusted the folder in,
-// then run the launch line. Claude's file tools ask before reading outside
-// the worktree, which would stop an unattended executor, so it adds the
-// engine plugin's directory with --add-dir and allows reads in /tmp with
-// --allowedTools. /tmp only gets a read rule: Claude loads skills from every
-// --add-dir directory, and anyone on the host can write to /tmp. The kickoff
-// comes last, after --, because both options take every argument up to the
-// next option.
-func launchCommand(d Deps, line, runDir, mode, kickoff string) string {
-	// An empty token would make gh fall back to the operator's own login.
-	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
-	// The permission hook logs to the run directory and, unattended, denies.
-	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(runDir) + " && "
-	if mode == HandsOff {
-		script += "export " + session.UnattendedVar + "=1 && "
-	} else {
-		script += "unset " + session.UnattendedVar + " && "
-	}
-	// The tmux server's environment may differ from engine start's.
-	if dir := d.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		script += "export CLAUDE_CONFIG_DIR=" + hosts.ShellWord(dir) + " && "
-	} else {
-		script += "unset CLAUDE_CONFIG_DIR && "
-	}
-	plugin := session.PluginDir(d.Getenv, d.Home)
-	script += "exec " + line + " --add-dir " + hosts.ShellWord(plugin) + " --allowedTools"
-	for _, rule := range tmpReads {
-		script += " " + hosts.ShellWord(rule)
-	}
-	script += " -- " + hosts.ShellWord(kickoff)
-	return "exec /bin/sh -c " + hosts.ShellWord(script)
-}
-
-func (p plan) record(s Started, log string, now time.Time) session.Record {
-	rec := session.Record{
-		Schema: session.RecordSchema, RunID: s.RunID, Repo: p.repo.String(), Task: p.opts.Ref.String(),
-		Host: p.host.Name, Harness: Harness, Tier: string(p.tier), Model: p.model.Model, Effort: p.model.Effort,
-		Mode: p.opts.Mode, Name: p.name, Tmux: session.Name + ":" + s.Window.ID,
-		Branch: s.Worktree.Branch, Worktree: s.Worktree.Path, PaneLog: log, Spawned: now.UTC(),
+// spawnRequest is what the host needs to launch the session: the task's
+// kickoff, or the planner's, at the chosen model.
+func (p plan) spawnRequest(runID string) hostops.SpawnRequest {
+	r := hostops.SpawnRequest{
+		Repo: p.repo.String(), Task: p.opts.Ref.Number, Mode: p.opts.Mode, Tier: string(p.tier),
+		Model: p.model.Model, Effort: p.model.Effort, RunID: runID,
+		Kickoff: Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name),
 	}
 	if p.task.Parent != nil {
-		rec.Feature = p.task.Parent.String()
+		r.Feature = p.task.Parent.String()
 	}
 	if p.planner {
-		rec.Feature = p.opts.Ref.String()
+		r.Feature = p.opts.Ref.String()
+		r.Kickoff = PlannerKickoff(p.opts.Ref, runID, p.name)
 	}
-	return rec
+	return r
 }
 
 func report(out io.Writer, s Started) {
-	target := session.Name + ":" + s.Window.ID
+	target := session.Name + ":" + s.WindowID
 	fmt.Fprintf(out, "Started %s as %s.\n", s.Task, s.Name)
 	fmt.Fprintf(out, "  run             %s\n", s.RunID)
 	fmt.Fprintf(out, "  run record      %s\n", filepath.Join(s.RunDir, session.RecordFile))
@@ -402,8 +349,13 @@ func report(out io.Writer, s Started) {
 	fmt.Fprintf(out, "  tmux window     %s (%s)\n", target, s.Name)
 	fmt.Fprintf(out, "  Remote Control  %s, in the Claude app and at claude.ai/code\n", s.Name)
 	fmt.Fprintf(out, "Attach: engine attach %s (once the executor has posted its claim)\n", s.Name)
-	fmt.Fprintf(out, "    or: tmux attach -t '=%s'\n", target)
-	if s.AwakeErr != nil {
-		fmt.Fprintf(out, "Warning: the host may sleep while the session runs: %v\n", s.AwakeErr)
+	fmt.Fprintf(out, "    or: %s\n", s.Attach)
+	if s.Warning != "" {
+		fmt.Fprintf(out, "Warning: %s\n", s.Warning)
 	}
 }
+
+// Check runs the preflight check on the session's host, prints its report,
+// and reports whether an unattended session there would run without a
+// prompt.
+func Check(d Deps, out io.Writer) (bool, error) { return d.client().Check(out) }

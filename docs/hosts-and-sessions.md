@@ -166,6 +166,10 @@ it:
    and `ENGINE_UNATTENDED=1` in hands-off mode;
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
+The checks run in `engine start`, which also picks the model, effort and
+kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
+`sync-repo` and `spawn` ops (`coordinator.md`, "Reaching hosts"), which
+`engine start` calls in-process.
 The executor claims the task; its claim check stops a racing second start.
 Designed, not built: `--harness codex`, and `--host` (spawning over SSH).
 

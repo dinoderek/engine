@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -30,6 +31,14 @@ func TestLatestRun(t *testing.T) {
 	if _, _, err := LatestRun("", "r-7"); err == nil {
 		t.Error("no home: no error")
 	}
+	// A note directory has no run.json and is no run.
+	if err := os.MkdirAll(filepath.Join(home, RunsDir, "r-7-coordinator"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	all, err := LatestRuns(home)
+	if err != nil || len(all) != 2 || all["r-7"].Record.RunID != "r-7-b" || all["r-70"].Record.RunID != "r-70-c" {
+		t.Errorf("all %+v, %v", all, err)
+	}
 	bad, _ := RunDir(home, "r-9-x")
 	if err := os.MkdirAll(bad, 0o755); err != nil {
 		t.Fatal(err)
@@ -39,6 +48,9 @@ func TestLatestRun(t *testing.T) {
 	}
 	if _, _, err := LatestRun(home, "r-9"); err == nil {
 		t.Error("bad run.json: no error")
+	}
+	if all, err := LatestRuns(home); err == nil || !strings.Contains(err.Error(), "r-9-x") || len(all) != 2 {
+		t.Errorf("a bad run.json hides only its run: %v, %v", all, err)
 	}
 }
 

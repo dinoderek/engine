@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -132,6 +133,10 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, tt.task)
+			var takenErr *BranchTakenError
+			if want := strings.Contains(tt.name, "exists") || strings.Contains(tt.name, "has the branch"); errors.As(err, &takenErr) != want {
+				t.Errorf("a taken branch is a BranchTakenError, and nothing else is: %v", err)
+			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("err = %v, want it to contain %q", err, tt.wantErr)
 			}

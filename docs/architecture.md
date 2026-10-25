@@ -16,7 +16,10 @@ Two programs share one Go module:
   (harness hooks: `engine hook pre-tool-use`), `internal/attach`
   (`engine attach`: a task's claim, then its tmux window), `internal/ps`
   (`engine ps`: the state of each claimed task), `internal/start`
-  (`engine start`: checks a task, then launches its session), `internal/tell`
+  (`engine start`: checks a task, then has its host launch the session),
+  `internal/hostops` (`engine host <op> --json`: the ops a host runs on
+  itself for a caller), `internal/remote` (the client that reaches a host's
+  ops: `Local` calls them in-process), `internal/tell`
   (`engine tell`: comments on a task and points its session at it),
   `internal/lint` (`engine lint`: a feature's plan rules), `internal/run`
   (`engine run`: the coordinator's loop, on top of the others). The commands
@@ -32,7 +35,7 @@ Two programs share one Go module:
   `baseline` and `repo` (git, go and file helpers).
 
 The designed components are the coordinator's reconcile loop, the host ops
-(`engine host <op> --json`), the rest of the tracker adapter and the
+over SSH, the rest of the tracker adapter and the
 telemetry collector.
 If you are building one, load its doc from the index in `AGENTS.md`.
 

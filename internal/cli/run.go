@@ -7,7 +7,6 @@ import (
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/ps"
 	"github.com/dinoderek/engine/internal/run"
-	"github.com/dinoderek/engine/internal/start"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
@@ -63,7 +62,7 @@ func runSystem(ref tracker.Ref, env Env) (run.System, bool, error) {
 			l, err := ps.List(src)
 			return l.Rows, err
 		},
-		Starts: start.Deps{GH: env.Exec, Run: env.Run, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now},
+		Starts: startDeps(env),
 		Out:    env.Out, Clock: env.Now,
 	}, taskOnly, nil
 }

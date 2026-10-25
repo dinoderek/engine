@@ -18,6 +18,9 @@ type Launch struct {
 	Clone string
 	// Home expands a bin path that starts with ~/.
 	Home string
+	// Model, when its model is set, replaces the tier's model and effort:
+	// a caller on another host passes what its own hosts.toml chose.
+	Model TierModel
 }
 
 // BinPath returns the absolute path of the harness binary on host h, with a
@@ -51,9 +54,12 @@ func (c *Config) LaunchLine(h Host, l Launch) (string, error) {
 	if !h.Runs(l.Harness) {
 		return "", fmt.Errorf("host %s does not run harness %q", h.Name, l.Harness)
 	}
-	model, err := c.Model(l.Harness, l.Tier)
-	if err != nil {
-		return "", err
+	model := l.Model
+	if model.Model == "" {
+		var err error
+		if model, err = c.Model(l.Harness, l.Tier); err != nil {
+			return "", err
+		}
 	}
 	bin, err := h.BinPath(l.Harness, l.Home)
 	if err != nil {
