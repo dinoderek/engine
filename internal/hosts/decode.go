@@ -126,6 +126,7 @@ func decode(root *node) (*Config, *Error) {
 	c.DefaultHarness, defaultAt = r.text("default_harness", true)
 	c.GBPerSession, _ = r.number("gb_per_session", true, 1)
 	c.ReserveGB, _ = r.number("reserve_gb", true, 0)
+	c.HeavyCapabilities = v.capabilities(r, "heavy_capabilities")
 	harnesses := r.table("harness", true)
 	v.children(harnesses, "harness", func(name string, n *node) { c.Harnesses[name] = v.harness(name, n) })
 	hosts := r.table("host", true)
@@ -244,22 +245,33 @@ func (v *validator) hostLimits(r *reader, h *Host) {
 		h.GBPerSession = n
 	}
 	h.MaxSessions, _ = r.number("max_sessions", false, 1)
+	if n, ok := r.number("max_heavy_sessions", false, 1); ok {
+		h.MaxHeavySessions = n
+		if slots := h.Slots(); n > slots {
+			v.fail(r.n.entries["max_heavy_sessions"].line, "%s: max_heavy_sessions (%d) must not exceed the host's %d sessions", r.where, n, slots)
+		}
+	}
 }
 
 func (v *validator) hostCapabilities(r *reader, h *Host) {
-	list, at := r.list("capabilities", false)
+	h.Capabilities = v.capabilities(r, "capabilities")
+}
+
+// capabilities reads an optional list of known capabilities, each once.
+func (v *validator) capabilities(r *reader, key string) []string {
+	list, at := r.list(key, false)
 	if at == nil {
-		return
+		return nil
 	}
 	for i, name := range list {
 		if !slices.Contains(Capabilities, name) {
 			v.fail(at.line, "%s: unknown capability %q; known: %s", r.where, name, strings.Join(Capabilities, ", "))
 		}
 		if slices.Contains(list[:i], name) {
-			v.fail(at.line, "%s: capabilities lists %q twice", r.where, name)
+			v.fail(at.line, "%s: %s lists %q twice", r.where, key, name)
 		}
 	}
-	h.Capabilities = list
+	return list
 }
 
 // hostBin reads the path of each harness binary: every harness the host runs

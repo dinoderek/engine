@@ -62,6 +62,9 @@ type Record struct {
 	Model   string `json:"model"`
 	Effort  string `json:"effort"`
 	Mode    string `json:"mode"`
+	// Heavy is true when the task's card requires a heavy capability: the
+	// run takes one of its host's heavy slots.
+	Heavy bool `json:"heavy"`
 	// Name is the session name: the tmux window and the Remote Control name.
 	Name     string    `json:"name"`
 	Tmux     string    `json:"tmux"` // the window's target, such as engine:@3

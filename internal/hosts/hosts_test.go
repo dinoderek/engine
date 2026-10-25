@@ -49,6 +49,38 @@ func TestPerHostOverrides(t *testing.T) {
 	}
 }
 
+func TestHeavy(t *testing.T) {
+	src := strings.Replace(base, "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = [\"ios\", \"vm\"]", 1)
+	src = strings.Replace(src, "ram_gb = 48", "ram_gb = 48\nmax_sessions = 6\nmax_heavy_sessions = 4", 1)
+	c, err := Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := c.Hosts["mac"]; h.Slots() != 6 || h.HeavySlots() != 4 {
+		t.Errorf("mac: %d slots, %d heavy; want 6 and 4", h.Slots(), h.HeavySlots())
+	}
+	for _, tc := range []struct {
+		requires []string
+		want     bool
+	}{{[]string{"ios"}, true}, {[]string{"macos", "vm"}, true}, {[]string{"docker"}, false}, {nil, false}} {
+		if got := c.Heavy(tc.requires); got != tc.want {
+			t.Errorf("Heavy(%v) = %v, want %v", tc.requires, got, tc.want)
+		}
+	}
+	// With no heavy cap of its own, every slot may be heavy; with no heavy
+	// capabilities named, no task is heavy.
+	c, err = Parse(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := c.Hosts["mac"]; h.HeavySlots() != h.Slots() || h.HeavySlots() != 4 {
+		t.Errorf("default heavy slots %d, want the host's 4", h.HeavySlots())
+	}
+	if c.Heavy([]string{"ios", "vm"}) {
+		t.Error("a config naming no heavy capability made a task heavy")
+	}
+}
+
 func TestModel(t *testing.T) {
 	c, err := Parse(base)
 	if err != nil {

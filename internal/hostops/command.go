@@ -21,8 +21,9 @@ ops, each printing one JSON object:
   sync-repo --repo <owner/repo>      sync engine's clone of a repo
   spawn --repo <owner/repo> --task <n> --mode hands-off|gated --model <m>
         --effort <e> --run-id <id> [--tier <t>] [--feature <owner/repo#n>]
-                                     launch a session; the kickoff is on stdin
-  status                             windows, Claude sessions, newest runs, free slots
+        [--heavy]                    launch a session; the kickoff is on stdin
+  status                             windows, Claude sessions, newest runs, free
+                                     slots and free heavy slots
   collect --run-id <id>              a run directory and its run.json
   release --name <repo>-<task> [--failed]
                                      close a session's window and remove its
@@ -110,6 +111,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		fs.StringVar(&req.Model, "model", "", "")
 		fs.StringVar(&req.Effort, "effort", "", "")
 		fs.StringVar(&req.RunID, "run-id", "", "")
+		fs.BoolVar(&req.Heavy, "heavy", false, "")
 	case "collect":
 		fs.StringVar(&req.RunID, "run-id", "", "")
 	case "release":

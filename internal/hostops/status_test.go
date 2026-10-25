@@ -2,6 +2,8 @@ package hostops
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -51,7 +53,7 @@ func TestStatus(t *testing.T) {
 	}
 	two := 2
 	want := Status{
-		Slots: 2, FreeSlots: 0,
+		Slots: 2, FreeSlots: 0, HeavySlots: 2, FreeHeavySlots: 0,
 		// Only a session that is not working shows its screen; a signal
 		// leaves no exit code. The newest run picks the probe.
 		Windows: []Window{
@@ -160,6 +162,44 @@ func TestStatusSlotsFollowSessions(t *testing.T) {
 			got, err := ReadStatus(Deps{Tmux: tm.tmux(), Home: h.dir, Exec: agentsFake("[]", nil)})
 			if err != nil || got.FreeSlots != c.free || len(got.Windows) != len(c.windows) {
 				t.Errorf("free slots %d, windows %d, err %v; want %d free, %d windows", got.FreeSlots, len(got.Windows), err, c.free, len(c.windows))
+			}
+		})
+	}
+}
+
+// A heavy run takes a heavy slot as well as a slot; free heavy slots never
+// exceed free slots.
+func TestStatusHeavySlots(t *testing.T) {
+	h := newHome(t, "mac")
+	capped := filepath.Join(h.dir, ".config", "engine", "hosts.toml")
+	data, err := os.ReadFile(capped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := fixedNow()
+	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Heavy: true, Spawned: at})
+	writeRun(t, h, session.Record{RunID: "r-2-a", Name: "r-2", Spawned: at})
+	writeRun(t, h, session.Record{RunID: "r-3-a", Name: "r-3", Heavy: true, Spawned: at})
+	cases := []struct {
+		name                          string
+		limits                        string
+		windows                       []string
+		slots, free, heavy, freeHeavy int
+	}{
+		{"a heavy and a light session under a cap of one", "max_sessions = 3\nmax_heavy_sessions = 1", []string{"@1 %1 0 r-1", "@2 %2 0 r-2"}, 3, 1, 1, 0},
+		{"a light session leaves the heavy slot", "max_sessions = 3\nmax_heavy_sessions = 1", []string{"@2 %2 0 r-2"}, 3, 2, 1, 1},
+		{"a dead heavy session holds nothing", "max_sessions = 3\nmax_heavy_sessions = 1", []string{"@1 %1 1 r-1", "@2 %2 0 r-2"}, 3, 2, 1, 1},
+		{"no cap: every slot may be heavy", "", []string{"@1 %1 0 r-1"}, 2, 1, 2, 1},
+		{"no cap: light sessions fill the heavy slots too", "", []string{"@2 %2 0 r-2", "@4 %4 0 r-2"}, 2, 0, 2, 0},
+		{"more heavy sessions than the cap", "max_sessions = 3\nmax_heavy_sessions = 1", []string{"@1 %1 0 r-1", "@3 %3 0 r-3"}, 3, 1, 1, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			write(t, capped, strings.Replace(string(data), "ram_gb = 24\ncapabilities = [\"macos\"]", "ram_gb = 24\n"+c.limits+"\ncapabilities = [\"macos\"]", 1), 0o600)
+			got, err := ReadStatus(Deps{Tmux: (&tmuxFake{windows: c.windows}).tmux(), Home: h.dir, Exec: agentsFake("[]", nil)})
+			if err != nil || got.Slots != c.slots || got.FreeSlots != c.free || got.HeavySlots != c.heavy || got.FreeHeavySlots != c.freeHeavy {
+				t.Errorf("slots %d free %d heavy %d free heavy %d, %v; want %d %d %d %d",
+					got.Slots, got.FreeSlots, got.HeavySlots, got.FreeHeavySlots, err, c.slots, c.free, c.heavy, c.freeHeavy)
 			}
 		})
 	}

@@ -27,7 +27,7 @@ func TestRecord(t *testing.T) {
 		t.Error("no home accepted")
 	}
 	runDir := filepath.Join(t.TempDir(), "runs", "r")
-	rec := Record{Schema: RecordSchema, RunID: "r", Task: "t", Spawned: at.UTC()}
+	rec := Record{Schema: RecordSchema, RunID: "r", Task: "t", Heavy: true, Spawned: at.UTC()}
 	if err := WriteRecord(runDir, rec); err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestRecord(t *testing.T) {
 	if err := json.Unmarshal([]byte(readFile(filepath.Join(runDir, RecordFile))), &back); err != nil || back != rec {
 		t.Errorf("read back %+v, %v", back, err)
 	}
-	if text := readFile(filepath.Join(runDir, RecordFile)); !strings.Contains(text, `"spawned": "2026-01-02T02:04:05Z"`) ||
+	if text := readFile(filepath.Join(runDir, RecordFile)); !strings.Contains(text, `"spawned": "2026-01-02T02:04:05Z"`) || !strings.Contains(text, `"heavy": true`) ||
 		strings.Contains(text, "feature") {
 		t.Errorf("run.json:\n%s", text)
 	}

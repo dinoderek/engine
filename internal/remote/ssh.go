@@ -51,6 +51,9 @@ func (s SSH) Spawn(r hostops.SpawnRequest) (hostops.Spawned, error) {
 	if r.Feature != "" {
 		args = append(args, "--feature", r.Feature)
 	}
+	if r.Heavy {
+		args = append(args, "--heavy")
+	}
 	var reply hostops.Spawned
 	return reply, s.call("spawn", args, r.Kickoff, &reply)
 }
