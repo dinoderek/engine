@@ -136,6 +136,8 @@ func TestRealSpawnStatusRelease(t *testing.T) {
 		t.Errorf("status %+v", s)
 	}
 
+	strayWindowsTakeNoSlot(t, d, tm, h.dir, 1)
+
 	done, err := Release(d, "r-7", false)
 	if err != nil || !done.WindowClosed || done.WorktreeKept {
 		t.Errorf("released r-7: %+v, %v", done, err)
@@ -153,5 +155,27 @@ func TestRealSpawnStatusRelease(t *testing.T) {
 	}
 	if s, err = ReadStatus(d); err != nil || len(s.Windows) != 0 || s.FreeSlots != 2 {
 		t.Errorf("after release: %+v, %v", s, err)
+	}
+}
+
+// strayWindowsTakeNoSlot opens a stray shell and engine run's own window,
+// both live and neither a session, and expects the free slots to stay free.
+func strayWindowsTakeNoSlot(t *testing.T, d Deps, tm *session.Tmux, dir string, free int) {
+	t.Helper()
+	before, err := ReadStatus(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"stray-shell", "run-o-56"} {
+		o, err := tm.Open(session.Window{Name: name, Dir: dir, Command: "exec sleep 60"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tm.Kill(o.ID) }()
+	}
+	got, err := ReadStatus(d)
+	if err != nil || len(got.Windows) != len(before.Windows)+2 || got.FreeSlots != free {
+		t.Errorf("with two strays: %d windows, %d free slots, %v; want %d and %d",
+			len(got.Windows), got.FreeSlots, err, len(before.Windows)+2, free)
 	}
 }
