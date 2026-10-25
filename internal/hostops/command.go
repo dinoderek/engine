@@ -72,6 +72,8 @@ func hostName(home string) string {
 
 // dispatch parses the op's flags and runs it. A call this engine cannot
 // parse is refused: a caller on a different engine may send one.
+// An unknown op's refusal carries the envelope, which callers read to check
+// the protocol; the op name "protocol" stays undefined for that.
 func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	fs := flag.NewFlagSet("engine host "+op, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)

@@ -74,7 +74,7 @@ func TestStartCommandLine(t *testing.T) {
 		{"no token", []string{"start", task}, 1, "engine start: the session reads the machine user's token from"},
 		{"usage names --check", []string{"start"}, 2, "engine start --check [--host <name>]"},
 		{"usage names --host", []string{"start", task, "--bogus"}, 2, "[--host <name>]"},
-		{"unknown host", []string{"start", task, "--host", "nowhere"}, 1, "engine start: the session reads the machine user's token from"},
+		{"--host parses, then the token is checked", []string{"start", task, "--host", "nowhere"}, 1, "engine start: the session reads the machine user's token from"},
 		{"check with a task", []string{"start", "--check", task}, 2, "--check takes no task"},
 		{"check on a host, no host config", []string{"start", "--check", "--host", "devbox"}, 1, "engine start --check: read host config"},
 		{"check, no token", []string{"start", "--check"}, 1, "engine start --check: the session reads the machine user's token from"},

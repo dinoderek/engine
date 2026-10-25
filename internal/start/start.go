@@ -166,7 +166,8 @@ func Run(o Options, d Deps, out io.Writer) error {
 }
 
 // check runs every refusal, in the order a fix would be made, and changes
-// nothing: it only reads files, the tracker and tmux's window list.
+// nothing: it only reads files, the tracker, tmux's window list and another
+// host's status.
 func check(o Options, d Deps) (plan, error) {
 	p := plan{opts: o}
 	if err := p.checkOptions(); err != nil {

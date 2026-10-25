@@ -17,7 +17,7 @@ var sshOptions = []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=10"}
 
 // probeOp is an op no engine defines. Every engine replies to it with a
 // refusal that carries the envelope, which is all the protocol check needs.
-const probeOp = "protocol"
+const probeOp = "protocol" // reserved: hostops must never define it
 
 // UnreachableError is a host that did not answer: ssh could not connect, or
 // the call did not complete. Nothing it would have said is known, so a

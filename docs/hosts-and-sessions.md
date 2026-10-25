@@ -144,7 +144,7 @@ It first refuses, changing nothing, when: the token file, host file,
 `hosts.toml` or this host's entry is missing; the task is closed, has a task
 state label or an open blocker, or is standalone without `engine:approved`;
 the card's harness is unknown (as a misspelt tier is), not Claude, or not run
-on the host; the host lacks a capability in the card's `requires`, even when
+on the host; the host lacks a capability in the card's `## Requires`, even when
 named; its window exists; or no slot is free (a live window holds one). Then
 it:
 
@@ -172,7 +172,7 @@ it:
 The checks run in `engine start`, which also picks the model, effort and
 kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
 `sync-repo` and `spawn` ops (`coordinator.md`, "Reaching hosts"), which
-`engine start` calls in-process.
+`engine start` calls in-process, or over SSH with `--host`.
 The executor claims the task; its claim check stops a racing second start.
 With `--host`, the caller makes the task, harness, tier and `requires`
 refusals, and reads the window and free slots from the host's `status`; the

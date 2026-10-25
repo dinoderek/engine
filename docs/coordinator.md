@@ -92,8 +92,9 @@ nothing, so the caller reports it as a refusal of its own.
 
 Over SSH, ssh's exit 255 is an unreachable host. A reply whose `protocol`
 differs, or that is not an engine's, is an error telling the operator to run
-`engine setup --host <name>`. `engine start --check --host <name>` first checks
-the protocol, then streams `ssh <address> engine start --check` and keeps its
+`engine setup --host <name>`. An unknown op is refused with the envelope.
+`engine start --check --host <name>` first reads the protocol from the refusal
+of the op `protocol`, which no engine defines, then streams `ssh <address> engine start --check` and keeps its
 exit code.
 
 **A failed call is unknown, never dead.** When a call fails or a host cannot
