@@ -340,3 +340,29 @@ func TestNewUsesTheDefaultServer(t *testing.T) {
 		t.Errorf("got %+v", tm)
 	}
 }
+
+func TestExitCodes(t *testing.T) {
+	tm, f := newFake(t)
+	if codes, err := tm.ExitCodes(); err != nil || codes != nil {
+		t.Errorf("no session: %v, %v", codes, err)
+	}
+	f.answer("has-session", "", nil)
+	f.answer("list-windows", "@1 0 \n@2 1 3\n@3 1 \n@4 1 0\n", nil)
+	codes, err := tm.ExitCodes()
+	if want := map[string]int{"@2": 3, "@4": 0}; err != nil || !reflect.DeepEqual(codes, want) {
+		t.Errorf("codes %v, %v; want %v", codes, err, want)
+	}
+	if !strings.Contains(f.dump(), "list-windows -t =engine: -F #{window_id} #{pane_dead} #{pane_dead_status}") {
+		t.Errorf("calls:\n%s", f.dump())
+	}
+	for _, bad := range []string{"@1\n", "@1 1 x\n"} {
+		f.answer("list-windows", bad, nil)
+		if _, err := tm.ExitCodes(); err == nil || !strings.Contains(err.Error(), "unexpected") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	f.answer("list-windows", "", errors.New("tmux died"))
+	if _, err := tm.ExitCodes(); err == nil {
+		t.Error("a failed list: want an error")
+	}
+}

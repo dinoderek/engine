@@ -45,6 +45,19 @@ func TestLaunchLineQuotesValues(t *testing.T) {
 	}
 }
 
+func TestLaunchLineTakesTheCallersModel(t *testing.T) {
+	c, err := Parse(docExample(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The tier is ignored, even an unknown one: the caller already chose.
+	l := Launch{Harness: "claude", Tier: "huge", Name: "r-1", Home: "/home/me", Model: TierModel{Model: "opus-y", Effort: "max"}}
+	got, err := c.LaunchLine(c.Hosts["mac"], l)
+	if err != nil || !strings.Contains(got, "--model opus-y --effort max ") {
+		t.Errorf("got %s, %v", got, err)
+	}
+}
+
 func TestLaunchLineFailures(t *testing.T) {
 	c, err := Parse(base)
 	if err != nil {

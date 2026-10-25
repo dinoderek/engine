@@ -139,6 +139,25 @@ func (r Repos) Sync(repo Repo) (Clone, error) {
 	return Clone{Repo: repo, Path: path, Default: def}, nil
 }
 
+// Open returns engine's clone of repo as the last Sync left it, without
+// fetching: its default branch is the one that Sync recorded. It fails when
+// there is no clone yet.
+func (r Repos) Open(repo Repo) (Clone, error) {
+	path, err := r.Path(repo)
+	if err != nil {
+		return Clone{}, err
+	}
+	if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+		return Clone{}, fmt.Errorf("no clone of %s at %s: sync it first", repo, path)
+	}
+	ref, err := r.git(path, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	def, ok := strings.CutPrefix(ref, "origin/")
+	if err != nil || !ok || def == "" {
+		return Clone{}, fmt.Errorf("the clone of %s at %s has no default branch: sync it first", repo, path)
+	}
+	return Clone{Repo: repo, Path: path, Default: def}, nil
+}
+
 // ensureClone clones repo to path unless a clone of it is already there, and
 // checks that the clone's remote is the HTTPS URL and stays it.
 func (r Repos) ensureClone(repo Repo, path string) error {

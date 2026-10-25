@@ -41,13 +41,10 @@ func TestCheckPlanner(t *testing.T) {
 			if !p.planner || p.tier != "deep" || p.model.Model != "opus-x" || p.name != "r-3" || p.opts.Mode != HandsOff {
 				t.Errorf("plan %+v", p)
 			}
-			got, err := p.command(d, session.Clone{Path: "/clones/o/r"}, "r-3-20260102T030405Z")
-			if err != nil || !strings.Contains(got, "Plan breakdown "+ref(3).String()+" with the engine planner. run=r-3-20260102T030405Z tmux=engine:r-3") || !strings.Contains(got, "--model opus-x") {
-				t.Errorf("command %s, %v", got, err)
-			}
-			rec := p.record(Started{RunID: "r-3-x"}, "/log", fixedNow())
-			if rec.Feature != ref(3).String() || rec.Task != ref(3).String() || rec.Tier != "deep" {
-				t.Errorf("record %+v", rec)
+			r := p.spawnRequest("r-3-20260102T030405Z")
+			if r.Kickoff != "Plan breakdown "+ref(3).String()+" with the engine planner. run=r-3-20260102T030405Z tmux=engine:r-3" ||
+				r.Model != "opus-x" || r.Feature != ref(3).String() || r.Task != 3 || r.Tier != "deep" {
+				t.Errorf("spawn request %+v", r)
 			}
 		})
 	}

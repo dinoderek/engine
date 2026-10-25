@@ -30,6 +30,14 @@ func TestLatestRun(t *testing.T) {
 	if _, _, err := LatestRun("", "r-7"); err == nil {
 		t.Error("no home: no error")
 	}
+	// A note directory has no run.json and is no run.
+	if err := os.MkdirAll(filepath.Join(home, RunsDir, "r-7-coordinator"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	all, err := LatestRuns(home)
+	if err != nil || len(all) != 2 || all["r-7"].Record.RunID != "r-7-b" || all["r-70"].Record.RunID != "r-70-c" {
+		t.Errorf("all %+v, %v", all, err)
+	}
 	bad, _ := RunDir(home, "r-9-x")
 	if err := os.MkdirAll(bad, 0o755); err != nil {
 		t.Fatal(err)

@@ -27,30 +27,41 @@ type Run struct {
 // LatestRun returns the newest run on this host of the session named name:
 // the run directory whose run.json names it and was spawned last.
 func LatestRun(home, name string) (Run, bool, error) {
+	runs, err := latestRuns(home, name+"-*")
+	r, ok := runs[name]
+	return r, ok, err
+}
+
+// LatestRuns returns the newest run on this host of every session name, by
+// name.
+func LatestRuns(home string) (map[string]Run, error) { return latestRuns(home, "*") }
+
+// latestRuns reads the run.json of every run directory matching pattern, and
+// keeps the newest run of each session name.
+func latestRuns(home, pattern string) (map[string]Run, error) {
 	if home == "" {
-		return Run{}, false, errors.New("no home directory to read run records from")
+		return nil, errors.New("no home directory to read run records from")
 	}
-	dirs, err := filepath.Glob(filepath.Join(home, filepath.FromSlash(RunsDir), name+"-*", RecordFile))
+	paths, err := filepath.Glob(filepath.Join(home, filepath.FromSlash(RunsDir), pattern, RecordFile))
 	if err != nil {
-		return Run{}, false, err
+		return nil, err
 	}
-	var latest Run
-	found := false
-	for _, path := range dirs {
+	latest := map[string]Run{}
+	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return Run{}, false, err
+			return nil, err
 		}
 		var rec Record
 		if err := json.Unmarshal(data, &rec); err != nil {
-			return Run{}, false, err
+			return nil, err
 		}
-		if rec.Name != name || found && !rec.Spawned.After(latest.Record.Spawned) {
+		if prev, ok := latest[rec.Name]; ok && !rec.Spawned.After(prev.Record.Spawned) {
 			continue
 		}
-		latest, found = Run{Dir: filepath.Dir(path), Record: rec}, true
+		latest[rec.Name] = Run{Dir: filepath.Dir(path), Record: rec}
 	}
-	return latest, found, nil
+	return latest, nil
 }
 
 // ReadNote returns the time a note holds, and whether it is there.

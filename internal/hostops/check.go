@@ -1,4 +1,4 @@
-package start
+package hostops
 
 import (
 	"bufio"
@@ -56,7 +56,7 @@ func (r CheckResult) OK() bool { return r.Closed && r.Finished && len(r.Denied) 
 // permission request, a stall, and a step left undone. Each run gets its own
 // run directory, which it leaves in place.
 func Check(d Deps, out io.Writer) (CheckResult, error) {
-	p, err := checkPlan(d)
+	cfg, host, err := checkHost(d)
 	if err != nil {
 		return CheckResult{}, err
 	}
@@ -78,7 +78,7 @@ func Check(d Deps, out io.Writer) (CheckResult, error) {
 		return CheckResult{}, err
 	}
 	defer func() { _ = os.Remove(marker) }()
-	line, err := p.cfg.LaunchLine(p.host, hosts.Launch{Harness: Harness, Tier: hosts.Light, Name: CheckName, Clone: work, Home: d.Home})
+	line, err := cfg.LaunchLine(host, hosts.Launch{Harness: Harness, Tier: hosts.Light, Name: CheckName, Clone: work, Home: d.Home})
 	if err != nil {
 		return CheckResult{}, err
 	}
@@ -108,27 +108,30 @@ func Check(d Deps, out io.Writer) (CheckResult, error) {
 	return r, nil
 }
 
-// checkPlan runs the refusals that apply without a task: the token, the
+// checkHost runs the refusals that apply without a task: the token, the
 // host config, the harness binary and a free window name.
-func checkPlan(d Deps) (plan, error) {
-	p := plan{opts: Options{Mode: HandsOff}}
-	if err := p.loadHost(d); err != nil {
-		return plan{}, err
+func checkHost(d Deps) (*hosts.Config, hosts.Host, error) {
+	if _, err := readToken(d.Home); err != nil {
+		return nil, hosts.Host{}, err
 	}
-	if !p.host.Runs(Harness) {
-		return plan{}, refuse("host %s does not run %s", p.host.Name, Harness)
+	cfg, host, err := openHost(d.Home)
+	if err != nil {
+		return nil, hosts.Host{}, err
 	}
-	if err := p.checkBin(d); err != nil {
-		return plan{}, err
+	if !host.Runs(Harness) {
+		return nil, hosts.Host{}, refuse("host %s does not run %s", host.Name, Harness)
+	}
+	if err := checkBin(host, d.Home); err != nil {
+		return nil, hosts.Host{}, err
 	}
 	ok, err := d.Tmux.HasWindow(CheckName)
 	if err != nil {
-		return plan{}, refuse("cannot list the tmux windows: %v", err)
+		return nil, hosts.Host{}, refuse("cannot list the tmux windows: %v", err)
 	}
 	if ok {
-		return plan{}, refuse("the tmux session %s already has a window %s: a check is running, or close it", session.Name, CheckName)
+		return nil, hosts.Host{}, refuse("the tmux session %s already has a window %s: a check is running, or close it", session.Name, CheckName)
 	}
-	return p, nil
+	return cfg, host, nil
 }
 
 // CheckKickoff is the check session's first message.

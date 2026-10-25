@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -146,44 +146,22 @@ func TestTierFlagReplacesTheCard(t *testing.T) {
 	}
 }
 
-func TestLaunchCommand(t *testing.T) {
+func TestSpawnRequest(t *testing.T) {
 	h := newHome(t, "mac")
 	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3, body: card("deep")}}
-	for _, c := range []struct{ configDir, mode string }{{"", HandsOff}, {"/cfg dir", HandsOff}, {"", Gated}} {
-		configDir := c.configDir
-		env := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": configDir}[k] }
-		d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: (&tmuxFake{}).run, Bin: "tmux"}, Home: h.dir, Getenv: env}
-		p, err := check(Options{Ref: ref(7), Mode: c.mode}, d)
+	for _, mode := range []string{HandsOff, Gated} {
+		d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: (&tmuxFake{}).run, Bin: "tmux"}, Home: h.dir, Getenv: func(string) string { return "" }}
+		p, err := check(Options{Ref: ref(7), Mode: mode}, d)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := p.command(d, session.Clone{Path: "/clones/o/r"}, "r-7-20260102T030405Z")
-		if err != nil {
-			t.Fatal(err)
-		}
-		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `
-		// The permission hook logs to the run directory, and denies only
-		// when nobody watches: in hands-off mode.
-		script += `export ENGINE_RUN_DIR=` + filepath.Join(h.dir, ".local/share/engine/runs/r-7-20260102T030405Z") + ` && `
-		if c.mode == HandsOff {
-			script += `export ENGINE_UNATTENDED=1 && `
-		} else {
-			script += `unset ENGINE_UNATTENDED && `
-		}
-		plugin := filepath.Join(h.dir, ".claude/plugins/cache/engine")
-		if configDir != "" {
-			script += `export CLAUDE_CONFIG_DIR='/cfg dir' && `
-			plugin = `'/cfg dir/plugins/cache/engine'`
-		} else {
-			script += `unset CLAUDE_CONFIG_DIR && `
-		}
-		// The skill's directory is a working directory, /tmp is readable
-		// only, and -- keeps the variadic options from taking the kickoff.
-		script += `exec ` + h.bin + ` --permission-mode auto --model opus-x --effort high -n r-7 --remote-control r-7 ` +
-			`--add-dir ` + plugin + ` --allowedTools 'Read(//tmp/**)' 'Read(//private/tmp/**)' -- ` +
-			`'Execute ` + ref(7).String() + ` with the engine executor, ` + c.mode + ` mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7'`
-		if want := "exec /bin/sh -c " + hosts.ShellWord(script); got != want {
-			t.Errorf("command\n got %s\nwant %s", got, want)
+		// The caller decides the model and the kickoff; the host only
+		// launches them.
+		want := hostops.SpawnRequest{Repo: "o/r", Task: 7, Feature: ref(3).String(), Mode: mode, Tier: "deep",
+			Model: "opus-x", Effort: "high", RunID: "r-7-20260102T030405Z",
+			Kickoff: "Execute " + ref(7).String() + " with the engine executor, " + mode + " mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7"}
+		if got := p.spawnRequest("r-7-20260102T030405Z"); got != want {
+			t.Errorf("spawn request\n got %+v\nwant %+v", got, want)
 		}
 	}
 }

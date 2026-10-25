@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -194,6 +195,35 @@ func (t *Tmux) Windows() ([]WindowInfo, error) {
 		windows = append(windows, WindowInfo{ID: f[0], PaneID: f[1], Dead: f[2] == "1", Name: f[3]})
 	}
 	return windows, nil
+}
+
+// ExitCodes returns, by window id, the exit code of each window of the
+// session whose command has exited. A command killed by a signal has none.
+func (t *Tmux) ExitCodes() (map[string]int, error) {
+	ok, err := t.HasSession()
+	if err != nil || !ok {
+		return nil, err
+	}
+	out, err := t.tmux("list-windows", "-t", sessionTarget, "-F", "#{window_id} #{pane_dead} #{pane_dead_status}")
+	if err != nil {
+		return nil, err
+	}
+	codes := map[string]int{}
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 {
+			return nil, fmt.Errorf("tmux list-windows: unexpected line %q", line)
+		}
+		if f[1] != "1" || len(f) < 3 {
+			continue
+		}
+		code, err := strconv.Atoi(f[2])
+		if err != nil {
+			return nil, fmt.Errorf("tmux list-windows: unexpected exit status in %q", line)
+		}
+		codes[f[0]] = code
+	}
+	return codes, nil
 }
 
 // HasWindow reports whether the session has a window named exactly name.

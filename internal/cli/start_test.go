@@ -42,15 +42,6 @@ func TestParseStart(t *testing.T) {
 	}
 }
 
-func TestCheckCode(t *testing.T) {
-	if c := checkCode(start.CheckResult{Closed: true, Finished: true}); c != 0 {
-		t.Errorf("a clean check exits %d", c)
-	}
-	if c := checkCode(start.CheckResult{Closed: true, Finished: true, Denied: []string{"Read"}}); c != 1 {
-		t.Errorf("a check with a denial exits %d", c)
-	}
-}
-
 func TestStartCommandLine(t *testing.T) {
 	none := func(string) string { return "" }
 	task := tracker.Ref{Repo: "o/r", Number: 1}.String()
