@@ -131,8 +131,13 @@ func TestADeadSessionFails(t *testing.T) {
 	if !c.Has(Failed) || c.Has(Running) || c.Has(Merging) || len(w.comments[ref(2)]) != 1 {
 		t.Errorf("labels %v, comments %q", c.Labels, w.comments[ref(2)])
 	}
-	if acts := Decide(gather(t, w)); slices.ContainsFunc(acts, func(a Action) bool { return a.Kind == StartTask }) {
-		t.Errorf("restarted a failed task: %+v", acts)
+	v = gather(t, w)
+	if acts := Decide(v); slices.ContainsFunc(acts, func(a Action) bool { return a.Kind == StartTask || a.Kind == Stall }) {
+		t.Errorf("restarted or flagged a failed task: %+v", acts)
+	}
+	Apply(w, v, Decide(v))
+	if c := w.comments[ref(2)]; len(c) != 1 {
+		t.Errorf("comments after the fail %q", c)
 	}
 }
 
@@ -392,5 +397,28 @@ func TestAnUnreadableSummaryNoteStopsTheFinish(t *testing.T) {
 	Apply(w, v, Decide(v))
 	if len(w.comments[ref(1)]) != 0 || w.closed {
 		t.Errorf("comments %q, closed %v", w.comments[ref(1)], w.closed)
+	}
+}
+
+func TestASessionThatDiesBeforeClaimingIsFlaggedOncePerSession(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Executing}, card(2, "standard"))
+	w.do[2] = behaviour{dieAt: 1}
+	pass := func() {
+		v := gather(t, w)
+		Apply(w, v, Decide(v))
+	}
+	pass()
+	w.sleep(2 * CheckEvery)
+	pass() // flags the death, closes the dead window, starts again
+	pass() // the new session is alive: nothing to flag
+	c := w.comments[ref(2)]
+	if len(c) != 1 || !strings.HasPrefix(c[0], "@op ") || !strings.Contains(c[0], "ended before it claimed") ||
+		!strings.Contains(c[0], "Do you want to proceed?") || strings.Contains(c[0], "engine attach") || len(w.starts) != 2 {
+		t.Fatalf("starts %v, comments %q", w.starts, c)
+	}
+	w.sleep(2 * CheckEvery)
+	pass()
+	if c := w.comments[ref(2)]; len(c) != 2 || len(w.starts) != 3 {
+		t.Errorf("second death: starts %v, comments %q", w.starts, c)
 	}
 }
