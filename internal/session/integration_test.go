@@ -242,7 +242,7 @@ func TestCreateWorktreeFallbackForReal(t *testing.T) {
 	}
 }
 
-func TestCreateWorktreeRefusesAStaleBranch(t *testing.T) {
+func TestCreateWorktreeRemakesOnlyALeftoverBranchWithNoWork(t *testing.T) {
 	remote := newRemote(t, "main")
 	remote.commit(t, "main", "a.txt", "a", 0o644)
 	r := remote.repos(t)
@@ -251,8 +251,25 @@ func TestCreateWorktreeRefusesAStaleBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustGit(t, clone.Path, "branch", "task/r-3", "origin/main")
-	if _, err := r.CreateWorktree(clone, 3); err == nil || !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("err = %v", err)
+	mustGit(t, clone.Path, "branch", "task/r-4", "origin/main")
+	mustGit(t, clone.Path, "worktree", "add", "--quiet", clone.Path+"-wt4", "task/r-4")
+	mustGit(t, clone.Path+"-wt4", "commit", "--quiet", "--allow-empty", "-m", "work")
+	mustGit(t, clone.Path, "worktree", "remove", clone.Path+"-wt4")
+	if _, err := r.CreateWorktree(clone, 4); err == nil || !strings.Contains(err.Error(), "with commits of its own") {
+		t.Errorf("a branch with work: err = %v", err)
+	}
+	// A branch with no commits of its own, as a session that died before
+	// claiming leaves, is made again from the default branch.
+	remote.commit(t, "main", "b.txt", "b", 0o644)
+	if _, err := r.Sync(mustRepo(t, "o/r")); err != nil {
+		t.Fatal(err)
+	}
+	wt, err := r.CreateWorktree(clone, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := mustGit(t, wt.Path, "rev-parse", "HEAD"), mustGit(t, clone.Path, "rev-parse", "origin/main"); got != want {
+		t.Errorf("the branch was made at %s, want origin/main %s", got, want)
 	}
 }
 

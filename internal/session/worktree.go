@@ -34,7 +34,8 @@ func Branch(repo Repo, task int) string {
 // create <branch>`, when the clone has an executable `dev` at its root, since
 // that command also provisions what the task needs. Otherwise it runs
 // `git worktree add`, beside the clone in <clone>-worktrees/. It refuses when
-// the task's branch or worktree already exists, so it never reuses leftovers.
+// the task's worktree already exists, or its branch holds work, so it never
+// reuses leftovers.
 func (r Repos) CreateWorktree(clone Clone, task int) (Worktree, error) {
 	if task < 1 {
 		return Worktree{}, fmt.Errorf("task number must be positive, got %d", task)
@@ -80,7 +81,10 @@ func taken(format string, args ...any) error {
 	return &BranchTakenError{Reason: fmt.Sprintf(format, args...)}
 }
 
-// refuseExisting stops when the branch is already taken, saying where.
+// refuseExisting stops when the branch is already taken, saying where. A
+// local branch with no worktree and no commits of its own, such as one left
+// by a session that ended before it did any work, is deleted instead, so
+// the task can start again.
 func (r Repos) refuseExisting(clone Clone, branch string) error {
 	path, err := r.worktreeOf(clone, branch)
 	if err != nil {
@@ -89,11 +93,17 @@ func (r Repos) refuseExisting(clone Clone, branch string) error {
 	if path != "" {
 		return taken("branch %s already has a worktree at %s; release it first", branch, path)
 	}
-	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
-		return taken("branch %s already exists in %s with no worktree; delete it or check it out first", branch, clone.Path)
-	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch); err == nil {
 		return taken("origin already has branch %s, from an earlier run; delete it or continue that work by hand", branch)
+	}
+	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
+		return nil
+	}
+	if _, err := r.git(clone.Path, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/remotes/origin/"+clone.Default); err != nil {
+		return taken("branch %s already exists in %s with commits of its own and no worktree; delete it or check it out first", branch, clone.Path)
+	}
+	if _, err := r.git(clone.Path, "branch", "-D", branch); err != nil {
+		return fmt.Errorf("delete the leftover branch %s, which has no commits of its own: %w", branch, err)
 	}
 	return nil
 }

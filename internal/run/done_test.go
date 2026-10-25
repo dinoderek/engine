@@ -112,9 +112,19 @@ func TestAFailedRunDoesNotWindDown(t *testing.T) {
 func TestAPassThatReadsTasksMakesNoDirectory(t *testing.T) {
 	w := newWorld(t, []string{"engine:feature", Executing}, card(2, "standard"), card(3, "standard", 2))
 	w.do[2] = smooth
-	v := gather(t, w)
-	Apply(w, v, Decide(v))
-	if entries, err := os.ReadDir(filepath.Join(w.home, "notes")); err == nil {
-		t.Errorf("a pass made note directories: %v", entries)
+	for range 3 {
+		v := gather(t, w)
+		Apply(w, v, Decide(v))
+		w.sleep(CheckEvery)
+	}
+	// Only the start of 2 is noted: reading 3, and 2's session working, make
+	// no directory.
+	entries, err := os.ReadDir(filepath.Join(w.home, "notes"))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "2" {
+		t.Fatalf("note directories %v, %v", entries, err)
+	}
+	notes, err := os.ReadDir(filepath.Join(w.home, "notes", "2"))
+	if err != nil || len(notes) != 1 || notes[0].Name() != StartedOn+"mac" {
+		t.Errorf("notes of 2: %v, %v", notes, err)
 	}
 }

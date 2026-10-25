@@ -118,7 +118,8 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 	}{
 		{"task zero", 0, nil, "must be positive"},
 		{"worktree exists", 7, []reply{{key: "worktree list", out: porcelain("/c", "/old", "task/r-7")}}, "already has a worktree at /old"},
-		{"branch exists", 7, []reply{{key: "rev-parse --verify", out: "abc"}}, "already exists"},
+		{"branch exists", 7, []reply{{key: "merge-base", err: errBoom}, {key: "refs/heads/task/r-7", out: "abc"}}, "with commits of its own"},
+		{"leftover branch delete fails", 7, []reply{{key: "refs/heads/task/r-7", out: "abc"}, {key: "branch -D", err: errBoom}}, "delete the leftover branch task/r-7"},
 		{"origin has the branch", 7, []reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}}, "origin already has branch task/r-7"},
 		{"list fails", 7, []reply{{key: "worktree list", err: errBoom}}, "list worktrees"},
 		{"git worktree add fails", 7, []reply{{key: "worktree add", err: errBoom}}, "create the worktree for task/r-7"},

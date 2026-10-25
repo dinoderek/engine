@@ -10,15 +10,6 @@ import (
 	"time"
 )
 
-// The notes a coordinator keeps in a run directory, each one a file holding
-// an RFC 3339 time.
-const (
-	// WaitingSince is when the session was first seen waiting for input.
-	WaitingSince = "waiting-since"
-	// StallNoted is when the coordinator last raised a stall for the run.
-	StallNoted = "stall-noted"
-)
-
 // Run is one run directory and its run.json.
 type Run struct {
 	Dir    string
@@ -69,7 +60,8 @@ func latestRuns(home, pattern string) (map[string]Run, error) {
 	return latest, errors.Join(bad...)
 }
 
-// ReadNote returns the time a note holds, and whether it is there.
+// ReadNote returns the time a note holds, and whether it is there. A note
+// is a file in a coordinator's note directory holding an RFC 3339 time.
 func ReadNote(dir, note string) (time.Time, bool, error) {
 	data, err := os.ReadFile(filepath.Join(dir, note))
 	if errors.Is(err, os.ErrNotExist) {

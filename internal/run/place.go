@@ -2,10 +2,13 @@ package run
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/hostops"
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
@@ -37,6 +40,34 @@ type HostLoad struct {
 	// Unreachable says why the host's status could not be read. Such a host
 	// takes no task, and its sessions are unknown.
 	Unreachable string
+	// Status is the host's reply, which the session check reads.
+	Status hostops.Status
+}
+
+// load is a host's load from its status: its free slots, and its live
+// sessions by the harness their newest run names. A window with no run,
+// such as engine run's own, holds a slot but no harness's session.
+func load(h hosts.Host, st hostops.Status, err error) HostLoad {
+	l := HostLoad{Name: h.Name, Harnesses: h.Harnesses, Capabilities: h.Capabilities, Sessions: map[string]int{}}
+	if err != nil {
+		l.Unreachable = err.Error()
+		return l
+	}
+	l.FreeSlots, l.Status = st.FreeSlots, st
+	harness := map[string]string{}
+	for _, r := range st.Runs {
+		harness[r.Name] = r.Record.Harness
+	}
+	for _, w := range st.Windows {
+		if !w.Alive {
+			continue
+		}
+		l.Live = append(l.Live, w.Name)
+		if hn := harness[w.Name]; hn != "" {
+			l.Sessions[hn]++
+		}
+	}
+	return l
 }
 
 func (h HostLoad) has(capability string) bool { return slices.Contains(h.Capabilities, capability) }
@@ -48,6 +79,15 @@ func (h HostLoad) free() int {
 		return 0
 	}
 	return max(0, h.FreeSlots)
+}
+
+// host finds a host by name.
+func (f Fleet) host(name string) (HostLoad, bool) {
+	i := slices.IndexFunc(f.Hosts, func(h HostLoad) bool { return h.Name == name })
+	if i < 0 {
+		return HostLoad{}, false
+	}
+	return f.Hosts[i], true
 }
 
 // localFree is how many slots this host has free.
@@ -172,4 +212,16 @@ func slotList(fits []HostLoad, free map[string]int) string {
 		parts = append(parts, fmt.Sprintf("%s (%d free)", h.Name, free[h.Name]))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// status is a host's reply, or why there is none.
+func (f Fleet) status(name string) (hostops.Status, error) {
+	h, ok := f.host(name)
+	switch {
+	case !ok:
+		return hostops.Status{}, fmt.Errorf("%q is not in hosts.toml", name)
+	case h.Unreachable != "":
+		return hostops.Status{}, errors.New(h.Unreachable)
+	}
+	return h.Status, nil
 }

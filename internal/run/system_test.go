@@ -3,6 +3,7 @@ package run
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/ps"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/start"
@@ -135,7 +137,7 @@ func TestSystemFleetReadsEveryHostsStatus(t *testing.T) {
 		{Name: "devbox", Harnesses: []string{"claude"}, Capabilities: []string{"linux"}, Sessions: map[string]int{}, Unreachable: "devbox is unreachable"},
 		// Only r-2 is a live session: r-3 has exited, and run-r-1 has no run.
 		{Name: "mac", Harnesses: []string{"claude"}, Capabilities: []string{"macos"}, FreeSlots: 1, Sessions: map[string]int{"claude": 1},
-			Live: []string{"r-2", "run-r-1"}},
+			Live: []string{"r-2", "run-r-1"}, Status: mac},
 	}}
 	if !reflect.DeepEqual(f, want) {
 		t.Errorf("fleet\n got %+v\nwant %+v", f, want)
@@ -168,5 +170,95 @@ func TestSystemNotesAndLog(t *testing.T) {
 	s.Logf("start %s", ref(2))
 	if out.String() != "2026-10-24T13:00:00Z start "+ref(2).String()+"\n" {
 		t.Errorf("log %q", out.String())
+	}
+}
+
+// claimOn is a claimed task whose session runs in engine's window name on
+// host.
+func claimOn(n int, host, name string) tracker.ClaimedTask {
+	return tracker.ClaimedTask{Ref: ref(n), Labels: []string{Running}, Claim: tracker.Claim{
+		Name: name, Host: host, Harness: "Claude Code 2 (opus)", Tmux: "engine:" + name, PostedAt: t0}}
+}
+
+func TestSystemRowsSettleEveryHostFromTheFleet(t *testing.T) {
+	claims := []tracker.ClaimedTask{
+		claimOn(2, "mac", "r-2"), claimOn(3, "mac", "r-3"), claimOn(4, "devbox", "r-4"), claimOn(5, "devbox", "r-5"),
+		claimOn(6, "gone", "r-6"),
+	}
+	s := System{Claims: ps.Source{
+		Claimed: func() ([]tracker.ClaimedTask, error) { return claims, nil },
+		Local:   "mac",
+		Now:     func() time.Time { return t0 },
+	}}
+	f := Fleet{Hosts: []HostLoad{
+		{Name: "devbox", Status: hostops.Status{
+			Windows: []hostops.Window{{Name: "r-4", ID: "@1", Alive: true}},
+			Agents:  []session.Agent{{Name: "r-4", Status: session.AgentWaiting}},
+		}},
+		{Name: "mac", Status: hostops.Status{
+			Windows: []hostops.Window{{Name: "r-2", ID: "@1", Alive: true}, {Name: "r-3", ID: "@2"}},
+			Agents:  []session.Agent{{Name: "r-2", Status: session.AgentBusy}},
+		}},
+	}}
+	rows, err := s.Rows(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, r := range rows {
+		got = append(got, r.Session+" "+r.State)
+	}
+	want := []string{"r-2 working", "r-3 dead", "r-4 waiting", "r-5 dead", "r-6 running"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("rows %q, want %q", got, want)
+	}
+	// An unreachable devbox, and this host's claude agents failing, leave
+	// what they would settle unknown.
+	f.Hosts[0] = HostLoad{Name: "devbox", Unreachable: "ssh: timed out"}
+	f.Hosts[1].Status.AgentsError = "claude agents: exit status 1"
+	rows, err = s.Rows(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = nil
+	for _, r := range rows {
+		got = append(got, r.Session+" "+r.State)
+	}
+	want = []string{"r-2 running", "r-3 running", "r-4 running", "r-5 running", "r-6 running"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("unknown rows %q, want %q", got, want)
+	}
+}
+
+// releaseClient records the releases it is asked for.
+type releaseClient struct {
+	remote.Client
+	released *[]string
+}
+
+func (c releaseClient) Release(name string, failed bool) (hostops.Released, error) {
+	*c.released = append(*c.released, fmt.Sprintf("%s failed=%v", name, failed))
+	return hostops.Released{Name: name, WindowClosed: true}, nil
+}
+
+func TestSystemReleasesOnTheNamedHost(t *testing.T) {
+	cfg, err := hosts.Parse(fleetConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var on []string
+	var released []string
+	s := System{Config: cfg, Client: func(h hosts.Host) remote.Client {
+		on = append(on, h.Name)
+		return releaseClient{released: &released}
+	}}
+	if r, err := s.Release("devbox", "r-2"); err != nil || !r.WindowClosed {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if !reflect.DeepEqual(on, []string{"devbox"}) || !reflect.DeepEqual(released, []string{"r-2 failed=false"}) {
+		t.Errorf("on %v, released %v", on, released)
+	}
+	if _, err := s.Release("nowhere", "r-2"); err == nil || !strings.Contains(err.Error(), `"nowhere" is not in hosts.toml`) {
+		t.Errorf("an unknown host: %v", err)
 	}
 }
