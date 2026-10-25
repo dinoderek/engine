@@ -5,6 +5,9 @@ Fixture feature engine#80 has four small real tasks: three changes and their
 acceptance task. #82 requires `linux`, and the others require `macos`. They
 ran under `engine run` on the Mac on 2026-10-25. #82 was placed on the
 devbox, executed there and merged from there; the other three ran on the Mac.
+#82's claim comment (20:54:08) reads `Host: devbox`, `Run:
+engine-82-20261025T205331Z` and `Tmux: engine:engine-82`, and its `run.json`
+on the devbox has `"host": "devbox"`.
 
 Setup first. The Mac was brought to `main` at f4d079e and plugin 0.7.6.
 `engine setup` there passed every item, including `engine start --check`.
@@ -47,25 +50,25 @@ engine#56 coordinator's window both open: the fixture's O1, live.
 | # | Proved by | Not proved |
 | --- | --- | --- |
 | O1 host ops and envelope | Live on the devbox: `spawn` and `sync-repo` (through #82's start), `status` (every check, and `ssh devbox engine host status --json`: `protocol 1`, `engine`, `host devbox`), `collect` (#82's run directory, `run.json` and file list), `release` (#82's reap), and an unknown op refused with the envelope and exit 1. On the Mac, the same ops ran in-process. Tests: `internal/hostops`, `internal/remote` | A live protocol mismatch: both hosts ran one build. Covered by `internal/remote` tests |
-| O2 `start --host` and `--check --host` | `engine run` starts #82 through `start.Run` with `Host: devbox`, the path `engine start --host` takes; setup's step 7 ran `engine start --check --host devbox`, twice. Tests: `internal/start/remote_test.go`, `ssh_test.go` | `engine start --host` typed by hand; the refusals over SSH, live |
-| O3 placement | Live: #82 (`linux`) on the devbox; #81, #83 and #84 (`macos`) on the Mac; #83 held with `no free slot on mac (0 free)` while the devbox had 2 free. Tests: `internal/run/place_test.go` | The tie-breaks and the once-only comment for a task no host can take, live |
+| O2 `start --host` and `--check --host` | `engine run` starts #82 through `start.Run` with `Host: devbox`, the path `engine start --host` takes; setup's step 7 ran `engine start --check --host devbox`, twice. Tests: `internal/start/remote_test.go`, `ssh_test.go` | `engine start --host` typed by hand: `engine run` takes the same `start.Run` path. The refusals over SSH, live: no refusal came up; `TestRefusalsOnAnotherHostChangeNothing` covers them |
+| O3 placement | Live: #82 (`linux`) on the devbox; #81, #83 and #84 (`macos`) on the Mac; #83 held with `no free slot on mac (0 free)` while the devbox had 2 free. Tests: `internal/run/place_test.go` | The tie-breaks and the once-only comment for a task no host can take, live: each task fit one host only (`macos` the Mac, `linux` the devbox). `TestATieOnSlotsAndCapabilitiesGoesToTheLowestName` and `TestATaskNoHostCanTakeIsLoggedEachPassAndCommentedOnce` cover them |
 | O4 `ps`, `tell`, `attach` | Live on #82: `engine ps` showed it `working` on `devbox`; `engine attach engine-82` showed the devbox screen over `ssh -t` and detached cleanly; `engine tell engine-82 -` commented, then typed the pointer, which the session queued. `engine ps` with the devbox's address made unresolvable warned and kept #82 at its label state, `running`, not `dead`. Tests: `internal/ps/remote_test.go`, `internal/tell/tell_test.go`, `internal/attach` | |
 | O5 session check across hosts | Live: the 60-second check read both hosts' `status`; it saw #81 and #82 waiting after their reports and reaped both at 21:11:14, #82 through the devbox's `release`, which also removed the tmux server's last window there. The `started-on-devbox` note is in the coordinator's directory on the Mac. Tests: `internal/run/remote_test.go` (unreachable host, stall with screen, dead remote session, restart through `release`) | A live stall, dead session or unreachable host during `engine run`: none happened |
 | O6 `engine setup [--host]` | Live, as above: `engine setup` on the Mac, and `engine setup --host devbox` twice (`changed` from 3346f0b, then `changed` for the Go). Tests: `internal/setup` | An item left open, live: none was |
-| O7 reap at done, no empty note dirs, skill | Each of `engine-80` to `engine-84-coordinator` holds a note; the empty ones in the runs directory are the engine#56 coordinator's, on build 2a08a0c. #84 took no merge lock. #83 and #84 closed their own windows. Tests: `internal/run/done_test.go` | Reaping at done, live: no window was left by then. #81 and #82 did not close their windows (Gaps) |
+| O7 reap at done, no empty note dirs, skill | Each of `engine-80` to `engine-84-coordinator` holds a note; the empty ones in the runs directory are the engine#56 coordinator's, on build 2a08a0c. The skill says both: `execute.md` step 12 (a hands-off run's last action is `tmux kill-window`, since nobody answers after its report) and "Merge lock" (a task with no other open task in its feature takes no lock). Live, #84 took no merge lock, and #83 and #84 closed their own windows. Tests: `internal/run/done_test.go` | Reaping at done, live: no window was left by then. #81 and #82 did not close their windows (Gaps) |
 | O8 docs bar | `AGENTS.md`, "Docs", "The bar" (engine#67); `./dev test docs-check` | The bar itself is judgement, not a check |
 
 ## Gaps
 
-- **A sibling merged over a moved `main`.** #81 took the lock 13 seconds after
+- **A sibling merged over a moved `main`.** #81 took the lock 14 seconds after
   #96 merged, fetched, saw `main` one commit ahead, and merged anyway, with no
   merge of `main` and no new gate run (`execute.md` step 10 and "Merge lock").
   GitHub does not require an up-to-date branch, and the two PRs touched
   different files, so `main` stayed green (CI at 4b0e14e).
 - **Two Sonnet executors did not close their windows.** #81 and #82 ended their
   turn on the report, saying `kill-window` was still to do. #83 and #84, also
-  Sonnet, ran it. `engine run` reaped both after ten minutes of waiting, which
-  held a Mac slot and delayed #83 by about 11 minutes.
+  Sonnet, ran it. `engine run` reaped both after ten minutes of waiting. #81's
+  window held a Mac slot meanwhile, which delayed #83 by about 11 minutes.
 - **Slots held by windows that are not sessions** (engine#68). The engine#56
   coordinator's own window held a Mac slot, so this fixture's coordinator ran
   outside session `engine`. #81 (#97) fixed it on `main`; the running
