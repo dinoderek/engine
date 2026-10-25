@@ -206,3 +206,26 @@ func gitFake(t *testing.T) session.RunFunc {
 func ref(n int) tracker.Ref { return tracker.Ref{Repo: "o/r", Number: n} }
 
 func fixedNow() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }
+
+// withRuns records a run under each name, as engine start does for a session
+// it opens.
+func withRuns(names ...string) func(*testing.T, home) {
+	return func(t *testing.T, h home) {
+		t.Helper()
+		writeRuns(t, h, names...)
+	}
+}
+
+func writeRuns(t *testing.T, h home, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		rec := session.Record{RunID: name + "-a", Name: name, Spawned: fixedNow()}
+		dir, err := session.RunDir(h.dir, rec.RunID)
+		if err == nil {
+			err = session.WriteRecord(dir, rec)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}

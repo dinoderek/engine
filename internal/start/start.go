@@ -331,7 +331,8 @@ func (p *plan) checkBin(d Deps) error {
 }
 
 // checkTmux refuses a task that already has a window, and a host whose slots
-// are full. A window whose command has exited holds no slot.
+// are full. Only a live window with a run recorded under its name holds a
+// slot.
 func (p *plan) checkTmux(d Deps) error {
 	if p.remote {
 		return p.checkStatus(d)
@@ -340,12 +341,16 @@ func (p *plan) checkTmux(d Deps) error {
 	if err != nil {
 		return refuse("cannot list the tmux windows: %v", err)
 	}
+	runs, err := session.LatestRuns(d.Home)
+	if err != nil {
+		return refuse("cannot read the run records: %v", err)
+	}
 	live := 0
 	for _, w := range windows {
 		if w.Name == p.name {
 			return refuse("the tmux session %s already has a window %s (%s)", session.Name, p.name, w.ID)
 		}
-		if !w.Dead {
+		if session.HoldsSlot(w, runs) {
 			live++
 		}
 	}

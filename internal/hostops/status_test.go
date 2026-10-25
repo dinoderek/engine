@@ -75,6 +75,7 @@ func TestStatus(t *testing.T) {
 func TestStatusWithoutClaudeAgents(t *testing.T) {
 	h := newHome(t, "mac")
 	tm := &tmuxFake{windows: []string{"@1 %1 0 r-1"}, screens: map[string]string{"@1": "a screen"}}
+	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Spawned: fixedNow()})
 	got, err := ReadStatus(Deps{Tmux: tm.tmux(), Home: h.dir, Exec: agentsFake("", errors.New("not signed in"))})
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +83,36 @@ func TestStatusWithoutClaudeAgents(t *testing.T) {
 	// Nothing says the session is busy, so its screen is shown.
 	if !strings.Contains(got.AgentsError, "not signed in") || len(got.Agents) != 0 || got.Windows[0].Screen != "a screen" || got.FreeSlots != 1 {
 		t.Errorf("status %+v", got)
+	}
+}
+
+// Only a live window with a run under its name takes a slot: a shell, engine
+// run's own window and a dead session take none.
+func TestStatusSlotsFollowSessions(t *testing.T) {
+	h := newHome(t, "mac") // two slots
+	at := fixedNow()
+	for _, name := range []string{"r-1", "r-4"} {
+		writeRun(t, h, session.Record{RunID: name + "-a", Name: name, Spawned: at})
+	}
+	cases := []struct {
+		name    string
+		windows []string
+		free    int
+	}{
+		{"a live window with a run", []string{"@1 %1 0 r-1"}, 1},
+		{"a live window without one", []string{"@1 %1 0 run-o-56", "@2 %2 0 zsh"}, 2},
+		{"a dead window with a run", []string{"@1 %1 1 r-4"}, 2},
+		{"all three together", []string{"@1 %1 0 r-1", "@2 %2 0 zsh", "@3 %3 1 r-4"}, 1},
+		{"more sessions than slots", []string{"@1 %1 0 r-1", "@2 %2 0 r-4", "@3 %3 0 r-1"}, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tm := &tmuxFake{windows: c.windows}
+			got, err := ReadStatus(Deps{Tmux: tm.tmux(), Home: h.dir, Exec: agentsFake("[]", nil)})
+			if err != nil || got.FreeSlots != c.free || len(got.Windows) != len(c.windows) {
+				t.Errorf("free slots %d, windows %d, err %v; want %d free, %d windows", got.FreeSlots, len(got.Windows), err, c.free, len(c.windows))
+			}
+		})
 	}
 }
 

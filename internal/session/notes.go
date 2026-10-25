@@ -29,6 +29,14 @@ func LatestRun(home, name string) (Run, bool, error) {
 // bad file hides only its own run.
 func LatestRuns(home string) (map[string]Run, error) { return latestRuns(home, "*") }
 
+// HoldsSlot reports whether a window takes one of its host's slots: its
+// command is still running and runs holds a run under its name. A window with
+// no run, such as engine run's own or a stray shell, is not a session.
+func HoldsSlot(w WindowInfo, runs map[string]Run) bool {
+	_, ok := runs[w.Name]
+	return ok && !w.Dead
+}
+
 // latestRuns reads the run.json of every run directory matching pattern, and
 // keeps the newest run of each session name. The runs it could read come
 // back with the error of those it could not.

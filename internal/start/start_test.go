@@ -66,7 +66,10 @@ func TestRefusalsChangeNothing(t *testing.T) {
 			want: "host mac lacks teleporter"},
 		{name: "unknown --host", opts: Options{Host: "nowhere"}, want: `host "nowhere" is not in hosts.toml; its machines are box, dev, mac`},
 		{name: "window exists", windows: []string{"@1 %1 0 r-7"}, want: "already has a window r-7 (@1)"},
-		{name: "no free slot", windows: []string{"@1 %1 0 r-1", "@2 %2 0 r-2"}, want: "no free slot: 2 sessions running, 2 slots"},
+		{name: "no free slot", windows: []string{"@1 %1 0 r-1", "@2 %2 0 r-2"}, setup: withRuns("r-1", "r-2"),
+			want: "no free slot: 2 sessions running, 2 slots"},
+		{name: "a stray window and a session fill the slots with another", windows: []string{"@1 %1 0 r-1", "@2 %2 0 zsh", "@3 %3 0 r-3"},
+			setup: withRuns("r-1", "r-3"), want: "no free slot: 2 sessions running, 2 slots"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { checkRefusal(t, c) })
@@ -126,8 +129,43 @@ func removeFile(rel string) func(*testing.T, home) {
 	}
 }
 
+func TestOnlySessionsHoldSlots(t *testing.T) {
+	// Two slots. Two dead sessions, a live shell, and engine run's own window
+	// hold none, so a start is not refused.
+	h := newHome(t, "mac")
+	writeRuns(t, h, "r-1", "r-2")
+	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3}}
+	tm := &tmuxFake{windows: []string{"@1 %1 1 r-1", "@2 %2 1 r-2", "@3 %3 0 zsh", "@4 %4 0 run-o-3"}}
+	d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: tm.run, Bin: "tmux"}, Home: h.dir, Getenv: func(string) string { return "" }}
+	if _, err := check(Options{Ref: ref(7)}, d); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnreadableRunRecordRefusesStart(t *testing.T) {
+	h := newHome(t, "mac")
+	writeRuns(t, h, "r-1")
+	dir, err := session.RunDir(h.dir, "r-9-a")
+	if err == nil {
+		err = os.MkdirAll(dir, 0o755)
+	}
+	if err == nil {
+		err = os.WriteFile(filepath.Join(dir, session.RecordFile), []byte("{"), 0o644)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3}}
+	tm := &tmuxFake{windows: []string{"@1 %1 0 r-1"}}
+	d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: tm.run, Bin: "tmux"}, Home: h.dir, Getenv: func(string) string { return "" }}
+	if _, err := check(Options{Ref: ref(7)}, d); err == nil || !strings.Contains(err.Error(), "cannot read the run records") {
+		t.Errorf("err = %v", err)
+	}
+}
+
 func TestDeadWindowsHoldNoSlot(t *testing.T) {
 	h := newHome(t, "mac")
+	writeRuns(t, h, "r-1", "r-2", "r-3")
 	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3}}
 	tm := &tmuxFake{windows: []string{"@1 %1 1 r-1", "@2 %2 1 r-2", "@3 %3 0 r-3"}}
 	d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: tm.run, Bin: "tmux"}, Home: h.dir, Getenv: func(string) string { return "" }}
