@@ -58,19 +58,34 @@ reconcile core, which stays a package with no CLI assumptions.
 
 ## Reaching hosts
 
-The coordinator calls `engine host <op> --json` in place for its own host
-(the name in `~/.config/engine/host`), or via `ssh <address>` for any other
-machine. It refuses to run unless that name is a machine in `hosts.toml`.
-It reads JSON from stdout. If you are changing host names or addresses, load
-`hosts-and-sessions.md`.
+A host does its own work through `engine host <op> --json`: one job, one
+JSON object on stdout, and exit 0, or 1 for a failure. The caller decides
+everything that reads GitHub or `hosts.toml`, such as the refusals, the
+model, the effort and the kickoff, and passes it in. The host does what
+touches its own disk, tmux and token. `engine start` calls its own host's
+ops in-process. Designed, not built: calling another machine's as
+`ssh <address> engine host <op> --json`. The coordinator refuses to run
+unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
+you are changing host names or addresses, load `hosts-and-sessions.md`.
 
 | Op | Does |
 | --- | --- |
-| `sync-repo` | Makes sure engine's own clone exists and fetches it. |
-| `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), opens the tmux window and launches the harness. |
-| `status` | Reports whether the window is alive and whether the harness is waiting for input. |
-| `collect` | Returns the run directory for telemetry. |
-| `release` | Closes the window if it is still open (a gated or failed run), and keeps the worktree when the run failed. |
+| `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
+| `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it, opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
+| `status` | Lists the windows of the session `engine` (alive, exit code), `claude agents --json`, the newest run of each session name, the free slots, and the last 20 screen lines of each window whose session is not busy. |
+| `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
+| `release` | Closes the session's window if it is open, and removes its worktree unless the run failed. The branch stays. |
+
+**The envelope.** Every reply, a failure too, carries `protocol` (the wire
+format's version, an integer), `engine` (the build) and `host` (the host's
+name). A caller refuses a reply whose `protocol` is not its own. A failure
+is `{"error": …, "refused": true|false}`; `refused` means the op changed
+nothing, so the caller reports it as a refusal of its own.
+
+**A failed call is unknown, never dead.** When a call fails or a host cannot
+be reached, everything that host would have said is unknown: none of its
+sessions is marked dead, failed or reaped for it. Only a successful
+`status` that lacks a window shows the window gone.
 
 - **Repos.** Each host keeps engine's own clone at
   `~/.local/share/engine/repos/<owner>/<repo>`, which acts as the main
