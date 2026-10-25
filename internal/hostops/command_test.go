@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -85,6 +86,27 @@ func TestFailuresAreReplies(t *testing.T) {
 			t.Errorf("%v: exit %d, reply %v; want refused %v and %q", c.args, code, reply, c.refused, c.want)
 		}
 	}
+}
+
+// The envelope's keys are added to every reply, so no reply may use them.
+func TestNoReplyUsesTheEnvelopesKeys(t *testing.T) {
+	envelope := map[string]bool{}
+	for i := range reflect.TypeFor[Envelope]().NumField() {
+		envelope[jsonName(reflect.TypeFor[Envelope]().Field(i))] = true
+	}
+	for _, typ := range []reflect.Type{reflect.TypeFor[Synced](), reflect.TypeFor[Spawned](), reflect.TypeFor[Status](),
+		reflect.TypeFor[Collected](), reflect.TypeFor[Released](), reflect.TypeFor[Failure]()} {
+		for i := range typ.NumField() {
+			if name := jsonName(typ.Field(i)); envelope[name] {
+				t.Errorf("%s.%s is %q, an envelope key", typ.Name(), typ.Field(i).Name, name)
+			}
+		}
+	}
+}
+
+func jsonName(f reflect.StructField) string {
+	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+	return name
 }
 
 var errFake = &session.ExitError{Command: "tmux list-windows", Code: 1, Stderr: "tmux died"}

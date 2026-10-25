@@ -114,6 +114,10 @@ func TestSpawnRefusalsChangeNothing(t *testing.T) {
 				`the kickoff is empty; unknown tier "huge": want deep, standard or light; feature: want owner/repo#n, got "x"; run id "../x"`},
 		{name: "bad feature", req: with(func(r *SpawnRequest) { r.Feature = "o/r" }), want: "feature: "},
 		{name: "bad run id", req: with(func(r *SpawnRequest) { r.RunID = "a/b" }), want: `run id "a/b"`},
+		{name: "another session's run id", req: with(func(r *SpawnRequest) { r.RunID = "r-8-20260102T030405Z" }), want: "is not a run of r-7"},
+		{name: "a run id in use", setup: func(t *testing.T, h home) {
+			write(t, filepath.Join(h.dir, session.RunsDir, "r-7-20260102T030405Z", session.PaneLog), "x\n", 0o644)
+		}, want: "run r-7-20260102T030405Z already has a directory"},
 		{name: "no token", setup: remove(".config/engine/github-token"), want: "the session reads the machine user's token"},
 		{name: "no hosts.toml", setup: remove(".config/engine/hosts.toml"), want: "read host config"},
 		{name: "host does not run claude", host: "box", want: "host box does not run claude"},

@@ -3,6 +3,7 @@ package hostops
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -166,13 +167,17 @@ func (s *spawn) checkRequest(home string) error {
 			problems = append(problems, "feature: "+err.Error())
 		}
 	}
+	s.name = session.TaskName(s.repo, s.Task)
 	if s.runDir, err = session.RunDir(home, s.RunID); err != nil {
 		problems = append(problems, err.Error())
+	} else if !strings.HasPrefix(s.RunID, s.name+"-") {
+		problems = append(problems, fmt.Sprintf("run id %s is not a run of %s", s.RunID, s.name))
+	} else if _, err := os.Stat(s.runDir); err == nil {
+		problems = append(problems, "run "+s.RunID+" already has a directory, "+s.runDir)
 	}
 	if len(problems) > 0 {
 		return refuse("%s", strings.Join(problems, "; "))
 	}
-	s.name = session.TaskName(s.repo, s.Task)
 	return nil
 }
 

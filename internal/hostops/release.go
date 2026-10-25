@@ -43,8 +43,9 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 		}
 		r.WindowClosed = true
 	}
-	// An unreadable run.json of another run matters only when this
-	// session's own run is unknown.
+	// An unreadable run.json fails the release only when no run of this
+	// session could be read; otherwise the newest readable one is released,
+	// and the note says what was skipped.
 	run, ok, err := session.LatestRun(d.Home, name)
 	if !ok || run.Record.Worktree == "" {
 		return r, err

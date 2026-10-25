@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/dinoderek/engine/internal/hostops"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -164,4 +165,43 @@ func TestSpawnRequest(t *testing.T) {
 			t.Errorf("spawn request\n got %+v\nwant %+v", got, want)
 		}
 	}
+}
+
+// clientFake is a host that records what engine start asks of it.
+type clientFake struct {
+	remote.Client
+	synced  []string
+	spawned []hostops.SpawnRequest
+}
+
+func (f *clientFake) SyncRepo(repo string) (hostops.Synced, error) {
+	f.synced = append(f.synced, repo)
+	return hostops.Synced{}, nil
+}
+
+func (f *clientFake) Spawn(r hostops.SpawnRequest) (hostops.Spawned, error) {
+	f.spawned = append(f.spawned, r)
+	return hostops.Spawned{Name: "r-7", Window: "@4", RunDir: "/runs/x", Worktree: "/wt", Branch: "task/r-7", Attach: "ssh -t me@box tmux attach"}, nil
+}
+
+// With Deps.Client set, the session starts on that host: engine start syncs
+// and spawns there, and runs nothing here.
+func TestStartGoesThroughTheClient(t *testing.T) {
+	h := newHome(t, "mac")
+	gh := &ghFake{issue: startable}
+	tm := &tmuxFake{}
+	c := &clientFake{}
+	d := Deps{GH: gh.run, Run: gitFake(t), Tmux: &session.Tmux{Run: tm.run, Bin: "tmux"}, Home: h.dir,
+		Getenv: func(string) string { return "" }, Now: fixedNow, Client: c}
+	var out bytes.Buffer
+	if err := Run(Options{Ref: ref(7)}, d, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(c.synced, []string{"o/r"}) || len(c.spawned) != 1 || c.spawned[0].RunID != "r-7-20260102T030405Z" || c.spawned[0].Model != "opus-x" {
+		t.Errorf("synced %v, spawned %+v", c.synced, c.spawned)
+	}
+	if !strings.Contains(out.String(), "tmux window     engine:@4 (r-7)") || !strings.Contains(out.String(), "or: ssh -t me@box tmux attach") {
+		t.Errorf("report:\n%s", out.String())
+	}
+	tm.readOnly(t)
 }
