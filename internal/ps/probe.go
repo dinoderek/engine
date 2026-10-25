@@ -42,14 +42,14 @@ type view struct {
 	err    error
 }
 
-// window finds the window the claim names, by name or by tmux's window id.
-// Nil means the host has no such window.
-func (v view) window(target string) (*hostops.Window, error) {
+// window finds the window the claim names, by name: tmux reuses window ids
+// after a restart. Nil means the host has no such window.
+func (v view) window(name string) (*hostops.Window, error) {
 	if v.err != nil {
 		return nil, v.err
 	}
 	for i, w := range v.status.Windows {
-		if w.Name == target || w.ID == target {
+		if w.Name == name {
 			return &v.status.Windows[i], nil
 		}
 	}

@@ -288,9 +288,9 @@ func TestTheWindowIsTheOneTheClaimNames(t *testing.T) {
 	if r := list(t, f).Rows[0]; r.State != Working {
 		t.Errorf("by name: got %s, %s", r.State, alive(r))
 	}
-	c.Claim.Tmux = "engine:@4" // tmux's window id
+	c.Claim.Tmux = "engine:@4" // an id, which tmux reuses: not a name
 	f = (&fake{tasks: []tracker.ClaimedTask{c}}).on([]hostops.Window{{Name: "w-1", ID: "@4", Alive: true, State: session.StateWaiting}})
-	if r := list(t, f).Rows[0]; r.State != Waiting {
+	if r := list(t, f).Rows[0]; r.State != Dead {
 		t.Errorf("by id: got %s, %s", r.State, alive(r))
 	}
 	c.Claim.Tmux = "other:w-1" // not engine's tmux session

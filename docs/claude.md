@@ -61,8 +61,8 @@ auto-mode refusal, to the run directory (`telemetry.md`). Without
 `claude agents --json` on the host lists every live session, including those
 in tmux, with its `pid`, `cwd`, `name`, `sessionId` and `status`. `busy` is
 working; `waiting` and `idle` are waiting for input, because only a prompt
-moves the session on. `status` gives a window whose newest run is Claude's the
-state of the session of its name. `engine ps` finds one started by hand by its
+moves the session on. For a window whose newest run is Claude's,
+`status` takes the state of the session of the window's name. `engine ps` finds one started by hand by its
 name (`<repo>-<task>`), then, on its own host only, by its worktree (its
 branch, in the claim's repo).
 
