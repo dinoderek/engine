@@ -19,7 +19,7 @@ Two programs share one Go module:
   (`engine start`: checks a task, then has its host launch the session),
   `internal/hostops` (`engine host <op> --json`: the ops a host runs on
   itself for a caller), `internal/remote` (the client that reaches a host's
-  ops: `Local` calls them in-process), `internal/tell`
+  ops: `Local` calls them in-process, `SSH` over `ssh`), `internal/tell`
   (`engine tell`: comments on a task and points its session at it),
   `internal/lint` (`engine lint`: a feature's plan rules), `internal/run`
   (`engine run`: the coordinator's loop, on top of the others). The commands
@@ -35,7 +35,7 @@ Two programs share one Go module:
   `baseline` and `repo` (git, go and file helpers).
 
 The designed components are the coordinator's reconcile loop, the host ops
-over SSH, the rest of the tracker adapter and the
+over SSH for `ps`, `tell` and `run`, the rest of the tracker adapter and the
 telemetry collector.
 If you are building one, load its doc from the index in `AGENTS.md`.
 

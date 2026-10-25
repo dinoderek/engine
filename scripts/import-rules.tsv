@@ -16,9 +16,9 @@ internal/hook	only	-
 internal/hosts	only	-
 internal/session	only	-
 internal/hostops	only	internal/hosts,internal/session,internal/tracker,internal/version
-internal/remote	only	internal/hostops
+internal/remote	only	internal/hostops,internal/session
 internal/start	only	internal/hostops,internal/hosts,internal/remote,internal/session,internal/tracker
-internal/attach	only	internal/hosts,internal/session,internal/tracker
+internal/attach	only	internal/hosts,internal/remote,internal/session,internal/tracker
 internal/ps	only	internal/tracker,internal/session
 internal/tell	only	internal/hosts,internal/session,internal/tracker
 internal/lint	only	internal/tracker

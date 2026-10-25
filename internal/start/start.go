@@ -45,6 +45,8 @@ type Options struct {
 	Tier string
 	// Mode is HandsOff or Gated; empty means HandsOff.
 	Mode string
+	// Host names the machine to start on, from hosts.toml; empty is this host.
+	Host string
 }
 
 // Deps are the outside world: the CLIs, the home directory, the environment
@@ -65,19 +67,42 @@ type Deps struct {
 	Sleep func(time.Duration)
 	// Exec runs the host's own CLIs, such as claude agents.
 	Exec session.Runner
-	// Client is the host the session starts on; nil is this host, in
-	// process, through the fields above.
+	// Client is the host the session starts on, for tests; nil is this host,
+	// in process, through the fields above, or the named one over SSH.
 	Client remote.Client
+	// SSH runs ssh to reach a named host; nil starts real processes.
+	SSH remote.Exec
 }
 
-// client is the host the session starts on.
-func (d Deps) client() remote.Client {
-	if d.Client != nil {
+// client is the host the session starts on: host, reached over SSH when
+// remote is set, else this host, in process.
+func (d Deps) client(host hosts.Host, remoteHost bool) remote.Client {
+	switch {
+	case d.Client != nil:
 		return d.Client
+	case remoteHost:
+		run := d.SSH
+		if run == nil {
+			run = remote.ExecCommand
+		}
+		return remote.SSH{Name: host.Name, Address: host.Address, Exec: run}
 	}
 	return remote.Local{Deps: hostops.Deps{
 		Run: d.Run, Exec: d.Exec, Tmux: d.Tmux, Home: d.Home, Getenv: d.Getenv, Now: d.Now, BaseURL: d.BaseURL, Sleep: d.Sleep,
 	}}
+}
+
+// pickHost returns the machine named name, and whether it is another one.
+// An empty name, or this host's own, is this host.
+func pickHost(cfg *hosts.Config, local hosts.Host, name string) (hosts.Host, bool, error) {
+	if name == "" || name == local.Name {
+		return local, false, nil
+	}
+	host, ok := cfg.Hosts[name]
+	if !ok {
+		return hosts.Host{}, false, refuse("host %q is not in hosts.toml; its machines are %s", name, strings.Join(cfg.HostNames(), ", "))
+	}
+	return host, true, nil
 }
 
 // RefusedError is a check that failed before engine start changed anything.
@@ -91,10 +116,12 @@ func refuse(format string, args ...any) error {
 
 // plan is a start that has passed every check.
 type plan struct {
-	opts     Options
-	token    string
-	cfg      *hosts.Config
-	host     hosts.Host
+	opts  Options
+	token string
+	cfg   *hosts.Config
+	host  hosts.Host
+	// remote is true when host is another machine, reached over SSH.
+	remote   bool
 	task     tracker.Task
 	repo     session.Repo
 	name     string
@@ -113,6 +140,8 @@ type Started struct {
 	RunID    string
 	RunDir   string
 	Worktree session.Worktree
+	// Host is the machine the session runs on when it is not this one.
+	Host string
 	// WindowID is the tmux window's id, such as @3.
 	WindowID string
 	// Attach is the command that attaches to the window on its host.
@@ -137,7 +166,8 @@ func Run(o Options, d Deps, out io.Writer) error {
 }
 
 // check runs every refusal, in the order a fix would be made, and changes
-// nothing: it only reads files, the tracker and tmux's window list.
+// nothing: it only reads files, the tracker, tmux's window list and another
+// host's status.
 func check(o Options, d Deps) (plan, error) {
 	p := plan{opts: o}
 	if err := p.checkOptions(); err != nil {
@@ -154,7 +184,7 @@ func check(o Options, d Deps) (plan, error) {
 	if err := checkTask(task); err != nil {
 		return plan{}, err
 	}
-	for _, step := range []func(Deps) error{p.pickModel, p.checkBin, p.checkTmux} {
+	for _, step := range []func(Deps) error{p.checkRequires, p.pickModel, p.checkBin, p.checkTmux} {
 		if err := step(d); err != nil {
 			return plan{}, err
 		}
@@ -195,8 +225,9 @@ func (p *plan) loadHost(d Deps) error {
 	if err != nil {
 		return refuse("%v", err)
 	}
-	p.token, p.cfg, p.host = token, cfg, host
-	return nil
+	p.token, p.cfg = token, cfg
+	p.host, p.remote, err = pickHost(cfg, host, p.opts.Host)
+	return err
 }
 
 func tokenFile(home string) string { return filepath.Join(home, filepath.FromSlash(tracker.TokenFile)) }
@@ -223,6 +254,28 @@ func checkTask(t tracker.Task) error {
 		return refuse("%s is blocked by open %s", t.Ref, strings.Join(names, ", "))
 	}
 	return nil
+}
+
+// checkRequires refuses a host that lacks a capability the card requires,
+// even when the operator named it.
+func (p *plan) checkRequires(Deps) error {
+	var lacks []string
+	for _, c := range p.task.Requires {
+		if !p.host.Has(c) {
+			lacks = append(lacks, c)
+		}
+	}
+	if len(lacks) > 0 {
+		return refuse("host %s lacks %s, which %s requires (it has: %s)", p.host.Name, strings.Join(lacks, ", "), p.task.Ref, orNone(p.host.Capabilities))
+	}
+	return nil
+}
+
+func orNone(words []string) string {
+	if len(words) == 0 {
+		return "none"
+	}
+	return strings.Join(words, ", ")
 }
 
 // pickModel settles the harness and the tier: the card's, unless the
@@ -261,7 +314,12 @@ func (p *plan) pickModel(Deps) error {
 	return nil
 }
 
+// checkBin refuses a harness binary that is not executable here. Another
+// machine's is its own spawn's refusal.
 func (p *plan) checkBin(d Deps) error {
+	if p.remote {
+		return nil
+	}
 	bin, err := p.host.BinPath(Harness, d.Home)
 	if err != nil {
 		return refuse("%v", err)
@@ -275,6 +333,9 @@ func (p *plan) checkBin(d Deps) error {
 // checkTmux refuses a task that already has a window, and a host whose slots
 // are full. A window whose command has exited holds no slot.
 func (p *plan) checkTmux(d Deps) error {
+	if p.remote {
+		return p.checkStatus(d)
+	}
 	windows, err := d.Tmux.Windows()
 	if err != nil {
 		return refuse("cannot list the tmux windows: %v", err)
@@ -294,6 +355,24 @@ func (p *plan) checkTmux(d Deps) error {
 	return nil
 }
 
+// checkStatus is checkTmux for another machine, from its status: one call
+// gives both the windows and the free slots.
+func (p *plan) checkStatus(d Deps) error {
+	st, err := d.client(p.host, true).Status()
+	if err != nil {
+		return err
+	}
+	for _, w := range st.Windows {
+		if w.Name == p.name {
+			return refuse("host %s: the tmux session %s already has a window %s (%s)", p.host.Name, session.Name, p.name, w.ID)
+		}
+	}
+	if st.FreeSlots < 1 {
+		return refuse("host %s has no free slot: %d slots", p.host.Name, st.Slots)
+	}
+	return nil
+}
+
 // Kickoff is the first message of the session: the executor's kickoff line,
 // plus the values its claim comment records.
 func Kickoff(task tracker.Ref, mode, reviewer, runID, name string) string {
@@ -304,7 +383,7 @@ func Kickoff(task tracker.Ref, mode, reviewer, runID, name string) string {
 // launch has the host sync engine's clone, then spawn the session with the
 // model, effort and kickoff decided here.
 func (p plan) launch(d Deps) (Started, error) {
-	host := d.client()
+	host := d.client(p.host, p.remote)
 	if _, err := host.SyncRepo(p.repo.String()); err != nil {
 		return Started{}, err
 	}
@@ -315,11 +394,17 @@ func (p plan) launch(d Deps) (Started, error) {
 	if err != nil {
 		return Started{}, err
 	}
-	return Started{
+	s := Started{
 		Task: p.opts.Ref, Name: sp.Name, RunID: runID, RunDir: sp.RunDir,
 		Worktree: session.Worktree{Path: sp.Worktree, Branch: sp.Branch},
 		WindowID: sp.Window, Attach: sp.Attach, Warning: sp.Warning,
-	}, nil
+	}
+	if p.remote {
+		// The window is on another machine, so the paths and the attach
+		// command are too.
+		s.Host, s.Attach = p.host.Name, "ssh -t "+p.host.Address+" "+hosts.ShellWord(sp.Attach)
+	}
+	return s, nil
 }
 
 // spawnRequest is what the host needs to launch the session: the task's
@@ -342,7 +427,11 @@ func (p plan) spawnRequest(runID string) hostops.SpawnRequest {
 
 func report(out io.Writer, s Started) {
 	target := session.Name + ":" + s.WindowID
-	fmt.Fprintf(out, "Started %s as %s.\n", s.Task, s.Name)
+	on := ""
+	if s.Host != "" {
+		on = " on " + s.Host
+	}
+	fmt.Fprintf(out, "Started %s as %s%s.\n", s.Task, s.Name, on)
 	fmt.Fprintf(out, "  run             %s\n", s.RunID)
 	fmt.Fprintf(out, "  run record      %s\n", filepath.Join(s.RunDir, session.RecordFile))
 	fmt.Fprintf(out, "  worktree        %s (branch %s)\n", s.Worktree.Path, s.Worktree.Branch)
@@ -355,7 +444,20 @@ func report(out io.Writer, s Started) {
 	}
 }
 
-// Check runs the preflight check on the session's host, prints its report,
-// and reports whether an unattended session there would run without a
+// Check runs the preflight check on host, which is this one when empty, prints
+// its report, and reports whether an unattended session there would run without a
 // prompt.
-func Check(d Deps, out io.Writer) (bool, error) { return d.client().Check(out) }
+func Check(d Deps, host string, out io.Writer) (bool, error) {
+	if host == "" {
+		return d.client(hosts.Host{}, false).Check(out)
+	}
+	cfg, local, err := hosts.Open(hosts.ConfigDir(d.Home))
+	if err != nil {
+		return false, refuse("%v", err)
+	}
+	target, isRemote, err := pickHost(cfg, local, host)
+	if err != nil {
+		return false, err
+	}
+	return d.client(target, isRemote).Check(out)
+}

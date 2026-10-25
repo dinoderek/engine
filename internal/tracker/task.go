@@ -30,13 +30,15 @@ type Task struct {
 	Harness string
 	// Tier is deep, standard or light; DefaultTier when the card names none.
 	Tier string
+	// Requires are the capabilities the card's Requires section names.
+	Requires []string
 }
 
 // Has reports whether the task carries label.
 func (t Task) Has(label string) bool { return slices.Contains(t.Labels, label) }
 
 // ReadTask reads a task issue: its labels, its open blockers, its parent
-// feature and its Harness / tier section. It does not check that the issue is
+// feature, and its Harness / tier and Requires sections. It does not check that the issue is
 // a task.
 func ReadTask(run Runner, token string, ref Ref) (Task, error) {
 	path := fmt.Sprintf("repos/%s/issues/%d", ref.Repo, ref.Number)
@@ -54,7 +56,7 @@ func ReadTask(run Runner, token string, ref Ref) (Task, error) {
 	}
 	task := Task{
 		Ref: ref, Title: issue.Title, Open: issue.State == "open",
-		Labels: issue.labelNames(), Harness: harness, Tier: tier,
+		Labels: issue.labelNames(), Harness: harness, Tier: tier, Requires: ParseRequires(issue.Body),
 	}
 	if issue.ParentURL != "" {
 		parent, err := refFromIssueURL(issue.ParentURL)
@@ -123,4 +125,21 @@ func ParseHarnessTier(body string) (harness, tier string, err error) {
 func tierSection(body string) string {
 	section, _ := Section(body, "Harness / tier")
 	return section
+}
+
+// ParseRequires reads a card's `## Requires` section: every word in it is a
+// capability the host must declare, in the order written and once, except
+// "none". Words start with a letter, so punctuation, bullets and numbering
+// between them are ignored. Like engine lint, it does not judge the words: a
+// word no host declares is a requirement no host meets. An empty or absent
+// section, or "none", requires nothing.
+func ParseRequires(body string) []string {
+	section, _ := Section(body, "Requires")
+	var caps []string
+	for _, word := range tierWord.FindAllString(strings.ToLower(section), -1) {
+		if word != "none" && !slices.Contains(caps, word) {
+			caps = append(caps, word)
+		}
+	}
+	return caps
 }

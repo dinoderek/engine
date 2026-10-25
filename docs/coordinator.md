@@ -70,8 +70,9 @@ every decision that reads the tracker, and picks the model, the effort and
 the kickoff, and passes them in. The host does what touches its own disk,
 tmux and token, and reads `hosts.toml` only for its own launch line,
 harness binary and slots. `engine start` calls its own host's
-ops in-process. Designed, not built: calling another machine's as
-`ssh <address> engine host <op> --json`. The coordinator refuses to run
+ops in-process, and another machine's as `ssh -o BatchMode=yes -o
+ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`).
+Designed, not built: the same for `ps`, `tell` and `run`. The coordinator refuses to run
 unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
 you are changing host names or addresses, load `hosts-and-sessions.md`.
 
@@ -88,6 +89,13 @@ format's version, an integer), `engine` (the build) and `host` (the host's
 name). A caller refuses a reply whose `protocol` is not its own. A failure
 is `{"error": …, "refused": true|false}`; `refused` means the op changed
 nothing, so the caller reports it as a refusal of its own.
+
+Over SSH, ssh's exit 255 is an unreachable host. A reply whose `protocol`
+differs, or that is not an engine's, is an error telling the operator to run
+`engine setup --host <name>`. An unknown op is refused with the envelope.
+`engine start --check --host <name>` first reads the protocol from the refusal
+of the op `protocol`, which no engine defines, then streams
+`ssh <address> engine start --check` and keeps its exit code.
 
 **A failed call is unknown, never dead.** When a call fails or a host cannot
 be reached, everything that host would have said is unknown: none of its

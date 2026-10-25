@@ -44,8 +44,8 @@ bin = { claude = "~/.local/bin/claude" }
 `
 
 const (
-	remote    = "dino@devbox.example.ts.net"
-	windowsFD = "#{window_id} #{pane_id} #{pane_dead} #{window_name}"
+	devboxAddr = "dino@devbox.example.ts.net"
+	windowsFD  = "#{window_id} #{pane_id} #{pane_dead} #{window_name}"
 )
 
 // home returns a home directory whose engine config names self as this host.
@@ -246,13 +246,13 @@ func TestAttachRemoteFindsTheWindowOverSSH(t *testing.T) {
 	if err := Attach("web.app-412", r.deps()); err != nil {
 		t.Fatal(err)
 	}
-	wantCall := "ssh " + remote + " 'tmux' 'list-windows' '-t' '=engine:' '-F' '" + windowsFD + "'"
+	wantCall := "ssh " + devboxAddr + " 'tmux' 'list-windows' '-t' '=engine:' '-F' '" + windowsFD + "'"
 	if !slices.Contains(tm.calls, wantCall) {
 		t.Errorf("calls %q lack %q", tm.calls, wantCall)
 	}
 	// ssh gets the remote command as one quoted string, so the target is not
 	// expanded by the remote login shell.
-	want := []string{"ssh", "-t", remote, "'tmux' 'attach' '-t' '=engine:@7'"}
+	want := []string{"ssh", "-t", devboxAddr, "'tmux' 'attach' '-t' '=engine:@7'"}
 	if r.exec.calls != 1 || r.exec.path != "/bin/ssh" || !slices.Equal(r.exec.argv, want) {
 		t.Errorf("replaced with %s %v, want /bin/ssh %v", r.exec.path, r.exec.argv, want)
 	}
@@ -273,7 +273,7 @@ func TestAttachRemoteIgnoresTmuxInside(t *testing.T) {
 func TestAttachRemoteUnreachable(t *testing.T) {
 	r := newRig(t, "mac", &fakeTmux{sshErr: &session.ExitError{Code: 255, Stderr: "Connection refused"}}, webTask("devbox", t0))
 	err := Attach("web.app-412", r.deps())
-	if err == nil || err.Error() != "ssh "+remote+": Connection refused" {
+	if err == nil || err.Error() != "ssh "+devboxAddr+": Connection refused" {
 		t.Errorf("error %v, want the ssh failure", err)
 	}
 	if r.exec.calls != 0 {
@@ -285,7 +285,7 @@ func TestAttachRemoteWithoutTmux(t *testing.T) {
 	// A missing tmux on the remote exits 127: that is not a missing session.
 	r := newRig(t, "mac", &fakeTmux{sshErr: &session.ExitError{Code: 127, Stderr: "zsh: command not found: tmux"}}, webTask("devbox", t0))
 	err := Attach("web.app-412", r.deps())
-	if err == nil || err.Error() != "ssh "+remote+": zsh: command not found: tmux" {
+	if err == nil || err.Error() != "ssh "+devboxAddr+": zsh: command not found: tmux" {
 		t.Errorf("error %v, want the remote shell's failure", err)
 	}
 	if r.exec.calls != 0 {
@@ -403,11 +403,5 @@ func TestSystemFillsEveryDep(t *testing.T) {
 	d := System(func([]string, string, ...string) (string, error) { return "", nil }, os.Getenv, "/home/x")
 	if d.Gh == nil || d.Run == nil || d.Replace == nil || d.LookPath == nil || d.Getenv == nil || d.Home != "/home/x" {
 		t.Errorf("System left a dep unset: %+v", d)
-	}
-}
-
-func TestShellJoin(t *testing.T) {
-	if got := shellJoin([]string{"tmux", "it's", "#{x} y"}); got != `'tmux' 'it'\''s' '#{x} y'` {
-		t.Errorf("got %s", got)
 	}
 }

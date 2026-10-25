@@ -29,6 +29,8 @@ type Card struct {
 	Labels    []string
 	Body      string
 	BlockedBy []Blocker
+	// Requires are the capabilities the Requires section names.
+	Requires []string
 }
 
 // Has reports whether the card carries label.
@@ -77,7 +79,7 @@ func readCard(run Runner, token string, issue apiIssue) (Card, error) {
 	if err != nil {
 		return Card{}, fmt.Errorf("a task: %w", err)
 	}
-	c := Card{Ref: ref, Title: issue.Title, Open: issue.State == "open", Labels: issue.labelNames(), Body: issue.Body}
+	c := Card{Ref: ref, Title: issue.Title, Open: issue.State == "open", Labels: issue.labelNames(), Body: issue.Body, Requires: ParseRequires(issue.Body)}
 	if c.BlockedBy, err = blockedBy(run, token, ref); err != nil {
 		return Card{}, err
 	}

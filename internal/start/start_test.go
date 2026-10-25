@@ -58,6 +58,13 @@ func TestRefusalsChangeNothing(t *testing.T) {
 		{name: "codex", issue: with(func(i *issue) { i.body = card("codex, light") }), want: "engine start launches claude only"},
 		{name: "host does not run claude", host: "box", want: "host box does not run claude"},
 		{name: "no harness binary", setup: removeFile("bin/claude"), want: "is not an executable claude binary"},
+		{name: "host lacks a required capability", issue: with(func(i *issue) { i.body = "## Requires\nios, macos\n\n" + card("deep") }),
+			want: "host mac lacks ios, which " + ref(7).String() + " requires (it has: macos)"},
+		{name: "named host lacks it too", opts: Options{Host: "mac"}, issue: with(func(i *issue) { i.body = "## Requires\nlinux\n\n" + card("deep") }),
+			want: "host mac lacks linux"},
+		{name: "a word no host declares", issue: with(func(i *issue) { i.body = "## Requires\nteleporter\n\n" + card("deep") }),
+			want: "host mac lacks teleporter"},
+		{name: "unknown --host", opts: Options{Host: "nowhere"}, want: `host "nowhere" is not in hosts.toml; its machines are box, dev, mac`},
 		{name: "window exists", windows: []string{"@1 %1 0 r-7"}, want: "already has a window r-7 (@1)"},
 		{name: "no free slot", windows: []string{"@1 %1 0 r-1", "@2 %2 0 r-2"}, want: "no free slot: 2 sessions running, 2 slots"},
 	}
