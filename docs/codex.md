@@ -4,7 +4,9 @@
 
 ## Launch
 
-A host lists `codex` in its `harnesses` and pins its `bin` (`hosts-and-sessions.md`). The harness's launch line and tiers:
+A host lists `codex` in its `harnesses` and pins its `bin` (`hosts-and-sessions.md`).
+Engine does not start Codex sessions yet (`hosts-and-sessions.md`, "Starting a
+session"). The harness's launch line and tiers:
 
 ```toml
 [harness.codex]
@@ -35,7 +37,7 @@ The sandbox needs two exceptions for executors:
 All Codex settings are passed per session with `-c`. The host's own
 `~/.codex/config.toml` is never edited.
 
-## Hooks
+## Guards
 
 Codex sessions have no guard yet. The merge and permission guards in
 `claude.md` do not apply to them.
