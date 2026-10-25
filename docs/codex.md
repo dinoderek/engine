@@ -49,7 +49,8 @@ call is a `Bash` tool call with the same `tool_input.command`, and its
 Codex's hooks run `engine hook state`, which writes `harness-state.json` to the
 run directory, atomically:
 the state (`working`, `waiting` or `ended`), the event that set it, the time
-and Codex's session ID. A prompt makes the session `working`. A session start,
+and Codex's session ID. A prompt, or a finished tool call, makes the session `working`: the call
+after an approved permission request is how a `waiting` session resumes. A session start,
 `Stop`, `Interrupt` or attended permission request makes it `waiting`, and a
 session end `ended`. Outside an engine run the hook does nothing, and no hook
 ever fails a Codex turn. `status` reads it for a window whose newest run is

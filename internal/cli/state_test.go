@@ -38,6 +38,7 @@ func TestStateHookWritesTheStateFile(t *testing.T) {
 	}{
 		{"SessionStart", session.StateWaiting},
 		{"UserPromptSubmit", session.StateWorking},
+		{"PostToolUse", session.StateWorking},
 		{"Stop", session.StateWaiting},
 		{"Interrupt", session.StateWaiting},
 		{"PermissionRequest", session.StateWaiting},
@@ -61,6 +62,7 @@ func TestStateHookWritesTheStateFile(t *testing.T) {
 
 func TestStateHookDoesNothingElsewhere(t *testing.T) {
 	dir := t.TempDir()
+	cwd := t.TempDir()
 	tests := map[string]struct {
 		in   string
 		vars map[string]string
@@ -73,14 +75,17 @@ func TestStateHookDoesNothingElsewhere(t *testing.T) {
 		"an unreadable event":          {"not json", map[string]string{session.RunDirVar: dir}, 1, "unreadable state event"},
 		"a run directory that is gone": {recordedEvent(t, "Stop"), map[string]string{session.RunDirVar: filepath.Join(dir, "gone")}, 1, "record the session state"},
 	}
+	t.Chdir(cwd) // a hook that wrote to "" would leave its file here
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			code, stderr := runStateHook(tt.in, tt.vars)
 			if code != tt.code || !strings.Contains(stderr, tt.msg) {
 				t.Errorf("exit %d, stderr %q; want %d, %q", code, stderr, tt.code, tt.msg)
 			}
-			if _, ok := session.ReadHarnessState(dir); ok {
-				t.Error("a state file was written")
+			for _, where := range []string{dir, cwd} {
+				if _, ok := session.ReadHarnessState(where); ok {
+					t.Errorf("a state file was written in %s", where)
+				}
 			}
 		})
 	}

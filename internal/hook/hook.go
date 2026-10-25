@@ -14,7 +14,8 @@ import (
 	"strings"
 )
 
-// event is the part of a Claude Code PreToolUse event the guard reads.
+// event is the part of a Claude Code or Codex PreToolUse event the guard
+// reads: both name the shell tool Bash and put the command in tool_input.
 type event struct {
 	ToolName  string `json:"tool_name"`
 	ToolInput struct {
@@ -22,7 +23,7 @@ type event struct {
 	} `json:"tool_input"`
 }
 
-// PreToolUse reads a Claude Code PreToolUse event from in. When a Bash
+// PreToolUse reads a Claude Code or Codex PreToolUse event from in. When a Bash
 // command merges a pull request unsafely it writes the reason to stderr and
 // returns 2, which blocks the call and shows the reason to the agent.
 // Otherwise it returns 0.

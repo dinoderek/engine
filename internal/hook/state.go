@@ -32,8 +32,9 @@ type State struct {
 
 // Handle reads a Codex hook event from in and records the session's state: a
 // session start, stop, interrupt or attended permission request leaves it
-// waiting, a submitted prompt makes it working, and a session end makes it
-// ended. Any other event changes nothing. An event it cannot read or record
+// waiting, a submitted prompt or a finished tool call makes it working (the
+// call after a permission request is what puts a session back to work), and a
+// session end makes it ended. Any other event changes nothing. An event it cannot read or record
 // gives exit 1, which blocks nothing: a hook never fails a Codex turn.
 func (s State) Handle(in io.Reader) int {
 	var e stateEvent
@@ -56,7 +57,7 @@ func (s State) Handle(in io.Reader) int {
 // event says nothing about it.
 func stateFor(event string, unattended bool) string {
 	switch event {
-	case "UserPromptSubmit":
+	case "UserPromptSubmit", "PostToolUse":
 		return "working"
 	case "SessionStart", "Stop", "Interrupt":
 		return "waiting"

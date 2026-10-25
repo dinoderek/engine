@@ -32,6 +32,8 @@ func TestStateFromRecordedEvents(t *testing.T) {
 	}{
 		{"SessionStart", false, "waiting"},
 		{"UserPromptSubmit", false, "working"},
+		{"PostToolUse", false, "working"},
+		{"PostToolUse", true, "working"},
 		{"Stop", false, "waiting"},
 		{"Interrupt", false, "waiting"},
 		{"PermissionRequest", false, "waiting"},
