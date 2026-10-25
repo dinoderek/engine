@@ -40,6 +40,13 @@ ram_gb = 24
 capabilities = ["macos"]
 bin = { claude = "@BIN@", codex = "~/bin/codex" }
 
+[host.dev]
+address = "me@dev"
+harnesses = ["claude"]
+ram_gb = 24
+capabilities = ["linux", "docker"]
+bin = { claude = "~/bin/claude" }
+
 [host.box]
 address = "me@box"
 harnesses = ["codex"]

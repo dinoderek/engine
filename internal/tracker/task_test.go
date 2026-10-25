@@ -221,3 +221,41 @@ func TestDecodeOneWantsOneValue(t *testing.T) {
 		t.Errorf("two: %v", err)
 	}
 }
+
+func TestParseRequires(t *testing.T) {
+	cases := []struct {
+		name, body string
+		want       []string
+	}{
+		{"absent", "## Outcome\n\nx", nil},
+		{"empty", "## Requires\n\n", nil},
+		{"only a comment", "## Requires\n\n<!-- Host capabilities. -->\n", nil},
+		{"none", "## Requires\nNone.", nil},
+		{"one", "## Requires\nmacos", []string{"macos"}},
+		{"list", "## Requires\n- ios\n- Docker, macos.", []string{"ios", "docker", "macos"}},
+		{"repeated", "## Requires\nios, ios", []string{"ios"}},
+		{"none among words", "## Requires\nnone, linux", []string{"linux"}},
+		{"stops at the next heading", "## Requires\nlinux\n## Harness / tier\ndeep", []string{"linux"}},
+		{"crlf", "## Requires \r\nvm\r\n", []string{"vm"}},
+		{"similar heading", "## Requires more\nios", nil},
+		{"heading inside a comment", "<!-- ## Requires\nios -->", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ParseRequires(tc.body); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadTaskReadsRequires(t *testing.T) {
+	gh := &fakeGH{replies: map[string]string{
+		taskPath:    `{"number":21,"state":"open","body":"## Requires\nios, docker\n"}`,
+		blockerPath: `[]`,
+	}}
+	task, err := ReadTask(gh.run, "tok", Ref{"o/r", 21})
+	if err != nil || !reflect.DeepEqual(task.Requires, []string{"ios", "docker"}) {
+		t.Errorf("got %+v, %v", task.Requires, err)
+	}
+}

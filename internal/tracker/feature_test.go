@@ -10,7 +10,7 @@ import (
 const (
 	issues   = "repos/o/r/" + "issues/"
 	repoAPI  = "https://api.github.com/repos/o/r"
-	subIssue = `{"number":%d,"title":"t","state":"%s","body":"b","repository_url":"` + repoAPI + `","labels":[{"name":"engine:running"}]}`
+	subIssue = `{"number":%d,"title":"t","state":"%s","body":"b\n## Requires\nlinux","repository_url":"` + repoAPI + `","labels":[{"name":"engine:running"}]}`
 )
 
 func featureRunner(fail string) Runner {
@@ -46,7 +46,7 @@ func TestReadFeature(t *testing.T) {
 		t.Fatalf("feature %+v", f)
 	}
 	c := f.Tasks[1]
-	if c.Ref != (Ref{"o/r", 3}) || !c.Open || !c.Has("engine:running") || c.Body != "b" ||
+	if c.Ref != (Ref{"o/r", 3}) || !c.Open || !c.Has("engine:running") || c.Body != "b\n## Requires\nlinux" || len(c.Requires) != 1 || c.Requires[0] != "linux" ||
 		len(c.BlockedBy) != 1 || c.BlockedBy[0] != (Blocker{Ref{"o/r", 2}, false}) {
 		t.Errorf("card %+v", c)
 	}

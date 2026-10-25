@@ -14,19 +14,28 @@ func TestParseStart(t *testing.T) {
 	cases := []struct {
 		name string
 		args []string
-		want start.Options
+		want startArgs
 		err  string
 	}{
-		{"task only", []string{task.String()}, start.Options{Ref: task}, ""},
-		{"flags after", []string{task.String(), "--tier", "deep", "--mode", "gated"}, start.Options{Ref: task, Tier: "deep", Mode: "gated"}, ""},
-		{"flags before, with =", []string{"--mode=gated", "--tier=light", task.String()}, start.Options{Ref: task, Tier: "light", Mode: "gated"}, ""},
-		{"no task", []string{"--tier", "deep"}, start.Options{}, "no task"},
-		{"two tasks", []string{task.String(), task.String()}, start.Options{}, "one task at a time"},
-		{"flag without a value", []string{task.String(), "--tier"}, start.Options{}, "--tier needs a value"},
-		{"empty value with =", []string{task.String(), "--mode="}, start.Options{}, "--mode= needs a value"},
-		{"empty value", []string{task.String(), "--tier", ""}, start.Options{}, "--tier needs a value"},
-		{"unknown flag", []string{task.String(), "--model", "x"}, start.Options{}, "unknown flag --model"},
-		{"bad task", []string{"o/r"}, start.Options{}, "want owner/repo#n"},
+		{"task only", []string{task.String()}, startArgs{Options: start.Options{Ref: task}}, ""},
+		{"flags after", []string{task.String(), "--tier", "deep", "--mode", "gated"}, startArgs{Options: start.Options{Ref: task, Tier: "deep", Mode: "gated"}}, ""},
+		{"flags before, with =", []string{"--mode=gated", "--tier=light", task.String()}, startArgs{Options: start.Options{Ref: task, Tier: "light", Mode: "gated"}}, ""},
+		{"no task", []string{"--tier", "deep"}, startArgs{}, "no task"},
+		{"two tasks", []string{task.String(), task.String()}, startArgs{}, "one task at a time"},
+		{"flag without a value", []string{task.String(), "--tier"}, startArgs{}, "--tier needs a value"},
+		{"empty value with =", []string{task.String(), "--mode="}, startArgs{}, "--mode= needs a value"},
+		{"empty value", []string{task.String(), "--tier", ""}, startArgs{}, "--tier needs a value"},
+		{"unknown flag", []string{task.String(), "--model", "x"}, startArgs{}, "unknown flag --model"},
+		{"host", []string{task.String(), "--host", "devbox"}, startArgs{Options: start.Options{Ref: task, Host: "devbox"}}, ""},
+		{"host with =", []string{"--host=devbox", task.String(), "--tier", "deep"}, startArgs{Options: start.Options{Ref: task, Host: "devbox", Tier: "deep"}}, ""},
+		{"host without a value", []string{task.String(), "--host"}, startArgs{}, "--host needs a value"},
+		{"check", []string{"--check"}, startArgs{Check: true}, ""},
+		{"check on a host", []string{"--check", "--host", "devbox"}, startArgs{Options: start.Options{Host: "devbox"}, Check: true}, ""},
+		{"host before check", []string{"--host=devbox", "--check"}, startArgs{Options: start.Options{Host: "devbox"}, Check: true}, ""},
+		{"check with a task", []string{"--check", task.String()}, startArgs{}, "--check takes no task"},
+		{"check with a tier", []string{"--check", "--tier", "deep"}, startArgs{}, "--check takes no task, --tier or --mode"},
+		{"check with a mode", []string{"--mode=gated", "--check"}, startArgs{}, "--check takes no task"},
+		{"bad task", []string{"o/r"}, startArgs{}, "want owner/repo#n"},
 	}
 	for _, c := range cases {
 		got, err := parseStart(c.args)
@@ -63,7 +72,11 @@ func TestStartCommandLine(t *testing.T) {
 		{"usage", []string{"start"}, 2, "usage: engine start <owner/repo#n>"},
 		{"refusal", []string{"start", task, "--mode", "yolo"}, 1, `engine start: unknown mode "yolo": want hands-off or gated; nothing was changed`},
 		{"no token", []string{"start", task}, 1, "engine start: the session reads the machine user's token from"},
-		{"usage names --check", []string{"start"}, 2, "engine start --check"},
+		{"usage names --check", []string{"start"}, 2, "engine start --check [--host <name>]"},
+		{"usage names --host", []string{"start", task, "--bogus"}, 2, "[--host <name>]"},
+		{"unknown host", []string{"start", task, "--host", "nowhere"}, 1, "engine start: the session reads the machine user's token from"},
+		{"check with a task", []string{"start", "--check", task}, 2, "--check takes no task"},
+		{"check on a host, no host config", []string{"start", "--check", "--host", "devbox"}, 1, "engine start --check: read host config"},
 		{"check, no token", []string{"start", "--check"}, 1, "engine start --check: the session reads the machine user's token from"},
 	}
 	for _, c := range cases {

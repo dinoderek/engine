@@ -134,15 +134,18 @@ branch. It holds letters, digits, `_`, `.` and `-`, and does not start with
 
 ## Starting a session: `engine start`
 
-`engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]`
-launches a Claude session on this machine from any directory, and returns
-once it is up. `--mode` defaults to `hands-off`; `--tier` replaces the card's.
+`engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated] [--host <name>]`
+launches a Claude session from any directory, and returns once it is up.
+`--mode` defaults to `hands-off`; `--tier` replaces the card's. With no
+`--host` the session runs on this machine; `--host` names another machine in
+`hosts.toml` and starts it there over SSH.
 
 It first refuses, changing nothing, when: the token file, host file,
 `hosts.toml` or this host's entry is missing; the task is closed, has a task
 state label or an open blocker, or is standalone without `engine:approved`;
 the card's harness is unknown (as a misspelt tier is), not Claude, or not run
-here; its window exists; or no slot is free (a live window holds one). Then
+on the host; the host lacks a capability in the card's `requires`, even when
+named; its window exists; or no slot is free (a live window holds one). Then
 it:
 
 1. syncs engine's clone (`operator-setup.md`, "Machine user"): clones it over
@@ -171,9 +174,13 @@ kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
 `sync-repo` and `spawn` ops (`coordinator.md`, "Reaching hosts"), which
 `engine start` calls in-process.
 The executor claims the task; its claim check stops a racing second start.
-Designed, not built: `--harness codex`, and `--host` (spawning over SSH).
+With `--host`, the caller makes the task, harness, tier and `requires`
+refusals, and reads the window and free slots from the host's `status`; the
+host's own `spawn` refuses anything else, such as a missing harness binary.
+An unreachable host is an error, not a refusal. Designed, not built:
+`--harness codex`.
 
-**Preflight:** `engine start --check` opens a throwaway hands-off session,
+**Preflight:** `engine start --check [--host <name>]` opens a throwaway hands-off session,
 `engine-check`, at the light tier, that reads the skill, reads a file it
 wrote in `/tmp`, runs `gh` and `engine`, and closes its window. It exits 1,
 printing what it met, when the session hit a permission request, stalled or
