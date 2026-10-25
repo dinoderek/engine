@@ -62,8 +62,8 @@ A host does its own work through `engine host <op> --json`: one job, one
 JSON object on stdout, and exit 0, or 1 for a failure. The caller makes
 every decision that reads the tracker, and picks the model, the effort and
 the kickoff, and passes them in. The host does what touches its own disk,
-tmux and token, and reads only its own entry in `hosts.toml`: its launch
-line, harness binary and slots. `engine start` calls its own host's
+tmux and token, and reads `hosts.toml` only for its own launch line,
+harness binary and slots. `engine start` calls its own host's
 ops in-process. Designed, not built: calling another machine's as
 `ssh <address> engine host <op> --json`. The coordinator refuses to run
 unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If

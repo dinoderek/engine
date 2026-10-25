@@ -33,7 +33,7 @@ One `run.json` per session, written at spawn and finalised at exit:
 window's raw output) and `permissions.jsonl`: one JSON line per permission
 request the hook denied and per action auto mode refused, with the time,
 tool, input and decision (`Entry` in `internal/hook/permission.go`). The run ID
-is `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, the time it was spawned. A preflight
+is `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, the time its launch began. A preflight
 check's directory, `check-<time>`, stays, with no `run.json`.
 
 **At spawn,** `engine start` writes the identity it knows (all but the

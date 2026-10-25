@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -15,7 +16,8 @@ type Released struct {
 	// Worktree is the newest run's worktree, when it still was on disk.
 	Worktree     string `json:"worktree,omitempty"`
 	WorktreeKept bool   `json:"worktree_kept"`
-	// Note says why a worktree was kept when the run had not failed.
+	// Note says what went wrong without failing the release: why a worktree
+	// was kept when the run had not failed, or a run.json it could not read.
 	Note string `json:"note,omitempty"`
 }
 
@@ -41,9 +43,14 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 		}
 		r.WindowClosed = true
 	}
+	// An unreadable run.json of another run matters only when this
+	// session's own run is unknown.
 	run, ok, err := session.LatestRun(d.Home, name)
-	if err != nil || !ok || run.Record.Worktree == "" {
+	if !ok || run.Record.Worktree == "" {
 		return r, err
+	}
+	if err != nil {
+		r.Note = err.Error()
 	}
 	if _, err := os.Stat(run.Record.Worktree); errors.Is(err, fs.ErrNotExist) {
 		return r, nil
@@ -53,7 +60,7 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 		return r, nil
 	}
 	if err := removeWorktree(d, run.Record); err != nil {
-		r.Note = err.Error()
+		r.Note = strings.TrimPrefix(r.Note+"; "+err.Error(), "; ")
 		return r, nil
 	}
 	r.WorktreeKept = false

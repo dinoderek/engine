@@ -1,6 +1,7 @@
 package hostops
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,10 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 		return Spawned{}, refuse("%v", err)
 	}
 	wt, err := repos.CreateWorktree(clone, s.Task)
+	var taken *session.BranchTakenError
+	if errors.As(err, &taken) {
+		return Spawned{}, refuse("%v", err)
+	}
 	if err != nil {
 		return Spawned{}, err
 	}

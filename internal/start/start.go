@@ -308,6 +308,8 @@ func (p plan) launch(d Deps) (Started, error) {
 	if _, err := host.SyncRepo(p.repo.String()); err != nil {
 		return Started{}, err
 	}
+	// Taken once the clone is synced, so the run ID and run.json's spawn
+	// time stay seconds apart.
 	runID := session.RunID(p.repo, p.opts.Ref.Number, d.Now())
 	sp, err := host.Spawn(p.spawnRequest(runID))
 	if err != nil {

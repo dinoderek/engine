@@ -60,6 +60,23 @@ func TestReleaseKeepsAWorktreeGitWillNotRemove(t *testing.T) {
 	}
 }
 
+// Another session's unreadable run.json does not stop this one's release.
+func TestReleaseReadsPastAnotherBadRun(t *testing.T) {
+	h := newHome(t, "mac")
+	worktree := filepath.Join(h.clone(t)+"-worktrees", "task-r-7")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeRun(t, h, session.Record{RunID: "r-7-a", Repo: "o/r", Name: "r-7", Worktree: worktree, Spawned: fixedNow()})
+	// Repo r-7's task 12 is the session r-7-12, whose runs LatestRun also reads.
+	write(t, filepath.Join(h.dir, session.RunsDir, "r-7-12-a", session.RecordFile), "{", 0o644)
+	git := &gitFake{}
+	r, err := Release(Deps{Run: git.run, Tmux: (&tmuxFake{}).tmux(), Home: h.dir}, "r-7", false)
+	if err != nil || r.WorktreeKept || r.Worktree != worktree || !strings.Contains(r.Note, "r-7-12-a") || len(git.calls) != 1 {
+		t.Errorf("released %+v, %v, git %v", r, err, git.calls)
+	}
+}
+
 func TestReleaseWithNothingLeft(t *testing.T) {
 	h := newHome(t, "mac")
 	writeRun(t, h, session.Record{RunID: "r-7-a", Repo: "o/r", Name: "r-7", Worktree: filepath.Join(h.dir, "gone"), Spawned: fixedNow()})

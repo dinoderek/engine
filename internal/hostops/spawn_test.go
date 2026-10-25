@@ -107,14 +107,7 @@ func TestLaunchCommand(t *testing.T) {
 
 func TestSpawnRefusalsChangeNothing(t *testing.T) {
 	with := func(edit func(*SpawnRequest)) SpawnRequest { r := request(); edit(&r); return r }
-	cases := []struct {
-		name    string
-		host    string
-		req     SpawnRequest
-		windows []string
-		setup   func(t *testing.T, h home)
-		want    string
-	}{
+	cases := []spawnRefusal{
 		{name: "bad repo", req: with(func(r *SpawnRequest) { r.Repo = "o" }), want: `want owner/repo, got "o"`},
 		{name: "everything else wrong", req: SpawnRequest{Repo: "o/r", Tier: "huge", Feature: "x", RunID: "../x"},
 			want: `task number must be positive, got 0; unknown mode "": want hands-off or gated; a model and an effort are required; ` +
@@ -126,6 +119,7 @@ func TestSpawnRefusalsChangeNothing(t *testing.T) {
 		{name: "host does not run claude", host: "box", want: "host box does not run claude"},
 		{name: "no harness binary", setup: remove("bin/claude"), want: "is not an executable claude binary"},
 		{name: "window exists", windows: []string{"@1 %1 0 r-7"}, want: "already has a window r-7"},
+		{name: "branch exists", git: &gitFake{branch: true}, want: "branch task/r-7 already exists"},
 		{name: "no clone", setup: func(t *testing.T, h home) {
 			if err := os.RemoveAll(filepath.Join(h.dir, ".local")); err != nil {
 				t.Fatal(err)
@@ -133,35 +127,57 @@ func TestSpawnRefusalsChangeNothing(t *testing.T) {
 		}, want: "sync it first"},
 	}
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if c.host == "" {
-				c.host = "mac"
-			}
-			if c.req.Repo == "" {
-				c.req = request()
-			}
-			h := newHome(t, c.host)
-			h.clone(t)
-			if c.setup != nil {
-				c.setup(t, h)
-			}
-			before := files(t, h.dir)
-			tm := &tmuxFake{windows: c.windows}
-			git := &gitFake{}
-			_, err := Spawn(spawnDeps(t, h, git.run, tm, nil), c.req)
-			var refused *RefusedError
-			if !errors.As(err, &refused) || !strings.Contains(err.Error(), c.want) || !strings.HasSuffix(err.Error(), "nothing was changed") {
-				t.Fatalf("err = %v, want a refusal containing %q", err, c.want)
-			}
-			if after := files(t, h.dir); !slices.Equal(before, after) {
-				t.Errorf("files changed:\nbefore %v\nafter  %v", before, after)
-			}
-			if slices.ContainsFunc(git.calls, func(c string) bool { return !strings.Contains(c, "symbolic-ref") }) {
-				t.Errorf("a refusal ran %v", git.calls)
-			}
-			tm.readOnly(t)
-		})
+		t.Run(c.name, func(t *testing.T) { checkSpawnRefusal(t, c) })
 	}
+}
+
+// spawnRefusal is one way spawn must refuse. Empty fields take the defaults
+// of a spawn that would launch: host mac, request().
+type spawnRefusal struct {
+	name    string
+	host    string
+	req     SpawnRequest
+	windows []string
+	git     *gitFake
+	setup   func(t *testing.T, h home)
+	want    string
+}
+
+// checkSpawnRefusal wants a refusal that wrote no file, made only git's and
+// tmux's reads, and says nothing changed.
+func checkSpawnRefusal(t *testing.T, c spawnRefusal) {
+	t.Helper()
+	if c.host == "" {
+		c.host = "mac"
+	}
+	if c.req.Repo == "" {
+		c.req = request()
+	}
+	h := newHome(t, c.host)
+	h.clone(t)
+	if c.setup != nil {
+		c.setup(t, h)
+	}
+	before := files(t, h.dir)
+	tm := &tmuxFake{windows: c.windows}
+	git := c.git
+	if git == nil {
+		git = &gitFake{}
+	}
+	_, err := Spawn(spawnDeps(t, h, git.run, tm, nil), c.req)
+	var refused *RefusedError
+	if !errors.As(err, &refused) || !strings.Contains(err.Error(), c.want) || !strings.HasSuffix(err.Error(), "nothing was changed") {
+		t.Fatalf("err = %v, want a refusal containing %q", err, c.want)
+	}
+	if after := files(t, h.dir); !slices.Equal(before, after) {
+		t.Errorf("files changed:\nbefore %v\nafter  %v", before, after)
+	}
+	if slices.ContainsFunc(git.calls, func(c string) bool {
+		return !strings.Contains(c, "symbolic-ref") && !strings.Contains(c, "worktree list") && !strings.Contains(c, "rev-parse --verify")
+	}) {
+		t.Errorf("a refusal ran %v", git.calls)
+	}
+	tm.readOnly(t)
 }
 
 func remove(rel string) func(*testing.T, home) {

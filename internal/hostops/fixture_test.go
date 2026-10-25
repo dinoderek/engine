@@ -165,6 +165,8 @@ type gitFake struct {
 	calls []string
 	fail  map[string]error
 	added string
+	// branch is true when the task's branch already exists in the clone.
+	branch bool
 }
 
 func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string, error) {
@@ -182,7 +184,7 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		return "https://github.com/o/r.git\n", nil
 	case strings.Contains(line, "symbolic-ref"):
 		return "origin/main\n", nil
-	case strings.Contains(line, "rev-parse --verify"):
+	case strings.Contains(line, "rev-parse --verify") && !f.branch:
 		return "", errors.New("exit status 1")
 	case strings.Contains(line, "worktree add"):
 		f.added = args[len(args)-2]
@@ -201,12 +203,14 @@ func noGit(t *testing.T) session.RunFunc {
 	}
 }
 
-// clone makes h's clone of o/r look synced.
+// clone makes h's clone of o/r look synced, with the lock file a sync
+// leaves beside it.
 func (h home) clone(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(h.dir, ".local/share/engine/repos/o/r")
 	if err := os.MkdirAll(filepath.Join(path, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	write(t, path+".lock", "", 0o600)
 	return path
 }
