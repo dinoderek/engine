@@ -29,24 +29,7 @@ approved, or a lone task that failed.
 **The reconcile loop.** Each pass reads state, works out what to do, and does
 it. The skill's `coordinate` mode
 (`plugins/engine/skills/engine/references/coordinate.md`) is the spec for a
-pass, so an agent coordinator and `engine run` behave the same. A pass can:
-
-- spawn the planner and lint the plan (the planner is started as
-  `engine start` starts a task: hands-off, at `deep`, with the kickoff
-  `Plan breakdown <feature> with the engine planner`);
-- place and spawn ready tasks in the skill's order (most downstream tasks
-  first), which is `engine start` for each one;
-- mark dead sessions `failed`;
-- update the feature's label;
-- @mention you about a stalled session;
-- close the windows of finished hands-off tasks that did not close their own;
-- on `done`, post a summary and close the feature issue;
-- gather and upload telemetry for runs that have ended (designed, not built).
-
-**Supervised.** An agent can watch `engine run`
-(the skill's `supervise` mode). It acts only through `engine` commands, may
-rebuild and restart `engine run` between passes, and records each gap it
-fills as a comment on the feature.
+pass, so an agent coordinator and `engine run` behave the same.
 
 A pass runs every 5 minutes. Between passes, a session check runs every 60
 seconds. It reads only the host, never GitHub, and starts a pass early when a
@@ -63,25 +46,6 @@ The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it
 skips any task whose session is still alive.
 
-Commands that work without `run`, and come first in the build:
-
-- `engine start <issue>`: place and launch one executor session
-  (`hosts-and-sessions.md`).
-- `engine ps`: every claimed task, built from the claim comments plus a
-  liveness probe of each host.
-- `engine attach <repo>-<task>`: attach to a session's tmux window, locally or
-  over SSH.
-- `engine tell <repo>-<task> <text>`: comment the text on the task's issue,
-  then type a pointer to the comment into its window on this host, so the
-  session reads it now rather than at its next inbox check. For a session on
-  another host, or with no live window, the comment stays and it exits 1. A
-  lone `-` as the text reads it from stdin, so a long or multi-line answer
-  needs no shell quoting; empty text is refused.
-- `engine lint <feature>`: plan lint on its own, printing each broken rule;
-  it exits 1 when there is one.
-- `engine labels sync <owner/repo>`: create or update the `engine:` labels in
-  a target repo.
-
 The coordinator's GitHub adapter and `engine lint` implement the skill's plan
 sources (`plugins/engine/skills/engine/references/plan-sources.md`) and its
 lint rules (`plugins/engine/skills/engine/references/plan.md`). The skill is
@@ -89,10 +53,8 @@ the spec; the code follows it.
 
 ## Later: `engine serve`
 
-A persistent daemon over many features, with a web UI for features, sessions
-and rulings. It runs the same reconcile core, and `run` is `serve` limited to
-one feature. Keep the core a package with no CLI assumptions, so `serve` only
-adds to it.
+A persistent daemon over many features, with a web UI. It runs the same
+reconcile core, which stays a package with no CLI assumptions.
 
 ## Reaching hosts
 
@@ -175,21 +137,5 @@ you. GitHub mobile pushes both.
 
 **Who engine trusts.** Repos can be public, so anyone can comment on a task.
 Engine acts on a claim comment only when its author is the operator or the
-machine user. The list is hardcoded in `internal/tracker` (`TrustedUsers`),
-and the newest trusted claim wins. Finding claimed tasks searches once per
-trusted commenter, so it covers only issues a trusted user has commented on,
-and it leaves out an issue with a claim label but no trusted claim. A claim by
-anyone else is ignored, so a stranger cannot add a task. Reading the list from config is a later change.
-
-## Salvage from `orchestrator`
-
-Worth porting from the earlier Go repo:
-
-- the run record schema;
-- the runtime directory layout;
-- the worktree manager;
-- the fake-harness acceptance tests;
-- its Codex sign-in check.
-
-Its headless `codex exec` worker model does not carry over. Engine sessions are
-interactive, in tmux.
+machine user. The newest trusted claim wins, and a claim by anyone else is
+ignored, so a stranger cannot add a task.

@@ -23,17 +23,12 @@
 5. **Pass it, don't log in with it.** Engine passes the token as `GH_TOKEN`
    to its own `git` and `gh` calls and to every session. Your own `gh` login
    stays yours.
-6. **Push from engine's clones only.** Engine clones over HTTPS and sets
-   `credential.helper` to `!gh auth git-credential` in each clone's local
-   config, after an empty value that drops any helper the host configures
-   globally, such as the keychain. Engine refuses to clone or sync when a
-   `url.<base>.insteadOf` or `pushInsteadOf` rule in your git config would
-   send an engine clone over SSH, so limit such a rule to your own checkouts
-   (an `includeIf "gitdir:"`). Your SSH-key checkouts are untouched.
-7. **Attribute commits truthfully.** Each engine clone sets the local
-   `user.name` to the machine user's login and `user.email` to its noreply
-   address, and the harness adds its `Co-Authored-By` trailer. PRs open as
-   the machine user, which also means you can approve them.
+6. **Push from engine's clones only.** Engine clones over HTTPS and refuses
+   to clone or sync when a `url.<base>.insteadOf` or `pushInsteadOf` rule in
+   your git config would send an engine clone over SSH, so limit such a rule
+   to your own checkouts (an `includeIf "gitdir:"`).
+7. **Attribute commits truthfully.** PRs open as the machine user,
+   which also means you can approve them.
 
 ## Notifications
 
@@ -57,13 +52,10 @@
   run `claude --permission-mode auto --remote-control` once by hand, in a
   folder you trust, and answer every prompt it shows, such as enabling Remote
   Control or the auto mode notice. Nobody is there to answer them in an
-  engine window. The workspace trust dialog needs nothing: `engine start`
-  writes `hasTrustDialogAccepted` for each worktree it creates (and
-  `--check` for its scratch folder), and nothing else in `~/.claude.json`
-  (`hosts-and-sessions.md`, "Starting a session"). Then run `engine start --check`, and again after updating Claude Code, the
-  plugin or `engine`: it finds a prompt before an unattended session meets it.
-- **Codex:** signed in. Engine passes auto-review and the sandbox exceptions
-  per session (`hosts-and-sessions.md`, "Permission mode").
+  engine window. Then run `engine start --check`, and again after updating Claude
+  Code, the plugin or `engine`: it finds a prompt before an unattended
+  session meets it.
+- **Codex:** signed in.
 - **Host name:** its logical name (`mac`, `devbox`) on one line in
   `~/.config/engine/host`. Claims post this name, never the hostname
   (`hosts-and-sessions.md`, "Hosts").
@@ -77,10 +69,7 @@
   from a shell with `claude plugin marketplace add dinoderek/engine` and
   `claude plugin install engine@engine`. Update it with `claude plugin update
   engine@engine --scope user`: without `--scope`, in a checkout that enables
-  the plugin, it updates the project's copy instead. Codex has no install yet.
-- **Sessions started by hand** run their `gh` calls as `engine gh …`, which
-  reads the token file, so their @mentions reach you. Their `git push` uses the checkout's own
-  credentials.
+  the plugin, it updates the project's copy instead.
 - **SSH (the fallback route to any session):**
   - every host on the same Tailscale tailnet as the phone;
   - plain OpenSSH, never Tailscale SSH: its check mode asks for a browser

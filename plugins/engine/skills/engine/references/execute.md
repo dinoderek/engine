@@ -40,7 +40,8 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    - the repo has the `engine:` labels (`engine labels sync`).
 
    If a check fails, say so in the session only. Otherwise add
-   `engine:running` and post the claim comment (below). Then re-read the
+   `engine:running` (it replaces `engine:approved` on a standalone task) and
+   post the claim comment (below). Then re-read the
    comments. If an earlier claim from another run exists, delete your claim
    comment, say so, and end the session (step 12's last action).
 2. **Open.**
@@ -161,16 +162,6 @@ Branch: <branch>
 - A plan-level change, such as a new task or one that is no longer needed, is
   made on tasks still to do, plus a `Deviation: <what and why>` comment on the
   feature issue.
-
-## Labels you set
-
-- `engine:running` when you claim the task. On a standalone task it replaces
-  `engine:approved`.
-- `engine:needs-human` during a hard stop. It replaces `engine:running` or
-  `engine:in-review`, and you restore that label when the stop is answered.
-- `engine:in-review` when the PR opens, removed after the merge.
-- `engine:merging` while you hold the merge lock.
-- `engine:ruling-review` with a `high` ruling. The operator clears it.
 
 Leave every other label to the coordinator.
 

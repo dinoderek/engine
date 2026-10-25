@@ -8,19 +8,19 @@
 | --- | --- |
 | `cmd/engine/` | the `engine` main package: one line that calls `internal/cli` |
 | `internal/` | product packages; `internal/cli` dispatches commands |
-| `internal/attach/` | `engine attach`: finds a task's claim, then replaces the process with `tmux attach` on the claim's host, locally or over `ssh` (`attach.go`) |
-| `internal/hosts/` | host config: parsing (`toml.go`), validation (`decode.go`), types, slots and loading (`hosts.go`), launch lines (`launch.go`) |
-| `internal/session/` | the local host's ops: clones and worktrees (`repo.go`, `worktree.go`), tmux windows and typing (`tmux.go`), keeping a Mac awake (`awake.go`), live Claude sessions (`agents.go`), folder trust (`trust.go`), the run directory (`record.go`) |
+| `internal/attach/` | `engine attach` |
+| `internal/hosts/` | host config: parsing, validation, slots and launch lines |
+| `internal/session/` | the local host's ops: clones, worktrees, tmux windows, keeping a Mac awake, live Claude sessions, folder trust, the run directory |
 | `internal/lint/` | `engine lint`: the plan rules |
 | `internal/run/` | `engine run`: the coordinator loop (`coordinator.md`) |
-| `internal/ps/` | `engine ps`: listing (`ps.go`), each claim's probe (`probe.go`), output (`render.go`) |
-| `internal/start/` | `engine start`: the refusals, then the launch |
-| `internal/tell/` | `engine tell`: a comment on the task, then a pointer typed into its window |
-| `devtools/cmd/dev/` | the `dev` main package that `./dev` builds and runs |
-| `devtools/internal/` | the `./dev` verbs (`dev`), the lane runner (`lanes`), the lane checks (`checks`), baselines (`baseline`) and git and file helpers (`repo`) |
-| `dev` | the shell entrypoint: pins Go from `go.mod`, builds `.dev/dev`, runs it |
-| `scripts/` | registries: lanes, import rules, doc budgets, and the three shrink-only baselines |
-| `docs/` | the persistent docs, every one indexed in `AGENTS.md` |
+| `internal/ps/` | `engine ps` |
+| `internal/start/` | `engine start` |
+| `internal/tell/` | `engine tell` |
+| `devtools/cmd/dev/` | the `dev` main package |
+| `devtools/internal/` | the `./dev` verbs, lane runner, lane checks, baselines and git and file helpers |
+| `dev` | the shell entrypoint to `devtools/cmd/dev/` |
+| `scripts/` | registries: lanes, import rules, doc budgets and baselines |
+| `docs/` | the persistent docs |
 | `design/` | ephemeral drafts: exempt from the doc rules, never cited |
 | `plugins/engine/` | the `engine` Claude Code plugin: its skills in `skills/<name>/SKILL.md`, its hooks in `plugins/engine/hooks/hooks.json` |
 | `.claude-plugin/` | the marketplace that publishes `plugins/` |
