@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
@@ -37,8 +38,14 @@ func TestSystemNotesAndLog(t *testing.T) {
 	if err != nil || dir != filepath.Join(home, ".local/share/engine/runs", "r-1-coordinator") {
 		t.Fatalf("note dir %q, %v", dir, err)
 	}
-	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		t.Errorf("not made: %v", err)
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("asking for the note directory made it: %v", err)
+	}
+	if err := session.WriteNote(dir, LintNoted, t0); err != nil {
+		t.Fatal(err)
+	}
+	if at, ok, err := session.ReadNote(dir, LintNoted); err != nil || !ok || !at.Equal(t0) {
+		t.Errorf("the first note: %v %v %v", at, ok, err)
 	}
 	if _, err := s.NoteDir(tracker.Ref{Repo: "bad", Number: 1}); err == nil {
 		t.Error("a bad repo: no error")
