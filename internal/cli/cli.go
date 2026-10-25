@@ -14,6 +14,7 @@ import (
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/lint"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tell"
 	"github.com/dinoderek/engine/internal/tracker"
@@ -58,8 +59,10 @@ type Env struct {
 	// standard output.
 	Local session.Runner
 	// Run runs git and gh for engine's clones.
-	Run    session.RunFunc
-	Tmux   *session.Tmux
+	Run  session.RunFunc
+	Tmux *session.Tmux
+	// SSH runs ssh to reach another host's ops; nil starts real processes.
+	SSH    remote.Exec
 	Getenv func(string) string
 	Home   string
 	Now    func() time.Time
@@ -174,12 +177,12 @@ func runTell(args []string, env Env) int {
 		fmt.Fprintln(env.Err, "engine tell:", err)
 		return 2
 	}
-	told, err := tell.Tell(args[0], text, tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Getenv: env.Getenv, Home: env.Home})
+	told, err := tell.Tell(args[0], text, tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Run: env.Local, Getenv: env.Getenv, Home: env.Home})
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine tell:", err)
 		return 1
 	}
-	fmt.Fprintf(env.Out, "commented on %s: %s\ntyped a pointer into %s\n", told.Task, told.URL, told.Window)
+	fmt.Fprintf(env.Out, "commented on %s: %s\ntyped a pointer into %s on %s\n", told.Task, told.URL, told.Window, told.Host)
 	return 0
 }
 

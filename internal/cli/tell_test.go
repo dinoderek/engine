@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/session"
 )
 
 const tellHosts = `default_harness = "claude"
@@ -100,10 +101,16 @@ func TestTellText(t *testing.T) {
 			env := Env{
 				In: strings.NewReader(tt.stdin), Out: &out, Err: &errOut, Exec: tellGh(t, &posted), Stream: noStream(t),
 				Getenv: func(k string) string { return map[string]string{"GH_TOKEN": "tok"}[k] }, Home: home,
+				Local: func(name string, _ ...string) (string, error) {
+					return "", &session.ExitError{Command: name, Code: 255, Stderr: "no route to host"}
+				},
 			}
-			// The claim is on another host, so the run ends in an error once the comment is posted.
+			// The claim is on a host ssh cannot reach, so the run ends in an error once the comment is posted.
 			if code := Run(tt.args, env); code != 1 {
 				t.Errorf("exit code %d, want 1; stderr %s", code, errOut.String())
+			}
+			if !strings.Contains(errOut.String(), "listing the windows on devbox failed") {
+				t.Errorf("stderr %s", errOut.String())
 			}
 			if posted != tt.want {
 				t.Errorf("commented %q, want %q; stderr %s", posted, tt.want, errOut.String())

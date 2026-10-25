@@ -5,15 +5,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/ps"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
 const psUsage = "usage: engine ps [--json]\n"
 
-// runPs lists every claimed task. Warnings about probes that failed go to
+// runPs lists every claimed task, asking each other host that holds a claim
+// for its status. Warnings about probes that failed go to
 // stderr and leave the exit code 0: the listing is still the best answer.
 func runPs(args []string, env Env) int {
 	if len(args) > 1 || len(args) == 1 && args[0] != "--json" {
@@ -40,7 +43,7 @@ func runPs(args []string, env Env) int {
 }
 
 func listClaimed(env Env) (ps.Listing, error) {
-	_, host, err := hosts.Open(hosts.ConfigDir(env.Home))
+	cfg, host, err := hosts.Open(hosts.ConfigDir(env.Home))
 	if err != nil {
 		return ps.Listing{}, err
 	}
@@ -48,7 +51,24 @@ func listClaimed(env Env) (ps.Listing, error) {
 	if err != nil {
 		return ps.Listing{}, err
 	}
-	return ps.List(psSource(env, host, token))
+	src := psSource(env, host, token)
+	src.Remote = remoteStatus(env, cfg)
+	return ps.List(src)
+}
+
+// remoteStatus asks another machine of hosts.toml for its status over SSH.
+func remoteStatus(env Env, cfg *hosts.Config) func(string) (hostops.Status, error) {
+	run := env.SSH
+	if run == nil {
+		run = remote.ExecCommand
+	}
+	return func(name string) (hostops.Status, error) {
+		h, ok := cfg.Hosts[name]
+		if !ok {
+			return hostops.Status{}, fmt.Errorf("%q is not in hosts.toml", name)
+		}
+		return remote.SSH{Name: name, Address: h.Address, Exec: run}.Status()
+	}
 }
 
 // psSource is where engine ps, and engine run's view of claims, read from.

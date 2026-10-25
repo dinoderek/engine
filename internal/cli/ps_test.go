@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,11 +71,18 @@ type psEnv struct {
 	tmuxErr error
 	ran     []string
 	claude  string // what `claude agents --json` prints
+	// status is what the host at an address prints for `engine host status`;
+	// an address with no entry is unreachable (ssh exits 255).
+	status map[string]string
+	sshed  []string
 }
 
 func newPsEnv(t *testing.T, host string) *psEnv {
 	t.Helper()
-	e := &psEnv{t: t, home: t.TempDir(), claude: `[{"pid":1,"cwd":"/w","name":"r-1","status":"busy"}]`}
+	e := &psEnv{t: t, home: t.TempDir(), claude: `[{"pid":1,"cwd":"/w","name":"r-1","status":"busy"}]`, status: map[string]string{
+		"me@devbox": `{"protocol":1,"engine":"x","host":"devbox","slots":3,"free_slots":2,"windows":[{"name":"r-2","id":"@1","alive":true}],"agents":[],"runs":[]}`,
+		"me@mac":    `{"protocol":1,"engine":"x","host":"mac","slots":4,"free_slots":3,"windows":[{"name":"r-1","id":"@1","alive":true}],"agents":[{"pid":1,"cwd":"/w","name":"r-1","status":"waiting"}],"runs":[]}`,
+	}}
 	if err := os.MkdirAll(filepath.Join(e.home, ".config", "engine"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -138,10 +147,24 @@ func (e *psEnv) local(name string, args ...string) (string, error) {
 	return "", errors.New("unexpected")
 }
 
+// ssh answers `ssh ... <address> engine host status --json` with the canned
+// status of the host at the address.
+func (e *psEnv) ssh(_ io.Reader, out, errOut io.Writer, name string, args ...string) (int, error) {
+	address, command := args[len(args)-2], args[len(args)-1]
+	e.sshed = append(e.sshed, name+" "+address+" "+command)
+	body, ok := e.status[address]
+	if name != "ssh" || command != "'engine' 'host' 'status' '--json'" || !ok {
+		fmt.Fprintln(errOut, "ssh: connect to host: no route")
+		return 255, nil
+	}
+	fmt.Fprintln(out, body)
+	return 0, nil
+}
+
 func (e *psEnv) run(args ...string) int {
 	e.t.Helper()
 	env := Env{
-		Out: &e.out, Err: &e.errOut, Exec: e.gh, Local: e.local, Home: e.home,
+		Out: &e.out, Err: &e.errOut, Exec: e.gh, Local: e.local, SSH: e.ssh, Home: e.home,
 		Getenv: func(string) string { return "" },
 		Now:    func() time.Time { return time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC) },
 	}
@@ -163,6 +186,10 @@ func TestPsTable(t *testing.T) {
 	if got := strings.Fields(lines[2]); got[1] != "devbox" || got[3] != "in-review" {
 		t.Errorf("remote row %q", lines[2])
 	}
+	// Only the host that holds a claim and is not this one is asked.
+	if len(e.sshed) != 1 || !strings.Contains(e.sshed[0], "me@devbox") {
+		t.Errorf("ssh calls %q", e.sshed)
+	}
 	if e.errOut.Len() != 0 {
 		t.Errorf("stderr: %s", e.errOut.String())
 	}
@@ -183,12 +210,12 @@ func TestPsJSON(t *testing.T) {
 		t.Fatalf("%v\n%s", err, e.out.String())
 	}
 	if len(rows) != 2 || rows[0].State != ps.Working || rows[0].Alive == nil || !*rows[0].Alive ||
-		rows[1].State != ps.InReview || rows[1].Alive != nil || rows[1].Host != "devbox" {
+		rows[1].State != ps.InReview || rows[1].Alive == nil || !*rows[1].Alive || rows[1].Host != "devbox" {
 		t.Errorf("rows: %+v", rows)
 	}
 }
 
-func TestPsOnAHostThatIsNotTheClaimsShowsLabels(t *testing.T) {
+func TestPsSettlesAClaimOnAnotherHostFromItsStatus(t *testing.T) {
 	e := newPsEnv(t, "devbox")
 	if code := e.run("--json"); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.errOut.String())
@@ -197,14 +224,46 @@ func TestPsOnAHostThatIsNotTheClaimsShowsLabels(t *testing.T) {
 	if err := json.Unmarshal(e.out.Bytes(), &rows); err != nil || len(rows) != 2 {
 		t.Fatalf("%v: %s", err, e.out.String())
 	}
-	if rows[0].State != ps.Running || rows[0].Alive != nil {
-		t.Errorf("row 0 is on mac and this host is devbox: %+v", rows[0])
+	if rows[0].State != ps.Waiting || rows[0].Alive == nil || !*rows[0].Alive {
+		t.Errorf("row 0 is on mac, whose status says it waits: %+v", rows[0])
 	}
 	// The remote host runs codex only, so claude is never asked.
 	for _, call := range e.ran {
 		if strings.Contains(call, "bin/claude") {
 			t.Errorf("claude ran: %q", call)
 		}
+	}
+}
+
+// A host ssh cannot reach is unknown, never dead: its rows keep their label
+// state, liveness is null, and the listing still succeeds with a warning.
+func TestPsUnreachableHostIsUnknown(t *testing.T) {
+	e := newPsEnv(t, "mac")
+	delete(e.status, "me@devbox")
+	if code := e.run("--json"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.errOut.String())
+	}
+	var rows []ps.Row
+	if err := json.Unmarshal(e.out.Bytes(), &rows); err != nil || len(rows) != 2 {
+		t.Fatalf("%v: %s", err, e.out.String())
+	}
+	if rows[1].State != ps.InReview || rows[1].Alive != nil {
+		t.Errorf("row 1 is on the unreachable devbox: %+v", rows[1])
+	}
+	if !strings.Contains(e.errOut.String(), "warning: host devbox: host devbox is unreachable over ssh") {
+		t.Errorf("stderr: %q", e.errOut.String())
+	}
+}
+
+// A claim naming a host hosts.toml does not list cannot be asked.
+func TestPsHostNotInConfigIsUnknown(t *testing.T) {
+	e := newPsEnv(t, "mac")
+	e.write("hosts.toml", strings.Replace(psHosts, "[host.devbox]", "[host.other]", 1))
+	if code := e.run("--json"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.errOut.String())
+	}
+	if !strings.Contains(e.errOut.String(), `"devbox" is not in hosts.toml`) || len(e.sshed) != 0 {
+		t.Errorf("stderr %q, ssh %q", e.errOut.String(), e.sshed)
 	}
 }
 

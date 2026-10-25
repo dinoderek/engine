@@ -203,7 +203,7 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. A claim on another host shows its label state, with liveness `null`. The signals are in `coordinator.md`. |
+| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. A claim on another host is settled from that host's `status`, one call per host with a claim, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
 
 ## Connecting to a session
 
@@ -235,7 +235,7 @@ so engine targets the windows it opens by id (`@3`), not by name. Windows stay a
 
 When engine has to type into a session, it sends the text with `send-keys -l`,
 then `Enter` as a separate call after a short delay. Input boxes can swallow a
-newline that arrives with the text.
+newline that arrives with the text. `engine tell` does this over SSH for a session on another host.
 
 ## Keeping hosts awake
 
