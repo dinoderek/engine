@@ -40,9 +40,9 @@ func TestStatus(t *testing.T) {
 		screens: map[string]string{"@1": "busy screen", "@2": "Allow this read?", "@3": "Error: not logged in"},
 	}
 	at := fixedNow()
-	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Spawned: at})
-	newest := writeRun(t, h, session.Record{RunID: "r-1-b", Name: "r-1", Spawned: at.Add(time.Hour)})
-	other := writeRun(t, h, session.Record{RunID: "r-2-a", Name: "r-2", Spawned: at})
+	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Harness: Codex, Spawned: at})
+	newest := writeRun(t, h, session.Record{RunID: "r-1-b", Name: "r-1", Harness: Harness, Spawned: at.Add(time.Hour)})
+	other := writeRun(t, h, session.Record{RunID: "r-2-a", Name: "r-2", Harness: Harness, Spawned: at})
 	d := Deps{Tmux: tm.tmux(), Home: h.dir,
 		Exec: agentsFake(`[{"pid":1,"name":"r-1","status":"busy"},{"pid":2,"name":"r-2","status":"waiting","waitingFor":"a permission"}]`, nil)}
 	got, err := ReadStatus(d)
@@ -52,18 +52,18 @@ func TestStatus(t *testing.T) {
 	two := 2
 	want := Status{
 		Slots: 2, FreeSlots: 0,
-		// Only a session that is not busy shows its screen; a signal leaves
-		// no exit code.
+		// Only a session that is not working shows its screen; a signal
+		// leaves no exit code. The newest run picks the probe.
 		Windows: []Window{
-			{Name: "r-1", ID: "@1", Alive: true},
-			{Name: "r-2", ID: "@2", Alive: true, Screen: "Allow this read?"},
+			{Name: "r-1", ID: "@1", Alive: true, Harness: Harness, State: session.StateWorking},
+			{Name: "r-2", ID: "@2", Alive: true, Harness: Harness, State: session.StateWaiting, WaitingFor: "a permission", Screen: "Allow this read?"},
 			{Name: "r-3", ID: "@3", ExitCode: &two, Screen: "Error: not logged in"},
 			{Name: "r-4", ID: "@4"},
 		},
 		Agents: []session.Agent{{PID: 1, Name: "r-1", Status: "busy"}, {PID: 2, Name: "r-2", Status: "waiting", WaitingFor: "a permission"}},
 		Runs: []Run{
-			{Name: "r-1", Dir: newest, Record: session.Record{RunID: "r-1-b", Name: "r-1", Spawned: at.Add(time.Hour)}},
-			{Name: "r-2", Dir: other, Record: session.Record{RunID: "r-2-a", Name: "r-2", Spawned: at}},
+			{Name: "r-1", Dir: newest, Record: session.Record{RunID: "r-1-b", Name: "r-1", Harness: Harness, Spawned: at.Add(time.Hour)}},
+			{Name: "r-2", Dir: other, Record: session.Record{RunID: "r-2-a", Name: "r-2", Harness: Harness, Spawned: at}},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -75,14 +75,63 @@ func TestStatus(t *testing.T) {
 func TestStatusWithoutClaudeAgents(t *testing.T) {
 	h := newHome(t, "mac")
 	tm := &tmuxFake{windows: []string{"@1 %1 0 r-1"}, screens: map[string]string{"@1": "a screen"}}
-	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Spawned: fixedNow()})
+	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Harness: Harness, Spawned: fixedNow()})
 	got, err := ReadStatus(Deps{Tmux: tm.tmux(), Home: h.dir, Exec: agentsFake("", errors.New("not signed in"))})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Nothing says the session is busy, so its screen is shown.
-	if !strings.Contains(got.AgentsError, "not signed in") || len(got.Agents) != 0 || got.Windows[0].Screen != "a screen" || got.FreeSlots != 1 {
+	// Nothing says the session is working, so its state is unknown and its
+	// screen is shown.
+	if w := got.Windows[0]; !strings.Contains(got.AgentsError, "not signed in") || len(got.Agents) != 0 ||
+		w.Harness != Harness || w.State != "" || w.Screen != "a screen" || got.FreeSlots != 1 {
 		t.Errorf("status %+v", got)
+	}
+}
+
+// Each window's newest run picks its probe. A Codex session's state comes
+// from the state file its hooks write; a missing, unreadable or ended one is
+// unknown, and a dead window is unknown whatever its file says.
+func TestStatusStatesByHarness(t *testing.T) {
+	h := newHome(t, "mac")
+	at := fixedNow()
+	codex := func(name string, st *session.HarnessState, body string) {
+		dir := writeRun(t, h, session.Record{RunID: name + "-a", Name: name, Harness: Codex, Spawned: at})
+		switch {
+		case st != nil:
+			if err := session.WriteHarnessState(dir, *st); err != nil {
+				t.Fatal(err)
+			}
+		case body != "":
+			write(t, dir+"/"+session.StateFile, body, 0o644)
+		}
+	}
+	codex("x-1", &session.HarnessState{State: session.StateWorking, Event: "UserPromptSubmit", At: at}, "")
+	codex("x-2", &session.HarnessState{State: session.StateWaiting, Event: "Stop", At: at}, "")
+	codex("x-3", nil, "")
+	codex("x-4", nil, "{not json")
+	codex("x-5", &session.HarnessState{State: session.StateEnded, Event: "SessionEnd", At: at}, "")
+	codex("x-6", &session.HarnessState{State: session.StateWorking, Event: "UserPromptSubmit", At: at}, "")
+	writeRun(t, h, session.Record{RunID: "o-1-a", Name: "o-1", Harness: "aider", Spawned: at})
+	tm := &tmuxFake{windows: []string{"@1 %1 0 x-1", "@2 %2 0 x-2", "@3 %3 0 x-3", "@4 %4 0 x-4", "@5 %5 0 x-5", "@6 %6 1 x-6",
+		"@7 %7 0 o-1", "@8 %8 0 zsh", "@9 %9 0 c-1"}}
+	// Claude Code lists sessions of the Codex and run-less windows' names:
+	// only a window whose run is Claude's reads them.
+	agents := `[{"name":"x-3","status":"busy"},{"name":"zsh","status":"busy"},{"name":"o-1","status":"busy"}]`
+	got, err := ReadStatus(Deps{Tmux: tm.tmux(), Home: h.dir, Exec: agentsFake(agents, nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][2]string{
+		"x-1": {Codex, session.StateWorking}, "x-2": {Codex, session.StateWaiting}, "x-3": {Codex, ""}, "x-4": {Codex, ""},
+		"x-5": {Codex, ""}, "x-6": {Codex, ""}, "o-1": {"aider", ""}, "zsh": {"", ""}, "c-1": {"", ""},
+	}
+	for _, w := range got.Windows {
+		if g := [2]string{w.Harness, w.State}; g != want[w.Name] {
+			t.Errorf("%s: harness and state %q, want %q", w.Name, g, want[w.Name])
+		}
+	}
+	if len(got.Windows) != len(want) {
+		t.Errorf("got %d windows", len(got.Windows))
 	}
 }
 

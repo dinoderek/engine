@@ -46,7 +46,7 @@ func (f *sshFake) ssh(address string) SSH {
 	return SSH{Name: "devbox", Address: address, Exec: f.exec}
 }
 
-const envelope = `"protocol":1,"engine":"v1","host":"devbox"`
+const envelope = `"protocol":2,"engine":"v1","host":"devbox"`
 
 // line is the remote command of the n'th call.
 func (f *sshFake) line(n int) string { return f.calls[n].args[len(f.calls[n].args)-1] }
@@ -85,14 +85,14 @@ func TestSSHSpawnPassesTheKickoffOnStdin(t *testing.T) {
 
 func TestSSHStatusCollectRelease(t *testing.T) {
 	f := &sshFake{replies: []reply{
-		{stdout: `{"slots":2,"free_slots":1,"windows":[{"name":"r-7","id":"@4","alive":true}],"agents":[],"runs":[],` + envelope + "}"},
+		{stdout: `{"slots":2,"free_slots":1,"windows":[{"name":"r-7","id":"@4","alive":true,"harness":"codex","state":"waiting"}],"agents":[],"runs":[],` + envelope + "}"},
 		{stdout: `{"run_dir":"/runs/x","run":null,"files":["a"],` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":true,"worktree_kept":false,` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":false,"worktree_kept":true,` + envelope + "}"},
 	}}
 	c := f.ssh("me@box")
 	st, err := c.Status()
-	if err != nil || st.FreeSlots != 1 || len(st.Windows) != 1 || st.Windows[0].Name != "r-7" || !st.Windows[0].Alive {
+	if err != nil || st.FreeSlots != 1 || len(st.Windows) != 1 || st.Windows[0] != (hostops.Window{Name: "r-7", ID: "@4", Alive: true, Harness: "codex", State: "waiting"}) {
 		t.Errorf("status %+v, %v", st, err)
 	}
 	col, err := c.Collect("r-7-1")
@@ -115,6 +115,16 @@ func TestSSHStatusCollectRelease(t *testing.T) {
 	}
 }
 
+// A host still on protocol 1 has no window states: its status is refused,
+// and the operator is told how to bring it up to date.
+func TestSSHRefusesAProtocol1Status(t *testing.T) {
+	f := &sshFake{replies: []reply{{stdout: `{"protocol":1,"engine":"v0","host":"devbox","slots":2,"free_slots":2,"windows":[],"agents":[],"runs":[]}`}}}
+	st, err := f.ssh("me@box").Status()
+	if err == nil || !strings.Contains(err.Error(), "speaks protocol 1 (engine v0), this engine speaks 2; run: engine setup --host devbox") || st.Slots != 0 {
+		t.Errorf("got %+v, %v", st, err)
+	}
+}
+
 func TestSSHMapsRemoteFailures(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -126,8 +136,8 @@ func TestSSHMapsRemoteFailures(t *testing.T) {
 			"the window r-7 exists", true},
 		{"failure", reply{stdout: `{"error":"tmux is down","refused":false,` + envelope + "}", code: 1}, "host devbox: tmux is down", false},
 		{"exit 1 without an error", reply{stdout: `{"slots":1,` + envelope + "}", code: 1}, "exited 1 with no error", false},
-		{"protocol mismatch", reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`}, "speaks protocol 2 (engine v9), this engine speaks 1; run: engine setup --host devbox", false},
-		{"protocol mismatch on a failure", reply{stdout: `{"error":"x","refused":true,"protocol":2,"engine":"v9","host":"devbox"}`, code: 1}, "speaks protocol 2", false},
+		{"protocol mismatch", reply{stdout: `{"protocol":1,"engine":"v9","host":"devbox"}`}, "speaks protocol 1 (engine v9), this engine speaks 2; run: engine setup --host devbox", false},
+		{"protocol mismatch on a failure", reply{stdout: `{"error":"x","refused":true,"protocol":1,"engine":"v9","host":"devbox"}`, code: 1}, "speaks protocol 1", false},
 		{"no protocol", reply{stdout: `{"clone":"/c"}`}, "speaks protocol 0", false},
 		{"engine missing", reply{stderr: "sh: engine: command not found\n", code: 127}, "did not reply (sh: engine: command not found); is engine current there? run: engine setup --host devbox", false},
 		{"old engine", reply{stderr: "engine: unknown command \"host\"", code: 2}, "run: engine setup --host devbox", false},
@@ -199,7 +209,7 @@ func TestSSHCheck(t *testing.T) {
 
 func TestSSHCheckFailures(t *testing.T) {
 	probe := reply{stdout: `{"error":"x","refused":true,` + envelope + "}", code: 1}
-	stale := reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`, code: 1}
+	stale := reply{stdout: `{"protocol":1,"engine":"v9","host":"devbox"}`, code: 1}
 	cases := []struct {
 		name    string
 		replies []reply
