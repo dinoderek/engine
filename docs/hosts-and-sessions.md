@@ -9,7 +9,7 @@ many sessions it holds, and its capabilities. Capabilities are declared, never i
 
 **One file, every host.** The host config is `~/.config/engine/hosts.toml`,
 the same file on every host, because any host can run the coordinator. Edit
-it on one host and copy it to the others. Each host also keeps its own name,
+it on one host; `engine setup --host <name>` copies it to another. Each host also keeps its own name,
 one line, in `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, a logical

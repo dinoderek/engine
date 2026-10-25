@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -91,26 +92,26 @@ func TestEachStepFailsOpenWithItsCommand(t *testing.T) {
 		command string
 	}{
 		{"missing tools", "1. tools: OPEN", func(r *rig) { r.box.missing = []string{"tmux", "gh"} },
-			"missing: tmux, gh", `ssh dev@box 'sed -i "1i export PATH=\$HOME/.local/bin:\$PATH" ~/.bashrc'`},
+			"missing: tmux, gh", `ssh dev@box 'grep -qs "^export PATH=.HOME/.local/bin" ~/.bashrc || { { echo "export PATH=\$HOME/.local/bin:\$PATH"; { cat ~/.bashrc 2>/dev/null || :; }; } > ~/.bashrc.new && mv ~/.bashrc.new ~/.bashrc; }'`},
 		{"go install fails", "2. engine: OPEN", func(r *rig) { r.box.rev, r.box.installFail = "d8c1744", true },
 			"go install failed: go: network is unreachable", `ssh dev@box 'GOBIN="$HOME/.local/bin" go install github.com/dinoderek/engine/cmd/engine@` + callerRev + `'`},
 		{"another engine first on the PATH", "2. engine: OPEN", func(r *rig) { r.box.rev, r.box.installTo = "d8c1744", "d8c1744" },
-			"the engine on the PATH is d8c1744", "sed -i"},
+			"the engine on the PATH is d8c1744", "~/.bashrc.new"},
 		{"no engine at all and none installed", "2. engine: OPEN", func(r *rig) { r.box.rev, r.box.installTo = "", "-dirty" },
-			"not the one installed", "sed -i"},
+			"not the one installed", "~/.bashrc.new"},
 		{"plugin update fails", "3. plugin: OPEN", func(r *rig) { r.box.plugin, r.box.pluginFail = "0.2.0", true },
 			"claude plugin marketplace update engine failed: plugin: marketplace unreachable", "ssh dev@box 'claude plugin marketplace update engine'"},
 		{"marketplace is older than the caller", "3. plugin: OPEN", func(r *rig) { r.box.plugin, r.box.pluginStuck = "0.2.0", "0.6.0" },
 			"the plugin is 0.6.0 there and 0.7.1 here", "claude plugin update engine@engine --scope user"},
 		{"write fails", "4. config: OPEN", func(r *rig) { r.box.writeFail, r.box.files = true, map[string]string{} },
-			"write host failed: cat: No space left on device", "scp -p "},
+			"write host failed: cat: No space left on device", "ssh dev@box 'mkdir -p ~/.config/engine' && scp -p "},
 		{"signed in with an API key", "5. sign-in: OPEN", func(r *rig) { r.box.auth = `{"loggedIn":true,"authMethod":"api_key"}` },
 			"not signed in with claude.ai", "ssh -t dev@box 'claude /login'"},
 		{"signed out", "5. sign-in: OPEN", func(r *rig) { r.box.auth = "Not logged in" },
 			"not signed in with claude.ai", "ssh -t dev@box 'claude /login'"},
 		{"sleep not masked", "6. no suspend: OPEN", func(r *rig) { r.box.masked = 3 },
 			"the host can suspend", "ssh -t dev@box 'sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target'"},
-		{"no systemd", "6. no suspend: OPEN", func(r *rig) { r.box.masked = 0 },
+		{"no systemd", "6. no suspend: OPEN", func(r *rig) { r.box.noSystemd = true },
 			"the host can suspend", "sudo systemctl mask"},
 		{"the check finds a prompt", "7. preflight: OPEN", func(r *rig) { r.check = func() (bool, error) { return false, nil } },
 			"an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'"},
@@ -223,12 +224,16 @@ func TestRefusalsChangeNothing(t *testing.T) {
 		{"an unknown host", "nope", func(*rig) {}, `host "nope" is not in hosts.toml; its machines are box, mac`},
 		{"a dirty build", "box", func(r *rig) { r.info.Modified = true }, "modified working tree"},
 		{"a build without a commit", "box", func(r *rig) { r.info.Revision = "" }, "has no commit"},
-		{"an unpushed commit", "box", func(r *rig) {
+		{"a dirty go install build", "box", func(r *rig) {
+			r.info.Revision, r.info.Version = "", "v0.0.0-20261025174939-2a08a0c1f2a2+dirty"
+		}, "modified working tree"},
+		{"a tagged build", "box", func(r *rig) { r.info.Revision, r.info.Version = "", "v1.2.3" }, "has no commit"},
+		{"gh cannot say", "box", func(r *rig) {
 			r.gh = func([]string, string, ...string) (string, error) { return "", errors.New("gh: Not Found (HTTP 404)") }
-		}, "is not on GitHub (dinoderek/engine); push it"},
+		}, "could not confirm commit " + callerRev + " is on GitHub (dinoderek/engine): gh: Not Found (HTTP 404)"},
 		{"a different commit back", "box", func(r *rig) {
 			r.gh = func([]string, string, ...string) (string, error) { return "deadbeef", nil }
-		}, "is not on GitHub"},
+		}, "is not on GitHub (dinoderek/engine); push it"},
 		{"no plugin here", "box", func(r *rig) { r.local.plugin = "" }, "plugin is not installed for the user on this host"},
 		{"no token file", "box", func(r *rig) {
 			_ = os.Remove(filepath.Join(r.home, ".config", "engine", "github-token"))
@@ -320,7 +325,7 @@ func TestLocalModeOpenItems(t *testing.T) {
 	}
 	out := r.out.String()
 	for _, want := range []string{
-		"1. tools: OPEN (missing: gh", `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshenv`,
+		"1. tools: OPEN (missing: gh", "~/.zshenv.new",
 		"2. engine: OPEN (engine is not on the PATH)",
 		"3. plugin: OPEN", "claude plugin marketplace add dinoderek/engine && claude plugin install engine@engine --scope user",
 		"5. sign-in: OPEN", ": claude /login", "5 open item(s); run each command, then rerun engine setup:",
@@ -328,5 +333,77 @@ func TestLocalModeOpenItems(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+// The engine that runs setup may itself come from go install module@commit,
+// which records the commit only in its pseudo-version.
+func TestSetupFromAGoInstallBuild(t *testing.T) {
+	r := newRig(t)
+	r.info.Revision, r.info.Version = "", "v0.0.0-20261025105230-"+callerRev[:12]
+	if !mustRun(t, r, "box") {
+		t.Fatalf("open:\n%s", r.out.String())
+	}
+	want := `GOBIN="$HOME/.local/bin" go install github.com/dinoderek/engine/cmd/engine@` + callerRev[:12]
+	if r.box.mutations[0] != want {
+		t.Errorf("first change %q, want %q", r.box.mutations[0], want)
+	}
+	r.box.mutations = nil
+	mustRun(t, r, "box")
+	if len(r.box.mutations) != 0 {
+		t.Errorf("a go install build reinstalled: %q", r.box.mutations)
+	}
+}
+
+func TestADirtyEngineOnTheHostIsReplaced(t *testing.T) {
+	r := newRig(t)
+	r.box = settledBox(r.home)
+	r.box.rev = "d8c1744-dirty"
+	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "2. engine: changed (2a08a0c, was d8c1744-dirty)") {
+		t.Errorf("open or unchanged:\n%s", r.out.String())
+	}
+}
+
+// The PATH line is run for real: it must put the line first, keep the rest of
+// the file, make the file when it is missing, and add nothing the second time.
+func TestPathLineInARealShell(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh is not installed")
+	}
+	r := &runner{d: Deps{Getenv: func(string) string { return "/bin/bash" }}, t: target{name: "this"}}
+	cmd := r.pathLine()
+	const line = "export PATH=$HOME/.local/bin:$PATH\n"
+	for name, before := range map[string]string{"missing": "", "empty": "", "existing": "case $- in *i*) ;; *) return;; esac\nalias l=ls\n"} {
+		home := t.TempDir()
+		rc := filepath.Join(home, ".bashrc")
+		if name != "missing" {
+			if err := os.WriteFile(rc, []byte(before), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for i := 0; i < 2; i++ {
+			c := exec.Command("sh", "-c", cmd)
+			c.Env = append(os.Environ(), "HOME="+home)
+			if out, err := c.CombinedOutput(); err != nil {
+				t.Fatalf("%s run %d: %v: %s", name, i, err, out)
+			}
+		}
+		got, err := os.ReadFile(rc)
+		if err != nil || string(got) != line+before {
+			t.Errorf("%s: %q, %v; want %q", name, got, err, line+before)
+		}
+	}
+}
+
+func TestPathLineFollowsTheShellOfThisHost(t *testing.T) {
+	for shell, want := range map[string]string{"/bin/zsh": "~/.zshenv", "/bin/bash": "~/.bashrc", "": "~/.bashrc"} {
+		r := &runner{d: Deps{Getenv: func(string) string { return shell }}, t: target{name: "this"}}
+		if got := r.pathLine(); !strings.Contains(got, want+".new") {
+			t.Errorf("SHELL=%q: %s, want %s", shell, got, want)
+		}
+	}
+	r := &runner{d: Deps{Getenv: func(string) string { return "/bin/zsh" }}, t: target{name: "box", address: boxAddress}}
+	if got := r.pathLine(); !strings.HasPrefix(got, "ssh dev@box ") || !strings.Contains(got, "~/.bashrc.new") {
+		t.Errorf("another host: %s", got)
 	}
 }

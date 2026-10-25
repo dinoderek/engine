@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/remote"
+	"github.com/dinoderek/engine/internal/version"
 )
 
 // tools are what a host needs on its non-interactive PATH.
@@ -26,13 +26,16 @@ func (r *runner) blocked(tool string) outcome {
 }
 
 // pathLine is the command that puts ~/.local/bin on the PATH that
-// non-interactive shells get, above the line of ~/.bashrc that returns for
-// them.
+// non-interactive shells get: a line at the top of the shell's rc file, above
+// any line that returns for them. It does nothing when the line is there.
 func (r *runner) pathLine() string {
-	if !r.t.remote() {
-		return `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshenv`
+	rc := "~/.bashrc"
+	if !r.t.remote() && strings.HasSuffix(r.d.Getenv("SHELL"), "zsh") {
+		rc = "~/.zshenv"
 	}
-	return r.t.onHost(`sed -i "1i export PATH=\$HOME/.local/bin:\$PATH" ~/.bashrc`, false)
+	line := `export PATH=\$HOME/.local/bin:\$PATH`
+	cmd := fmt.Sprintf(`grep -qs "^export PATH=.HOME/.local/bin" %[1]s || { { echo "%[2]s"; { cat %[1]s 2>/dev/null || :; }; } > %[1]s.new && mv %[1]s.new %[1]s; }`, rc, line)
+	return r.t.onHost(cmd, false)
 }
 
 // tools lists the tools the host lacks, and the PATH line for the usual cause.
@@ -51,22 +54,26 @@ func (r *runner) tools() (outcome, error) {
 	return open("missing: "+strings.Join(missing, ", ")+"; install any the PATH line does not reveal", r.pathLine()), nil
 }
 
-// revRe reads the commit out of `engine version`: "engine v0.1 (3f2a9c1, go1.27.2)".
-var revRe = regexp.MustCompile(`\(([0-9a-f]{7,40})(-dirty)?[,)]`)
-
 // engineRev is the short commit of the engine on the target's PATH, with
 // "-dirty" when it was built from a modified tree, and "" when it has none.
 func (r *runner) engineRev() (string, error) {
 	res, err := r.t.sh("engine version", "")
-	if err != nil {
+	if err != nil || res.code != 0 {
 		return "", err
 	}
-	m := revRe.FindStringSubmatch(res.out)
-	if res.code != 0 || m == nil {
+	info := version.Parse(res.out)
+	commit := info.Commit()
+	if len(commit) < shortRev {
 		return "", nil
 	}
-	return m[1][:7] + m[2], nil
+	if info.Dirty() {
+		return commit[:shortRev] + "-dirty", nil
+	}
+	return commit[:shortRev], nil
 }
+
+// shortRev is how much of a commit setup compares.
+const shortRev = 7
 
 func orNone(s string) string {
 	if s == "" {
@@ -78,7 +85,7 @@ func orNone(s string) string {
 // installEngine puts the caller's commit at ~/.local/bin/engine, and checks
 // that it is the engine the PATH finds.
 func (r *runner) installEngine() (outcome, error) {
-	want := r.want.commit[:7]
+	want := r.want.commit[:shortRev]
 	have, err := r.engineRev()
 	if err != nil || have == want {
 		return passed(want), err

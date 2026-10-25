@@ -77,6 +77,7 @@ type box struct {
 	writeFail   bool
 	auth        string // claude auth status output
 	os          string
+	noSystemd   bool
 	masked      int // sleep targets masked
 	down        bool
 
@@ -138,6 +139,9 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 			fmt.Fprint(errOut, "engine: command not found")
 			return 127
 		}
+		if len(b.rev) == 12 { // built by go install module@commit: no VCS settings
+			return say("engine v0.0.0-20261025174939-%s (go1.27.1)\n", b.rev)
+		}
 		return say("engine v0.0.0 (%s, go1.27.2)\n", b.rev)
 	case strings.Contains(cmd, "go install"):
 		return b.goInstall(cmd, errOut)
@@ -150,8 +154,8 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 		return say(`[{"name":"other"}]`)
 	case strings.HasPrefix(cmd, "claude plugin "):
 		return b.pluginCommand(cmd, errOut)
-	case strings.HasPrefix(cmd, "cat "):
-		return b.cat(cmd, out)
+	case strings.HasPrefix(cmd, "cmp -s - "):
+		return b.cmp(cmd, stdin)
 	case strings.HasPrefix(cmd, "find "):
 		return b.find(cmd, out)
 	case strings.HasPrefix(cmd, "chmod 600 "):
@@ -162,6 +166,8 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 		return b.write(cmd, stdin, errOut)
 	case cmd == "claude auth status":
 		return say("%s", b.auth)
+	case strings.HasPrefix(cmd, "uname -s") && b.noSystemd:
+		return say("%s\n", b.os)
 	case strings.HasPrefix(cmd, "uname -s"):
 		return say("%s\n%s", b.os, strings.Repeat("masked\n", b.masked)+strings.Repeat("enabled\n", 4-b.masked))
 	}
@@ -176,7 +182,7 @@ func (b *box) goInstall(cmd string, errOut io.Writer) int {
 		return 1
 	}
 	_, commit, _ := strings.Cut(cmd, "@")
-	b.rev = commit[:7]
+	b.rev = commit[:12]
 	if b.installTo != "" {
 		b.rev = b.installTo
 	}
@@ -211,13 +217,12 @@ func fileOf(cmd string) string {
 	return ""
 }
 
-func (b *box) cat(cmd string, out io.Writer) int {
-	content, found := b.files[fileOf(cmd)]
-	if !found {
-		return 1
+// cmp is cmp -s - <file>: 0 when the file holds exactly stdin.
+func (b *box) cmp(cmd, stdin string) int {
+	if content, found := b.files[fileOf(cmd)]; found && content == stdin {
+		return 0
 	}
-	fmt.Fprint(out, content)
-	return 0
+	return 1
 }
 
 func (b *box) find(cmd string, out io.Writer) int {
@@ -292,7 +297,12 @@ func (r *rig) exec(in io.Reader, out, errOut io.Writer, name string, args ...str
 
 func (r *rig) deps() Deps {
 	return Deps{
-		Home: r.home, Getenv: func(string) string { return "" }, Exec: r.exec, GH: r.gh, Info: r.info,
+		Home: r.home, Getenv: func(k string) string {
+			if k == "SHELL" {
+				return "/bin/zsh"
+			}
+			return ""
+		}, Exec: r.exec, GH: r.gh, Info: r.info,
 		Check: func(out io.Writer) (bool, error) {
 			fmt.Fprintln(out, "the check report")
 			r.checked = append(r.checked, "checked")

@@ -3,6 +3,7 @@
 package version
 
 import (
+	"regexp"
 	"runtime/debug"
 	"strings"
 )
@@ -68,4 +69,48 @@ func (i Info) String() string {
 		out += " (" + strings.Join(details, ", ") + ")"
 	}
 	return out
+}
+
+// pseudoRe is the commit a pseudo-version ends in: the version of a build made
+// by `go install module@commit`, which records no VCS settings.
+var pseudoRe = regexp.MustCompile(`-\d{14}-([0-9a-f]{12})(\+dirty)?$`)
+
+// Commit is the commit the build was made from: its VCS revision, else the one
+// its pseudo-version ends in. It is empty when the build records neither.
+func (i Info) Commit() string {
+	if i.Revision != "" {
+		return i.Revision
+	}
+	if m := pseudoRe.FindStringSubmatch(i.Version); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// Dirty reports whether the build was made from a modified working tree.
+func (i Info) Dirty() bool {
+	return i.Modified || strings.HasSuffix(i.Version, "+dirty")
+}
+
+// stringRe reads the first line of Info.String: "engine <version> (<details>)".
+var stringRe = regexp.MustCompile(`^engine (\S+)(?: \(([^)]*)\))?`)
+
+// shortRevRe is the revision String prints, with "-dirty" when modified.
+var shortRevRe = regexp.MustCompile(`^([0-9a-f]{7,40})(-dirty)?$`)
+
+// Parse reads what String printed, which another engine's `engine version`
+// prints. A line that is not engine's yields an Info with no version.
+func Parse(output string) Info {
+	line, _, _ := strings.Cut(output, "\n")
+	m := stringRe.FindStringSubmatch(strings.TrimSpace(line))
+	if m == nil {
+		return Info{}
+	}
+	info := Info{Version: m[1]}
+	for _, detail := range strings.Split(m[2], ", ") {
+		if r := shortRevRe.FindStringSubmatch(detail); r != nil {
+			info.Revision, info.Modified = r[1], r[2] != ""
+		}
+	}
+	return info
 }

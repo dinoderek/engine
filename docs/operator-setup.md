@@ -44,9 +44,12 @@
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
 name, one line, as claims post it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
-with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout. Sign in
-to Claude Code with your claude.ai account (`/login`): Remote Control rejects
-API keys and `setup-token`. Sign in to Codex.
+with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
+plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
+`claude plugin install engine@engine --scope user`. Sign in to Claude Code
+with your claude.ai account (`/login`): Remote Control rejects API keys and
+`setup-token`. Sign in to Codex. Setup copies the Mac's engine commit and
+plugin version to the other hosts, so update both here first.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
@@ -64,9 +67,9 @@ answer every prompt, such as enabling Remote Control or the auto mode notice.
 Run `engine setup` again after updating Claude Code, the plugin or `engine`.
 
 **The plugin in a target repo.** A repo enables the `engine` plugin in its
-`.claude/settings.json`, as this repo does. `engine setup` installs it for the
-user: `claude plugin update engine@engine --scope user` (without `--scope`, in
-a checkout that enables the plugin, it updates the project's copy instead).
+`.claude/settings.json`, as this repo does. Update the user's copy with
+`claude plugin update engine@engine --scope user`: without `--scope`, in a
+checkout that enables the plugin, it updates the project's copy instead.
 
 **SSH, the route to any session:**
 

@@ -29,21 +29,25 @@ type wanted struct {
 // pushed commit, a plugin not installed here, or a config file not written.
 func (r *runner) resolveWanted() (wanted, error) {
 	info := r.d.Info
+	commit := info.Commit()
 	switch {
-	case info.Revision == "":
+	case len(commit) < shortRev:
 		return wanted{}, refuse("this engine's build has no commit; install it from a pushed commit")
-	case info.Modified:
+	case info.Dirty():
 		return wanted{}, refuse("this engine was built from a modified working tree; build it from a pushed commit")
 	}
 	token, err := tracker.Token(r.d.Getenv, r.d.Home)
 	if err != nil {
 		return wanted{}, refuse("%v", err)
 	}
-	out, err := r.d.GH([]string{"GH_TOKEN=" + token}, "gh", "api", "repos/"+engineRepo+"/commits/"+info.Revision, "--jq", ".sha")
-	if err != nil || strings.TrimSpace(out) != info.Revision {
-		return wanted{}, refuse("commit %s is not on GitHub (%s); push it, or build this engine from a pushed commit", info.Revision, engineRepo)
+	out, err := r.d.GH([]string{"GH_TOKEN=" + token}, "gh", "api", "repos/"+engineRepo+"/commits/"+commit, "--jq", ".sha")
+	switch {
+	case err != nil:
+		return wanted{}, refuse("could not confirm commit %s is on GitHub (%s): %v", commit, engineRepo, err)
+	case !strings.HasPrefix(strings.TrimSpace(out), commit):
+		return wanted{}, refuse("commit %s is not on GitHub (%s); push it, or build this engine from a pushed commit", commit, engineRepo)
 	}
-	w := wanted{commit: info.Revision}
+	w := wanted{commit: commit}
 	if w.files, err = r.configFiles(); err != nil {
 		return wanted{}, err
 	}
@@ -89,7 +93,7 @@ func (r *runner) copyConfig() (outcome, error) {
 		}
 		if res.code != 0 {
 			path := filepath.Join(hosts.ConfigDir(r.d.Home), f.name)
-			return open("write "+f.name+" failed: "+res.why(), "scp -p "+path+" "+r.t.address+":.config/engine/"+f.name), nil
+			return open("write "+f.name+" failed: "+res.why(), "ssh "+r.t.address+" 'mkdir -p ~/.config/engine' && scp -p "+path+" "+r.t.address+":.config/engine/"+f.name), nil
 		}
 		if did {
 			wrote = append(wrote, f.name)
@@ -108,11 +112,11 @@ const configDir = `"$HOME/.config/engine"`
 // whether it had to write. The result is the failed write, when it failed.
 func (r *runner) syncFile(f configFile) (bool, result, error) {
 	path := configDir + "/" + f.name
-	have, err := r.t.sh("cat "+path, "")
+	same, err := r.t.sh("cmp -s - "+path, f.content)
 	if err != nil {
 		return false, result{}, err
 	}
-	if have.code == 0 && have.out == f.content {
+	if same.code == 0 {
 		perm, err := r.t.sh("find "+path+" -maxdepth 0 -perm 600", "")
 		if err != nil || strings.TrimSpace(perm.out) != "" {
 			return false, result{}, err

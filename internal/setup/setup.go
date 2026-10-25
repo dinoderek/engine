@@ -56,7 +56,7 @@ func open(detail, command string) outcome {
 }
 
 type step struct {
-	n    int // the step's number in the design; a host checking itself skips some
+	n    int // its number in the report; a host checking itself skips some
 	name string
 	run  func() (outcome, error)
 }
