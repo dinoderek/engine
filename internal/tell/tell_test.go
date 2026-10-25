@@ -198,3 +198,44 @@ func TestPointerNamesTheURL(t *testing.T) {
 		t.Errorf("pointer %q", p)
 	}
 }
+
+type failReader struct{}
+
+func (failReader) Read([]byte) (int, error) { return 0, errors.New("pipe closed") }
+
+func TestText(t *testing.T) {
+	tests := []struct {
+		name    string
+		words   []string
+		in      string
+		want    string
+		wantErr string
+	}{
+		{"words are joined", []string{"go", "ahead"}, "", "go ahead", ""},
+		{"one word", []string{"yes"}, "", "yes", ""},
+		{"a dash with other words is text", []string{"-", "yes"}, "ignored", "- yes", ""},
+		{"stdin text", []string{"-"}, "use the second option", "use the second option", ""},
+		{"stdin keeps its lines", []string{"-"}, "one\n\n  two\n```\ncode\n```\n", "one\n\n  two\n```\ncode\n```", ""},
+		{"stdin loses trailing whitespace", []string{"-"}, "text \r\n\n", "text", ""},
+		{"empty stdin", []string{"-"}, "", "", "the text is empty"},
+		{"blank stdin", []string{"-"}, " \t\n\n", "", "the text is empty"},
+		{"empty argument", []string{""}, "", "", "the text is empty"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Text(tt.words, strings.NewReader(tt.in))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("error %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Errorf("Text = %q, %v; want %q", got, err, tt.want)
+			}
+		})
+	}
+	if _, err := Text([]string{"-"}, failReader{}); err == nil || !strings.Contains(err.Error(), "read the text from stdin: pipe closed") {
+		t.Errorf("a failing stdin gave %v", err)
+	}
+}

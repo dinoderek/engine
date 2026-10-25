@@ -4,7 +4,10 @@
 package tell
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
@@ -69,6 +72,24 @@ func Tell(name, text string, d Deps) (Told, error) {
 	}
 	told.Window = session.Name + ":" + id
 	return told, nil
+}
+
+// Text is the comment text for the words after the task name. A lone "-" reads
+// the text from in, so a long or multi-line answer needs no shell quoting;
+// otherwise the words are joined with spaces. Empty text is refused.
+func Text(words []string, in io.Reader) (string, error) {
+	text := strings.Join(words, " ")
+	if len(words) == 1 && words[0] == "-" {
+		data, err := io.ReadAll(in)
+		if err != nil {
+			return "", fmt.Errorf("read the text from stdin: %w", err)
+		}
+		text = strings.TrimRight(string(data), " \t\r\n")
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", errors.New("the text is empty")
+	}
+	return text, nil
 }
 
 // Pointer is the line typed into the session.
