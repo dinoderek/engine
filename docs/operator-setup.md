@@ -27,8 +27,8 @@
    to clone or sync when a `url.<base>.insteadOf` or `pushInsteadOf` rule in
    your git config would send an engine clone over SSH, so limit such a rule
    to your own checkouts (an `includeIf "gitdir:"`).
-7. **Attribute commits truthfully.** PRs open as the machine user,
-   which also means you can approve them.
+7. **Who opens PRs.** The machine user, which also means you can
+   approve them.
 
 ## Notifications
 

@@ -109,7 +109,8 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
     directory was deleted, run it again. A gated window stays open.
 
 Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
-when you resume after a stop.
+when you resume after a stop. Leave every label the steps don't set to the
+coordinator.
 
 **Unattended sessions.** When `ENGINE_UNATTENDED=1` is in your environment,
 nobody watches your screen. A denied permission request may be the
@@ -162,8 +163,6 @@ Branch: <branch>
 - A plan-level change, such as a new task or one that is no longer needed, is
   made on tasks still to do, plus a `Deviation: <what and why>` comment on the
   feature issue.
-
-Leave every other label to the coordinator.
 
 ## Next ready tasks (gated)
 

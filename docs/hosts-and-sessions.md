@@ -219,7 +219,8 @@ Each harness reaches the apps differently:
 Engine owns the tmux session `engine` on each host. It sets its options on
 the session and on each window it opens, and never edits the host's
 `~/.tmux.conf` or tmux's global options. tmux reads `.` as a pane separator,
-so engine targets the windows it opens by id (`@3`), not by name.
+so engine targets the windows it opens by id (`@3`), not by name. Windows stay after their command exits
+(`remain-on-exit`), so a dead session's last screen and exit stay readable.
 
 When engine has to type into a session, it sends the text with `send-keys -l`,
 then `Enter` as a separate call after a short delay. Input boxes can swallow a
@@ -228,7 +229,7 @@ newline that arrives with the text.
 ## Keeping hosts awake
 
 tmux survives a closed terminal, but not a sleeping machine. A macOS
-host holds off sleep per window. A Linux host should not suspend at all.
+host holds off sleep per window, while on power. A Linux host should not suspend at all.
 
 ## Lifecycle
 

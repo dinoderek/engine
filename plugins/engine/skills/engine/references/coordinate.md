@@ -58,14 +58,14 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    a comment saying so that @mentions the operator. Its worktree stays.
 7. **Reap.** Close a window, or archive a cloud session, you started in hands-off
    mode only when its task is closed, carries no `engine:` state label, and
-   the session has been waiting for 10 minutes. Leave a gated run's window
-   for the operator.
+   the session has been waiting for 10 minutes.
 8. **Done.** When the feature has sub-issues and all are closed, comment
    on the feature: each task with its PR, the acceptance result, the tasks still carrying
    `engine:ruling-review`, and the deviations. Set `engine:done`, close the
    feature as completed, and end the session.
 
-Executors own the task labels, except `engine:failed` and a dead holder's `engine:merging`.
+Log each pass's actions. Move only the feature's labels, as above; executors
+own the task labels, except `engine:failed` and a dead holder's `engine:merging`.
 
 ## Native sessions
 
