@@ -87,7 +87,8 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    Push and open the PR. Swap `engine:running` for `engine:in-review`.
    Release any local resources the repo says to stop when a PR opens.
 10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
-    - Take the merge lock (below) first. A standalone task needs none.
+    - Take the merge lock (below) first. A standalone task, or one with no
+      other open task in its feature, needs none.
     - On a failure, read the logs, fix, and go back to step 5.
     - If the default branch moved, merge it in and go back to step 5. Keep
       the lock if it merged cleanly; a conflict you resolved is a fix.
@@ -102,11 +103,13 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
     deviations. Update downstream tasks that are still to do if your work
     changed what they assume (below).
 12. **Clean up.** Run the repo's worktree-release command from outside the
-    worktree, and say what it removed. If the PR closed without merging, ask
-    first. Then end the session. In hands-off mode, when the kickoff names
-    `tmux=`, your last action is `cd "$HOME" && tmux kill-window -t
-    "$TMUX_PANE"`, which frees its slot; if the shell says its working
-    directory was deleted, run it again. A gated window stays open.
+    worktree, and say what it removed. If the PR closed without merging, a
+    gated run asks first; a hands-off run reports it and does not wait, since
+    nobody answers a hands-off session after its report. Then end the session.
+    In hands-off mode, when the kickoff names `tmux=`, your last action is
+    `cd "$HOME" && tmux kill-window -t "$TMUX_PANE"`, which frees its slot; if
+    the shell says its working directory was deleted, run it again. A gated
+    window stays open.
 
 Read the inbox (the task's comments) at steps 3, 8 and 10, and first thing
 when you resume after a stop. Leave every label the steps don't set to the
@@ -119,8 +122,9 @@ nobody watches your screen. A denied permission request may be the
 ## Merge lock
 
 One task per feature merges at a time, so no sibling moves the default
-branch under your last gate run. To take the lock, add `engine:merging` to
-your task if no open sibling carries it. The holder is the carrier whose latest
+branch under your last gate run. A task with no other open task in its feature
+takes no lock. Otherwise, to take the lock, add `engine:merging` to your task
+if no open sibling carries it. The holder is the carrier whose latest
 `engine:merging` `labeled` event (`gh api repos/<o>/<r>/issues/<n>/events`)
 is oldest; check after adding it and just before merging, and if it is not
 you, remove yours. Without the lock, check every 5 minutes. Once you hold
