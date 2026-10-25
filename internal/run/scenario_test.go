@@ -423,12 +423,18 @@ func TestASessionThatDiesBeforeClaimingIsFlaggedOncePerSession(t *testing.T) {
 	}
 }
 
-func TestTheLoopFlagsASessionThatDiesBeforeClaimingAndRestartsIt(t *testing.T) {
+func TestTheLoopFlagsASessionThatDiesBeforeClaimingOnceAndRestartsIt(t *testing.T) {
 	w := newWorld(t, []string{"engine:feature", Approved}, card(2, "standard"))
 	w.do[2] = behaviour{dieAt: 1}
-	// The first session dies; the one that replaces it runs the task through.
+	// The first session dies, the first restart is refused and rests, and the
+	// next one runs the task through.
+	tries := 0
 	w.refuse = func(r tracker.Ref) error {
-		if len(w.starts) > 0 {
+		tries++
+		switch {
+		case tries == 2:
+			return errors.New("no free slot")
+		case tries > 2:
 			w.do[r.Number] = smooth
 		}
 		return nil
@@ -436,12 +442,17 @@ func TestTheLoopFlagsASessionThatDiesBeforeClaimingAndRestartsIt(t *testing.T) {
 	if err := Loop(w, ref(1), false, w.sleep); err != nil {
 		t.Fatalf("%v\n%s", err, strings.Join(w.log, "\n"))
 	}
-	c := w.comments[ref(2)]
-	if len(c) != 1 || !strings.HasPrefix(c[0], "@op ") || !strings.Contains(c[0], "ended before it claimed") ||
-		!strings.Contains(c[0], "Do you want to proceed?") {
-		t.Errorf("comments %q", c)
+	var flags []string
+	for _, c := range w.comments[ref(2)] {
+		if strings.Contains(c, "ended before it claimed") {
+			flags = append(flags, c)
+		}
 	}
-	if !slices.Equal(w.starts, []tracker.Ref{ref(2), ref(2)}) || !w.closed || w.card(ref(2)).Open {
-		t.Errorf("starts %v, closed %v\n%s", w.starts, w.closed, strings.Join(w.log, "\n"))
+	if len(flags) != 1 || !strings.HasPrefix(flags[0], "@op ") || !strings.Contains(flags[0], "Do you want to proceed?") ||
+		strings.Contains(flags[0], "engine attach") {
+		t.Errorf("flags %q of comments %q", flags, w.comments[ref(2)])
+	}
+	if !slices.Equal(w.starts, []tracker.Ref{ref(2), ref(2)}) || tries != 3 || !w.closed || w.card(ref(2)).Open {
+		t.Errorf("starts %v, tries %d, closed %v\n%s", w.starts, tries, w.closed, strings.Join(w.log, "\n"))
 	}
 }
