@@ -2,8 +2,10 @@ package setup
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
@@ -22,6 +24,10 @@ type wanted struct {
 	commit string
 	plugin string
 	files  []configFile
+	// toolchain is the Go go.mod names at commit; toolchainErr says why it
+	// could not be read, which leaves the engine step open rather than refusing.
+	toolchain    string
+	toolchainErr error
 }
 
 // resolveWanted reads everything a remote setup copies from the caller, and
@@ -48,6 +54,7 @@ func (r *runner) resolveWanted() (wanted, error) {
 		return wanted{}, refuse("commit %s is not on GitHub (%s); push it, or build this engine from a pushed commit", commit, engineRepo)
 	}
 	w := wanted{commit: commit}
+	w.toolchain, w.toolchainErr = readToolchain(r.d.GH, token, strings.TrimSpace(out))
 	if w.files, err = r.configFiles(); err != nil {
 		return wanted{}, err
 	}
@@ -127,4 +134,29 @@ func (r *runner) syncFile(f configFile) (bool, result, error) {
 	tmp := path + ".tmp"
 	res, err := r.t.sh("umask 077 && mkdir -p "+configDir+" && cat > "+tmp+" && chmod 600 "+tmp+" && mv "+tmp+" "+path, f.content)
 	return err == nil && res.code == 0, res, err
+}
+
+var (
+	toolchainLine = regexp.MustCompile(`(?m)^toolchain[ \t]+(\S+)[ \t]*$`)
+	// goName is a Go release name such as go1.27.3 or go1.28rc1: the only text
+	// that goes into the install command.
+	goName = regexp.MustCompile(`^go[0-9][0-9a-z.]*$`)
+)
+
+// readToolchain is the Go that go.mod's toolchain line names at the commit,
+// read from GitHub, which has already confirmed the commit.
+func readToolchain(gh tracker.Runner, token, commit string) (string, error) {
+	out, err := gh([]string{"GH_TOKEN=" + token}, "gh", "api", "-H", "Accept: application/vnd.github.raw",
+		"repos/"+engineRepo+"/contents/go.mod?ref="+commit)
+	if err != nil {
+		return "", fmt.Errorf("could not read go.mod at %s (%s): %w", commit[:shortRev], engineRepo, err)
+	}
+	m := toolchainLine.FindStringSubmatch(out)
+	switch {
+	case m == nil:
+		return "", fmt.Errorf("go.mod at %s has no toolchain line", commit[:shortRev])
+	case !goName.MatchString(m[1]):
+		return "", fmt.Errorf("go.mod at %s names the toolchain %q, which is not a Go release", commit[:shortRev], m[1])
+	}
+	return m[1], nil
 }

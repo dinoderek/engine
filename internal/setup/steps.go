@@ -54,22 +54,37 @@ func (r *runner) tools() (outcome, error) {
 	return open("missing: "+strings.Join(missing, ", ")+"; install any the PATH line does not reveal", r.pathLine()), nil
 }
 
-// engineRev is the short commit of the engine on the target's PATH, with
-// "-dirty" when it was built from a modified tree, and "" when it has none.
-func (r *runner) engineRev() (string, error) {
+// engineBuild is the engine on the target's PATH: its short commit, with
+// "-dirty" when it was built from a modified tree, and the Go that built it.
+// Both are empty when the target has no engine.
+type engineBuild struct{ rev, goVersion string }
+
+func (e engineBuild) String() string {
+	if e.rev == "" {
+		return "none"
+	}
+	if e.goVersion == "" {
+		return e.rev
+	}
+	return e.rev + " " + e.goVersion
+}
+
+// hostEngine reads the engine on the target's PATH.
+func (r *runner) hostEngine() (engineBuild, error) {
 	res, err := r.t.sh("engine version", "")
 	if err != nil || res.code != 0 {
-		return "", err
+		return engineBuild{}, err
 	}
 	info := version.Parse(res.out)
 	commit := info.Commit()
 	if len(commit) < shortRev {
-		return "", nil
+		return engineBuild{}, nil
 	}
+	rev := commit[:shortRev]
 	if info.Dirty() {
-		return commit[:shortRev] + "-dirty", nil
+		rev += "-dirty"
 	}
-	return commit[:shortRev], nil
+	return engineBuild{rev: rev, goVersion: info.Go}, nil
 }
 
 // shortRev is how much of a commit setup compares.
@@ -82,18 +97,22 @@ func orNone(s string) string {
 	return s
 }
 
-// installEngine puts the caller's commit at ~/.local/bin/engine, and checks
-// that it is the engine the PATH finds.
+// installEngine puts the caller's commit at ~/.local/bin/engine, built with
+// the Go go.mod names at that commit, and checks that it is the engine the
+// PATH finds. An engine on the right commit built with another Go is replaced.
 func (r *runner) installEngine() (outcome, error) {
-	want := r.want.commit[:shortRev]
-	have, err := r.engineRev()
+	if r.want.toolchainErr != nil {
+		return open(r.want.toolchainErr.Error()+"; setup cannot tell which Go the engine needs", r.rerun()), nil
+	}
+	want := engineBuild{rev: r.want.commit[:shortRev], goVersion: r.want.toolchain}
+	have, err := r.hostEngine()
 	if err != nil || have == want {
-		return passed(want), err
+		return passed(want.String()), err
 	}
 	if r.missing["go"] {
 		return r.blocked("go"), nil
 	}
-	install := fmt.Sprintf(`GOBIN="$HOME/.local/bin" go install %s@%s`, engineModule, r.want.commit)
+	install := fmt.Sprintf(`GOBIN="$HOME/.local/bin" GOTOOLCHAIN=%s go install %s@%s`, want.goVersion, engineModule, r.want.commit)
 	res, err := r.t.sh(install, "")
 	if err != nil {
 		return outcome{}, err
@@ -101,14 +120,14 @@ func (r *runner) installEngine() (outcome, error) {
 	if res.code != 0 {
 		return open("go install failed: "+res.why(), r.t.onHost(install, false)), nil
 	}
-	after, err := r.engineRev()
+	after, err := r.hostEngine()
 	if err != nil {
 		return outcome{}, err
 	}
 	if after != want {
-		return open("the engine on the PATH is "+orNone(after)+", not the one installed in ~/.local/bin", r.pathLine()), nil
+		return open("the engine on the PATH is "+after.String()+", not the one installed in ~/.local/bin ("+want.String()+")", r.pathLine()), nil
 	}
-	return changed(fmt.Sprintf("%s, was %s", want, orNone(have))), nil
+	return changed(fmt.Sprintf("%s, was %s", want, have)), nil
 }
 
 // enginePath checks that this host finds engine on its PATH.

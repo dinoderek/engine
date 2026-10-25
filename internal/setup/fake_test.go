@@ -15,6 +15,7 @@ import (
 const (
 	callerRev    = "2a08a0c1f2a2b3c4d5e6f708192a3b4c5d6e7f80"
 	callerPlugin = "0.7.1"
+	callerGo     = "go1.27.3"
 	boxAddress   = "dev@box"
 	secret       = "ghp_secret_token"
 )
@@ -66,6 +67,7 @@ func callerHome(t *testing.T) string {
 type box struct {
 	missing     []string // tools not on the PATH
 	rev         string   // short commit of the engine on the PATH; "" is none
+	goVer       string   // Go that built it; "" is go1.27.2
 	installTo   string   // what go install leaves on the PATH; "" is the commit asked for
 	installFail bool
 	marketplace bool
@@ -98,7 +100,7 @@ func staleBox() *box {
 // settled is staleBox after a setup: nothing left to do.
 func settledBox(home string) *box {
 	b := staleBox()
-	b.rev, b.plugin = callerRev[:7], callerPlugin
+	b.rev, b.goVer, b.plugin = callerRev[:7], callerGo, callerPlugin
 	for _, name := range []string{"hosts.toml", "github-token"} {
 		data, _ := os.ReadFile(filepath.Join(home, ".config", "engine", name))
 		b.files[name] = string(data)
@@ -139,10 +141,14 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 			fmt.Fprint(errOut, "engine: command not found")
 			return 127
 		}
-		if len(b.rev) == 12 { // built by go install module@commit: no VCS settings
-			return say("engine v0.0.0-20261025174939-%s (go1.27.1)\n", b.rev)
+		goVer := b.goVer
+		if goVer == "" {
+			goVer = "go1.27.2"
 		}
-		return say("engine v0.0.0 (%s, go1.27.2)\n", b.rev)
+		if len(b.rev) == 12 { // built by go install module@commit: no VCS settings
+			return say("engine v0.0.0-20261025174939-%s (%s)\n", b.rev, goVer)
+		}
+		return say("engine v0.0.0 (%s, %s)\n", b.rev, goVer)
 	case strings.Contains(cmd, "go install"):
 		return b.goInstall(cmd, errOut)
 	case cmd == "claude plugin list --json":
@@ -182,11 +188,22 @@ func (b *box) goInstall(cmd string, errOut io.Writer) int {
 		return 1
 	}
 	_, commit, _ := strings.Cut(cmd, "@")
-	b.rev = commit[:12]
+	b.rev, b.goVer = commit[:12], goToolchain(cmd)
 	if b.installTo != "" {
 		b.rev = b.installTo
 	}
 	return 0
+}
+
+// goToolchain is the Go a go install line pins with GOTOOLCHAIN, or the host's
+// own go1.27.2 when it pins none.
+func goToolchain(cmd string) string {
+	for _, word := range strings.Fields(cmd) {
+		if v, found := strings.CutPrefix(word, "GOTOOLCHAIN="); found {
+			return v
+		}
+	}
+	return "go1.27.2"
 }
 
 func (b *box) pluginCommand(cmd string, errOut io.Writer) int {
@@ -256,17 +273,22 @@ type rig struct {
 	check   func() (bool, error)
 	gh      func(env []string, name string, args ...string) (string, error)
 	info    version.Info
+	goMod   string // go.mod at the caller's commit, as GitHub serves it
 }
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	r := &rig{home: callerHome(t), box: staleBox(), info: version.Info{Revision: callerRev}}
+	r := &rig{home: callerHome(t), box: staleBox(), info: version.Info{Revision: callerRev},
+		goMod: "module github.com/dinoderek/engine\n\ngo 1.27.0\n\ntoolchain " + callerGo + "\n"}
 	r.local = &box{plugin: callerPlugin, files: map[string]string{}, badMode: map[string]bool{},
 		auth: `{"loggedIn":true,"authMethod":"claude.ai"}`, os: "Darwin", rev: "2a08a0c"}
 	r.check = func() (bool, error) { return true, nil }
 	r.gh = func(env []string, name string, args ...string) (string, error) {
 		if len(env) != 1 || env[0] != "GH_TOKEN="+secret {
 			return "", fmt.Errorf("gh got env %v", env)
+		}
+		if strings.Contains(strings.Join(args, " "), "contents/go.mod?ref="+callerRev) {
+			return r.goMod, nil
 		}
 		return callerRev + "\n", nil
 	}
