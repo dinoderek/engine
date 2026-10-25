@@ -96,9 +96,14 @@ The coordinator places a ready task on a host that meets all of these:
   is under its own cap;
 - the host's capabilities include everything in the card's `requires`.
 
-Ties go to the host with the most free slots. A task that no host can take
-stays ready, and the coordinator reports why. How the coordinator reaches each
-host is in `coordinator.md`.
+The coordinator walks the ready tasks in start order and gives each the host
+with the most free slots, then the fewest capabilities, then the lowest name.
+Free slots come from each host's `status`; a host whose `status` fails takes
+no task, and its sessions do not count against a harness's cap. A task left
+unplaced stays ready and is logged with the reason each pass. If no host
+could take it even with every slot free, the coordinator also comments the
+reason on the task, once. The planner starts on the coordinator's own host.
+How the coordinator reaches each host is in `coordinator.md`.
 
 ## Permission mode
 

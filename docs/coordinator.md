@@ -16,7 +16,8 @@
 ## V1: `engine run`
 
 `engine run <owner/repo#n>` is started by hand, on one host, and drives Claude
-sessions there through `engine start`. It stays alive until the work is done,
+sessions through `engine start`, on whichever host placement picks
+(`hosts-and-sessions.md`, "Placement"). It stays alive until the work is done,
 you stop it, or the machine goes down, and logs one timestamped line per
 action. It exits 1 when the run ends short of done: a feature that is not
 approved, or a lone task that failed.
@@ -39,7 +40,8 @@ waited long enough to stall. Designed, not built: a pass on each webhook event
 mid-pass, and SSH hosts. The first time it sees
 a session waiting, it writes the time to the session's run directory as
 `waiting-since`, and clears it when the session works again ("Session
-signals"). Its own notes, such as having reported a failing lint, live in
+signals"). Its own notes, such as having reported a failing lint or a task no host
+can take, live in
 `<repo>-<n>-coordinator` beside the run directories; the first note written
 makes the directory.
 
@@ -72,7 +74,9 @@ tmux and token, and reads `hosts.toml` only for its own launch line,
 harness binary and slots. `engine start` calls its own host's
 ops in-process, and another machine's as `ssh -o BatchMode=yes -o
 ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`).
-Designed, not built: the same for `ps`, `tell` and `run`. The coordinator refuses to run
+`engine run` reads every host's `status` for placement, and starts a
+session elsewhere as `engine start --host` does. Designed, not built: the
+same for `ps`, `tell` and `run`'s session check. The coordinator refuses to run
 unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
 you are changing host names or addresses, load `hosts-and-sessions.md`.
 

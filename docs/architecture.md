@@ -35,7 +35,7 @@ Two programs share one Go module:
   `baseline` and `repo` (git, go and file helpers).
 
 The designed components are the coordinator's reconcile loop, the host ops
-over SSH for `ps`, `tell` and `run`, the rest of the tracker adapter and the
+over SSH for `ps`, `tell` and `run`'s session check, the rest of the tracker adapter and the
 telemetry collector.
 If you are building one, load its doc from the index in `AGENTS.md`.
 

@@ -1,6 +1,7 @@
 package run
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,6 +42,7 @@ var smooth = behaviour{claim: 1, review: 3, merge: 4}
 // executor is a session the fake world started.
 type executor struct {
 	ref     tracker.Ref
+	host    string
 	started time.Time
 	do      behaviour
 	window  session.WindowInfo
@@ -48,14 +50,29 @@ type executor struct {
 	status  string
 }
 
-// world is a fake World: an in-memory feature, a host, a clock, and fake
+// fakeHost is a host of the fake world.
+type fakeHost struct {
+	name      string
+	slots     int
+	caps      []string
+	harnesses []string
+	// down is why its status fails, when it does.
+	down string
+}
+
+// world is a fake World: an in-memory feature, hosts, a clock, and fake
 // executors that move their tasks along as the clock runs.
 type world struct {
-	t        *testing.T
-	home     string
-	now      time.Time
-	feature  tracker.Feature
-	slots    int
+	t       *testing.T
+	home    string
+	now     time.Time
+	feature tracker.Feature
+	// slots are this host's, mac, when hosts is empty.
+	slots int
+	hosts []fakeHost
+	// limit caps claude across the hosts; 0 is 8.
+	limit    int
+	placed   []string       // each start, as <task>@<host>
 	plans    func(w *world) // the planner's work, when it is started
 	refuse   func(tracker.Ref) error
 	failNext map[string]error // the next call of a write fails: "comment", "close"
@@ -154,16 +171,46 @@ func (w *world) LatestRun(name string) (session.Run, bool, error) {
 	return session.LatestRun(w.home, name)
 }
 
-func (w *world) Slots() (int, error) { return w.slots, nil }
+func (w *world) fleet() []fakeHost {
+	if len(w.hosts) == 0 {
+		return []fakeHost{{name: "mac", slots: w.slots, caps: []string{"macos"}, harnesses: []string{"claude"}}}
+	}
+	return w.hosts
+}
+
+// live counts the live windows on host.
+func (w *world) live(host string) int {
+	n := 0
+	for _, e := range w.execs {
+		if e.host == host && e.window.ID != "" && !e.window.Dead {
+			n++
+		}
+	}
+	return n
+}
+
+func (w *world) Fleet() Fleet {
+	f := Fleet{Local: "mac", DefaultHarness: "claude", Caps: map[string]int{"claude": cmp.Or(w.limit, 8), "codex": 2}}
+	for _, h := range w.fleet() {
+		l := HostLoad{Name: h.name, Harnesses: h.harnesses, Capabilities: h.caps, Unreachable: h.down,
+			FreeSlots: max(0, h.slots-w.live(h.name)), Sessions: map[string]int{"claude": w.live(h.name)}}
+		if h.down != "" {
+			l.FreeSlots, l.Sessions = 0, nil
+		}
+		f.Hosts = append(f.Hosts, l)
+	}
+	slices.SortFunc(f.Hosts, func(a, b HostLoad) int { return cmp.Compare(a.Name, b.Name) })
+	return f
+}
 
 func (w *world) NoteDir(r tracker.Ref) (string, error) {
 	return filepath.Join(w.home, "notes", fmt.Sprint(r.Number)), nil
 }
 
-func (w *world) launch(r tracker.Ref, do behaviour) error {
+func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 	name := fmt.Sprintf("r-%d", r.Number)
 	w.nextID++
-	e := &executor{ref: r, started: w.now, do: do, status: session.AgentBusy,
+	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy,
 		window: session.WindowInfo{ID: fmt.Sprintf("@%d", w.nextID), Name: name}}
 	dir, err := session.RunDir(w.home, session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
 	if err != nil {
@@ -179,19 +226,19 @@ func (w *world) launch(r tracker.Ref, do behaviour) error {
 		Mode: mode, Tmux: "engine:" + e.window.ID, Spawned: w.now})
 }
 
-// Start refuses as engine start does: a window of that name, live or dead,
-// or no free slot.
-func (w *world) Start(r tracker.Ref) error {
-	live := 0
+// Start refuses as engine start does: an unknown host, a window of that
+// name, live or dead, or no free slot on the host.
+func (w *world) Start(r tracker.Ref, host string) error {
+	i := slices.IndexFunc(w.fleet(), func(h fakeHost) bool { return h.name == host })
+	if i < 0 {
+		return fmt.Errorf("host %q is not in hosts.toml", host)
+	}
 	for _, e := range w.execs {
 		if e.window.ID != "" && e.window.Name == fmt.Sprintf("r-%d", r.Number) {
 			return fmt.Errorf("the tmux session engine already has a window r-%d", r.Number)
 		}
-		if e.window.ID != "" && !e.window.Dead {
-			live++
-		}
 	}
-	if live >= w.slots {
+	if w.live(host) >= w.fleet()[i].slots {
 		return fmt.Errorf("no free slot")
 	}
 	if w.refuse != nil {
@@ -200,7 +247,8 @@ func (w *world) Start(r tracker.Ref) error {
 		}
 	}
 	w.starts = append(w.starts, r)
-	return w.launch(r, w.do[r.Number])
+	w.placed = append(w.placed, fmt.Sprintf("%d@%s", r.Number, host))
+	return w.launch(r, host, w.do[r.Number])
 }
 
 func (w *world) StartPlanner(r tracker.Ref) error {
@@ -211,7 +259,7 @@ func (w *world) StartPlanner(r tracker.Ref) error {
 		}
 	}
 	w.starts = append(w.starts, r)
-	return w.launch(r, behaviour{})
+	return w.launch(r, "mac", behaviour{})
 }
 
 func (w *world) AddLabels(r tracker.Ref, labels ...string) error {

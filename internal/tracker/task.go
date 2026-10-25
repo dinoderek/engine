@@ -32,6 +32,8 @@ type Task struct {
 	Tier string
 	// Requires are the capabilities the card's Requires section names.
 	Requires []string
+	// Body is the issue's text.
+	Body string
 }
 
 // Has reports whether the task carries label.
@@ -57,6 +59,7 @@ func ReadTask(run Runner, token string, ref Ref) (Task, error) {
 	task := Task{
 		Ref: ref, Title: issue.Title, Open: issue.State == "open",
 		Labels: issue.labelNames(), Harness: harness, Tier: tier, Requires: ParseRequires(issue.Body),
+		Body: issue.Body,
 	}
 	if issue.ParentURL != "" {
 		parent, err := refFromIssueURL(issue.ParentURL)

@@ -94,11 +94,14 @@ type View struct {
 	LintNoted bool
 	// StartFailed is when each task's last start failed, if it did.
 	StartFailed map[tracker.Ref]time.Time
+	// PlaceNoted is true for each task the coordinator has said no host
+	// can take.
+	PlaceNoted map[tracker.Ref]bool
 	// Operator is the issue whose assignee, else author, is @mentioned:
 	// the feature, or a lone task's feature.
-	Operator  tracker.Ref
-	FreeSlots int
-	Now       time.Time
+	Operator tracker.Ref
+	Fleet    Fleet
+	Now      time.Time
 }
 
 // Kind is what an action does.
@@ -107,6 +110,7 @@ type Kind string
 // The actions a pass can take.
 const (
 	StartTask    Kind = "start"
+	Wait         Kind = "wait"
 	StartPlanner Kind = "plan"
 	SetLabel     Kind = "label"
 	ReportLint   Kind = "lint"
@@ -123,11 +127,15 @@ type Action struct {
 	Ref  tracker.Ref
 	// Label is the feature state SetLabel sets.
 	Label string
+	// Host is where StartTask starts the task.
+	Host string
 	// Text says why, for the log and for the comment the action posts.
 	Text    string
 	Session Session
 	// Failure marks an Exit that ends the run short of done.
 	Failure bool
+	// Notify asks a Wait to comment its reason on the task.
+	Notify bool
 }
 
 func hasAny(labels []string, set []string) bool {

@@ -29,8 +29,8 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    minutes, or ends with no tasks written, gets one @mention on the feature.
    Steps 3 to 8 run only on a feature that is `engine:planned` or later.
 3. **Start ready tasks.** A task is ready when it is open, has no `engine:`
-   state label, and every blocker is closed. While a slot is free, start
-   them in this order:
+   state label, and every blocker is closed. Start them in this order, each
+   on a host placement allows:
    1. most downstream tasks first: the count of open tasks blocked by it,
       directly or through others;
    2. then `deep` before `standard` before `light`;
@@ -40,6 +40,7 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    claimed. If it died before claiming, @mention the operator once with its
    last screen, close its window and start again. A start that fails gets
    one @mention on the task, and no retry for 30 minutes, holding no slot.
+   A task no host could take gets one @mention, with why.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is open and
