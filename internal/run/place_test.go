@@ -175,17 +175,14 @@ func TestAnUnreachableHostTakesNoTask(t *testing.T) {
 	if len(w.comments[ref(2)]) != 0 {
 		t.Errorf("a task waiting for a host was commented on: %q", w.comments[ref(2)])
 	}
-	if !slices.ContainsFunc(w.log, func(l string) bool { return strings.HasPrefix(l, "host devbox takes no task: ssh") }) {
-		t.Errorf("log:\n%s", strings.Join(w.log, "\n"))
-	}
 }
 
 func TestATaskStartedOnAnotherHostIsNotStartedAgainBeforeItClaims(t *testing.T) {
 	w := newWorld(t, []string{"engine:feature", Planned}, needs(2, "standard", "linux"))
 	twoHosts(w, 3, 3)
 	passOf(t, w)
-	if v := gather(t, w); len(v.Sessions) != 0 {
-		t.Fatalf("this host sees the devbox's session: %+v", v.Sessions)
+	if s := gather(t, w).Sessions[ref(2)]; s.Host != "devbox" || !s.Live {
+		t.Fatalf("the devbox's session: %+v", s)
 	}
 	if acts := passOf(t, w); len(acts) != 0 {
 		t.Errorf("second pass, before the claim: %+v", acts)

@@ -1,6 +1,7 @@
 package run
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -26,11 +27,9 @@ type System struct {
 	Host   hosts.Host
 	// Client reaches a host's ops: in process for this host, else over SSH.
 	Client func(hosts.Host) remote.Client
-	Tmux   *session.Tmux
-	// Agents lists the live Claude Code sessions on this host.
-	ListAgents func() ([]session.Agent, error)
-	// ListRows is engine ps's listing.
-	ListRows func() ([]ps.Row, error)
+	// Claims is engine ps's source of claims. Rows reads every host's
+	// sessions from a Fleet instead of its own calls.
+	Claims ps.Source
 	// Starts is what engine start launches with.
 	Starts start.Deps
 	Out    io.Writer
@@ -60,15 +59,39 @@ func (s System) Task(ref tracker.Ref) (tracker.Card, tracker.Ref, error) {
 	return c, op, nil
 }
 
-func (s System) Rows() ([]ps.Row, error)                  { return s.ListRows() }
-func (s System) Windows() ([]session.WindowInfo, error)   { return s.Tmux.Windows() }
-func (s System) Agents() ([]session.Agent, error)         { return s.ListAgents() }
-func (s System) Capture(id string, n int) (string, error) { return s.Tmux.Capture(id, n) }
-func (s System) Kill(id string) error                     { return s.Tmux.Kill(id) }
-func (s System) Now() time.Time                           { return s.Clock() }
+func (s System) Now() time.Time { return s.Clock() }
 
-func (s System) LatestRun(name string) (session.Run, bool, error) {
-	return session.LatestRun(s.Home, name)
+// Rows settles every claim as engine ps does, from the hosts' replies in f:
+// this host's windows and Claude Code sessions too.
+func (s System) Rows(f Fleet) ([]ps.Row, error) {
+	src := s.Claims
+	src.Windows = func() ([]session.WindowInfo, error) {
+		st, err := f.status(src.Local)
+		var ws []session.WindowInfo
+		for _, w := range st.Windows {
+			ws = append(ws, session.WindowInfo{ID: w.ID, Name: w.Name, Dead: !w.Alive})
+		}
+		return ws, err
+	}
+	src.Agents = func() ([]session.Agent, error) {
+		st, err := f.status(src.Local)
+		if err == nil && st.AgentsError != "" {
+			err = errors.New(st.AgentsError)
+		}
+		return st.Agents, err
+	}
+	src.Remote = f.status
+	l, err := ps.List(src)
+	return l.Rows, err
+}
+
+// Release releases a session on the named host.
+func (s System) Release(host, name string) (hostops.Released, error) {
+	h, ok := s.Config.Hosts[host]
+	if !ok {
+		return hostops.Released{}, fmt.Errorf("host %q is not in hosts.toml", host)
+	}
+	return s.Client(h).Release(name, false)
 }
 
 // NoteDir is <runs>/<repo>-<n>-coordinator, beside the runs it watches. It
@@ -103,32 +126,6 @@ func (s System) Fleet() Fleet {
 	}
 	wg.Wait()
 	return f
-}
-
-// load is a host's load from its status: its free slots, and its live
-// sessions by the harness their newest run names. A window with no run,
-// such as engine run's own, holds a slot but no harness's session.
-func load(h hosts.Host, st hostops.Status, err error) HostLoad {
-	l := HostLoad{Name: h.Name, Harnesses: h.Harnesses, Capabilities: h.Capabilities, Sessions: map[string]int{}}
-	if err != nil {
-		l.Unreachable = err.Error()
-		return l
-	}
-	l.FreeSlots = st.FreeSlots
-	harness := map[string]string{}
-	for _, r := range st.Runs {
-		harness[r.Name] = r.Record.Harness
-	}
-	for _, w := range st.Windows {
-		if !w.Alive {
-			continue
-		}
-		l.Live = append(l.Live, w.Name)
-		if hn := harness[w.Name]; hn != "" {
-			l.Sessions[hn]++
-		}
-	}
-	return l
 }
 
 func (s System) StartPlanner(feature tracker.Ref) error {

@@ -59,15 +59,17 @@ func planStep(v View) ([]Action, bool) {
 		return nil, false
 	case !f.Has(Approved):
 		return []Action{{Kind: Exit, Ref: f.Ref, Text: f.Ref.String() + " is not approved", Failure: true}}, true
+	case started && planner.Unknown:
+		return nil, true
 	case started && planner.Live:
-		if planner.waited(v.Now, StallWait) && planner.StallNoted.Before(planner.WaitingSince) {
-			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner,
+		if planner.waited(v.Now, StallWait) && !planner.flagged(planner.WaitingSince) {
+			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner, At: planner.WaitingSince,
 				Text: fmt.Sprintf("the planner %s has waited for input for %s", planner.Name, StallWait)}}, true
 		}
 		return nil, true
 	case len(f.Tasks) == 0 && started:
-		if planner.StallNoted.Before(planner.Spawned) {
-			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner,
+		if !planner.flagged(planner.Spawned) {
+			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner, At: planner.Spawned,
 				Text: "the planner " + planner.Name + " ended without writing any task"}}, true
 		}
 		return nil, true
@@ -102,22 +104,22 @@ func stalls(v View) []Action {
 	var acts []Action
 	for _, c := range v.Feature.Tasks {
 		s, ok := v.Sessions[c.Ref]
-		if !ok || !c.Open {
+		if !ok || !c.Open || s.Unknown {
 			continue
 		}
 		if !s.Live {
-			if !hasAny(c.Labels, takenStates) && s.StallNoted.Before(s.Spawned) {
-				acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
+			if !hasAny(c.Labels, takenStates) && !s.flagged(s.Spawned) {
+				acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s, At: s.Spawned,
 					Text: s.Name + " ended before it claimed the task; it will be started again"})
 			}
 			continue
 		}
 		switch {
-		case !hasAny(c.Labels, claimStates) && v.Now.Sub(s.Spawned) >= ClaimWait && s.StallNoted.Before(s.Spawned):
-			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
+		case !hasAny(c.Labels, claimStates) && v.Now.Sub(s.Spawned) >= ClaimWait && !s.flagged(s.Spawned):
+			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s, At: s.Spawned,
 				Text: fmt.Sprintf("%s has not claimed the task %s after it started", s.Name, ClaimWait)})
-		case hasAny(c.Labels, claimStates) && !c.Has(NeedsHuman) && s.waited(v.Now, StallWait) && s.StallNoted.Before(s.WaitingSince):
-			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
+		case hasAny(c.Labels, claimStates) && !c.Has(NeedsHuman) && s.waited(v.Now, StallWait) && !s.flagged(s.WaitingSince):
+			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s, At: s.WaitingSince,
 				Text: fmt.Sprintf("%s has waited for input for %s, outside a hard stop", s.Name, StallWait)})
 		}
 	}
@@ -146,10 +148,15 @@ func finished(c tracker.Card, s Session) bool {
 // doneReaps is step 8's reaping, once the work is done: it closes every
 // finished hands-off window that is waiting for input at once, and reports
 // how many hands-off windows of closed tasks are still live, whether they
-// are finished or not.
+// are finished or not. A closed task's session on a host that cannot be
+// read counts as live.
 func doneReaps(v View) (acts []Action, live int) {
 	for _, c := range v.Feature.Tasks {
 		s, ok := v.Sessions[c.Ref]
+		if ok && !c.Open && s.Unknown {
+			live++
+			continue
+		}
 		if !ok || c.Open || !s.Live || s.Mode != "hands-off" {
 			continue
 		}
@@ -163,7 +170,8 @@ func doneReaps(v View) (acts []Action, live int) {
 }
 
 // ready is step 3: the ready tasks, in start order. A task whose window is
-// live on any host is not ready: its session has not claimed yet.
+// live on any host is not ready: its session has not claimed yet. Nor is
+// one whose session is on a host that cannot be read.
 func ready(v View) []tracker.Card {
 	var cands []tracker.Card
 	for _, c := range v.Feature.Tasks {
@@ -171,7 +179,7 @@ func ready(v View) []tracker.Card {
 		blocked := slices.ContainsFunc(c.BlockedBy, func(b tracker.Blocker) bool { return b.Open })
 		failed, ok := v.StartFailed[c.Ref]
 		resting := ok && failed.After(s.Spawned) && v.Now.Sub(failed) < StartRetry
-		if c.Open && !blocked && !hasAny(c.Labels, takenStates) && !s.Live && !resting && !v.Fleet.liveAnywhere(windowName(c.Ref)) {
+		if c.Open && !blocked && !hasAny(c.Labels, takenStates) && !s.Live && !s.Unknown && !resting && !v.Fleet.liveAnywhere(windowName(c.Ref)) {
 			cands = append(cands, c)
 		}
 	}

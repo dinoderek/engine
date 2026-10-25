@@ -33,22 +33,28 @@ it. The skill's `coordinate` mode
 pass, so an agent coordinator and `engine run` behave the same.
 
 A pass runs every 5 minutes. Between passes, a session check runs every 60
-seconds. It reads only the host, never GitHub, and starts a pass early when a
-session has started, ended or changed between working and waiting, or has
-waited long enough to stall. Designed, not built: a pass on each webhook event
-(`gh webhook forward` to a localhost endpoint), coalescing events that arrive
-mid-pass, and SSH hosts. The first time it sees
-a session waiting, it writes the time to the session's run directory as
-`waiting-since`, and clears it when the session works again ("Session
-signals"). Its own notes, such as having reported a failing lint or a task no host
-can take, live in
-`<repo>-<n>-coordinator` beside the run directories; the first note written
-makes the directory.
+seconds. It reads every host's `status`, one call per host in parallel, and
+never GitHub, and starts a pass early when a session has started, ended,
+become known or unknown, or changed between working and waiting, or has
+waited long enough to stall. A pass reads its sessions from the same
+replies. Designed, not built: a pass on each webhook event
+(`gh webhook forward` to a localhost endpoint), and coalescing events that
+arrive mid-pass.
+
+The coordinator's notes live in `<repo>-<n>-coordinator` beside its own
+host's run directories, whichever host a session runs on: the host it last
+started each session on, `waiting-since` (written the first time it sees a
+session waiting, cleared when the session works again; "Session signals"),
+the stall it last reported, and having reported a failing lint or a task no
+host can take. The first note written makes the directory. A coordinator
+restarted on another host has none of them, so its stall timers start
+again.
 
 At done, `engine run` posts the summary and closes the feature (a lone task
-has neither), then re-reads the work and the host's sessions each minute. It closes each hands-off window of a
-closed task as soon as the session is waiting, with no 10-minute wait, and
-exits when none is left or after 15 minutes. Gated windows are never closed.
+has neither), then re-reads the work and every host's sessions each minute.
+It releases each hands-off window of a closed task as soon as the session is
+waiting, with no 10-minute wait, and exits when none is left or after 15
+minutes. Gated windows are never closed.
 
 The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it
@@ -78,8 +84,10 @@ and `status` for `engine ps`). `engine tell` has no op: it types the pointer
 with `tmux send-keys` over the same ssh options, and exits 1, keeping its
 comment, when the window is missing or the host is unreachable. `engine run`
 reads every host's `status` for placement, and starts a session elsewhere as
-`engine start --host` does. Designed, not built: the same for `run`'s session
-check. The coordinator refuses to run
+`engine start --host` does. Its session check reads the same `status`
+replies. It reaps a finished window, and clears an ended session before
+starting its task again, with the session's host's `release`. The
+coordinator refuses to run
 unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
 you are changing host names or addresses, load `hosts-and-sessions.md`.
 
@@ -107,7 +115,11 @@ of the op `protocol`, which no engine defines, then streams
 **A failed call is unknown, never dead.** When a call fails or a host cannot
 be reached, everything that host would have said is unknown: none of its
 sessions is marked dead, failed or reaped for it. Only a successful
-`status` that lacks a window shows the window gone.
+`status` that lacks a window shows the window gone. `engine run` looks for a
+session on the host its claim names, else the host it last started it on;
+while that host cannot be read, the session is neither stalled, restarted
+nor reaped, and the run logs the outage once, then once when the host answers
+again.
 
 - **Repos.** Each host keeps engine's own clone at
   `~/.local/share/engine/repos/<owner>/<repo>`, which acts as the main
@@ -154,9 +166,10 @@ time is stalled before the claim, for example on a prompt (the skill's
 once, then started again. A session whose `waiting-since` is 10
 minutes old while its task is open and not `needs-human` has stopped outside
 the protocol, for example on a question asked in the session rather than on
-the issue. The coordinator @mentions you on the task's issue, once per wait:
-it skips the mention when its own stall comment is newer than
-`waiting-since`.
+the issue. The coordinator @mentions you on the task's issue, with the last
+screen the host's `status` sent (it sends one for a window whose session is
+not busy), once per session start or wait: it notes the start or wait it
+flagged, and flags only another one.
 
 ## Identity and notifications
 

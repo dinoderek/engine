@@ -92,6 +92,8 @@ func TestAnUnclaimedSessionStallsOnce(t *testing.T) {
 	w.do[2] = behaviour{}
 	v := gather(t, w)
 	Apply(w, v, Decide(v))
+	// It sits at a prompt, so its host sends its screen.
+	w.execs[ref(2)].status = session.AgentWaiting
 	w.sleep(ClaimWait)
 	v = gather(t, w)
 	Apply(w, v, Decide(v))
@@ -307,11 +309,11 @@ func TestACheckTriggersAnEarlyPass(t *testing.T) {
 	v := gather(t, w)
 	Apply(w, v, Decide(v))
 	v = gather(t, w)
-	if passDue(w, v) {
+	if passDue(w, v, outages{}) {
 		t.Error("due with nothing changed")
 	}
 	w.execs[ref(2)].status = session.AgentWaiting
-	if !passDue(w, v) {
+	if !passDue(w, v, outages{}) {
 		t.Error("not due after the session began to wait")
 	}
 }

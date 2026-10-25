@@ -156,7 +156,8 @@ it:
    HTTPS on first use, fetches, and leaves it at the remote's default branch;
 2. creates the worktree on `task/<repo>-<task>`, with the clone's executable
    `./dev worktree create` if it has one, else `git worktree add` from the
-   default branch, refusing a branch that exists locally or on `origin`;
+   default branch, refusing a branch on `origin`, or a local one with
+   commits (one without is remade);
 3. sets `projects.<worktree>.hasTrustDialogAccepted` in `~/.claude.json` (or
    `$CLAUDE_CONFIG_DIR`'s), so the trust dialog, whose default exits, never
    shows;

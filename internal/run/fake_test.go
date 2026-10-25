@@ -2,6 +2,7 @@ package run
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/hostops"
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/ps"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
@@ -56,8 +59,9 @@ type fakeHost struct {
 	slots     int
 	caps      []string
 	harnesses []string
-	// down is why its status fails, when it does.
-	down string
+	// down is why its status fails, when it does, and agentsDown why its
+	// claude agents does.
+	down, agentsDown string
 }
 
 // world is a fake World: an in-memory feature, hosts, a clock, and fake
@@ -75,10 +79,12 @@ type world struct {
 	placed   []string       // each start, as <task>@<host>
 	plans    func(w *world) // the planner's work, when it is started
 	refuse   func(tracker.Ref) error
-	failNext map[string]error // the next call of a write fails: "comment", "close"
-	killed   []string
-	attempts int      // planner starts tried, refused or not
-	history  []string // the labels set on the feature, in order
+	failNext map[string]error // the next call of a write fails: "comment", "close", "release"
+	killed   []string         // the ids of the windows released
+	released []string         // each release, as <name>@<host>
+	keep     string           // why release keeps a worktree, when it does
+	attempts int              // planner starts tried, refused or not
+	history  []string         // the labels set on the feature, in order
 	do       map[int]behaviour
 	execs    map[tracker.Ref]*executor
 	nextID   int
@@ -131,7 +137,9 @@ func (w *world) Task(r tracker.Ref) (tracker.Card, tracker.Ref, error) {
 	return *w.card(r), w.feature.Ref, nil
 }
 
-func (w *world) Rows() ([]ps.Row, error) {
+// Rows settles claims as engine ps does: a claim on a host that cannot be
+// read stays running, with liveness unknown.
+func (w *world) Rows(f Fleet) ([]ps.Row, error) {
 	var rows []ps.Row
 	for _, c := range w.feature.Tasks {
 		e, ok := w.execs[c.Ref]
@@ -139,37 +147,12 @@ func (w *world) Rows() ([]ps.Row, error) {
 			continue
 		}
 		state := ps.Running
-		if e.window.Dead {
+		if _, err := f.status(e.host); err == nil && e.window.Dead {
 			state = ps.Dead
 		}
-		rows = append(rows, ps.Row{Task: c.Ref.String(), Session: e.window.Name, State: state})
+		rows = append(rows, ps.Row{Task: c.Ref.String(), Session: e.window.Name, Host: e.host, State: state})
 	}
 	return rows, nil
-}
-
-// Windows, Agents and LatestRun see this host, mac, only.
-func (w *world) Windows() ([]session.WindowInfo, error) {
-	var ws []session.WindowInfo
-	for _, e := range w.execs {
-		if e.host == "mac" && e.window.ID != "" {
-			ws = append(ws, e.window)
-		}
-	}
-	return ws, nil
-}
-
-func (w *world) Agents() ([]session.Agent, error) {
-	var as []session.Agent
-	for _, e := range w.execs {
-		if e.host == "mac" && e.window.ID != "" && !e.window.Dead {
-			as = append(as, session.Agent{Name: e.window.Name, Status: e.status})
-		}
-	}
-	return as, nil
-}
-
-func (w *world) LatestRun(name string) (session.Run, bool, error) {
-	return session.LatestRun(w.home, name)
 }
 
 func (w *world) fleet() []fakeHost {
@@ -193,15 +176,50 @@ func (w *world) live(host string) []string {
 func (w *world) Fleet() Fleet {
 	f := Fleet{Local: "mac", DefaultHarness: "claude", Caps: map[string]int{"claude": cmp.Or(w.limit, 8), "codex": 2}}
 	for _, h := range w.fleet() {
-		l := HostLoad{Name: h.name, Harnesses: h.harnesses, Capabilities: h.caps, Unreachable: h.down,
-			FreeSlots: max(0, h.slots-len(w.live(h.name))), Sessions: map[string]int{"claude": len(w.live(h.name))}, Live: w.live(h.name)}
+		var err error
 		if h.down != "" {
-			l.FreeSlots, l.Sessions, l.Live = 0, nil, nil
+			err = errors.New(h.down)
 		}
-		f.Hosts = append(f.Hosts, l)
+		f.Hosts = append(f.Hosts, load(hosts.Host{Name: h.name, Harnesses: h.harnesses, Capabilities: h.caps}, w.status(h), err))
 	}
 	slices.SortFunc(f.Hosts, func(a, b HostLoad) int { return cmp.Compare(a.Name, b.Name) })
 	return f
+}
+
+// status is what a host's status op says: its windows, with the screen of
+// each whose session is not busy, its live Claude Code sessions and its
+// newest runs.
+func (w *world) status(h fakeHost) hostops.Status {
+	st := hostops.Status{Slots: h.slots, FreeSlots: max(0, h.slots-len(w.live(h.name))), AgentsError: h.agentsDown}
+	for _, e := range w.execs {
+		if e.host != h.name || e.window.ID == "" {
+			continue
+		}
+		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead}
+		if e.window.Dead || e.status != session.AgentBusy {
+			win.Screen = "Do you want to proceed?\n"
+		}
+		st.Windows = append(st.Windows, win)
+		if !e.window.Dead && h.agentsDown == "" {
+			st.Agents = append(st.Agents, session.Agent{Name: e.window.Name, Status: e.status})
+		}
+	}
+	runs, err := session.LatestRuns(w.hostHome(h.name))
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	for name, r := range runs {
+		st.Runs = append(st.Runs, hostops.Run{Name: name, Dir: r.Dir, Record: r.Record})
+	}
+	return st
+}
+
+// hostHome is a host's home directory: its run directories are there.
+func (w *world) hostHome(host string) string {
+	if host == "mac" {
+		return w.home
+	}
+	return filepath.Join(w.home, "hosts", host)
 }
 
 func (w *world) NoteDir(r tracker.Ref) (string, error) {
@@ -214,11 +232,7 @@ func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy,
 		window: session.WindowInfo{ID: fmt.Sprintf("@%d", w.nextID), Name: name}}
 	// Another host's run directory is on that host.
-	home := w.home
-	if host != "mac" {
-		home = filepath.Join(w.home, "hosts", host)
-	}
-	dir, err := session.RunDir(home, session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
+	dir, err := session.RunDir(w.hostHome(host), session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
 	if err != nil {
 		return err
 	}
@@ -229,7 +243,7 @@ func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 		mode = "gated"
 	}
 	return session.WriteRecord(dir, session.Record{RunID: filepath.Base(dir), Task: r.String(), Name: name,
-		Mode: mode, Tmux: "engine:" + e.window.ID, Spawned: w.now})
+		Mode: mode, Harness: "claude", Tmux: "engine:" + e.window.ID, Spawned: w.now})
 }
 
 // Start refuses as engine start does: an unknown host, a window of that
@@ -329,16 +343,24 @@ func (w *world) PullRequests(r tracker.Ref) ([]string, error) {
 	return []string{fmt.Sprintf("https://example.test/o/r/pull/%d", 100+r.Number)}, nil
 }
 
-func (w *world) Capture(string, int) (string, error) { return "Do you want to proceed?", nil }
-
-func (w *world) Kill(id string) error {
-	w.killed = append(w.killed, id)
+// Release closes every window of the name on the host, as the release op
+// does.
+func (w *world) Release(host, name string) (hostops.Released, error) {
+	if err := w.fails("release"); err != nil {
+		return hostops.Released{}, err
+	}
+	w.released = append(w.released, name+"@"+host)
+	r := hostops.Released{Name: name}
+	if w.keep != "" {
+		r.Worktree, r.WorktreeKept, r.Note = "/wt/"+name, true, w.keep
+	}
 	for _, e := range w.execs {
-		if e.window.ID == id {
-			e.window = session.WindowInfo{}
+		if e.host == host && e.window.ID != "" && e.window.Name == name {
+			w.killed = append(w.killed, e.window.ID)
+			e.window, r.WindowClosed = session.WindowInfo{}, true
 		}
 	}
-	return nil
+	return r, nil
 }
 
 func (w *world) Now() time.Time { return w.now }

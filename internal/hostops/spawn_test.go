@@ -177,7 +177,8 @@ func checkSpawnRefusal(t *testing.T, c spawnRefusal) {
 		t.Errorf("files changed:\nbefore %v\nafter  %v", before, after)
 	}
 	if slices.ContainsFunc(git.calls, func(c string) bool {
-		return !strings.Contains(c, "symbolic-ref") && !strings.Contains(c, "worktree list") && !strings.Contains(c, "rev-parse --verify")
+		return !strings.Contains(c, "symbolic-ref") && !strings.Contains(c, "worktree list") && !strings.Contains(c, "rev-parse --verify") &&
+			!strings.Contains(c, "merge-base --is-ancestor")
 	}) {
 		t.Errorf("a refusal ran %v", git.calls)
 	}

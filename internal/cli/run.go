@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/hosts"
-	"github.com/dinoderek/engine/internal/ps"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/run"
 	"github.com/dinoderek/engine/internal/tracker"
@@ -56,16 +55,11 @@ func runSystem(ref tracker.Ref, env Env) (run.System, bool, error) {
 	if taskOnly && len(issue.OpenBlockers) > 0 {
 		return run.System{}, false, fmt.Errorf("%s is blocked by open %v", ref, issue.OpenBlockers)
 	}
-	src := psSource(env, host, token)
 	starts := startDeps(env)
 	return run.System{
-		Gh: env.Exec, Token: token, Home: env.Home, Config: cfg, Host: host, Tmux: env.Tmux,
-		Client:     func(h hosts.Host) remote.Client { return starts.HostClient(h, h.Name != host.Name) },
-		ListAgents: agents(env, host),
-		ListRows: func() ([]ps.Row, error) {
-			l, err := ps.List(src)
-			return l.Rows, err
-		},
+		Gh: env.Exec, Token: token, Home: env.Home, Config: cfg, Host: host,
+		Client: func(h hosts.Host) remote.Client { return starts.HostClient(h, h.Name != host.Name) },
+		Claims: psSource(env, host, token),
 		Starts: starts,
 		Out:    env.Out, Clock: env.Now,
 	}, taskOnly, nil

@@ -53,12 +53,16 @@ var claimStates = []string{Running, NeedsHuman, InReview}
 // takenStates are the task labels that keep a task from starting.
 var takenStates = append(slices.Clone(claimStates), Failed)
 
-// Session is the newest run engine started on this host for a task, or for
-// a feature's planner.
+// Session is the newest run of a task, or of a feature's planner, on any
+// host.
 type Session struct {
-	Name     string
+	Name string
+	// Host is where it runs. When that host could not be read, Unknown is
+	// true and nothing else is known: the session is neither live nor
+	// dead, and nothing is done to it.
+	Host     string
+	Unknown  bool
 	WindowID string
-	RunDir   string
 	Mode     string
 	Spawned  time.Time
 	// Live is true while its window is open and its command runs.
@@ -70,7 +74,18 @@ type Session struct {
 	// Waiting is true when Claude Code says it waits for input.
 	Waiting      bool
 	WaitingSince time.Time
-	StallNoted   time.Time
+	// StallNoted is the start, or the wait, the coordinator last flagged.
+	StallNoted time.Time
+	// Screen is the window's last lines, when its host sent them: it does
+	// for a window whose session is not busy.
+	Screen string
+}
+
+// flagged reports whether at, the session's start or the start of its
+// wait, is the one the coordinator last flagged. Notes keep whole seconds.
+// Equality, not order, so hosts' clocks need not agree.
+func (s Session) flagged(at time.Time) bool {
+	return s.StallNoted.Truncate(time.Second).Equal(at.Truncate(time.Second))
 }
 
 // waited reports whether the session has waited for input for d by now.
@@ -136,6 +151,8 @@ type Action struct {
 	Failure bool
 	// Notify asks a Wait to comment its reason on the task.
 	Notify bool
+	// At is the session start, or the wait, a Stall flags.
+	At time.Time
 }
 
 func hasAny(labels []string, set []string) bool {

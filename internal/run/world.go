@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/ps"
 	"github.com/dinoderek/engine/internal/session"
@@ -13,7 +14,8 @@ import (
 )
 
 // The coordinator's own notes: that it has reported the plan's lint
-// failures, and when a task's start last failed.
+// failures, when a task's start last failed, and that it has posted the
+// summary.
 const (
 	LintNoted   = "lint-noted"
 	StartFailed = "start-failed"
@@ -21,19 +23,19 @@ const (
 )
 
 // World is what a pass reads and changes: the tracker, the hosts' sessions
-// and the clock. System gives the real one; tests play it.
+// and the clock. System gives the real one; tests play it. Every host is
+// read through Fleet, one status call each, and changed through Start and
+// Release.
 type World interface {
 	Feature(ref tracker.Ref) (tracker.Feature, error)
 	// Task reads one task, and the issue whose operator it @mentions: its
 	// feature, or the task itself when it has none.
 	Task(ref tracker.Ref) (tracker.Card, tracker.Ref, error)
-	// Rows are every claimed task, settled as engine ps settles them.
-	Rows() ([]ps.Row, error)
-	Windows() ([]session.WindowInfo, error)
-	Agents() ([]session.Agent, error)
-	LatestRun(name string) (session.Run, bool, error)
-	// Fleet reads every host's load for placement. A host that cannot be
-	// read is in it, marked unreachable.
+	// Rows are every claimed task, settled as engine ps settles them, from
+	// the hosts' replies in f.
+	Rows(f Fleet) ([]ps.Row, error)
+	// Fleet reads every host's status. A host that cannot be read is in it,
+	// marked unreachable.
 	Fleet() Fleet
 	// NoteDir is where the coordinator keeps its own notes for ref.
 	NoteDir(ref tracker.Ref) (string, error)
@@ -46,8 +48,9 @@ type World interface {
 	Close(ref tracker.Ref) error
 	Operator(ref tracker.Ref) (string, error)
 	PullRequests(ref tracker.Ref) ([]string, error)
-	Capture(windowID string, lines int) (string, error)
-	Kill(windowID string) error
+	// Release closes the session's window on host, and removes its
+	// worktree unless it has changes.
+	Release(host, name string) (hostops.Released, error)
 	Now() time.Time
 	Logf(format string, args ...any)
 }
@@ -68,21 +71,12 @@ func Gather(w World, ref tracker.Ref, taskOnly bool) (View, error) {
 	if v.StartFailed, v.PlaceNoted, err = taskNotes(w, v.Feature); err != nil {
 		return View{}, err
 	}
-	if v.Rows, err = rows(w, v.Feature); err != nil {
-		return View{}, err
-	}
-	windows, err := w.Windows()
-	if err != nil {
-		return View{}, err
-	}
-	if v.Sessions, err = sessions(w, v.Feature, taskOnly, windows, v.Now); err != nil {
-		return View{}, err
-	}
 	v.Fleet = w.Fleet()
-	for _, h := range v.Fleet.Hosts {
-		if h.Unreachable != "" {
-			w.Logf("host %s takes no task: %s", h.Name, h.Unreachable)
-		}
+	if v.Rows, err = rows(w, v.Feature, v.Fleet); err != nil {
+		return View{}, err
+	}
+	if v.Sessions, err = sessions(w, v); err != nil {
+		return View{}, err
 	}
 	if !taskOnly {
 		err = lintState(w, &v)
@@ -119,8 +113,8 @@ func taskNotes(w World, f tracker.Feature) (failed map[tracker.Ref]time.Time, pl
 	return failed, placeNoted, nil
 }
 
-func rows(w World, f tracker.Feature) (map[tracker.Ref]ps.Row, error) {
-	all, err := w.Rows()
+func rows(w World, f tracker.Feature, fleet Fleet) (map[tracker.Ref]ps.Row, error) {
+	all, err := w.Rows(fleet)
 	if err != nil {
 		return nil, err
 	}
@@ -135,82 +129,6 @@ func rows(w World, f tracker.Feature) (map[tracker.Ref]ps.Row, error) {
 		}
 	}
 	return out, nil
-}
-
-// sessions reads the newest run of each task, and of the feature's planner,
-// and keeps each one's waiting-since note true to what Claude Code says now.
-func sessions(w World, f tracker.Feature, taskOnly bool, windows []session.WindowInfo, now time.Time) (map[tracker.Ref]Session, error) {
-	agents, err := w.Agents()
-	if err != nil {
-		return nil, err
-	}
-	refs := []tracker.Ref{}
-	if !taskOnly {
-		refs = append(refs, f.Ref)
-	}
-	for _, c := range f.Tasks {
-		refs = append(refs, c.Ref)
-	}
-	out := map[tracker.Ref]Session{}
-	for _, ref := range refs {
-		s, ok, err := readSession(w, ref, windows, agents, now)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			out[ref] = s
-		}
-	}
-	return out, nil
-}
-
-func readSession(w World, ref tracker.Ref, windows []session.WindowInfo, agents []session.Agent, now time.Time) (Session, bool, error) {
-	repo, err := session.ParseRepo(ref.Repo)
-	if err != nil {
-		return Session{}, false, err
-	}
-	name := session.TaskName(repo, ref.Number)
-	r, ok, err := w.LatestRun(name)
-	if err != nil || !ok {
-		return Session{}, false, err
-	}
-	_, id, _ := strings.Cut(r.Record.Tmux, ":")
-	s := Session{Name: name, WindowID: id, RunDir: r.Dir, Mode: r.Record.Mode, Spawned: r.Record.Spawned}
-	for _, win := range windows {
-		if win.ID == id && win.Name == name {
-			s.Live, s.DeadWindow = !win.Dead, win.Dead
-		}
-	}
-	for _, a := range agents {
-		if a.Name == name && (a.Status == session.AgentWaiting || a.Status == session.AgentIdle) {
-			s.Waiting = true
-		}
-	}
-	if err := keepWaiting(&s, now); err != nil {
-		return Session{}, false, err
-	}
-	s.StallNoted, _, err = session.ReadNote(r.Dir, session.StallNoted)
-	return s, true, err
-}
-
-// keepWaiting writes the time a session is first seen waiting, and clears it
-// when the session works again.
-func keepWaiting(s *Session, now time.Time) error {
-	if !s.Live || !s.Waiting {
-		return session.ClearNote(s.RunDir, session.WaitingSince)
-	}
-	since, ok, err := session.ReadNote(s.RunDir, session.WaitingSince)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		since = now
-		if err := session.WriteNote(s.RunDir, session.WaitingSince, now); err != nil {
-			return err
-		}
-	}
-	s.WaitingSince = since
-	return nil
 }
 
 // lintState lints an approved feature's plan once its planner is done.
@@ -254,7 +172,7 @@ func Apply(w World, v View, acts []Action) bool {
 		case Fail:
 			err = fail(w, v, a)
 		case Reap:
-			err = w.Kill(a.Session.WindowID)
+			err = release(w, a.Session)
 		case Finish:
 			err = finish(w, v)
 			over = err == nil
@@ -275,27 +193,30 @@ func logText(a Action) string {
 	return a.Text
 }
 
-// startTask starts a ready task. A dead window left by its last session is
-// closed first, since engine start refuses a name in use. A failed start is
-// noted, holds no slot until StartRetry, and @mentions the operator the
-// first time after a session start.
+// startTask starts a ready task. The last session, which has ended, is
+// released on its host first: engine start refuses a name in use, and a
+// worktree left on the task's branch.
+// A started session is noted with its host, so a host that cannot be read
+// leaves it unknown. A failed start is noted, holds no slot until
+// StartRetry, and @mentions the operator the first time after a session
+// start.
 func startTask(w World, v View, a Action) error {
-	if s, ok := v.Sessions[a.Ref]; ok && s.DeadWindow {
-		if err := w.Kill(s.WindowID); err != nil {
-			w.Logf("close the dead window of %s: %v", a.Ref, err)
+	if s, ok := v.Sessions[a.Ref]; ok && !s.Live && !s.Unknown {
+		if err := release(w, s); err != nil {
+			w.Logf("release the last session of %s on %s: %v", a.Ref, s.Host, err)
 		}
 	}
-	start := func(r tracker.Ref) error { return w.Start(r, a.Host) }
+	start, host := func(r tracker.Ref) error { return w.Start(r, a.Host) }, a.Host
 	if a.Kind == StartPlanner {
-		start = w.StartPlanner
+		start, host = w.StartPlanner, v.Fleet.Local
 	}
 	err := start(a.Ref)
-	if err == nil {
-		return nil
-	}
 	dir, derr := w.NoteDir(a.Ref)
 	if derr != nil {
 		return errors.Join(err, derr)
+	}
+	if err == nil {
+		return session.WriteNote(dir, StartedOn+host, v.Now)
 	}
 	// The note is written first, so a failed comment is not posted again by
 	// the next try; the mention goes out once per session start.
@@ -365,15 +286,11 @@ func reportLint(w World, v View) error {
 	return session.WriteNote(dir, LintNoted, v.Now)
 }
 
-// stallLines is how much of a stalled screen a stall comment carries.
-const stallLines = 20
-
+// stall comments on a stalled session, with the last screen its host sent.
 func stall(w World, v View, a Action) error {
 	body := mention(w, v.Operator) + "engine run: " + a.Text + "."
-	if a.Session.Live || a.Session.DeadWindow {
-		if screen, err := w.Capture(a.Session.WindowID, stallLines); err == nil && screen != "" {
-			body += " Its last screen:\n\n```text\n" + screen + "\n```"
-		}
+	if screen := strings.TrimRight(a.Session.Screen, "\n"); screen != "" && (a.Session.Live || a.Session.DeadWindow) {
+		body += " Its last screen:\n\n```text\n" + screen + "\n```"
 	}
 	if a.Session.Live {
 		body += fmt.Sprintf("\n\nAttach with `engine attach %s`.", a.Session.Name)
@@ -381,7 +298,20 @@ func stall(w World, v View, a Action) error {
 	if err := w.Comment(a.Ref, body); err != nil {
 		return err
 	}
-	return session.WriteNote(a.Session.RunDir, session.StallNoted, v.Now)
+	dir, err := w.NoteDir(a.Ref)
+	if err != nil {
+		return err
+	}
+	return session.WriteNote(dir, StallNoted, a.At)
+}
+
+// release releases a session on its host, and logs a worktree it kept.
+func release(w World, s Session) error {
+	r, err := w.Release(s.Host, s.Name)
+	if err == nil && r.WorktreeKept {
+		w.Logf("release %s on %s kept its worktree %s: %s", s.Name, s.Host, r.Worktree, r.Note)
+	}
+	return err
 }
 
 func fail(w World, v View, a Action) error {

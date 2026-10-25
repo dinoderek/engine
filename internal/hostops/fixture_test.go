@@ -165,7 +165,8 @@ type gitFake struct {
 	calls []string
 	fail  map[string]error
 	added string
-	// branch is true when the task's branch already exists in the clone.
+	// branch is true when the task's branch already exists in the clone,
+	// with commits of its own.
 	branch bool
 }
 
@@ -184,7 +185,8 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		return "https://github.com/o/r.git\n", nil
 	case strings.Contains(line, "symbolic-ref"):
 		return "origin/main\n", nil
-	case strings.Contains(line, "rev-parse --verify") && !f.branch:
+	case strings.Contains(line, "rev-parse --verify") && (!f.branch || strings.Contains(line, "refs/remotes/")),
+		strings.Contains(line, "merge-base --is-ancestor"):
 		return "", errors.New("exit status 1")
 	case strings.Contains(line, "worktree add"):
 		f.added = args[len(args)-2]
