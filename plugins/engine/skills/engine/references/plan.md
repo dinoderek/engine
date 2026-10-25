@@ -117,8 +117,8 @@ Write the fields from `plan-sources.md`, "Card fields". For each one:
   on the owner.
 - **Gates:** from the repo's lane rules and the paths the card touches.
 - **Overrides:** only those this card adds to its feature's.
-- **Size:** each task is one PR. Aim for about 2000 added lines at most.
-  There is no size field: split a task you expect to be larger.
+- **Size:** each task is one PR. About 2000 added lines is a guide, not a
+  limit: split a task you expect to be much larger. There is no size field.
 - **Tier:**
 
   | Tier | When |

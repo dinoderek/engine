@@ -72,7 +72,8 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
    - Fix every real finding, re-run the gates the fixes touch, and review
      again with a new reviewer.
    - Decline a finding only with a reason, which goes in the PR body.
-   - Two rounds that don't converge are a **Review** hard stop.
+   - Repeat until the reviewer approves; stop only for a **Review** hard
+     stop.
 7. **Gates again,** if anything changed since step 5.
 8. **Checkpoint.** Read new comments on the task's issue, and act on them.
 9. **PR.** Write the body with the repo's template, and add:
