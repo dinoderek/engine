@@ -14,6 +14,7 @@ import (
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
+	"github.com/dinoderek/engine/internal/start"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
@@ -48,8 +49,8 @@ type statusClient struct {
 
 func (c statusClient) Status() (hostops.Status, error) { return c.st, c.err }
 
-func TestSystemFleetReadsEveryHostsStatus(t *testing.T) {
-	cfg, err := hosts.Parse(`default_harness = "claude"
+// fleetConfig is a hosts.toml of the Mac and a Linux devbox.
+const fleetConfig = `default_harness = "claude"
 gb_per_session = 8
 reserve_gb = 8
 [harness.claude]
@@ -70,7 +71,53 @@ harnesses = ["claude"]
 ram_gb = 32
 capabilities = ["linux"]
 bin = { claude = "/bin/claude" }
-`)
+`
+
+// recordingClient is another host that records what it is asked to spawn.
+type recordingClient struct {
+	statusClient
+	spawned *[]hostops.SpawnRequest
+}
+
+func (c recordingClient) SyncRepo(string) (hostops.Synced, error) { return hostops.Synced{}, nil }
+
+func (c recordingClient) Spawn(r hostops.SpawnRequest) (hostops.Spawned, error) {
+	*c.spawned = append(*c.spawned, r)
+	return hostops.Spawned{Name: "r-7", Window: "@4"}, nil
+}
+
+func TestSystemStartsOnTheChosenHost(t *testing.T) {
+	home := t.TempDir()
+	dir := hosts.ConfigDir(home)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"hosts.toml": fleetConfig, "host": "mac\n", "github-token": "tok\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gh := func(_ []string, _ string, args ...string) (string, error) {
+		if strings.HasSuffix(args[1], "/blocked_by") {
+			return `[]`, nil
+		}
+		return `{"number":7,"title":"T","state":"open","repository_url":"https://api.github.com/repos/o/r",` +
+			`"parent_issue_url":"https://api.github.com/repos/o/r/` + `issues/3","labels":[],"body":"## Requires\nlinux\n"}`, nil
+	}
+	var spawned []hostops.SpawnRequest
+	devbox := recordingClient{statusClient: statusClient{st: hostops.Status{FreeSlots: 1}}, spawned: &spawned}
+	var out bytes.Buffer
+	s := System{Out: &out, Starts: start.Deps{GH: gh, Home: home, Now: func() time.Time { return t0 }, Client: devbox}}
+	if err := s.Start(ref(7), "devbox"); err != nil {
+		t.Fatal(err)
+	}
+	if len(spawned) != 1 || spawned[0].Task != 7 || !strings.Contains(out.String(), "on devbox") {
+		t.Errorf("spawned %+v, out %q", spawned, out.String())
+	}
+}
+
+func TestSystemFleetReadsEveryHostsStatus(t *testing.T) {
+	cfg, err := hosts.Parse(fleetConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +134,8 @@ bin = { claude = "/bin/claude" }
 	want := Fleet{Local: "mac", DefaultHarness: "claude", Caps: map[string]int{"claude": 5}, Hosts: []HostLoad{
 		{Name: "devbox", Harnesses: []string{"claude"}, Capabilities: []string{"linux"}, Sessions: map[string]int{}, Unreachable: "devbox is unreachable"},
 		// Only r-2 is a live session: r-3 has exited, and run-r-1 has no run.
-		{Name: "mac", Harnesses: []string{"claude"}, Capabilities: []string{"macos"}, FreeSlots: 1, Sessions: map[string]int{"claude": 1}},
+		{Name: "mac", Harnesses: []string{"claude"}, Capabilities: []string{"macos"}, FreeSlots: 1, Sessions: map[string]int{"claude": 1},
+			Live: []string{"r-2", "run-r-1"}},
 	}}
 	if !reflect.DeepEqual(f, want) {
 		t.Errorf("fleet\n got %+v\nwant %+v", f, want)

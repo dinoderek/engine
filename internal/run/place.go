@@ -32,6 +32,8 @@ type HostLoad struct {
 	FreeSlots    int
 	// Sessions counts the live sessions of each harness on the host.
 	Sessions map[string]int
+	// Live names the host's live windows.
+	Live []string
 	// Unreachable says why the host's status could not be read. Such a host
 	// takes no task, and its sessions are unknown.
 	Unreachable string
@@ -56,6 +58,12 @@ func (f Fleet) localFree() int {
 		}
 	}
 	return 0
+}
+
+// liveAnywhere reports whether a host that answered has a live window
+// named name.
+func (f Fleet) liveAnywhere(name string) bool {
+	return slices.ContainsFunc(f.Hosts, func(h HostLoad) bool { return slices.Contains(h.Live, name) })
 }
 
 // running counts the live sessions of each harness on the hosts that

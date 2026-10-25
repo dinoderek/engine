@@ -7,6 +7,7 @@ import (
 
 	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/ps"
+	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
@@ -161,7 +162,8 @@ func doneReaps(v View) (acts []Action, live int) {
 	return acts, live
 }
 
-// ready is step 3: the ready tasks, in start order.
+// ready is step 3: the ready tasks, in start order. A task whose window is
+// live on any host is not ready: its session has not claimed yet.
 func ready(v View) []tracker.Card {
 	var cands []tracker.Card
 	for _, c := range v.Feature.Tasks {
@@ -169,12 +171,21 @@ func ready(v View) []tracker.Card {
 		blocked := slices.ContainsFunc(c.BlockedBy, func(b tracker.Blocker) bool { return b.Open })
 		failed, ok := v.StartFailed[c.Ref]
 		resting := ok && failed.After(s.Spawned) && v.Now.Sub(failed) < StartRetry
-		if c.Open && !blocked && !hasAny(c.Labels, takenStates) && !s.Live && !resting {
+		if c.Open && !blocked && !hasAny(c.Labels, takenStates) && !s.Live && !resting && !v.Fleet.liveAnywhere(windowName(c.Ref)) {
 			cands = append(cands, c)
 		}
 	}
 	order(v.Feature.Tasks, cands)
 	return cands
+}
+
+// windowName is the session name of ref's task, or "" for a bad repo.
+func windowName(ref tracker.Ref) string {
+	repo, err := session.ParseRepo(ref.Repo)
+	if err != nil {
+		return ""
+	}
+	return session.TaskName(repo, ref.Number)
 }
 
 // order sorts cands for starting: most open tasks downstream first, then

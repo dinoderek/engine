@@ -180,6 +180,21 @@ func TestAnUnreachableHostTakesNoTask(t *testing.T) {
 	}
 }
 
+func TestATaskStartedOnAnotherHostIsNotStartedAgainBeforeItClaims(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Planned}, needs(2, "standard", "linux"))
+	twoHosts(w, 3, 3)
+	passOf(t, w)
+	if v := gather(t, w); len(v.Sessions) != 0 {
+		t.Fatalf("this host sees the devbox's session: %+v", v.Sessions)
+	}
+	if acts := passOf(t, w); len(acts) != 0 {
+		t.Errorf("second pass, before the claim: %+v", acts)
+	}
+	if !slices.Equal(w.placed, []string{"2@devbox"}) {
+		t.Errorf("placed %v", w.placed)
+	}
+}
+
 func TestThePlannerStartsOnlyOnThisHost(t *testing.T) {
 	w := newWorld(t, []string{"engine:feature", Approved})
 	twoHosts(w, 0, 3)

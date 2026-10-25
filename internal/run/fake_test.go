@@ -147,10 +147,11 @@ func (w *world) Rows() ([]ps.Row, error) {
 	return rows, nil
 }
 
+// Windows, Agents and LatestRun see this host, mac, only.
 func (w *world) Windows() ([]session.WindowInfo, error) {
 	var ws []session.WindowInfo
 	for _, e := range w.execs {
-		if e.window.ID != "" {
+		if e.host == "mac" && e.window.ID != "" {
 			ws = append(ws, e.window)
 		}
 	}
@@ -160,7 +161,7 @@ func (w *world) Windows() ([]session.WindowInfo, error) {
 func (w *world) Agents() ([]session.Agent, error) {
 	var as []session.Agent
 	for _, e := range w.execs {
-		if e.window.ID != "" && !e.window.Dead {
+		if e.host == "mac" && e.window.ID != "" && !e.window.Dead {
 			as = append(as, session.Agent{Name: e.window.Name, Status: e.status})
 		}
 	}
@@ -178,24 +179,24 @@ func (w *world) fleet() []fakeHost {
 	return w.hosts
 }
 
-// live counts the live windows on host.
-func (w *world) live(host string) int {
-	n := 0
+// live names the live windows on host.
+func (w *world) live(host string) []string {
+	var names []string
 	for _, e := range w.execs {
 		if e.host == host && e.window.ID != "" && !e.window.Dead {
-			n++
+			names = append(names, e.window.Name)
 		}
 	}
-	return n
+	return names
 }
 
 func (w *world) Fleet() Fleet {
 	f := Fleet{Local: "mac", DefaultHarness: "claude", Caps: map[string]int{"claude": cmp.Or(w.limit, 8), "codex": 2}}
 	for _, h := range w.fleet() {
 		l := HostLoad{Name: h.name, Harnesses: h.harnesses, Capabilities: h.caps, Unreachable: h.down,
-			FreeSlots: max(0, h.slots-w.live(h.name)), Sessions: map[string]int{"claude": w.live(h.name)}}
+			FreeSlots: max(0, h.slots-len(w.live(h.name))), Sessions: map[string]int{"claude": len(w.live(h.name))}, Live: w.live(h.name)}
 		if h.down != "" {
-			l.FreeSlots, l.Sessions = 0, nil
+			l.FreeSlots, l.Sessions, l.Live = 0, nil, nil
 		}
 		f.Hosts = append(f.Hosts, l)
 	}
@@ -212,7 +213,12 @@ func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 	w.nextID++
 	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy,
 		window: session.WindowInfo{ID: fmt.Sprintf("@%d", w.nextID), Name: name}}
-	dir, err := session.RunDir(w.home, session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
+	// Another host's run directory is on that host.
+	home := w.home
+	if host != "mac" {
+		home = filepath.Join(w.home, "hosts", host)
+	}
+	dir, err := session.RunDir(home, session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
 	if err != nil {
 		return err
 	}
@@ -238,7 +244,7 @@ func (w *world) Start(r tracker.Ref, host string) error {
 			return fmt.Errorf("the tmux session engine already has a window r-%d", r.Number)
 		}
 	}
-	if w.live(host) >= w.fleet()[i].slots {
+	if len(w.live(host)) >= w.fleet()[i].slots {
 		return fmt.Errorf("no free slot")
 	}
 	if w.refuse != nil {

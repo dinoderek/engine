@@ -52,7 +52,7 @@ exits when none is left or after 15 minutes. Gated windows are never closed.
 
 The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it
-skips any task whose session is still alive.
+skips any task whose session is still alive, on any host.
 
 The coordinator's GitHub adapter and `engine lint` implement the skill's plan
 sources (`plugins/engine/skills/engine/references/plan-sources.md`) and its

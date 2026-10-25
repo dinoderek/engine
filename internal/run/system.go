@@ -120,7 +120,11 @@ func load(h hosts.Host, st hostops.Status, err error) HostLoad {
 		harness[r.Name] = r.Record.Harness
 	}
 	for _, w := range st.Windows {
-		if hn := harness[w.Name]; w.Alive && hn != "" {
+		if !w.Alive {
+			continue
+		}
+		l.Live = append(l.Live, w.Name)
+		if hn := harness[w.Name]; hn != "" {
 			l.Sessions[hn]++
 		}
 	}

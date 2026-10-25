@@ -30,16 +30,16 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    Steps 3 to 8 run only on a feature that is `engine:planned` or later.
 3. **Start ready tasks.** A task is ready when it is open, has no `engine:`
    state label, and every blocker is closed. Start them in this order, each
-   on a host placement allows:
+   on a host placement allows (a free slot, harness under cap, `## Requires`
+   met):
    1. most downstream tasks first: the count of open tasks blocked by it,
       directly or through others;
    2. then `deep` before `standard` before `light`;
    3. then the lowest issue number.
 
-   Skip a task while the session you started for it is alive and has not
-   claimed. If it died before claiming, @mention the operator once with its
-   last screen, close its window and start again. A start that fails gets
-   one @mention on the task, and no retry for 30 minutes, holding no slot.
+   Skip a task whose session you started is alive and unclaimed. If it died before claiming, @mention the operator once with its
+   last screen, close its window and start again. A failed start gets one
+   @mention on the task and rests 30 minutes, holding no slot.
    A task no host could take gets one @mention, with why.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
