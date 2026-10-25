@@ -2,8 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
@@ -52,17 +50,21 @@ func listClaimed(env Env) (ps.Listing, error) {
 		return ps.Listing{}, err
 	}
 	src := psSource(env, host, token)
-	src.Remote = remoteStatus(env, cfg)
+	src.Status = hostStatus(env, cfg, host.Name)
 	return ps.List(src)
 }
 
-// remoteStatus asks another machine of hosts.toml for its status over SSH.
-func remoteStatus(env Env, cfg *hosts.Config) func(string) (hostops.Status, error) {
+// hostStatus reads a host's status: this host's in process, another machine
+// of hosts.toml's over SSH.
+func hostStatus(env Env, cfg *hosts.Config, local string) func(string) (hostops.Status, error) {
 	run := env.SSH
 	if run == nil {
 		run = remote.ExecCommand
 	}
 	return func(name string) (hostops.Status, error) {
+		if name == local {
+			return hostops.ReadStatus(hostDeps(env))
+		}
 		h, ok := cfg.Hosts[name]
 		if !ok {
 			return hostops.Status{}, fmt.Errorf("%q is not in hosts.toml", name)
@@ -72,33 +74,12 @@ func remoteStatus(env Env, cfg *hosts.Config) func(string) (hostops.Status, erro
 }
 
 // psSource is where engine ps, and engine run's view of claims, read from.
+// Engine run reads each host's status from its own replies.
 func psSource(env Env, host hosts.Host, token string) ps.Source {
-	tmux := &session.Tmux{Run: env.Local, Bin: "tmux"}
 	return ps.Source{
 		Claimed:  func() ([]tracker.ClaimedTask, error) { return tracker.Claimed(env.Exec, token) },
 		Local:    host.Name,
-		Windows:  tmux.Windows,
-		Agents:   agents(env, host),
 		Checkout: func(dir string) (session.Checkout, error) { return session.ProbeCheckout(env.Local, dir) },
 		Now:      env.Now,
 	}
-}
-
-// agents lists the live Claude Code sessions on host.
-func agents(env Env, host hosts.Host) func() ([]session.Agent, error) {
-	claude := expandHome(host.Bin["claude"], env.Home)
-	return func() ([]session.Agent, error) {
-		if claude == "" {
-			return nil, fmt.Errorf("host %s has no claude binary in hosts.toml", host.Name)
-		}
-		return session.ListAgents(env.Local, claude)
-	}
-}
-
-// expandHome turns a leading ~ into the home directory.
-func expandHome(path, home string) string {
-	if path == "~" || strings.HasPrefix(path, "~/") {
-		return filepath.Join(home, path[1:])
-	}
-	return path
 }

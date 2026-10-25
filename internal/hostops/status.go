@@ -19,8 +19,10 @@ type Status struct {
 	Slots     int      `json:"slots"`
 	FreeSlots int      `json:"free_slots"`
 	Windows   []Window `json:"windows"`
-	// Agents are the live Claude Code sessions. When AgentsError says why
-	// Claude Code could not list them, what they would show is unknown.
+	// Agents are the live Claude Code sessions, so a caller can find one
+	// started by hand; a window's state already says what Claude Code does.
+	// When AgentsError says why Claude Code could not list them, what they
+	// would show is unknown.
 	Agents      []session.Agent `json:"agents"`
 	AgentsError string          `json:"agents_error,omitempty"`
 	// Runs is the newest run of each session name, by name. RunsError
@@ -38,8 +40,15 @@ type Window struct {
 	// ExitCode is the exit code of a window whose command has exited, unless
 	// a signal ended it.
 	ExitCode *int `json:"exit_code,omitempty"`
+	// Harness is the harness the window's newest run launched, and State
+	// what its session is doing, from that harness's probe: working, waiting,
+	// or unknown (left out). A dead window, or one with no run, is unknown.
+	Harness string `json:"harness,omitempty"`
+	State   string `json:"state,omitempty"`
+	// WaitingFor says what a waiting session needs, when its harness says.
+	WaitingFor string `json:"waiting_for,omitempty"`
 	// Screen is the last ScreenLines lines of a window whose session is not
-	// busy.
+	// working.
 	Screen string `json:"screen,omitempty"`
 }
 
@@ -50,10 +59,10 @@ type Run struct {
 	Record session.Record `json:"run"`
 }
 
-// ReadStatus reads this host's windows, live Claude Code sessions, newest
-// runs and free slots, and the screen of every window whose session is not
-// busy. A tmux that cannot list its windows fails the op: nothing it would
-// say is known.
+// ReadStatus reads this host's windows and the state of each, live Claude
+// Code sessions, newest runs and free slots, and the screen of every window
+// whose session is not working. A tmux that cannot list its windows fails
+// the op: nothing it would say is known.
 func ReadStatus(d Deps) (Status, error) {
 	_, host, err := openHost(d.Home)
 	if err != nil {
@@ -81,7 +90,13 @@ func ReadStatus(d Deps) (Status, error) {
 		if code, ok := codes[w.ID]; ok && w.Dead {
 			out.ExitCode = &code
 		}
-		if !s.busy(w.Name) {
+		if r, ok := runs[w.Name]; ok {
+			out.Harness = r.Record.Harness
+			if out.Alive {
+				s.probe(&out, r)
+			}
+		}
+		if out.State != session.StateWorking {
 			// A window can close between the list and the capture.
 			out.Screen, _ = d.Tmux.Capture(w.ID, ScreenLines)
 		}
@@ -111,7 +126,28 @@ func (s *Status) listAgents(d Deps, host hosts.Host) {
 	}
 }
 
-// busy reports whether Claude Code lists the session name as working.
-func (s *Status) busy(name string) bool {
-	return slices.ContainsFunc(s.Agents, func(a session.Agent) bool { return a.Name == name && a.Status == session.AgentBusy })
+// probe sets a live window's state from the probe of the harness its
+// newest run launched. A harness with no probe leaves it unknown.
+func (s *Status) probe(w *Window, r session.Run) {
+	switch r.Record.Harness {
+	case Harness:
+		if s.AgentsError != "" {
+			return
+		}
+		for _, a := range s.Agents {
+			if a.Name == w.Name {
+				w.State = session.AgentState(a)
+				if w.State == session.StateWaiting {
+					w.WaitingFor = a.WaitingFor
+				}
+				return
+			}
+		}
+	case Codex:
+		// Codex's hooks write the state file; a session that has ended
+		// while its window lives is unknown.
+		if st, ok := session.ReadHarnessState(r.Dir); ok && st.State != session.StateEnded {
+			w.State = st.State
+		}
+	}
 }

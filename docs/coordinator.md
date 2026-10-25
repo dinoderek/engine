@@ -95,7 +95,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | --- | --- |
 | `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it, opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
-| `status` | Lists the windows of the session `engine` (alive, exit code), `claude agents --json`, the newest run of each session name, the free slots (a live window takes one only if it has a run), and the last 20 screen lines of each window whose session is not busy. |
+| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, the free slots (a live window takes one only if it has a run), and the last 20 screen lines of each window whose session is not working. |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
 | `release` | Closes the session's window if it is open, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
@@ -136,21 +136,21 @@ labels; the session layer adds only whether a session is alive and whether it
 is waiting for input. Three sources:
 
 1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
-2. **The harness**, for "waiting for input", as each harness doc says
-   (`claude.md`, "Session list"; `codex.md`, "Session signals").
+2. **The harness**, for "waiting for input". `status` gives each window of
+   session `engine` a `harness` and a `state`, `working` or `waiting`, from
+   the probe of the harness its newest `run.json` names, as each harness doc
+   says (`claude.md`, "Session list"; `codex.md`, "Session signals").
+   Anything else, including a window with no run, is unknown, never dead.
 3. **tmux.** If the window exists and its command has not exited, the
-   session is alive.
+   session is alive. A dead window is dead whatever its harness says.
 
-On every host that holds a claim, `engine ps` calls a session alive when its
-tmux window is live or the harness lists it, reading another host's from
-its `status` reply. That reply carries no git state, so there a session is
-matched by name only: one started by hand is unknown unless listed under its
-claim's name. It calls one dead only when its claim names a
-window of engine's session, that window is gone or its command exited,
-the harness does not list it and no probe failed: a session started by
-hand can run anywhere, so its liveness is unknown unless listed. A failed
-probe also leaves it unknown. A session in `needs-human` or `in-review` keeps
-that state while alive.
+`engine ps` and `engine run`'s session check read only `state`, from the
+`status` of the host a claim names, this host's too. A claim in engine's tmux
+session is alive while its window's command runs, and dead once the window
+is gone or its command exited. A session started by hand is alive only when
+the reply's harness list shows it (`claude.md`, "Session list"); otherwise
+its liveness is unknown. A failed call leaves it unknown too. A session in
+`needs-human` or `in-review` keeps that state while alive.
 
 **Stalls.** A window the coordinator opened whose task has not claimed in
 time is stalled before the claim, for example on a prompt (the skill's
@@ -160,7 +160,7 @@ minutes old while its task is open and not `needs-human` has stopped outside
 the protocol, for example on a question asked in the session rather than on
 the issue. The coordinator @mentions you on the task's issue, with the last
 screen the host's `status` sent (it sends one for a window whose session is
-not busy), once per session start or wait: it notes the start or wait it
+not working), once per session start or wait: it notes the start or wait it
 flagged, and flags only another one.
 
 ## Identity and notifications

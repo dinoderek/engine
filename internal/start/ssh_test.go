@@ -81,7 +81,7 @@ address=$1; shift
 printf '%s %s\n' "$address" "$*" >> "$`+sshLogVar+`"
 case "$`+sshModeVar+`" in
 down) echo "ssh: connect to host dev port 22: No route to host" >&2; exit 255 ;;
-oldproto) echo '{"protocol":2,"engine":"old","host":"dev"}'; exit 0 ;;
+oldproto) echo '{"protocol":1,"engine":"old","host":"dev"}'; exit 0 ;;
 esac
 exec env HOME="$`+remoteHomeVar+`" `+remoteModeVar+`=1 sh -c "$*"
 `, 0o755)
@@ -191,7 +191,7 @@ func TestStartOverSSHProtocolMismatch(t *testing.T) {
 	r := newSSHRig(t)
 	t.Setenv(sshModeVar, "oldproto")
 	err := Run(Options{Ref: ref(7), Host: "dev"}, r.deps, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "host dev speaks protocol 2 (engine old), this engine speaks 1; run: engine setup --host dev") {
+	if err == nil || !strings.Contains(err.Error(), "host dev speaks protocol 1 (engine old), this engine speaks 2; run: engine setup --host dev") {
 		t.Errorf("err = %v", err)
 	}
 	if got := r.sshCalls(t); len(got) != 1 {

@@ -1,7 +1,6 @@
 package run
 
 import (
-	"slices"
 	"strings"
 	"time"
 
@@ -25,7 +24,7 @@ const (
 
 // sessions reads the newest run of each of v's tasks, and of the feature's
 // planner, from the hosts' replies in v.Fleet, and keeps each one's
-// waiting-since note true to what Claude Code says at v.Now.
+// waiting-since note true to the state its window shows at v.Now.
 func sessions(w World, v View) (map[tracker.Ref]Session, error) {
 	refs := []tracker.Ref{}
 	if !v.TaskOnly {
@@ -124,22 +123,23 @@ func newestRun(fleet Fleet, name string) (Session, HostLoad, bool) {
 	return Session{Name: name, Host: on.Name, WindowID: id, Mode: best.Record.Mode, Spawned: best.Record.Spawned}, on, true
 }
 
-// see reads the session's window and Claude Code's state from its host's
-// status. It reports whether Claude Code's state is known.
+// see reads the session's window, and the state status gives it, from its
+// host's status. It reports whether the session's state is known: a live
+// window whose state is unknown leaves it unknown.
 func see(s *Session, h HostLoad, name string) bool {
+	known := true
 	for _, win := range h.Status.Windows {
 		if win.ID == s.WindowID && win.Name == name {
 			s.Live, s.DeadWindow, s.Screen = win.Alive, !win.Alive, win.Screen
+			s.Waiting = win.Alive && win.State == session.StateWaiting
+			known = !win.Alive || win.State != ""
 		}
 	}
-	s.Waiting = slices.ContainsFunc(h.Status.Agents, func(a session.Agent) bool {
-		return a.Name == name && (a.Status == session.AgentWaiting || a.Status == session.AgentIdle)
-	})
-	return h.Status.AgentsError == ""
+	return known
 }
 
 // keepWaiting writes the time a session is first seen waiting, and clears it
-// when the session works again. When Claude Code's state is unknown, the
+// when the session works again. When the session's state is unknown, the
 // note is left as it is.
 func keepWaiting(dir string, s *Session, known bool, now time.Time) error {
 	if !known {
