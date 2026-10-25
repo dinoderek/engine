@@ -422,3 +422,26 @@ func TestASessionThatDiesBeforeClaimingIsFlaggedOncePerSession(t *testing.T) {
 		t.Errorf("second death: starts %v, comments %q", w.starts, c)
 	}
 }
+
+func TestTheLoopFlagsASessionThatDiesBeforeClaimingAndRestartsIt(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Approved}, card(2, "standard"))
+	w.do[2] = behaviour{dieAt: 1}
+	// The first session dies; the one that replaces it runs the task through.
+	w.refuse = func(r tracker.Ref) error {
+		if len(w.starts) > 0 {
+			w.do[r.Number] = smooth
+		}
+		return nil
+	}
+	if err := Loop(w, ref(1), false, w.sleep); err != nil {
+		t.Fatalf("%v\n%s", err, strings.Join(w.log, "\n"))
+	}
+	c := w.comments[ref(2)]
+	if len(c) != 1 || !strings.HasPrefix(c[0], "@op ") || !strings.Contains(c[0], "ended before it claimed") ||
+		!strings.Contains(c[0], "Do you want to proceed?") {
+		t.Errorf("comments %q", c)
+	}
+	if !slices.Equal(w.starts, []tracker.Ref{ref(2), ref(2)}) || !w.closed || w.card(ref(2)).Open {
+		t.Errorf("starts %v, closed %v\n%s", w.starts, w.closed, strings.Join(w.log, "\n"))
+	}
+}
