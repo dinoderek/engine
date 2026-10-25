@@ -37,8 +37,9 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    2. then `deep` before `standard` before `light`;
    3. then the lowest issue number.
 
-   Skip a task whose session you started is alive and unclaimed. If it died before claiming, @mention the operator once with its
-   last screen, close its window and start again. A failed start gets one
+   Skip a task whose session you started is alive and unclaimed. If it
+   died before claiming, @mention the operator once with its last screen,
+   close its window and start again. A failed start gets one
    @mention on the task and rests 30 minutes, holding no slot.
    A task no host could take gets one @mention, with why.
 4. **Stalls.** A session is stalled when:

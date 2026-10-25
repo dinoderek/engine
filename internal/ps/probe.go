@@ -121,23 +121,23 @@ func (p *probes) inWorktree(dir string, t tracker.ClaimedTask) (bool, error) {
 	return co.Branch == t.Claim.Branch && co.IsRepo(t.Ref.Repo), nil
 }
 
-// settle works out a claim on this host: whether its session is alive, and
+// settle works out a claim on a host, from what its view says: whether its session is alive, and
 // what it is doing. A session is alive when its window is open and its
 // command has not exited, or when Claude Code lists it. Only a window can
 // prove a session gone: it is dead when the claim names a window of engine's
 // session, nothing says it is alive, and every probe ran. A session started
 // by hand may run anywhere and under any name, so failing to find it proves
 // nothing and leaves liveness unknown.
-func (p *probes) settle(row *Row, t tracker.ClaimedTask) {
+func (p *probes) settle(v view, row *Row, t tracker.ClaimedTask) {
 	var agent *session.Agent
 	live, unknown, windowed := false, false, false
 	if sess, win, ok := strings.Cut(t.Claim.Tmux, ":"); ok && sess == session.Name {
 		windowed = true
-		ok, err := p.window(cmp.Or(win, t.Claim.Name))
+		ok, err := v.window(cmp.Or(win, t.Claim.Name))
 		live, unknown = live || ok, unknown || err != nil
 	}
 	if isClaude(t.Claim.Harness) {
-		a, err := p.agent(t)
+		a, err := v.agent(t)
 		agent, live, unknown = a, live || a != nil, unknown || err != nil
 	}
 	yes, no := true, false

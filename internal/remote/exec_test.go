@@ -49,7 +49,7 @@ func TestTmuxRunner(t *testing.T) {
 	if !errors.As(err, &got) || got.Code != 1 || out != "out" {
 		t.Errorf("exit 1: %q, %v", out, err)
 	}
-	if want := []string{"ssh", "me@box", `'tmux' 'has-session' '-t' '=a b'`}; strings.Join(argv, "|") != strings.Join(want, "|") {
+	if want := []string{"ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "me@box", `'tmux' 'has-session' '-t' '=a b'`}; strings.Join(argv, "|") != strings.Join(want, "|") {
 		t.Errorf("argv %q, want %q", argv, want)
 	}
 	for _, tc := range []struct {

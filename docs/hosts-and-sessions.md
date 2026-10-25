@@ -89,21 +89,20 @@ the repo.
 
 ## Placement
 
-The coordinator places a ready task on a host that meets all of these:
+In start order, the coordinator gives each ready task a host that meets all
+of these, preferring the most free slots, then the fewest capabilities, then
+the lowest name:
 
-- the host has a free slot (its slots are under "Hosts");
-- the host lists the harness (the card's, or the default), and that harness
-  is under its own cap;
-- the host's capabilities include everything in the card's `requires`.
+- a free slot, from the host's `status` (a host whose `status` fails takes
+  no task);
+- the task's harness (the card's, or the default), under its cap across
+  hosts;
+- every capability in the card's `requires`.
 
-The coordinator walks the ready tasks in start order and gives each the host
-with the most free slots, then the fewest capabilities, then the lowest name.
-Free slots come from each host's `status`; a host whose `status` fails takes
-no task, and its sessions do not count against a harness's cap. A task left
-unplaced stays ready and is logged with the reason each pass. If no host
-could take it even with every slot free, the coordinator also comments the
-reason on the task, once. The planner starts on the coordinator's own host.
-How the coordinator reaches each host is in `coordinator.md`.
+An unplaced task stays ready, logged with the reason each pass. If no host
+could take it with every slot free, the coordinator comments the reason on
+it once. The planner starts on the coordinator's host. How the coordinator
+reaches each host is in `coordinator.md`.
 
 ## Permission mode
 
@@ -208,7 +207,7 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. A claim on another host shows its label state, with liveness `null`. The signals are in `coordinator.md`. |
+| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. A claim on another host is settled from that host's `status`, one call per host with a claim, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
 
 ## Connecting to a session
 
@@ -240,7 +239,7 @@ so engine targets the windows it opens by id (`@3`), not by name. Windows stay a
 
 When engine has to type into a session, it sends the text with `send-keys -l`,
 then `Enter` as a separate call after a short delay. Input boxes can swallow a
-newline that arrives with the text.
+newline that arrives with the text. `engine tell` does this over SSH for a session on another host.
 
 ## Keeping hosts awake
 

@@ -1,6 +1,7 @@
 // Package tell posts a message on a task's issue and points the task's live
-// session at it. The comment is the record; the typed pointer makes the
-// session read it now rather than at its next inbox check.
+// session at it, on this host or over SSH on another. The comment is the
+// record; the typed pointer makes the session read it now rather than at its
+// next inbox check.
 package tell
 
 import (
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
@@ -17,8 +19,10 @@ import (
 // Deps are the programs and the environment tell reaches.
 type Deps struct {
 	// Gh runs gh as the machine user.
-	Gh     tracker.Runner
+	Gh tracker.Runner
+	// Tmux is this host's tmux. Run runs ssh, to reach another host's.
 	Tmux   *session.Tmux
+	Run    session.Runner
 	Getenv func(string) string
 	Home   string
 }
@@ -30,12 +34,15 @@ type Told struct {
 	URL string
 	// Window is the tmux window the pointer was typed into.
 	Window string
+	// Host is the host of that window.
+	Host string
 }
 
 // Tell comments text on the issue of the task whose session is named name,
-// then types a pointer to the comment into the task's tmux window on this
-// host. A session on another host, or one with no window, keeps the comment
-// and gets an error: it reads the comment at its next inbox check.
+// then types a pointer to the comment into the task's tmux window, on this
+// host or over SSH on the claim's host. A session with no live window, or on
+// a host that cannot be reached, keeps the comment and gets an error: it
+// reads the comment at its next inbox check.
 func Tell(name, text string, d Deps) (Told, error) {
 	token, err := tracker.Token(d.Getenv, d.Home)
 	if err != nil {
@@ -52,26 +59,45 @@ func Tell(name, text string, d Deps) (Told, error) {
 	if task.Claim.Host == "" {
 		return Told{}, fmt.Errorf("the claim of %s names no host", name)
 	}
-	_, local, err := hosts.Open(hosts.ConfigDir(d.Home))
+	cfg, local, err := hosts.Open(hosts.ConfigDir(d.Home))
 	if err != nil {
 		return Told{}, err
 	}
-	told := Told{Task: task.Ref}
+	told := Told{Task: task.Ref, Host: task.Claim.Host}
 	if told.URL, err = tracker.Comment(d.Gh, token, task.Ref, text); err != nil {
 		return told, err
 	}
-	if task.Claim.Host != local.Name {
-		return told, fmt.Errorf("commented at %s, but %s runs on %q, not this host (%q): run engine tell there to type the pointer", told.URL, name, task.Claim.Host, local.Name)
-	}
-	id, err := window(d.Tmux, name)
+	tm, err := d.tmuxOn(told.Host, cfg, local)
 	if err != nil {
 		return told, fmt.Errorf("commented at %s, but %w", told.URL, err)
 	}
-	if err := d.Tmux.Type(id, Pointer(told.URL)); err != nil {
-		return told, fmt.Errorf("commented at %s, but typing into the window failed: %w", told.URL, err)
+	id, err := window(tm, name, task.Claim.Host)
+	if err != nil {
+		return told, fmt.Errorf("commented at %s, but %w", told.URL, err)
+	}
+	if err := tm.Type(id, Pointer(told.URL)); err != nil {
+		return told, fmt.Errorf("commented at %s, but typing into the window on %s failed: %w", told.URL, told.Host, err)
 	}
 	told.Window = session.Name + ":" + id
 	return told, nil
+}
+
+// tmuxOn is the tmux of the claim's host: this host's own, or the tmux of
+// another machine in hosts.toml, reached over ssh. A host hosts.toml does not
+// list is an error.
+func (d Deps) tmuxOn(name string, cfg *hosts.Config, local hosts.Host) (*session.Tmux, error) {
+	if name == local.Name {
+		return d.Tmux, nil
+	}
+	host, ok := cfg.Hosts[name]
+	if !ok {
+		return nil, fmt.Errorf("host %q is not in hosts.toml", name)
+	}
+	tm := &session.Tmux{Run: remote.TmuxRunner(d.Run, host.Address), Bin: "tmux"}
+	if d.Tmux != nil {
+		tm.Sleep = d.Tmux.Sleep
+	}
+	return tm, nil
 }
 
 // Text is the comment text for the words after the task name. A lone "-" reads
@@ -97,15 +123,16 @@ func Pointer(url string) string {
 	return "New comment on your task's issue, read it and act on it now: " + url
 }
 
-func window(tm *session.Tmux, name string) (string, error) {
+// window returns the id of the live window named name, on host.
+func window(tm *session.Tmux, name, host string) (string, error) {
 	windows, err := tm.Windows()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("listing the windows on %s failed: %w", host, err)
 	}
 	for _, w := range windows {
 		if w.Name == name && !w.Dead {
 			return w.ID, nil
 		}
 	}
-	return "", fmt.Errorf("no live tmux window named %s in the session %s", name, session.Name)
+	return "", fmt.Errorf("no live tmux window named %s in the session %s on %s", name, session.Name, host)
 }
