@@ -2,7 +2,9 @@
 // session. A task's state comes from its tracker labels. For a claim on this
 // host the session layer adds whether the session is alive (tmux, and the
 // harness's own list of live sessions) and whether it is working or waiting.
-// A claim on another host shows its label state, with liveness unknown.
+// A claim on another host is settled the same way from that host's status,
+// one call per host. When the call fails, or the host cannot be asked, the
+// claim shows its label state, with liveness unknown.
 package ps
 
 import (
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
@@ -42,9 +45,9 @@ type Row struct {
 	Harness string `json:"harness,omitempty"`
 	Branch  string `json:"branch,omitempty"`
 	State   string `json:"state"`
-	// Alive is null when nothing on this host settled it: the claim is on
-	// another host, a probe failed, or the session was started by hand and
-	// Claude Code does not list it.
+	// Alive is null when nothing settled it: a probe or the host's status
+	// call failed, the claim names a host that cannot be asked, or the
+	// session was started by hand and Claude Code does not list it.
 	Alive      *bool  `json:"alive"`
 	WaitingFor string `json:"waiting_for,omitempty"`
 	ClaimedAt  string `json:"claimed_at"`
@@ -64,7 +67,10 @@ type Source struct {
 	Agents func() ([]session.Agent, error)
 	// Checkout reads the git checkout a directory is in.
 	Checkout func(dir string) (session.Checkout, error)
-	Now      func() time.Time
+	// Remote reads another host's status by name. Nil leaves a claim on
+	// another host unsettled.
+	Remote func(host string) (hostops.Status, error)
+	Now    func() time.Time
 }
 
 // Listing is the rows, ordered by repo and task number, and a warning for each
@@ -85,12 +91,18 @@ func List(src Source) (Listing, error) {
 		return cmp.Or(cmp.Compare(a.Ref.Repo, b.Ref.Repo), cmp.Compare(a.Ref.Number, b.Ref.Number))
 	})
 	p := &probes{src: src}
+	var remotes map[string]view
+	if src.Remote != nil {
+		remotes = p.statuses(remoteHosts(tasks, src.Local))
+	}
 	now := src.Now()
 	var l Listing
 	for _, t := range tasks {
 		row := claimRow(t, now)
 		if t.Claim.Host != "" && t.Claim.Host == src.Local {
-			p.settle(&row, t)
+			p.settle(p, &row, t)
+		} else if v, ok := remotes[t.Claim.Host]; ok {
+			p.settle(v, &row, t)
 		}
 		l.Rows = append(l.Rows, row)
 	}

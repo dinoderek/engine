@@ -71,8 +71,11 @@ the kickoff, and passes them in. The host does what touches its own disk,
 tmux and token, and reads `hosts.toml` only for its own launch line,
 harness binary and slots. `engine start` calls its own host's
 ops in-process, and another machine's as `ssh -o BatchMode=yes -o
-ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`).
-Designed, not built: the same for `ps`, `tell` and `run`. The coordinator refuses to run
+ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`,
+and `status` for `engine ps`). `engine tell` has no op: it types the pointer
+with `tmux send-keys` over the same ssh options, and exits 1, keeping its
+comment, when the window is missing or the host is unreachable. Designed, not
+built: the same for `run`. The coordinator refuses to run
 unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
 you are changing host names or addresses, load `hosts-and-sessions.md`.
 
@@ -130,8 +133,11 @@ is waiting for input. Three sources:
 3. **tmux.** If the window exists and its command has not exited, the
    session is alive.
 
-On this host, `engine ps` calls a session alive when its tmux window is live
-or `claude agents` lists it. It calls one dead only when its claim names a
+On every host that holds a claim, `engine ps` calls a session alive when its
+tmux window is live or `claude agents` lists it, reading another host's from
+its `status` reply. That reply carries no git state, so there a session is
+matched by name only: one started by hand is unknown unless listed under its
+claim's name. It calls one dead only when its claim names a
 window of engine's session, that window is gone or its command exited,
 `claude agents` does not list it and no probe failed: a session started by
 hand can run anywhere, so its liveness is unknown unless listed. A failed

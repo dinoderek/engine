@@ -127,11 +127,36 @@ func (f *tmux) run(_ string, args ...string) (string, error) {
 	return "", fmt.Errorf("unexpected tmux %v", args)
 }
 
+// ssh answers a tmux command run over ssh by handing the unquoted command to
+// the tmux fake, or fails the way ssh does when it cannot connect.
+type ssh struct {
+	tm    *tmux
+	err   error
+	calls [][]string
+}
+
+func (f *ssh) run(name string, args ...string) (string, error) {
+	f.calls = append(f.calls, append([]string{name}, args...))
+	if name != "ssh" || len(args) < 2 {
+		return "", fmt.Errorf("unexpected %s %v", name, args)
+	}
+	if f.err != nil {
+		return "", f.err
+	}
+	// ShellJoin quotes every word as '...', with ' written '\''.
+	words := strings.Split(strings.Trim(args[len(args)-1], "'"), "' '")
+	for i, w := range words {
+		words[i] = strings.ReplaceAll(w, `'\''`, "'")
+	}
+	return f.tm.run(words[0], words[1:]...)
+}
+
 func rig(t *testing.T, self, claimHost string, tm *tmux) (Deps, *gh, *[]time.Duration) {
 	g := &gh{t: t, host: claimHost}
 	var slept []time.Duration
 	d := Deps{
 		Gh:     g.run,
+		Run:    (&ssh{tm: tm}).run,
 		Tmux:   &session.Tmux{Run: tm.run, Bin: "tmux", Sleep: func(d time.Duration) { slept = append(slept, d) }},
 		Getenv: func(k string) string { return map[string]string{"GH_TOKEN": "tok"}[k] },
 		Home:   home(t, self),
@@ -163,12 +188,14 @@ func TestTellFailures(t *testing.T) {
 		commented                            bool
 	}{
 		{"no such task", "r-8", "mac", "mac", "", nil, nil, "no claimed task named r-8", false},
-		{"other host", "r-7", "mac", "devbox", "", nil, nil, `runs on "devbox", not this host ("mac")`, true},
+		{"host not in hosts.toml", "r-7", "mac", "laptop", "", nil, nil, `host "laptop" is not in hosts.toml`, true},
+		{"no window on the other host", "r-7", "mac", "devbox", "@1 %1 0 other\n", nil, nil, "no live tmux window named r-7 in the session engine on devbox", true},
+		{"typing fails on the other host", "r-7", "mac", "devbox", "@4 %9 0 r-7\n", nil, errors.New("tmux died"), "typing into the window on devbox failed", true},
 		{"no window", "r-7", "mac", "mac", "@1 %1 0 other\n", nil, nil, "no live tmux window named r-7", true},
 		{"dead window", "r-7", "mac", "mac", "@4 %9 1 r-7\n", nil, nil, "no live tmux window named r-7", true},
 		{"comment fails", "r-7", "mac", "mac", "@4 %9 0 r-7\n", errors.New("exit 1"), nil, "comment on o/r", false},
 		{"claim names no host", "r-7", "mac", "", "@4 %9 0 r-7\n", nil, nil, "names no host", false},
-		{"typing fails", "r-7", "mac", "mac", "@4 %9 0 r-7\n", nil, errors.New("tmux died"), "typing into the window failed", true},
+		{"typing fails", "r-7", "mac", "mac", "@4 %9 0 r-7\n", nil, errors.New("tmux died"), "typing into the window on mac failed", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -183,6 +210,49 @@ func TestTellFailures(t *testing.T) {
 				t.Errorf("commented %q, want %v", g.posted, tt.commented)
 			}
 		})
+	}
+}
+
+// A claim on another host gets the pointer typed over ssh, to the host's
+// address, with the same keys as a local window.
+func TestTellTypesOverSSH(t *testing.T) {
+	tm := &tmux{windows: "@1 %1 0 other\n@4 %9 0 r-7\n"}
+	d, g, slept := rig(t, "mac", "devbox", tm)
+	conn := &ssh{tm: tm}
+	d.Run = conn.run
+	told, err := Tell("r-7", "Use the second option.", d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.posted != "Use the second option." || told.Window != "engine:@4" || told.Host != "devbox" {
+		t.Errorf("told %+v, posted %q", told, g.posted)
+	}
+	want := [][]string{{"send-keys", "-t", "=engine:@4", "-l", Pointer(commentURL)}, {"send-keys", "-t", "=engine:@4", "Enter"}}
+	if fmt.Sprint(tm.keys) != fmt.Sprint(want) || len(*slept) != 1 {
+		t.Errorf("keys %q, slept %v", tm.keys, *slept)
+	}
+	for _, c := range conn.calls {
+		if c[0] != "ssh" || !slices.Contains(c, "dino@devbox.example.ts.net") || !slices.Contains(c, "BatchMode=yes") {
+			t.Errorf("call %q is not a batch ssh to the devbox", c)
+		}
+	}
+}
+
+// A host that cannot be reached keeps the comment and says so: it is not a
+// missing window.
+func TestTellUnreachableHost(t *testing.T) {
+	tm := &tmux{}
+	d, g, _ := rig(t, "mac", "devbox", tm)
+	d.Run = (&ssh{tm: tm, err: &session.ExitError{Command: "ssh", Code: 255, Stderr: "no route to host\n"}}).run
+	told, err := Tell("r-7", "hi", d)
+	if err == nil || !strings.Contains(err.Error(), "listing the windows on devbox failed") || !strings.Contains(err.Error(), "no route to host") {
+		t.Errorf("error %v", err)
+	}
+	if strings.Contains(err.Error(), "no live tmux window") {
+		t.Errorf("an unreachable host was read as a missing window: %v", err)
+	}
+	if g.posted != "hi" || told.URL != commentURL || len(tm.keys) != 0 {
+		t.Errorf("posted %q, told %+v, keys %v", g.posted, told, tm.keys)
 	}
 }
 

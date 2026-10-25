@@ -137,7 +137,7 @@ func (f *fakeTmux) run(name string, args ...string) (string, error) {
 		if f.sshErr != nil {
 			return "", f.sshErr
 		}
-		sub = strings.Trim(strings.Fields(args[1])[1], "'")
+		sub = strings.Trim(strings.Fields(args[len(args)-1])[1], "'")
 	} else {
 		sub = args[0]
 	}
@@ -246,7 +246,7 @@ func TestAttachRemoteFindsTheWindowOverSSH(t *testing.T) {
 	if err := Attach("web.app-412", r.deps()); err != nil {
 		t.Fatal(err)
 	}
-	wantCall := "ssh " + devboxAddr + " 'tmux' 'list-windows' '-t' '=engine:' '-F' '" + windowsFD + "'"
+	wantCall := "ssh -o BatchMode=yes -o ConnectTimeout=10 " + devboxAddr + " 'tmux' 'list-windows' '-t' '=engine:' '-F' '" + windowsFD + "'"
 	if !slices.Contains(tm.calls, wantCall) {
 		t.Errorf("calls %q lack %q", tm.calls, wantCall)
 	}
