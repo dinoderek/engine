@@ -136,26 +136,18 @@ labels; the session layer adds only whether a session is alive and whether it
 is waiting for input. Three sources:
 
 1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
-2. **The harness**, for "waiting for input":
-   - **Claude Code:** `claude agents --json` on the host lists every live
-     session, including those in tmux, with its `pid`, `cwd`, `name`,
-     `sessionId` and `status`. Engine matches a session by its name
-     (`<repo>-<task>`), then by its worktree (its branch, in the claim's
-     repo) for one started by hand. `busy` is working; `waiting` and `idle`
-     are waiting for input, because only a prompt moves the session on.
-   - **Codex:** its hooks write to the run directory. Codex's `notify` is not
-     used, because it holds a single program and other tools already claim it
-     (Computer Use on the Mac).
+2. **The harness**, for "waiting for input", as each harness doc says
+   (`claude.md`, "Session list"; `codex.md`, "Session signals").
 3. **tmux.** If the window exists and its command has not exited, the
    session is alive.
 
 On every host that holds a claim, `engine ps` calls a session alive when its
-tmux window is live or `claude agents` lists it, reading another host's from
+tmux window is live or the harness lists it, reading another host's from
 its `status` reply. That reply carries no git state, so there a session is
 matched by name only: one started by hand is unknown unless listed under its
 claim's name. It calls one dead only when its claim names a
 window of engine's session, that window is gone or its command exited,
-`claude agents` does not list it and no probe failed: a session started by
+the harness does not list it and no probe failed: a session started by
 hand can run anywhere, so its liveness is unknown unless listed. A failed
 probe also leaves it unknown. A session in `needs-human` or `in-review` keeps
 that state while alive.
