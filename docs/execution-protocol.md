@@ -13,8 +13,9 @@ changing what an agent does, change the skill.
   review. It stops only for a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator's pass is specified once
   and implemented in code (`engine run`). Merging is a scripted check of the
-  reviewed head commit against green checks. In Claude Code, the plugin's
-  merge guard (`claude.md`, "Hooks") blocks an unpinned, auto or admin merge through `gh`.
+  reviewed head commit against green checks. In Claude Code and in Codex, the
+  merge guard (`claude.md`, "Hooks"; `codex.md`, "Guards") blocks an unpinned,
+  auto or admin merge through `gh`.
 - **One task = one session = one worktree = one PR.**
 - **One plan source per feature:** the tracker, or an in-repo plan that the
   operator points the executor at. The coordinator drives only the tracker.

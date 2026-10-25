@@ -1,0 +1,14 @@
+{
+  "session_id": "01a1752f-8cf9-7592-bdbd-7a42730e503a",
+  "turn_id": "01a17530-2040-7420-9c65-9723141e59e1",
+  "transcript_path": "/home/user/.codex/sessions/2026/10/25/rollout-2026-10-25T22-30-12-01a1752f-8cf9-7592-bdbd-7a42730e503a.jsonl",
+  "cwd": "/tmp/codex-cap",
+  "model": "gpt-6.1-sol",
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "echo hi"
+  },
+  "tool_use_id": "exec-342232c9-f25c-4b20-a5eb-5a345ababd6d"
+}
