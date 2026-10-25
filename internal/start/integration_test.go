@@ -114,13 +114,20 @@ func TestRealStart(t *testing.T) {
 	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3, body: card("light")}}
 	d := Deps{GH: gh.run, Run: realGit, Tmux: tm, Home: h.dir, Getenv: func(string) string { return "" },
 		Now: fixedNow, BaseURL: "file://" + bareRemote(t)}
+	// Two live windows that are not sessions fill the host's two slots by
+	// count, and take none.
+	for _, name := range []string{"stray-shell", "run-o-56"} {
+		if _, err := tm.Open(session.Window{Name: name, Dir: h.dir, Command: "exec sleep 60"}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var out bytes.Buffer
 	if err := Run(Options{Ref: ref(7)}, d, &out); err != nil {
 		t.Fatal(err)
 	}
 
 	windows, err := tm.Windows()
-	if err != nil || len(windows) != 1 || windows[0].Name != "r-7" {
+	if err != nil || len(windows) != 3 || windows[2].Name != "r-7" {
 		t.Fatalf("windows = %+v, %v", windows, err)
 	}
 	eventually(t, "the fake claude's record", func() bool { return strings.Contains(readFile(record), "pwd:") })
@@ -143,7 +150,7 @@ func TestRealStart(t *testing.T) {
 		t.Fatalf("run.json: %v", err)
 	}
 	if rec.RunID != "r-7-20260102T030405Z" || rec.Task != ref(7).String() || rec.Feature != ref(3).String() ||
-		rec.Host != "mac" || rec.Tier != "light" || rec.Model != "haiku-x" || rec.Tmux != "engine:"+windows[0].ID ||
+		rec.Host != "mac" || rec.Tier != "light" || rec.Model != "haiku-x" || rec.Tmux != "engine:"+windows[2].ID ||
 		rec.Branch != "task/r-7" || !rec.Spawned.Equal(fixedNow()) || rec.PaneLog != filepath.Join(runDir, "pane.log") {
 		t.Errorf("run.json = %+v", rec)
 	}
@@ -152,7 +159,7 @@ func TestRealStart(t *testing.T) {
 		!strings.Contains(trust, rec.Worktree) {
 		t.Errorf("the worktree is not trusted:\n%s", trust)
 	}
-	for _, want := range []string{"Started " + ref(7).String() + " as r-7", "Attach: engine attach r-7 (once", "or: tmux attach -t '=engine:" + windows[0].ID} {
+	for _, want := range []string{"Started " + ref(7).String() + " as r-7", "Attach: engine attach r-7 (once", "or: tmux attach -t '=engine:" + windows[2].ID} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
