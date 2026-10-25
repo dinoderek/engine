@@ -44,9 +44,9 @@ type Permission struct {
 }
 
 // Handle reads a Claude Code or Codex PermissionRequest, or a Claude Code
-// PermissionDenied, event from in. An unattended session's request is denied: the decision goes to
-// Out and the request to Log. In an attended session it writes nothing, so
-// Claude Code shows its prompt as usual. A PermissionDenied event (auto mode
+// PermissionDenied, event from in. An unattended session's request is denied:
+// the decision goes to Out and the request to Log. In an attended session it
+// writes nothing, so the harness shows its prompt as usual. A PermissionDenied event (auto mode
 // refusing a call) is only logged. It returns the process exit code.
 func (p Permission) Handle(in io.Reader) int {
 	var e permissionEvent

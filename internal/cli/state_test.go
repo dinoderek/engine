@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,14 +12,14 @@ import (
 
 var stateAt = time.Date(2026, 10, 25, 22, 30, 0, 0, time.UTC)
 
+// recordedEvent is a Codex hook event cut to the fields the hook reads; the
+// hook package's tests run the full recordings.
 func recordedEvent(t *testing.T, name string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "hook", "testdata", "codex", name+".json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
+	return `{"session_id":"` + codexSession + `","hook_event_name":"` + name + `","tool_name":"Bash"}`
 }
+
+const codexSession = "01a1752f-8cf9-7592-bdbd-7a42730e503a"
 
 func runStateHook(in string, vars map[string]string) (int, string) {
 	var errOut bytes.Buffer
@@ -52,7 +51,7 @@ func TestStateHookWritesTheStateFile(t *testing.T) {
 				t.Fatalf("exit %d, stderr %q", code, stderr)
 			}
 			got, ok := session.ReadHarnessState(dir)
-			want := session.HarnessState{State: tt.want, Event: tt.event, At: stateAt, SessionID: "01a1752f-8cf9-7592-bdbd-7a42730e503a"}
+			want := session.HarnessState{State: tt.want, Event: tt.event, At: stateAt, SessionID: codexSession}
 			if !ok || got != want {
 				t.Errorf("state %+v (read %v), want %+v", got, ok, want)
 			}
