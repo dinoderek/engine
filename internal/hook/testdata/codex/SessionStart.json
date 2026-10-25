@@ -1,0 +1,9 @@
+{
+  "session_id": "01a1752f-8cf9-7592-bdbd-7a42730e503a",
+  "transcript_path": "/home/user/.codex/sessions/2026/10/25/rollout-2026-10-25T22-30-12-01a1752f-8cf9-7592-bdbd-7a42730e503a.jsonl",
+  "cwd": "/tmp/codex-cap",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "default",
+  "source": "startup"
+}

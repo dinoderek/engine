@@ -26,8 +26,10 @@ const usage = `usage: engine <command>
 commands:
   version                   print the engine version
   labels sync <owner/repo>  create or update the engine: labels in a repo
-  hook pre-tool-use         the Claude Code merge guard: reads the event on stdin
+  hook pre-tool-use         the merge guard, for Claude Code and Codex: reads the event on stdin
   hook permission           deny and log permission requests in unattended sessions
+                            (Claude Code and Codex)
+  hook state                record a Codex session's state from its hook event
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
@@ -136,6 +138,9 @@ func runHook(args []string, env Env) int {
 	}
 	if len(args) == 1 && args[0] == "permission" {
 		return permissionHook(env)
+	}
+	if len(args) == 1 && args[0] == "state" {
+		return stateHook(env)
 	}
 	fmt.Fprintf(env.Err, "engine hook: unknown hook %q; update engine (go install ./cmd/engine)\n", strings.Join(args, " "))
 	return 1
@@ -265,6 +270,20 @@ func permissionHook(env Env) int {
 			}
 			return code
 		}
+	}
+	return h.Handle(env.In)
+}
+
+// stateHook records the session's state in the run directory that engine
+// start exported. Outside an engine run there is none, and it does nothing.
+func stateHook(env Env) int {
+	dir := env.Getenv(session.RunDirVar)
+	if dir == "" {
+		return 0
+	}
+	h := hook.State{Err: env.Err, Unattended: env.Getenv(session.UnattendedVar) == "1"}
+	h.Write = func(sig hook.Signal) error {
+		return session.WriteHarnessState(dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID})
 	}
 	return h.Handle(env.In)
 }
