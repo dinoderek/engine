@@ -193,16 +193,17 @@ func logText(a Action) string {
 	return a.Text
 }
 
-// startTask starts a ready task. The last session's window, if it is dead,
-// is released on its host first, since engine start refuses a name in use.
+// startTask starts a ready task. The last session, which has ended, is
+// released on its host first: engine start refuses a name in use, and a
+// worktree left on the task's branch.
 // A started session is noted with its host, so a host that cannot be read
 // leaves it unknown. A failed start is noted, holds no slot until
 // StartRetry, and @mentions the operator the first time after a session
 // start.
 func startTask(w World, v View, a Action) error {
-	if s, ok := v.Sessions[a.Ref]; ok && s.DeadWindow {
+	if s, ok := v.Sessions[a.Ref]; ok && !s.Live && !s.Unknown {
 		if err := release(w, s); err != nil {
-			w.Logf("release the dead window of %s on %s: %v", a.Ref, s.Host, err)
+			w.Logf("release the last session of %s on %s: %v", a.Ref, s.Host, err)
 		}
 	}
 	start, host := func(r tracker.Ref) error { return w.Start(r, a.Host) }, a.Host
@@ -301,17 +302,7 @@ func stall(w World, v View, a Action) error {
 	if err != nil {
 		return err
 	}
-	return session.WriteNote(dir, StallNoted, flagged(a.Session))
-}
-
-// flagged is what a stall comment flags: the session's start, or the wait
-// it is in when that began later. The stall note holds it, so a later
-// session or wait is flagged again, whichever host's clock it was read on.
-func flagged(s Session) time.Time {
-	if s.WaitingSince.After(s.Spawned) {
-		return s.WaitingSince
-	}
-	return s.Spawned
+	return session.WriteNote(dir, StallNoted, a.At)
 }
 
 // release releases a session on its host, and logs a worktree it kept.

@@ -81,6 +81,13 @@ type Session struct {
 	Screen string
 }
 
+// flagged reports whether at, the session's start or the start of its
+// wait, is the one the coordinator last flagged. Notes keep whole seconds.
+// Equality, not order, so hosts' clocks need not agree.
+func (s Session) flagged(at time.Time) bool {
+	return s.StallNoted.Truncate(time.Second).Equal(at.Truncate(time.Second))
+}
+
 // waited reports whether the session has waited for input for d by now.
 func (s Session) waited(now time.Time, d time.Duration) bool {
 	return s.Live && s.Waiting && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
@@ -144,6 +151,8 @@ type Action struct {
 	Failure bool
 	// Notify asks a Wait to comment its reason on the task.
 	Notify bool
+	// At is the session start, or the wait, a Stall flags.
+	At time.Time
 }
 
 func hasAny(labels []string, set []string) bool {

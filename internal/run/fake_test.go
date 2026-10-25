@@ -81,6 +81,7 @@ type world struct {
 	refuse   func(tracker.Ref) error
 	failNext map[string]error // the next call of a write fails: "comment", "close", "release"
 	killed   []string         // the ids of the windows released
+	released []string         // each release, as <name>@<host>
 	keep     string           // why release keeps a worktree, when it does
 	attempts int              // planner starts tried, refused or not
 	history  []string         // the labels set on the feature, in order
@@ -348,6 +349,7 @@ func (w *world) Release(host, name string) (hostops.Released, error) {
 	if err := w.fails("release"); err != nil {
 		return hostops.Released{}, err
 	}
+	w.released = append(w.released, name+"@"+host)
 	r := hostops.Released{Name: name}
 	if w.keep != "" {
 		r.Worktree, r.WorktreeKept, r.Note = "/wt/"+name, true, w.keep

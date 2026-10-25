@@ -6,8 +6,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dinoderek/engine/internal/session"
+	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // The session check across hosts: a task that needs linux runs on the
@@ -64,8 +66,14 @@ func TestARemoteSessionWaitingIsNotedHereAndStallsOnce(t *testing.T) {
 	if !noteOf(t, w, 2, WaitingSince) {
 		t.Fatal("no waiting-since in the coordinator's note directory")
 	}
-	if _, err := os.Stat(filepath.Join(w.home, "hosts", "devbox", ".local/share/engine/runs")); err != nil {
-		t.Fatal(err)
+	runs, err := filepath.Glob(filepath.Join(w.hostHome("devbox"), ".local/share/engine/runs", "*", "*"))
+	if err != nil || len(runs) == 0 {
+		t.Fatalf("the devbox's run files %v, %v", runs, err)
+	}
+	for _, f := range runs {
+		if filepath.Base(f) == WaitingSince {
+			t.Errorf("waiting-since in the run directory: %s", f)
+		}
 	}
 	checks(t, w, 15)
 	c := w.comments[ref(2)]
@@ -211,5 +219,36 @@ func TestAReleaseThatKeepsTheWorktreeIsLogged(t *testing.T) {
 		if !slices.Contains(w.log, line) {
 			t.Errorf("log lacks %q:\n%s", line, strings.Join(w.log, "\n"))
 		}
+	}
+}
+
+func TestARestartReleasesTheLastSessionEvenWithItsWindowGone(t *testing.T) {
+	w := onDevbox(t, behaviour{})
+	// The devbox rebooted: the window is gone, its worktree is not.
+	w.execs[ref(2)].window = session.WindowInfo{}
+	w.do[2] = behaviour{claim: 1}
+	checks(t, w, 1)
+	if !slices.Equal(w.released, []string{"r-2@devbox"}) || !slices.Equal(w.placed, []string{"2@devbox", "2@devbox"}) {
+		t.Errorf("released %v, placed %v\n%s", w.released, w.placed, strings.Join(w.log, "\n"))
+	}
+}
+
+func TestAStallIsFlaggedPerSessionWhateverTheClocks(t *testing.T) {
+	c := card(2, "standard")
+	// The last stall flagged a session started at 13:05 by one host's clock;
+	// this one started at 13:01 by another's, which runs behind.
+	s := Session{Name: "r-2", Host: "devbox", Spawned: t0.Add(time.Minute), StallNoted: t0.Add(5 * time.Minute)}
+	v := View{Feature: tracker.Feature{Ref: ref(1), Open: true, Labels: []string{Executing}, Tasks: []tracker.Card{c}},
+		Sessions: map[tracker.Ref]Session{ref(2): s}, Now: t0.Add(10 * time.Minute)}
+	if acts := stalls(v); len(acts) != 1 || !acts[0].At.Equal(s.Spawned) {
+		t.Errorf("a new session behind the clock: %+v", acts)
+	}
+	// Once flagged, the same session is not flagged again: the note keeps
+	// whole seconds.
+	s.Spawned = t0.Add(time.Minute + 300*time.Millisecond)
+	s.StallNoted = t0.Add(time.Minute)
+	v.Sessions[ref(2)] = s
+	if acts := stalls(v); len(acts) != 0 {
+		t.Errorf("flagged twice: %+v", acts)
 	}
 }

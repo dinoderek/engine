@@ -109,7 +109,7 @@ func TestAFailedRunDoesNotWindDown(t *testing.T) {
 	}
 }
 
-func TestAPassThatReadsTasksMakesNoDirectory(t *testing.T) {
+func TestOnlyAStartMakesANoteDirectory(t *testing.T) {
 	w := newWorld(t, []string{"engine:feature", Executing}, card(2, "standard"), card(3, "standard", 2))
 	w.do[2] = smooth
 	for range 3 {

@@ -15,8 +15,8 @@ import (
 const (
 	// WaitingSince is when the session was first seen waiting for input.
 	WaitingSince = "waiting-since"
-	// StallNoted is the session start, or the wait, of the task that the
-	// coordinator last raised a stall for.
+	// StallNoted is the session start, or the wait, the coordinator last
+	// raised a stall for on the task.
 	StallNoted = "stall-noted"
 	// StartedOn, followed by a host's name, is when the coordinator last
 	// started the task's session on that host.

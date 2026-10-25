@@ -85,8 +85,8 @@ with `tmux send-keys` over the same ssh options, and exits 1, keeping its
 comment, when the window is missing or the host is unreachable. `engine run`
 reads every host's `status` for placement, and starts a session elsewhere as
 `engine start --host` does. Its session check reads the same `status`
-replies. It reaps a finished window, and closes the dead window of a session
-that ended before claiming, with the session's host's `release`. The
+replies. It reaps a finished window, and clears an ended session before
+starting its task again, with the session's host's `release`. The
 coordinator refuses to run
 unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
 you are changing host names or addresses, load `hosts-and-sessions.md`.
@@ -169,7 +169,7 @@ the protocol, for example on a question asked in the session rather than on
 the issue. The coordinator @mentions you on the task's issue, with the last
 screen the host's `status` sent (it sends one for a window whose session is
 not busy), once per session start or wait: it notes the start or wait it
-flagged, and flags only a later one.
+flagged, and flags only another one.
 
 ## Identity and notifications
 

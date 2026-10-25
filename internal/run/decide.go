@@ -62,14 +62,14 @@ func planStep(v View) ([]Action, bool) {
 	case started && planner.Unknown:
 		return nil, true
 	case started && planner.Live:
-		if planner.waited(v.Now, StallWait) && planner.StallNoted.Before(planner.WaitingSince) {
-			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner,
+		if planner.waited(v.Now, StallWait) && !planner.flagged(planner.WaitingSince) {
+			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner, At: planner.WaitingSince,
 				Text: fmt.Sprintf("the planner %s has waited for input for %s", planner.Name, StallWait)}}, true
 		}
 		return nil, true
 	case len(f.Tasks) == 0 && started:
-		if planner.StallNoted.Before(planner.Spawned) {
-			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner,
+		if !planner.flagged(planner.Spawned) {
+			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner, At: planner.Spawned,
 				Text: "the planner " + planner.Name + " ended without writing any task"}}, true
 		}
 		return nil, true
@@ -108,18 +108,18 @@ func stalls(v View) []Action {
 			continue
 		}
 		if !s.Live {
-			if !hasAny(c.Labels, takenStates) && s.StallNoted.Before(s.Spawned) {
-				acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
+			if !hasAny(c.Labels, takenStates) && !s.flagged(s.Spawned) {
+				acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s, At: s.Spawned,
 					Text: s.Name + " ended before it claimed the task; it will be started again"})
 			}
 			continue
 		}
 		switch {
-		case !hasAny(c.Labels, claimStates) && v.Now.Sub(s.Spawned) >= ClaimWait && s.StallNoted.Before(s.Spawned):
-			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
+		case !hasAny(c.Labels, claimStates) && v.Now.Sub(s.Spawned) >= ClaimWait && !s.flagged(s.Spawned):
+			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s, At: s.Spawned,
 				Text: fmt.Sprintf("%s has not claimed the task %s after it started", s.Name, ClaimWait)})
-		case hasAny(c.Labels, claimStates) && !c.Has(NeedsHuman) && s.waited(v.Now, StallWait) && s.StallNoted.Before(s.WaitingSince):
-			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
+		case hasAny(c.Labels, claimStates) && !c.Has(NeedsHuman) && s.waited(v.Now, StallWait) && !s.flagged(s.WaitingSince):
+			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s, At: s.WaitingSince,
 				Text: fmt.Sprintf("%s has waited for input for %s, outside a hard stop", s.Name, StallWait)})
 		}
 	}
