@@ -351,10 +351,12 @@ const stallLines = 20
 
 func stall(w World, v View, a Action) error {
 	body := mention(w, v.Operator) + "engine run: " + a.Text + "."
-	if a.Session.Live {
+	if a.Session.Live || a.Session.DeadWindow {
 		if screen, err := w.Capture(a.Session.WindowID, stallLines); err == nil && screen != "" {
 			body += " Its last screen:\n\n```text\n" + screen + "\n```"
 		}
+	}
+	if a.Session.Live {
 		body += fmt.Sprintf("\n\nAttach with `engine attach %s`.", a.Session.Name)
 	}
 	if err := w.Comment(a.Ref, body); err != nil {

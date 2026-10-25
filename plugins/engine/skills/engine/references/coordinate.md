@@ -36,17 +36,17 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    2. then `deep` before `standard` before `light`;
    3. then the lowest issue number.
 
-   Skip a task whose session you started and that has not claimed yet,
-   while that session is alive. If it died before claiming, close its
-   window and start it again. A start that fails gets one @mention on the
+   Skip a task whose session you started and has not claimed yet,
+   while that session is alive. If it died before claiming, @mention the
+   operator once with its last screen, close its window and start again. A start that fails gets one @mention on the
    task, and no retry for 30 minutes, holding no slot.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is open and
      not `engine:needs-human`.
 
-   @mention the operator on the task with the stall and the session's last
-   20 screen lines (`tmux capture-pane -p -S -20`, or the cloud session's
+   @mention the operator on the task with the session's last 20 screen
+   lines (`tmux capture-pane -p -S -20`, or the cloud session's
    last message). Once per wait: skip it if your stall comment is newer than
    the wait.
 5. **Feature label.** Once a task has started, the feature's label is the
@@ -61,15 +61,14 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    Close a window, or archive a cloud session, you started in hands-off
    mode only when its task is closed, carries no `engine:` state label, and
    the session has been waiting for 10 minutes. Leave a gated run's window
-   for the operator. Say what you closed in the pass's log line.
-8. **Done.** When the feature has sub-issues and every one is closed, comment on the feature: each
-   task with its PR, the acceptance result, the tasks still carrying
+   for the operator.
+8. **Done.** When the feature has sub-issues and all are closed, comment
+   on the feature: each task with its PR, the acceptance result, the tasks still carrying
    `engine:ruling-review`, and the deviations. Set `engine:done`, close the
    feature as completed, and end the session.
 
 Log what each pass started, flagged, marked and closed. Move the feature's
-labels only as above. Executors own the task
-labels, except `engine:failed` and clearing a dead holder's `engine:merging`.
+labels only as above. Executors own the task labels, except `engine:failed` and clearing a dead holder's `engine:merging`.
 
 ## Native sessions
 

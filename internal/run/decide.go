@@ -93,13 +93,21 @@ func deadSessions(v View) []Action {
 	return acts
 }
 
-// stalls is step 4: a session that has not claimed in time, or that waits
-// outside a hard stop. Once per wait.
+// stalls is step 4: a session that has not claimed in time, that died
+// before claiming, or that waits outside a hard stop. Once per wait, and
+// once per session that died.
 func stalls(v View) []Action {
 	var acts []Action
 	for _, c := range v.Feature.Tasks {
 		s, ok := v.Sessions[c.Ref]
-		if !ok || !s.Live || !c.Open {
+		if !ok || !c.Open {
+			continue
+		}
+		if !s.Live {
+			if !hasAny(c.Labels, claimStates) && s.StallNoted.Before(s.Spawned) {
+				acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s,
+					Text: s.Name + " ended before it claimed the task; it starts again"})
+			}
 			continue
 		}
 		switch {

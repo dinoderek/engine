@@ -394,3 +394,26 @@ func TestAnUnreadableSummaryNoteStopsTheFinish(t *testing.T) {
 		t.Errorf("comments %q, closed %v", w.comments[ref(1)], w.closed)
 	}
 }
+
+func TestASessionThatDiesBeforeClaimingIsFlaggedOncePerSession(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Executing}, card(2, "standard"))
+	w.do[2] = behaviour{dieAt: 1}
+	pass := func() {
+		v := gather(t, w)
+		Apply(w, v, Decide(v))
+	}
+	pass()
+	w.sleep(2 * CheckEvery)
+	pass() // flags the death, closes the dead window, starts again
+	pass() // the new session is alive: nothing to flag
+	c := w.comments[ref(2)]
+	if len(c) != 1 || !strings.HasPrefix(c[0], "@op ") || !strings.Contains(c[0], "ended before it claimed") ||
+		!strings.Contains(c[0], "Do you want to proceed?") || strings.Contains(c[0], "engine attach") || len(w.starts) != 2 {
+		t.Fatalf("starts %v, comments %q", w.starts, c)
+	}
+	w.sleep(2 * CheckEvery)
+	pass()
+	if c := w.comments[ref(2)]; len(c) != 2 || len(w.starts) != 3 {
+		t.Errorf("second death: starts %v, comments %q", w.starts, c)
+	}
+}
