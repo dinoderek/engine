@@ -74,7 +74,9 @@ Commands that work without `run`, and come first in the build:
 - `engine tell <repo>-<task> <text>`: comment the text on the task's issue,
   then type a pointer to the comment into its window on this host, so the
   session reads it now rather than at its next inbox check. For a session on
-  another host, or with no live window, the comment stays and it exits 1.
+  another host, or with no live window, the comment stays and it exits 1. A
+  lone `-` as the text reads it from stdin, so a long or multi-line answer
+  needs no shell quoting; empty text is refused.
 - `engine lint <feature>`: plan lint on its own, printing each broken rule;
   it exits 1 when there is one.
 - `engine labels sync <owner/repo>`: create or update the `engine:` labels in

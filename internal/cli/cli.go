@@ -30,7 +30,8 @@ commands:
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
-  tell <repo>-<task> <text> comment on a task's issue and point its session at it
+  tell <repo>-<task> <text> comment on a task's issue and point its session at it;
+                            a lone - reads the text from stdin
   run <owner/repo#n>        coordinate a feature, or one task, on this host until
                             it is done
   lint <owner/repo#n>       check a feature's plan: card sections, keys, cycles,
@@ -159,10 +160,15 @@ func runAttach(args []string, env Env) int {
 // after the comment landed still prints the comment's address.
 func runTell(args []string, env Env) int {
 	if len(args) < 2 {
-		fmt.Fprint(env.Err, "usage: engine tell <repo>-<task> <text...>\n")
+		fmt.Fprint(env.Err, "usage: engine tell <repo>-<task> <text...|->\n")
 		return 2
 	}
-	told, err := tell.Tell(args[0], strings.Join(args[1:], " "), tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Getenv: env.Getenv, Home: env.Home})
+	text, err := tell.Text(args[1:], env.In)
+	if err != nil {
+		fmt.Fprintln(env.Err, "engine tell:", err)
+		return 2
+	}
+	told, err := tell.Tell(args[0], text, tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Getenv: env.Getenv, Home: env.Home})
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine tell:", err)
 		return 1
