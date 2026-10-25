@@ -22,8 +22,9 @@ internal/attach	only	internal/hosts,internal/remote,internal/session,internal/tr
 internal/ps	only	internal/hostops,internal/tracker,internal/session
 internal/tell	only	internal/hosts,internal/remote,internal/session,internal/tracker
 internal/lint	only	internal/tracker
+internal/setup	only	internal/hosts,internal/remote,internal/tracker,internal/version
 internal/run	only	internal/hosts,internal/lint,internal/ps,internal/session,internal/start,internal/tracker
-internal/cli	only	internal/version,internal/tracker,internal/hook,internal/hostops,internal/remote,internal/attach,internal/hosts,internal/session,internal/ps,internal/start,internal/tell,internal/lint,internal/run
+internal/cli	only	internal/version,internal/tracker,internal/hook,internal/hostops,internal/remote,internal/attach,internal/hosts,internal/session,internal/ps,internal/start,internal/tell,internal/lint,internal/run,internal/setup
 cmd/engine	only	internal/cli
 devtools/...	forbid	internal/...,cmd/...
 devtools/internal/repo	only	-

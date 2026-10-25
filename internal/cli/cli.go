@@ -43,6 +43,8 @@ commands:
   start --check [--host <name>]
                             launch a throwaway session to find prompts that would
                             stop an unattended one
+  setup [--host <name>]     bring a host to this engine's commit, plugin and config,
+                            or check this one; exits 1 while any item is open
   host <op> --json          run one of this host's ops for a caller on any host:
                             sync-repo, spawn, status, collect or release
 `
@@ -62,7 +64,10 @@ type Env struct {
 	Run  session.RunFunc
 	Tmux *session.Tmux
 	// SSH runs ssh to reach another host's ops; nil starts real processes.
-	SSH    remote.Exec
+	SSH remote.Exec
+	// Build is this engine's own build, whose commit engine setup installs on
+	// another host.
+	Build  version.Info
 	Getenv func(string) string
 	Home   string
 	Now    func() time.Time
@@ -73,7 +78,7 @@ func System() Env {
 	home, _ := os.UserHomeDir() // "" makes tracker.Token refuse the token file
 	return Env{
 		In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec,
-		Local: session.Exec, Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now,
+		Local: session.Exec, Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now, Build: version.Current(),
 	}
 }
 
@@ -111,6 +116,8 @@ func Run(args []string, env Env) int {
 		return runRun(args[1:], env, time.Sleep)
 	case "host":
 		return runHost(args[1:], env)
+	case "setup":
+		return runSetup(args[1:], env)
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0

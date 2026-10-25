@@ -177,7 +177,9 @@ The executor claims the task; its claim check stops a racing second start.
 With `--host`, the caller makes the task, harness, tier and `requires`
 refusals, and reads the window and free slots from the host's `status`; the
 host's own `spawn` refuses anything else, such as a missing harness binary.
-An unreachable host is an error, not a refusal. Designed, not built:
+An unreachable host is an error, not a refusal. A host whose engine speaks
+another protocol is refused, naming `engine setup --host <name>`, which
+installs the caller's commit (`operator-setup.md`, "Each host"). Designed, not built:
 `--harness codex`.
 
 **Preflight:** `engine start --check [--host <name>]` opens a throwaway hands-off session,
