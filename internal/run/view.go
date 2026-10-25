@@ -77,7 +77,7 @@ type Session struct {
 	// StallNoted is the start, or the wait, the coordinator last flagged.
 	StallNoted time.Time
 	// Screen is the window's last lines, when its host sent them: it does
-	// for a window whose session is not busy.
+	// for a window whose session is not working.
 	Screen string
 }
 

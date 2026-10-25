@@ -160,7 +160,7 @@ minutes old while its task is open and not `needs-human` has stopped outside
 the protocol, for example on a question asked in the session rather than on
 the issue. The coordinator @mentions you on the task's issue, with the last
 screen the host's `status` sent (it sends one for a window whose session is
-not busy), once per session start or wait: it notes the start or wait it
+not working), once per session start or wait: it notes the start or wait it
 flagged, and flags only another one.
 
 ## Identity and notifications
