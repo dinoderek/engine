@@ -86,8 +86,8 @@ one.
 ## Placement
 
 In start order, the coordinator gives each ready task a host that meets all
-of these, preferring the most free slots (heavy ones, for a heavy task), then the fewest capabilities, then
-the lowest name:
+of these, preferring the most free slots (heavy ones, for a heavy task),
+then the fewest capabilities, then the lowest name:
 
 - a free slot, from the host's `status` (a host whose `status` fails takes
   no task), and a free heavy slot too for a heavy task;
@@ -149,8 +149,9 @@ kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
 `engine start` calls in-process, or over SSH with `--host`.
 The executor claims the task; its claim check stops a racing second start.
 With `--host`, the caller makes the task, harness, tier and `requires`
-refusals, and reads the window and free slots, heavy ones too, from the host's `status`; the
-host's own `spawn` refuses anything else, such as a missing harness binary.
+refusals, and reads the window and free slots, heavy ones too, from the
+host's `status`; the host's own `spawn` refuses anything else, such as a
+missing harness binary.
 An unreachable host is an error, not a refusal. A host on another protocol
 is refused, naming `engine setup --host <name>` (`operator-setup.md`). Designed, not built:
 `--harness codex`.

@@ -123,8 +123,11 @@ func (c *Config) HostNames() []string {
 }
 
 // Heavy reports whether a task that requires these capabilities is heavy.
-func (c *Config) Heavy(requires []string) bool {
-	return slices.ContainsFunc(requires, func(r string) bool { return slices.Contains(c.HeavyCapabilities, r) })
+func (c *Config) Heavy(requires []string) bool { return IsHeavy(requires, c.HeavyCapabilities) }
+
+// IsHeavy reports whether requires names one of the heavy capabilities.
+func IsHeavy(requires, heavy []string) bool {
+	return slices.ContainsFunc(requires, func(r string) bool { return slices.Contains(heavy, r) })
 }
 
 // Model returns the model and effort the harness runs a tier at.

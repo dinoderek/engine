@@ -214,7 +214,7 @@ func (f Fleet) fits(c tracker.Card) (harness string, fits []HostLoad, why string
 
 // heavy reports whether the card requires a heavy capability.
 func (f Fleet) heavy(c tracker.Card) bool {
-	return slices.ContainsFunc(c.Requires, func(r string) bool { return slices.Contains(f.Heavy, r) })
+	return hosts.IsHeavy(c.Requires, f.Heavy)
 }
 
 // pick is the host with the most free slots a task like this one may take,

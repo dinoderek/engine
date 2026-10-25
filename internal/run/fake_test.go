@@ -198,7 +198,7 @@ var heavyCaps = []string{"ios", "vm"}
 func (w *world) heavy(r tracker.Ref) bool {
 	for _, c := range w.feature.Tasks {
 		if c.Ref == r {
-			return slices.ContainsFunc(c.Requires, func(c string) bool { return slices.Contains(heavyCaps, c) })
+			return hosts.IsHeavy(c.Requires, heavyCaps)
 		}
 	}
 	return false

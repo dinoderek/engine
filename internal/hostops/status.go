@@ -55,9 +55,9 @@ type Run struct {
 }
 
 // ReadStatus reads this host's windows, live Claude Code sessions, newest
-// runs and free slots, heavy and all, and the screen of every window whose session is not
-// busy. A tmux that cannot list its windows fails the op: nothing it would
-// say is known.
+// runs and free slots, heavy and all, and the screen of every window whose
+// session is not busy. A tmux that cannot list its windows fails the op:
+// nothing it would say is known.
 func ReadStatus(d Deps) (Status, error) {
 	_, host, err := openHost(d.Home)
 	if err != nil {
