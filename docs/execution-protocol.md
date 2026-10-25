@@ -1,6 +1,6 @@
 # Execution protocol
 
-> **Owns:** the principles, the phases at a glance, why the coordinator is a role, task and feature states and who moves them, the inbox, merge conflicts, what the merge guard enforces, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, why the coordinator is a role, task and feature states and who moves them, the inbox, merge conflicts, why harnesses guard merges in code, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), each harness's guards (`claude.md`, `codex.md`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 The skill is the single source for agent behaviour. This doc explains the
 design around it and never restates a rule the skill holds. If you are
@@ -14,7 +14,7 @@ changing what an agent does, change the skill.
 - **Enforce in code, not prompts.** The coordinator's pass is specified once
   and implemented in code (`engine run`). Merging is a scripted check of the
   reviewed head commit against green checks. In Claude Code, the plugin's
-  merge guard (below) blocks an unpinned, auto or admin merge through `gh`.
+  merge guard (`claude.md`, "Hooks") blocks an unpinned, auto or admin merge through `gh`.
 - **One task = one session = one worktree = one PR.**
 - **One plan source per feature:** the tracker, or an in-repo plan that the
   operator points the executor at. The coordinator drives only the tracker.

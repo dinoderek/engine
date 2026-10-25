@@ -47,7 +47,7 @@ for rules.**
 
 ## Always load
 
-Read these every session:
+Read these at each session start:
 
 - `docs/project-brief.md`: what engine is, its state, scope and stack.
 - `docs/architecture.md`: components, layers and binding decisions.
@@ -59,11 +59,11 @@ Read these every session:
 
 | If your task… | Load |
 | --- | --- |
-| changes how agents plan, execute or review | `plugins/engine/skills/engine/SKILL.md` and its references |
+| changes how agents plan, execute or review | `plugins/engine/skills/engine/SKILL.md` and the reference it routes to |
 | changes phases, roles, task states or the protocol's principles | `docs/execution-protocol.md` |
 | changes how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changes host config, placement or session access | `docs/hosts-and-sessions.md` |
-| changes a Claude or Codex session's launch, permissions, hooks or apps | `docs/claude.md`, `docs/codex.md` |
+| changes a Claude or Codex session | `docs/claude.md`, `docs/codex.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
 | sets up engine's GitHub identity, tokens, notifications, harness sign-in or a host | `docs/operator-setup.md` |
 | changes what a target repo must provide, the seed prompt, or the shape of this file or the doc rules | `docs/project-context.md` |

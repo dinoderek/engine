@@ -15,13 +15,13 @@ tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
 tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 ```
 
-`{name}` is the session name, `<repo>-<task>`. `{model}` and `{effort}` come
-from the tier. `{clone}` is engine's clone of the repo.
+`{model}` and `{effort}` come from the tier. `{clone}` is engine's clone of
+the repo.
 
 ## Permission mode
 
-Sessions run under the `workspace-write` sandbox, with Codex's auto-review
-deciding any action that crosses the sandbox boundary. With
+Sessions default to auto mode: the `workspace-write` sandbox, with Codex's
+auto-review deciding any action that crosses the sandbox boundary. With
 `approval_policy = "never"` there would be nothing for it to review.
 
 The sandbox needs two exceptions for executors:
@@ -49,5 +49,4 @@ Use on the Mac).
 ## Apps
 
 The host runs the remote-control app-server (`codex remote-control start`),
-and the session's TUI connects to it with `--remote`. Clients reach the
-session through the ChatGPT or Codex apps.
+and the session's TUI connects to it with `--remote`.
