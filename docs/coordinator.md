@@ -95,7 +95,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | --- | --- |
 | `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it, opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
-| `status` | Lists the windows of the session `engine` (alive, exit code), `claude agents --json`, the newest run of each session name, the free slots (a live window takes one only if it has a run), and the last 20 screen lines of each window whose session is not busy. |
+| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, the free slots (a live window takes one only if it has a run), and the last 20 screen lines of each window whose session is not working. |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
 | `release` | Closes the session's window if it is open, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
@@ -136,29 +136,32 @@ labels; the session layer adds only whether a session is alive and whether it
 is waiting for input. Three sources:
 
 1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
-2. **The harness**, for "waiting for input":
+2. **The harness**, for "waiting for input". `status` gives each window of
+   session `engine` a `harness` and a `state`, `working` or `waiting`, from
+   the probe of the harness its newest `run.json` names. Anything else,
+   including a window with no run, is unknown, never dead:
    - **Claude Code:** `claude agents --json` on the host lists every live
      session, including those in tmux, with its `pid`, `cwd`, `name`,
-     `sessionId` and `status`. Engine matches a session by its name
-     (`<repo>-<task>`), then by its worktree (its branch, in the claim's
-     repo) for one started by hand. `busy` is working; `waiting` and `idle`
-     are waiting for input, because only a prompt moves the session on.
-   - **Codex:** its hooks write to the run directory. Codex's `notify` is not
-     used, because it holds a single program and other tools already claim it
-     (Computer Use on the Mac).
+     `sessionId` and `status`, matched to a window by name. `busy` is
+     working; `waiting` and `idle` are waiting for input, because only a
+     prompt moves the session on.
+   - **Codex:** its hooks write `harness-state.json` to the run directory:
+     the state (`working`, `waiting` or `ended`), the event, the time and
+     Codex's session ID. A missing or unreadable file is unknown, and so is
+     `ended` while the window lives. Codex's `notify` is not used, because
+     it holds a single program and other tools already claim it (Computer
+     Use on the Mac).
 3. **tmux.** If the window exists and its command has not exited, the
-   session is alive.
+   session is alive. A dead window is dead whatever its harness says.
 
-On every host that holds a claim, `engine ps` calls a session alive when its
-tmux window is live or `claude agents` lists it, reading another host's from
-its `status` reply. That reply carries no git state, so there a session is
-matched by name only: one started by hand is unknown unless listed under its
-claim's name. It calls one dead only when its claim names a
-window of engine's session, that window is gone or its command exited,
-`claude agents` does not list it and no probe failed: a session started by
-hand can run anywhere, so its liveness is unknown unless listed. A failed
-probe also leaves it unknown. A session in `needs-human` or `in-review` keeps
-that state while alive.
+`engine ps` and `engine run`'s session check read only `state`, from the
+`status` of the host a claim names, this host's too. A claim in engine's tmux
+session is alive while its window's command runs, and dead once the window
+is gone or its command exited. For a Claude session started by hand, `ps`
+matches the reply's `claude agents` list by name (`<repo>-<task>`), then, on
+this host only, by worktree (its branch, in the claim's repo); unless listed,
+its liveness is unknown. A failed call leaves it unknown too. A session in
+`needs-human` or `in-review` keeps that state while alive.
 
 **Stalls.** A window the coordinator opened whose task has not claimed in
 time is stalled before the claim, for example on a prompt (the skill's

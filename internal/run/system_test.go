@@ -192,12 +192,12 @@ func TestSystemRowsSettleEveryHostFromTheFleet(t *testing.T) {
 	}}
 	f := Fleet{Hosts: []HostLoad{
 		{Name: "devbox", Status: hostops.Status{
-			Windows: []hostops.Window{{Name: "r-4", ID: "@1", Alive: true}},
-			Agents:  []session.Agent{{Name: "r-4", Status: session.AgentWaiting}},
+			Windows: []hostops.Window{{Name: "r-4", ID: "@1", Alive: true, State: session.StateWaiting}},
 		}},
 		{Name: "mac", Status: hostops.Status{
-			Windows: []hostops.Window{{Name: "r-2", ID: "@1", Alive: true}, {Name: "r-3", ID: "@2"}},
-			Agents:  []session.Agent{{Name: "r-2", Status: session.AgentBusy}},
+			Windows: []hostops.Window{{Name: "r-2", ID: "@1", Alive: true, State: session.StateWorking}, {Name: "r-3", ID: "@2"}},
+			// Claude Code's raw list never settles a windowed claim.
+			Agents: []session.Agent{{Name: "r-3", Status: session.AgentBusy}},
 		}},
 	}}
 	rows, err := s.Rows(f)
@@ -212,10 +212,10 @@ func TestSystemRowsSettleEveryHostFromTheFleet(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("rows %q, want %q", got, want)
 	}
-	// An unreachable devbox, and this host's claude agents failing, leave
-	// what they would settle unknown.
+	// An unreachable devbox, and this host's status failing, leave what
+	// they would settle unknown.
 	f.Hosts[0] = HostLoad{Name: "devbox", Unreachable: "ssh: timed out"}
-	f.Hosts[1].Status.AgentsError = "claude agents: exit status 1"
+	f.Hosts[1] = HostLoad{Name: "mac", Unreachable: "tmux: no server"}
 	rows, err = s.Rows(f)
 	if err != nil {
 		t.Fatal(err)

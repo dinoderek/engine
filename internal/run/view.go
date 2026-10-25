@@ -71,7 +71,7 @@ type Session struct {
 	// its command exited. Only then is the window its own to close: tmux
 	// reuses ids after a restart.
 	DeadWindow bool
-	// Waiting is true when Claude Code says it waits for input.
+	// Waiting is true when its window's state, from status, is waiting.
 	Waiting      bool
 	WaitingSince time.Time
 	// StallNoted is the start, or the wait, the coordinator last flagged.

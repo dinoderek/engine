@@ -1,7 +1,6 @@
 package run
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -61,26 +60,11 @@ func (s System) Task(ref tracker.Ref) (tracker.Card, tracker.Ref, error) {
 
 func (s System) Now() time.Time { return s.Clock() }
 
-// Rows settles every claim as engine ps does, from the hosts' replies in f:
-// this host's windows and Claude Code sessions too.
+// Rows settles every claim as engine ps does, from the hosts' replies in f,
+// this host's too.
 func (s System) Rows(f Fleet) ([]ps.Row, error) {
 	src := s.Claims
-	src.Windows = func() ([]session.WindowInfo, error) {
-		st, err := f.status(src.Local)
-		var ws []session.WindowInfo
-		for _, w := range st.Windows {
-			ws = append(ws, session.WindowInfo{ID: w.ID, Name: w.Name, Dead: !w.Alive})
-		}
-		return ws, err
-	}
-	src.Agents = func() ([]session.Agent, error) {
-		st, err := f.status(src.Local)
-		if err == nil && st.AgentsError != "" {
-			err = errors.New(st.AgentsError)
-		}
-		return st.Agents, err
-	}
-	src.Remote = f.status
+	src.Status = f.status
 	l, err := ps.List(src)
 	return l.Rows, err
 }

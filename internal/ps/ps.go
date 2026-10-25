@@ -1,10 +1,10 @@
 // Package ps lists the tasks that executors hold, with the state of each
-// session. A task's state comes from its tracker labels. For a claim on this
-// host the session layer adds whether the session is alive (tmux, and the
-// harness's own list of live sessions) and whether it is working or waiting.
-// A claim on another host is settled the same way from that host's status,
-// one call per host. When the call fails, or the host cannot be asked, the
-// claim shows its label state, with liveness unknown.
+// session. A task's state comes from its tracker labels. The host a claim
+// names adds, from its status, one call per host, whether the session is
+// alive and whether it is working or waiting: its window's state, or for a
+// session started by hand, Claude Code's list of live sessions. When the
+// call fails, or the host cannot be asked, the claim shows its label state,
+// with liveness unknown.
 package ps
 
 import (
@@ -20,7 +20,7 @@ import (
 
 // The states a row shows.
 const (
-	Working    = "working"     // alive, and the harness says it is busy
+	Working    = "working"     // alive, and the harness says it is working
 	Waiting    = "waiting"     // alive, and the harness says it waits for input
 	Running    = "running"     // holds the task; nothing says more
 	NeedsHuman = "needs-human" // stopped at a hard stop
@@ -29,8 +29,8 @@ const (
 )
 
 // isClaude reports whether a claim's harness line names Claude Code, the
-// harness whose sessions `claude agents` lists. Claims spell it claude,
-// claude-code or Claude Code.
+// harness whose sessions started by hand `claude agents` lists. Claims spell
+// it claude, claude-code or Claude Code.
 func isClaude(harness string) bool {
 	return strings.HasPrefix(strings.ToLower(harness), "claude")
 }
@@ -45,32 +45,29 @@ type Row struct {
 	Harness string `json:"harness,omitempty"`
 	Branch  string `json:"branch,omitempty"`
 	State   string `json:"state"`
-	// Alive is null when nothing settled it: a probe or the host's status
-	// call failed, the claim names a host that cannot be asked, or the
-	// session was started by hand and Claude Code does not list it.
+	// Alive is null when nothing settled it: the host's status call failed,
+	// the claim names a host that cannot be asked, or the session was
+	// started by hand and Claude Code does not list it.
 	Alive      *bool  `json:"alive"`
 	WaitingFor string `json:"waiting_for,omitempty"`
 	ClaimedAt  string `json:"claimed_at"`
 	AgeSeconds int64  `json:"age_seconds"`
 }
 
-// Source is where a listing reads from. Each probe runs at most once, and
-// only when a claim on this host needs it.
+// Source is where a listing reads from. Each host's status is read at most
+// once, and only when a claim names the host.
 type Source struct {
 	// Claimed lists the claimed tasks.
 	Claimed func() ([]tracker.ClaimedTask, error)
 	// Local is this host's name in its host file.
 	Local string
-	// Windows lists the windows of engine's tmux session.
-	Windows func() ([]session.WindowInfo, error)
-	// Agents lists the live Claude Code sessions on this host.
-	Agents func() ([]session.Agent, error)
-	// Checkout reads the git checkout a directory is in.
+	// Status reads a host's status by name, this host's too. Nil leaves
+	// every claim unsettled.
+	Status func(host string) (hostops.Status, error)
+	// Checkout reads the git checkout a directory on this host is in, so a
+	// session started by hand here is found by its worktree.
 	Checkout func(dir string) (session.Checkout, error)
-	// Remote reads another host's status by name. Nil leaves a claim on
-	// another host unsettled.
-	Remote func(host string) (hostops.Status, error)
-	Now    func() time.Time
+	Now      func() time.Time
 }
 
 // Listing is the rows, ordered by repo and task number, and a warning for each
@@ -91,18 +88,16 @@ func List(src Source) (Listing, error) {
 		return cmp.Or(cmp.Compare(a.Ref.Repo, b.Ref.Repo), cmp.Compare(a.Ref.Number, b.Ref.Number))
 	})
 	p := &probes{src: src}
-	var remotes map[string]view
-	if src.Remote != nil {
-		remotes = p.statuses(remoteHosts(tasks, src.Local))
+	var views map[string]view
+	if src.Status != nil {
+		views = p.statuses(claimHosts(tasks))
 	}
 	now := src.Now()
 	var l Listing
 	for _, t := range tasks {
 		row := claimRow(t, now)
-		if t.Claim.Host != "" && t.Claim.Host == src.Local {
-			p.settle(p, &row, t)
-		} else if v, ok := remotes[t.Claim.Host]; ok {
-			p.settle(v, &row, t)
+		if v, ok := views[t.Claim.Host]; ok {
+			settle(v, &row, t)
 		}
 		l.Rows = append(l.Rows, row)
 	}

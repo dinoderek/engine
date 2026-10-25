@@ -186,23 +186,25 @@ func (w *world) Fleet() Fleet {
 	return f
 }
 
-// status is what a host's status op says: its windows, with the screen of
-// each whose session is not busy, its live Claude Code sessions and its
-// newest runs.
+// status is what a host's status op says: its windows, with the state and
+// the screen of each whose session is not working, its live Claude Code
+// sessions and its newest runs.
 func (w *world) status(h fakeHost) hostops.Status {
 	st := hostops.Status{Slots: h.slots, FreeSlots: max(0, h.slots-len(w.live(h.name))), AgentsError: h.agentsDown}
 	for _, e := range w.execs {
 		if e.host != h.name || e.window.ID == "" {
 			continue
 		}
-		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead}
-		if e.window.Dead || e.status != session.AgentBusy {
+		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead, Harness: hostops.Harness}
+		if !e.window.Dead && h.agentsDown == "" {
+			agent := session.Agent{Name: e.window.Name, Status: e.status}
+			st.Agents = append(st.Agents, agent)
+			win.State = session.AgentState(agent)
+		}
+		if win.State != session.StateWorking {
 			win.Screen = "Do you want to proceed?\n"
 		}
 		st.Windows = append(st.Windows, win)
-		if !e.window.Dead && h.agentsDown == "" {
-			st.Agents = append(st.Agents, session.Agent{Name: e.window.Name, Status: e.status})
-		}
 	}
 	runs, err := session.LatestRuns(w.hostHome(h.name))
 	if err != nil {
