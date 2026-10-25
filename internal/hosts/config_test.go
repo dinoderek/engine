@@ -8,18 +8,24 @@ import (
 	"testing"
 )
 
-// docExample is the hosts.toml in docs/hosts-and-sessions.md.
+// docExample is the hosts.toml, joined from its toml blocks in
+// docs/hosts-and-sessions.md and the harness docs that hold the harness tables.
 func docExample(t *testing.T) string {
 	t.Helper()
-	data, err := os.ReadFile("../../docs/hosts-and-sessions.md")
-	if err != nil {
-		t.Fatal(err)
+	var b strings.Builder
+	for _, doc := range []string{"hosts-and-sessions.md", "claude.md", "codex.md"} {
+		data, err := os.ReadFile("../../docs/" + doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range regexp.MustCompile("(?s)```toml\n(.*?)```").FindAllSubmatch(data, -1) {
+			b.Write(m[1])
+		}
 	}
-	m := regexp.MustCompile("(?s)```toml\n(.*?)```").FindSubmatch(data)
-	if m == nil {
-		t.Fatal("no toml block in docs/hosts-and-sessions.md")
+	if b.Len() == 0 {
+		t.Fatal("no toml block in docs")
 	}
-	return string(m[1])
+	return b.String()
 }
 
 func TestDocExample(t *testing.T) {

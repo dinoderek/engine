@@ -135,24 +135,9 @@ forces a re-gate on every other open PR. So a feature has one merge lock,
 the `engine:merging` label: its holder merges the default branch, gates and
 merges, while the others wait before their last gate run.
 
-## Enforced by hook
+## Harness guards
 
-The plugin ships a Claude Code `PreToolUse` hook,
-`engine hook pre-tool-use`. It blocks a Bash call that:
-
-- runs `gh pr merge` without `--match-head-commit`, or with `--auto` or
-  `--admin`;
-- merges through `gh api`, REST or GraphQL.
-
-`engine gh …` counts as `gh` for both.
-
-It also ships `engine hook permission`, run on `PermissionRequest` and
-`PermissionDenied`. When `ENGINE_UNATTENDED=1`, it denies every permission
-request with a message naming the Permission hard stop, instead of a prompt
-nobody would answer. It logs each request it denies, and in any session each
-auto-mode refusal, to the run directory (`telemetry.md`). Without
-`ENGINE_UNATTENDED`, Claude Code prompts as usual.
-
-Every other hard stop rests on the skill. A guard reads the command's words;
-it catches mistakes, not a session set on getting round it. Codex sessions
-have no guard yet.
+A harness may guard the merge and permission rules in code. Each harness's
+guards are in its doc (`claude.md`, `codex.md`). Every other hard stop rests on
+the skill. A guard reads the command's words; it catches mistakes, not a
+session set on getting round it.

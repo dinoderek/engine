@@ -9,8 +9,8 @@ for rules.**
 
 1. **Every gate is mandatory.** Get `./dev test` green before every PR; CI
    runs the same command. A lane that cannot run here is a setup gap: fix it
-   with `./dev doctor`, never skip it. Never report a lane you did
-   not run as passed, or fake any evidence.
+   with `./dev doctor`, never skip it. Never report an unrun lane as
+   passed, or fake evidence.
 2. **Tests always.** Every code change adds or updates tests for the
    behaviour it changes, in the layer `docs/testing-strategy.md` assigns. A
    gate check gets a test proving it fails on a violation.
@@ -47,7 +47,7 @@ for rules.**
 
 ## Always load
 
-Read these at the start of every session:
+Read these every session:
 
 - `docs/project-brief.md`: what engine is, its state, scope and stack.
 - `docs/architecture.md`: components, layers and binding decisions.
@@ -59,10 +59,11 @@ Read these at the start of every session:
 
 | If your task… | Load |
 | --- | --- |
-| changes how agents plan, execute or review | `plugins/engine/skills/engine/SKILL.md` and the reference it routes to |
+| changes how agents plan, execute or review | `plugins/engine/skills/engine/SKILL.md` and its references |
 | changes phases, roles, task states or the protocol's principles | `docs/execution-protocol.md` |
 | changes how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changes host config, placement or session access | `docs/hosts-and-sessions.md` |
+| changes a Claude or Codex session's launch, permissions, hooks or apps | `docs/claude.md`, `docs/codex.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
 | sets up engine's GitHub identity, tokens, notifications, harness sign-in or a host | `docs/operator-setup.md` |
 | changes what a target repo must provide, the seed prompt, or the shape of this file or the doc rules | `docs/project-context.md` |
