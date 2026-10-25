@@ -46,7 +46,7 @@ func (f *sshFake) ssh(address string) SSH {
 	return SSH{Name: "devbox", Address: address, Exec: f.exec}
 }
 
-const envelope = `"protocol":1,"engine":"v1","host":"devbox"`
+const envelope = `"protocol":2,"engine":"v1","host":"devbox"`
 
 // line is the remote command of the n'th call.
 func (f *sshFake) line(n int) string { return f.calls[n].args[len(f.calls[n].args)-1] }
@@ -66,19 +66,19 @@ func TestSSHCallsTheOpsWithTheirFlags(t *testing.T) {
 func TestSSHSpawnPassesTheKickoffOnStdin(t *testing.T) {
 	f := &sshFake{replies: []reply{{stdout: `{"name":"r-7","window":"@4","run_dir":"/runs/x","worktree":"/wt","branch":"b","attach":"tmux attach",` + envelope + "}"}}}
 	req := hostops.SpawnRequest{Repo: "o/r", Task: 7, Feature: "o/r" + "#" + "3", Mode: "hands-off", Tier: "deep",
-		Model: "opus", Effort: "high", RunID: "r-7-1", Kickoff: "it's $HOME\nsecond line"}
+		Model: "opus", Effort: "high", RunID: "r-7-1", Kickoff: "it's $HOME\nsecond line", Heavy: true}
 	got, err := f.ssh("me@box").Spawn(req)
 	if err != nil || got.Window != "@4" || got.RunDir != "/runs/x" || got.Branch != "b" {
 		t.Fatalf("got %+v, %v", got, err)
 	}
-	if want := `'engine' 'host' 'spawn' '--json' '--repo' 'o/r' '--task' '7' '--mode' 'hands-off' '--model' 'opus' '--effort' 'high' '--run-id' 'r-7-1' '--tier' 'deep' '--feature' 'o/r` + "#" + `3'`; f.line(0) != want {
+	if want := `'engine' 'host' 'spawn' '--json' '--repo' 'o/r' '--task' '7' '--mode' 'hands-off' '--model' 'opus' '--effort' 'high' '--run-id' 'r-7-1' '--tier' 'deep' '--feature' 'o/r` + "#" + `3' '--heavy'`; f.line(0) != want {
 		t.Errorf("remote command\n got %s\nwant %s", f.line(0), want)
 	}
 	if f.calls[0].stdin != req.Kickoff {
 		t.Errorf("stdin %q", f.calls[0].stdin)
 	}
 	f = &sshFake{replies: []reply{{stdout: `{"name":"r-7",` + envelope + "}"}}}
-	if _, err := f.ssh("me@box").Spawn(hostops.SpawnRequest{Repo: "o/r", Task: 7, Kickoff: "k"}); err != nil || strings.Contains(f.line(0), "--tier") || strings.Contains(f.line(0), "--feature") {
+	if _, err := f.ssh("me@box").Spawn(hostops.SpawnRequest{Repo: "o/r", Task: 7, Kickoff: "k"}); err != nil || strings.Contains(f.line(0), "--tier") || strings.Contains(f.line(0), "--feature") || strings.Contains(f.line(0), "--heavy") {
 		t.Errorf("optional flags: %v, %s", err, f.line(0))
 	}
 }
@@ -126,8 +126,8 @@ func TestSSHMapsRemoteFailures(t *testing.T) {
 			"the window r-7 exists", true},
 		{"failure", reply{stdout: `{"error":"tmux is down","refused":false,` + envelope + "}", code: 1}, "host devbox: tmux is down", false},
 		{"exit 1 without an error", reply{stdout: `{"slots":1,` + envelope + "}", code: 1}, "exited 1 with no error", false},
-		{"protocol mismatch", reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`}, "speaks protocol 2 (engine v9), this engine speaks 1; run: engine setup --host devbox", false},
-		{"protocol mismatch on a failure", reply{stdout: `{"error":"x","refused":true,"protocol":2,"engine":"v9","host":"devbox"}`, code: 1}, "speaks protocol 2", false},
+		{"protocol mismatch", reply{stdout: `{"protocol":9,"engine":"v9","host":"devbox"}`}, "speaks protocol 9 (engine v9), this engine speaks 2; run: engine setup --host devbox", false},
+		{"protocol mismatch on a failure", reply{stdout: `{"error":"x","refused":true,"protocol":9,"engine":"v9","host":"devbox"}`, code: 1}, "speaks protocol 9", false},
 		{"no protocol", reply{stdout: `{"clone":"/c"}`}, "speaks protocol 0", false},
 		{"engine missing", reply{stderr: "sh: engine: command not found\n", code: 127}, "did not reply (sh: engine: command not found); is engine current there? run: engine setup --host devbox", false},
 		{"old engine", reply{stderr: "engine: unknown command \"host\"", code: 2}, "run: engine setup --host devbox", false},
@@ -199,7 +199,7 @@ func TestSSHCheck(t *testing.T) {
 
 func TestSSHCheckFailures(t *testing.T) {
 	probe := reply{stdout: `{"error":"x","refused":true,` + envelope + "}", code: 1}
-	stale := reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`, code: 1}
+	stale := reply{stdout: `{"protocol":9,"engine":"v9","host":"devbox"}`, code: 1}
 	cases := []struct {
 		name    string
 		replies []reply

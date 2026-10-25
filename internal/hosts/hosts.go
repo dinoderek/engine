@@ -65,8 +65,11 @@ type Host struct {
 	ReserveGB    int
 	GBPerSession int
 	// MaxSessions replaces the count derived from RAM; 0 means derive it.
-	MaxSessions  int
-	Capabilities []string
+	MaxSessions int
+	// MaxHeavySessions caps the heavy sessions below Slots; 0 means no cap
+	// of their own.
+	MaxHeavySessions int
+	Capabilities     []string
 	// Bin is the path of each harness binary, as written: it may start with ~.
 	Bin map[string]string
 }
@@ -83,6 +86,15 @@ func (h Host) Slots() int {
 	return max(0, (h.RAMGB-h.ReserveGB)/h.GBPerSession)
 }
 
+// HeavySlots is how many heavy sessions the host runs at once:
+// MaxHeavySessions when set, else all its slots.
+func (h Host) HeavySlots() int {
+	if h.MaxHeavySessions > 0 {
+		return h.MaxHeavySessions
+	}
+	return h.Slots()
+}
+
 // Has reports whether the host declares the capability.
 func (h Host) Has(capability string) bool { return slices.Contains(h.Capabilities, capability) }
 
@@ -94,8 +106,10 @@ type Config struct {
 	DefaultHarness string
 	GBPerSession   int
 	ReserveGB      int
-	Harnesses      map[string]Harness
-	Hosts          map[string]Host
+	// HeavyCapabilities make a task heavy when its card requires one.
+	HeavyCapabilities []string
+	Harnesses         map[string]Harness
+	Hosts             map[string]Host
 }
 
 // HostNames lists the configured hosts, sorted.
@@ -106,6 +120,11 @@ func (c *Config) HostNames() []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+// Heavy reports whether a task that requires these capabilities is heavy.
+func (c *Config) Heavy(requires []string) bool {
+	return slices.ContainsFunc(requires, func(r string) bool { return slices.Contains(c.HeavyCapabilities, r) })
 }
 
 // Model returns the model and effort the harness runs a tier at.

@@ -51,6 +51,7 @@ type executor struct {
 	window  session.WindowInfo
 	dir     string
 	status  string
+	heavy   bool
 }
 
 // fakeHost is a host of the fake world.
@@ -59,6 +60,8 @@ type fakeHost struct {
 	slots     int
 	caps      []string
 	harnesses []string
+	// heavy caps the host's heavy sessions; 0 is every slot.
+	heavy int
 	// down is why its status fails, when it does, and agentsDown why its
 	// claude agents does.
 	down, agentsDown string
@@ -173,8 +176,36 @@ func (w *world) live(host string) []string {
 	return names
 }
 
+// liveHeavy counts the live heavy sessions on host.
+func (w *world) liveHeavy(host string) int {
+	n := 0
+	for _, e := range w.execs {
+		if e.host == host && e.heavy && e.window.ID != "" && !e.window.Dead {
+			n++
+		}
+	}
+	return n
+}
+
+// heavySlots is the host's heavy cap.
+func (h fakeHost) heavySlots() int { return cmp.Or(h.heavy, h.slots) }
+
+// heavyCaps are the fake world's heavy capabilities.
+var heavyCaps = []string{"ios", "vm"}
+
+// heavy reports whether r is a task of the feature that requires a heavy
+// capability. A session started outside the feature is not.
+func (w *world) heavy(r tracker.Ref) bool {
+	for _, c := range w.feature.Tasks {
+		if c.Ref == r {
+			return slices.ContainsFunc(c.Requires, func(c string) bool { return slices.Contains(heavyCaps, c) })
+		}
+	}
+	return false
+}
+
 func (w *world) Fleet() Fleet {
-	f := Fleet{Local: "mac", DefaultHarness: "claude", Caps: map[string]int{"claude": cmp.Or(w.limit, 8), "codex": 2}}
+	f := Fleet{Local: "mac", DefaultHarness: "claude", Caps: map[string]int{"claude": cmp.Or(w.limit, 8), "codex": 2}, Heavy: heavyCaps}
 	for _, h := range w.fleet() {
 		var err error
 		if h.down != "" {
@@ -190,7 +221,8 @@ func (w *world) Fleet() Fleet {
 // each whose session is not busy, its live Claude Code sessions and its
 // newest runs.
 func (w *world) status(h fakeHost) hostops.Status {
-	st := hostops.Status{Slots: h.slots, FreeSlots: max(0, h.slots-len(w.live(h.name))), AgentsError: h.agentsDown}
+	st := hostops.Status{Slots: h.slots, FreeSlots: max(0, h.slots-len(w.live(h.name))), HeavySlots: h.heavySlots(), AgentsError: h.agentsDown}
+	st.FreeHeavySlots = min(max(0, h.heavySlots()-w.liveHeavy(h.name)), st.FreeSlots)
 	for _, e := range w.execs {
 		if e.host != h.name || e.window.ID == "" {
 			continue
@@ -229,7 +261,8 @@ func (w *world) NoteDir(r tracker.Ref) (string, error) {
 func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 	name := fmt.Sprintf("r-%d", r.Number)
 	w.nextID++
-	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy,
+	heavy := w.heavy(r)
+	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy, heavy: heavy,
 		window: session.WindowInfo{ID: fmt.Sprintf("@%d", w.nextID), Name: name}}
 	// Another host's run directory is on that host.
 	dir, err := session.RunDir(w.hostHome(host), session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
@@ -243,11 +276,12 @@ func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 		mode = "gated"
 	}
 	return session.WriteRecord(dir, session.Record{RunID: filepath.Base(dir), Task: r.String(), Name: name,
-		Mode: mode, Harness: "claude", Tmux: "engine:" + e.window.ID, Spawned: w.now})
+		Mode: mode, Heavy: heavy, Harness: "claude", Tmux: "engine:" + e.window.ID, Spawned: w.now})
 }
 
 // Start refuses as engine start does: an unknown host, a window of that
-// name, live or dead, or no free slot on the host.
+// name, live or dead, or no free slot on the host, or no free heavy slot for
+// a heavy task.
 func (w *world) Start(r tracker.Ref, host string) error {
 	i := slices.IndexFunc(w.fleet(), func(h fakeHost) bool { return h.name == host })
 	if i < 0 {
@@ -258,8 +292,12 @@ func (w *world) Start(r tracker.Ref, host string) error {
 			return fmt.Errorf("the tmux session engine already has a window r-%d", r.Number)
 		}
 	}
-	if len(w.live(host)) >= w.fleet()[i].slots {
+	h := w.fleet()[i]
+	if len(w.live(host)) >= h.slots {
 		return fmt.Errorf("no free slot")
+	}
+	if w.heavy(r) && w.liveHeavy(host) >= h.heavySlots() {
+		return fmt.Errorf("no free heavy slot")
 	}
 	if w.refuse != nil {
 		if err := w.refuse(r); err != nil {

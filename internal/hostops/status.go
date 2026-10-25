@@ -15,10 +15,14 @@ const ScreenLines = 20
 type Status struct {
 	// Slots is how many sessions the host runs at once, and FreeSlots how
 	// many more it can start: only a live window with a run recorded under
-	// its name holds one.
-	Slots     int      `json:"slots"`
-	FreeSlots int      `json:"free_slots"`
-	Windows   []Window `json:"windows"`
+	// its name holds one. HeavySlots is how many of them may be heavy, and
+	// FreeHeavySlots how many more heavy sessions it can start, never more
+	// than FreeSlots.
+	Slots          int      `json:"slots"`
+	FreeSlots      int      `json:"free_slots"`
+	HeavySlots     int      `json:"heavy_slots"`
+	FreeHeavySlots int      `json:"free_heavy_slots"`
+	Windows        []Window `json:"windows"`
 	// Agents are the live Claude Code sessions. When AgentsError says why
 	// Claude Code could not list them, what they would show is unknown.
 	Agents      []session.Agent `json:"agents"`
@@ -51,7 +55,7 @@ type Run struct {
 }
 
 // ReadStatus reads this host's windows, live Claude Code sessions, newest
-// runs and free slots, and the screen of every window whose session is not
+// runs and free slots, heavy and all, and the screen of every window whose session is not
 // busy. A tmux that cannot list its windows fails the op: nothing it would
 // say is known.
 func ReadStatus(d Deps) (Status, error) {
@@ -67,7 +71,7 @@ func ReadStatus(d Deps) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	s := Status{Slots: host.Slots(), Windows: []Window{}, Agents: []session.Agent{}, Runs: []Run{}}
+	s := Status{Slots: host.Slots(), HeavySlots: host.HeavySlots(), Windows: []Window{}, Agents: []session.Agent{}, Runs: []Run{}}
 	if host.Runs(Harness) {
 		s.listAgents(d, host)
 	}
@@ -75,7 +79,6 @@ func ReadStatus(d Deps) (Status, error) {
 	if err != nil {
 		s.RunsError = err.Error()
 	}
-	live := 0
 	for _, w := range windows {
 		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
 		if code, ok := codes[w.ID]; ok && w.Dead {
@@ -85,12 +88,11 @@ func ReadStatus(d Deps) (Status, error) {
 			// A window can close between the list and the capture.
 			out.Screen, _ = d.Tmux.Capture(w.ID, ScreenLines)
 		}
-		if session.HoldsSlot(w, runs) {
-			live++
-		}
 		s.Windows = append(s.Windows, out)
 	}
+	live, heavy := session.SlotsHeld(windows, runs)
 	s.FreeSlots = max(s.Slots-live, 0)
+	s.FreeHeavySlots = min(max(s.HeavySlots-heavy, 0), s.FreeSlots)
 	for name, r := range runs {
 		s.Runs = append(s.Runs, Run{Name: name, Dir: r.Dir, Record: r.Record})
 	}

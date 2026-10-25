@@ -44,7 +44,7 @@ func TestEveryReplyCarriesTheEnvelope(t *testing.T) {
 		{"sync-repo", "--repo", "o/r", "--json"},
 	} {
 		_, reply, _ := call(t, d, "", args...)
-		if reply["protocol"] != 1.0 || reply["engine"] != engine || reply["host"] != "mac" {
+		if reply["protocol"] != float64(Protocol) || reply["engine"] != engine || reply["host"] != "mac" {
 			t.Errorf("%v: envelope %v", args, reply)
 		}
 	}
@@ -82,7 +82,7 @@ func TestFailuresAreReplies(t *testing.T) {
 		}
 		code, reply, _ := call(t, d, "", c.args...)
 		msg, _ := reply["error"].(string)
-		if code != 1 || reply["refused"] != c.refused || !strings.Contains(msg, c.want) || reply["protocol"] != 1.0 {
+		if code != 1 || reply["refused"] != c.refused || !strings.Contains(msg, c.want) || reply["protocol"] != float64(Protocol) {
 			t.Errorf("%v: exit %d, reply %v; want refused %v and %q", c.args, code, reply, c.refused, c.want)
 		}
 	}
@@ -126,10 +126,13 @@ func TestSpawnReadsTheKickoffFromStdin(t *testing.T) {
 	tm := &tmuxFake{}
 	d := Deps{Tmux: tm.tmux(), Home: h.dir, Run: (&gitFake{}).run, Getenv: func(string) string { return "" }, Now: fixedNow}
 	args := []string{"spawn", "--json", "--repo", "o/r", "--task", "7", "--mode", "gated", "--model", "opus-x", "--effort", "high",
-		"--run-id", "r-7-20260102T030405Z", "--tier", "deep", "--feature", ref(3)}
+		"--run-id", "r-7-20260102T030405Z", "--tier", "deep", "--feature", ref(3), "--heavy"}
 	code, reply, _ := call(t, d, "it's the kickoff\n", args...)
-	if code != 0 || reply["window"] != "@9" || reply["name"] != "r-7" || reply["protocol"] != 1.0 || reply["host"] != "mac" || !strings.Contains(tm.command, "s the kickoff") || strings.Contains(tm.command, "kickoff\n") {
+	if code != 0 || reply["window"] != "@9" || reply["name"] != "r-7" || reply["protocol"] != float64(Protocol) || reply["host"] != "mac" || !strings.Contains(tm.command, "s the kickoff") || strings.Contains(tm.command, "kickoff\n") {
 		t.Errorf("exit %d, reply %v, command %s", code, reply, tm.command)
+	}
+	if run, ok, err := session.LatestRun(h.dir, "r-7"); err != nil || !ok || !run.Record.Heavy {
+		t.Errorf("--heavy is not in run.json: %+v, %v, %v", run, ok, err)
 	}
 	code, reply, _ = call(t, d, "", args...)
 	if msg, _ := reply["error"].(string); code != 1 || !strings.Contains(msg, "the kickoff is empty") {

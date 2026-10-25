@@ -110,7 +110,7 @@ func (s System) Start(task tracker.Ref, host string) error {
 
 // Fleet reads every host's status, one call per host, all at once.
 func (s System) Fleet() Fleet {
-	f := Fleet{Local: s.Host.Name, DefaultHarness: s.Config.DefaultHarness, Caps: map[string]int{}}
+	f := Fleet{Local: s.Host.Name, DefaultHarness: s.Config.DefaultHarness, Caps: map[string]int{}, Heavy: s.Config.HeavyCapabilities}
 	for name, h := range s.Config.Harnesses {
 		f.Caps[name] = h.MaxSessions
 	}

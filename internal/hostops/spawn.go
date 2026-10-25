@@ -17,8 +17,8 @@ import (
 var tmpReads = []string{"Read(//tmp/**)", "Read(//private/tmp/**)"}
 
 // SpawnRequest is what the caller decided for a session: the task, the
-// mode, the model and the kickoff. The tier and the feature are only
-// recorded in run.json.
+// mode, the model and the kickoff. The tier, the feature and whether the
+// task is heavy are only recorded in run.json.
 type SpawnRequest struct {
 	Repo    string // owner/name
 	Task    int
@@ -29,6 +29,8 @@ type SpawnRequest struct {
 	Effort  string
 	RunID   string
 	Kickoff string
+	// Heavy is true when the card requires a heavy capability.
+	Heavy bool
 }
 
 // Spawned is spawn's reply.
@@ -186,7 +188,7 @@ func (s spawn) record(wt session.Worktree, window, log string, d Deps) session.R
 		Schema: session.RecordSchema, RunID: s.RunID, Repo: s.repo.String(),
 		Task: tracker.Ref{Repo: s.repo.String(), Number: s.Task}.String(), Feature: s.Feature,
 		Host: s.host.Name, Harness: Harness, Tier: s.Tier, Model: s.Model, Effort: s.Effort,
-		Mode: s.Mode, Name: s.name, Tmux: session.Name + ":" + window,
+		Mode: s.Mode, Heavy: s.Heavy, Name: s.name, Tmux: session.Name + ":" + window,
 		Branch: wt.Branch, Worktree: wt.Path, PaneLog: log, Spawned: d.Now().UTC(),
 	}
 }

@@ -28,7 +28,15 @@ and needs `address` and `ram_gb`. Engine does not spawn cloud sessions.
 once: `(ram_gb - reserve_gb) / gb_per_session`, rounded down. Both values
 are set at the top and may be set again per host. A host's `max_sessions`
 replaces the derived count. Only a live window with a run recorded under
-its name takes a slot.
+its name takes a slot: an executor's or the planner's. A coordinator's
+window or a stray shell takes none.
+
+**Heavy sessions.** A task is heavy when its card requires one of the
+top-level `heavy_capabilities`: a simulator or a VM loads a machine far more
+than a session does. A host's `max_heavy_sessions` caps its heavy sessions
+below its slots; without it, every slot may be heavy, and a cap above the
+slots is refused. `run.json` records whether a run is heavy, and `status`
+reports `heavy_slots` and `free_heavy_slots`, never more than `free_slots`.
 
 **Capabilities:**
 
@@ -47,12 +55,14 @@ here first, then declared by the hosts that have it.
 default_harness = "claude"
 gb_per_session = 8      # RAM one session and its gates need
 reserve_gb = 8          # RAM kept back for the host itself
+heavy_capabilities = ["ios", "vm"]
 
 [host.mac]              # 4 slots
 address = "<user>@<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 48
 reserve_gb = 16         # also the operator's workstation
+max_heavy_sessions = 2  # at most 2 of its 4 sessions heavy
 capabilities = ["macos", "ios", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 
@@ -76,11 +86,11 @@ one.
 ## Placement
 
 In start order, the coordinator gives each ready task a host that meets all
-of these, preferring the most free slots, then the fewest capabilities, then
+of these, preferring the most free slots (heavy ones, for a heavy task), then the fewest capabilities, then
 the lowest name:
 
 - a free slot, from the host's `status` (a host whose `status` fails takes
-  no task);
+  no task), and a free heavy slot too for a heavy task;
 - the task's harness (the card's, or the default), under its cap across
   hosts;
 - every capability in the card's `requires`.
@@ -110,7 +120,8 @@ It first refuses, changing nothing, when: the token file, host file,
 state label or an open blocker, or is standalone without `engine:approved`;
 the card's harness is unknown (as a misspelt tier is), not Claude, or not run
 on the host; the host lacks a capability in the card's `## Requires`, even when
-named; its window exists; or no slot is free. Then
+named; its window exists; or no slot is free, or no heavy slot for a heavy
+task. Then
 it:
 
 1. syncs engine's clone (`operator-setup.md`, "Machine user"): clones it over
@@ -138,7 +149,7 @@ kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
 `engine start` calls in-process, or over SSH with `--host`.
 The executor claims the task; its claim check stops a racing second start.
 With `--host`, the caller makes the task, harness, tier and `requires`
-refusals, and reads the window and free slots from the host's `status`; the
+refusals, and reads the window and free slots, heavy ones too, from the host's `status`; the
 host's own `spawn` refuses anything else, such as a missing harness binary.
 An unreachable host is an error, not a refusal. A host on another protocol
 is refused, naming `engine setup --host <name>` (`operator-setup.md`). Designed, not built:

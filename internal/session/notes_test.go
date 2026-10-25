@@ -54,6 +54,27 @@ func TestLatestRun(t *testing.T) {
 	}
 }
 
+func TestSlotsHeld(t *testing.T) {
+	runs := map[string]Run{
+		"r-1": {Record: Record{Name: "r-1"}},
+		"r-2": {Record: Record{Name: "r-2", Heavy: true}},
+		"r-3": {Record: Record{Name: "r-3", Heavy: true}},
+		"r-4": {Record: Record{Name: "r-4", Heavy: true}},
+	}
+	windows := []WindowInfo{
+		{Name: "r-1"}, {Name: "r-2"}, {Name: "r-3"},
+		{Name: "r-4", Dead: true}, // has exited: holds nothing
+		{Name: "run-r-9"},         // a coordinator: no run
+		{Name: "home"},            // a stray shell: no run
+	}
+	if held, heavy := SlotsHeld(windows, runs); held != 3 || heavy != 2 {
+		t.Errorf("held %d, heavy %d; want 3 and 2", held, heavy)
+	}
+	if held, heavy := SlotsHeld(windows, nil); held != 0 || heavy != 0 {
+		t.Errorf("with no runs: held %d, heavy %d", held, heavy)
+	}
+}
+
 func TestNotes(t *testing.T) {
 	dir := t.TempDir()
 	if _, ok, err := ReadNote(dir, "waiting-since"); ok || err != nil {

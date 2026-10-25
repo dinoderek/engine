@@ -23,6 +23,8 @@ type Fleet struct {
 	DefaultHarness string
 	// Caps is each harness's max_sessions, across all hosts.
 	Caps map[string]int
+	// Heavy are the capabilities that make a task heavy.
+	Heavy []string
 	// Hosts are sorted by name.
 	Hosts []HostLoad
 }
@@ -33,6 +35,8 @@ type HostLoad struct {
 	Harnesses    []string
 	Capabilities []string
 	FreeSlots    int
+	// FreeHeavySlots is how many heavy sessions the host can start now.
+	FreeHeavySlots int
 	// Sessions counts the live sessions of each harness on the host.
 	Sessions map[string]int
 	// Live names the host's live windows.
@@ -44,16 +48,15 @@ type HostLoad struct {
 	Status hostops.Status
 }
 
-// load is a host's load from its status: its free slots, and its live
-// sessions by the harness their newest run names. A window with no run,
-// such as engine run's own, holds a slot but no harness's session.
+// load is a host's load from its status: its free slots, heavy and all, and
+// its live sessions by the harness their newest run names.
 func load(h hosts.Host, st hostops.Status, err error) HostLoad {
 	l := HostLoad{Name: h.Name, Harnesses: h.Harnesses, Capabilities: h.Capabilities, Sessions: map[string]int{}}
 	if err != nil {
 		l.Unreachable = err.Error()
 		return l
 	}
-	l.FreeSlots, l.Status = st.FreeSlots, st
+	l.FreeSlots, l.FreeHeavySlots, l.Status = st.FreeSlots, st.FreeHeavySlots, st
 	harness := map[string]string{}
 	for _, r := range st.Runs {
 		harness[r.Name] = r.Record.Harness
@@ -72,13 +75,35 @@ func load(h hosts.Host, st hostops.Status, err error) HostLoad {
 
 func (h HostLoad) has(capability string) bool { return slices.Contains(h.Capabilities, capability) }
 
-// free is how many slots the host has free now: none when it cannot be
-// read.
-func (h HostLoad) free() int {
+// free is how many slots the host has free now, and how many of them a heavy
+// task may take: none when it cannot be read.
+func (h HostLoad) free() slots {
 	if h.Unreachable != "" {
-		return 0
+		return slots{}
 	}
-	return max(0, h.FreeSlots)
+	all := max(0, h.FreeSlots)
+	return slots{all: all, heavy: min(all, max(0, h.FreeHeavySlots))}
+}
+
+// slots are a host's free slots as placement hands them out.
+type slots struct{ all, heavy int }
+
+// take is the slots left once a task starts.
+func (s slots) take(heavy bool) slots {
+	s.all--
+	if heavy {
+		s.heavy--
+	}
+	s.heavy = min(s.heavy, s.all)
+	return s
+}
+
+// left is how many tasks like this one the host can still start.
+func (s slots) left(heavy bool) int {
+	if heavy {
+		return s.heavy
+	}
+	return s.all
 }
 
 // host finds a host by name.
@@ -94,7 +119,7 @@ func (f Fleet) host(name string) (HostLoad, bool) {
 func (f Fleet) localFree() int {
 	for _, h := range f.Hosts {
 		if h.Name == f.Local {
-			return h.free()
+			return h.free().all
 		}
 	}
 	return 0
@@ -120,11 +145,11 @@ func (f Fleet) running() map[string]int {
 
 // place is step 3's placement: it walks the ready tasks in start order and
 // gives each the eligible host with the most free slots, then the fewest
-// capabilities, then the lowest name. A task no host can take now waits,
-// with the reason; one no host could take even when free is commented on
-// once.
+// capabilities, then the lowest name. A heavy task counts only a host's free
+// heavy slots. A task no host can take now waits, with the reason; one no
+// host could take even when free is commented on once.
 func place(v View, cands []tracker.Card) []Action {
-	free := map[string]int{}
+	free := map[string]slots{}
 	for _, h := range v.Fleet.Hosts {
 		free[h.Name] = h.free()
 	}
@@ -140,12 +165,13 @@ func place(v View, cands []tracker.Card) []Action {
 			acts = append(acts, Action{Kind: Wait, Ref: c.Ref, Text: fmt.Sprintf("%s is at its cap of %d sessions", harness, limit)})
 			continue
 		}
-		best, ok := pick(fits, free)
+		heavy := v.Fleet.heavy(c)
+		best, ok := pick(fits, free, heavy)
 		if !ok {
-			acts = append(acts, Action{Kind: Wait, Ref: c.Ref, Text: "no free slot on " + slotList(fits, free)})
+			acts = append(acts, Action{Kind: Wait, Ref: c.Ref, Text: "no free " + slotKind(heavy) + " on " + slotList(fits, free, heavy)})
 			continue
 		}
-		free[best.Name]--
+		free[best.Name] = free[best.Name].take(heavy)
 		running[harness]++
 		acts = append(acts, Action{Kind: StartTask, Ref: c.Ref, Host: best.Name, Text: "ready, on " + best.Name})
 	}
@@ -186,30 +212,42 @@ func (f Fleet) fits(c tracker.Card) (harness string, fits []HostLoad, why string
 	return harness, fits, ""
 }
 
-// pick is the host with the most free slots, then the fewest capabilities,
-// then the lowest name, among those with a free slot.
-func pick(fits []HostLoad, free map[string]int) (HostLoad, bool) {
-	open := slices.DeleteFunc(slices.Clone(fits), func(h HostLoad) bool { return free[h.Name] < 1 })
+// heavy reports whether the card requires a heavy capability.
+func (f Fleet) heavy(c tracker.Card) bool {
+	return slices.ContainsFunc(c.Requires, func(r string) bool { return slices.Contains(f.Heavy, r) })
+}
+
+// pick is the host with the most free slots a task like this one may take,
+// then the fewest capabilities, then the lowest name, among those with one.
+func pick(fits []HostLoad, free map[string]slots, heavy bool) (HostLoad, bool) {
+	open := slices.DeleteFunc(slices.Clone(fits), func(h HostLoad) bool { return free[h.Name].left(heavy) < 1 })
 	if len(open) == 0 {
 		return HostLoad{}, false
 	}
 	return slices.MinFunc(open, func(a, b HostLoad) int {
 		return cmp.Or(
-			cmp.Compare(free[b.Name], free[a.Name]),
+			cmp.Compare(free[b.Name].left(heavy), free[a.Name].left(heavy)),
 			cmp.Compare(len(a.Capabilities), len(b.Capabilities)),
 			cmp.Compare(a.Name, b.Name))
 	}), true
 }
 
+func slotKind(heavy bool) string {
+	if heavy {
+		return "heavy slot"
+	}
+	return "slot"
+}
+
 // slotList says, for each host that could take a task, why it has no slot.
-func slotList(fits []HostLoad, free map[string]int) string {
+func slotList(fits []HostLoad, free map[string]slots, heavy bool) string {
 	var parts []string
 	for _, h := range fits {
 		if h.Unreachable != "" {
 			parts = append(parts, h.Name+" (unreachable: "+h.Unreachable+")")
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("%s (%d free)", h.Name, free[h.Name]))
+		parts = append(parts, fmt.Sprintf("%s (%d free)", h.Name, free[h.Name].left(heavy)))
 	}
 	return strings.Join(parts, ", ")
 }
