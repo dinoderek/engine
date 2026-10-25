@@ -25,8 +25,7 @@ for rules.**
    - gofmt, go vet, golangci-lint, the docs check, and version pins that agree.
 
    Existing violations live in the shrink-only baselines
-   (`scripts/*-baseline.tsv`, all empty); a `//nolint` counts as one. Meet a
-   target with tests, a split function or moved code.
+   (`scripts/*-baseline.tsv`, all empty); a `//nolint` counts as one.
 4. **Hard stops.** Stop and ask the operator for:
    - the protocol's classes: product, data, security, contract, gates,
      outward or costly, drift, objectives, review, environment, repo rule,
@@ -72,8 +71,11 @@ Read these at the start of every session:
 
 ## Docs
 
-- **Header.** Every doc opens with one line, `> **Owns:** … **Not here:** …`,
-  so each fact lands in its owner. No load trigger: this index does that.
+- **The bar.** A persistent doc holds only what (1) the code an agent loads
+  anyway does not make obvious; (2) spans code locations an agent is
+  unlikely to load, typically to keep product or engineering behaviour
+  consistent; or (3) is a practice to follow. Cut the rest.
+- **Header.** Every doc opens with one line, `> **Owns:** … **Not here:** …`.
 - **Every link is a load trigger** ("if you are changing X, load Y"), never
   an unconditional "see also".
 - **One place per fact.** Cite a registry that is the source
@@ -81,14 +83,13 @@ Read these at the start of every session:
   `go.mod`); never restate it.
 - **Budgets.** Every doc has a word budget in `scripts/doc-budgets.tsv`;
   this file plus the always-load docs share about 4000 words. Over budget:
-  split behind a load trigger, or trim what repeats another doc or the code.
-- **No orphans.** A new persistent doc gets a row above, in the same PR.
+  split behind a load trigger, or cut what fails the bar.
 - **Keep the docs true.** A change to layout, layers, tests, gates or
-  versions updates its owning doc in the same PR.
+  versions updates its owning doc in the same PR. A new persistent doc gets
+  a row above.
 
-`./dev test docs-check` enforces these, except link wording, one place per
-fact and keeping docs true: those are yours and the reviewer's. `design/` is
-exempt from every doc rule.
+`./dev test docs-check` enforces these, except the bar, link wording, one
+place per fact and keeping docs true: those are yours and the reviewer's.
 
 ## Workflow: worktree to merge
 

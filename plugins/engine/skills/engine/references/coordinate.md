@@ -47,33 +47,29 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
 
    @mention the operator on the task with the stall and the session's last
    20 screen lines (`tmux capture-pane -p -S -20`, or the cloud session's
-   last message). Once per wait: skip it if your stall comment is newer than
-   the wait.
+   last message), once per wait.
 5. **Feature label.** Once a task has started, the feature's label is the
    first that holds: `engine:blocked` while any task is
    `engine:needs-human`; `engine:verifying` while only the acceptance task
-   is open; else `engine:executing`. Change it only when it differs.
+   is open; else `engine:executing`.
 6. **Dead sessions.** An open task with a claim state label (`running`,
    `needs-human`, `in-review`) whose session is dead gets `engine:failed` in
    place of that label, loses `engine:merging` if it holds the lock, and gets
    a comment saying so that @mentions the operator. Its worktree stays.
-7. **Reap.** A hands-off executor closes its own window after its report.
-   Close a window, or archive a cloud session, you started in hands-off
+7. **Reap.** Close a window, or archive a cloud session, you started in hands-off
    mode only when its task is closed, carries no `engine:` state label, and
-   the session has been waiting for 10 minutes. Leave a gated run's window
-   for the operator.
+   the session has been waiting for 10 minutes.
 8. **Done.** When the feature has sub-issues and all are closed, comment
    on the feature: each task with its PR, the acceptance result, the tasks still carrying
    `engine:ruling-review`, and the deviations. Set `engine:done`, close the
    feature as completed, and end the session.
 
-Log what each pass started, flagged, marked and closed. Move the feature's
-labels only as above. Executors own the task labels, except `engine:failed` and clearing a dead holder's `engine:merging`.
+Log each pass's actions. Move only the feature's labels, as above; executors
+own the task labels, except `engine:failed` and a dead holder's `engine:merging`.
 
 ## Native sessions
 
-With `native sessions`, each executor is a Claude Code cloud session, so no
-host, tmux or `hosts.toml` is involved.
+With `native sessions`, each executor is a Claude Code cloud session.
 
 - **Start** with the harness's create-session tool: the target repo as its
   source, permission mode `dontAsk`, title `<repo>-<task>`, environment
@@ -81,8 +77,7 @@ host, tmux or `hosts.toml` is involved.
   engine executor, hands-off mode. host=cloud run=<repo>-<task>-<UTC
   yyyymmddThhmmssZ> started=coordinator`.
 - **The environment** must give the session `GH_TOKEN` and an `engine` on
-  `PATH`, for the merge guard. Without them the executor stops
-  (**Environment**).
+  `PATH`, for the merge guard.
 - **Slots:** 3 live sessions at once, unless the operator says otherwise. A
   session whose task has closed holds no slot.
 - **Liveness:** the session's status. A failed or archived session is dead,

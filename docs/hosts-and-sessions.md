@@ -87,14 +87,6 @@ one. The other placeholders: `{name}` is the session name (`<repo>-<task>`),
 `{model}` and `{effort}` come from the tier, and `{clone}` is engine's clone of
 the repo.
 
-**Validation.** `internal/hosts` reads the file with a strict parser for the
-TOML subset above: tables, dotted keys, single-line strings, integers, arrays
-of strings, one-line inline tables and comments. It rejects anything else, an
-unknown key, a duplicate, and any broken rule on this page, and reports the
-first violation with its line number. A launch line must start with `{bin}`,
-contain `{model}` and use only the placeholders listed here. A host's `bin`
-names exactly the harnesses it runs. Every tier is mapped for every harness.
-
 ## Placement
 
 The coordinator places a ready task on a host that meets all of these:
@@ -206,7 +198,7 @@ hand and one started by the coordinator look the same.
 
 | From | How |
 | --- | --- |
-| Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. Targets the window by id. Detach with `Ctrl-b d`; the session keeps running. |
+| Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. |
 | Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
 | Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT or Codex apps, through Codex remote control. |
 
@@ -224,20 +216,11 @@ Each harness reaches the apps differently:
 
 ## tmux setup
 
-Engine owns the tmux session `engine` on each host, and creates it with its
-first window. It sets the options itself, on the session and on each window it
-opens, and never edits the host's `~/.tmux.conf` or tmux's global options:
-
-- on the session: `mouse on` and `history-limit 50000`;
-- on each window: `allow-rename off` and `automatic-rename off`, so agents
-  can't rename them; `window-size latest`, to fit whoever attached last; and
-  `remain-on-exit on`, so a crashed session's last screen stays readable.
-
-`pipe-pane` copies each window's output into its run directory, so the raw log
-outlives the tmux server. Engine opens a window on a placeholder command, sets
-the options and the pipe, then swaps in the task's command, so a command that
-fails at once still leaves its log and its screen. tmux reads `.` as a pane
-separator, so engine targets the windows it opens by id (`@3`), not by name.
+Engine owns the tmux session `engine` on each host. It sets its options on
+the session and on each window it opens, and never edits the host's
+`~/.tmux.conf` or tmux's global options. tmux reads `.` as a pane separator,
+so engine targets the windows it opens by id (`@3`), not by name. Windows stay after their command exits
+(`remain-on-exit`), so a dead session's last screen and exit stay readable.
 
 When engine has to type into a session, it sends the text with `send-keys -l`,
 then `Enter` as a separate call after a short delay. Input boxes can swallow a
@@ -245,10 +228,8 @@ newline that arrives with the text.
 
 ## Keeping hosts awake
 
-tmux survives a closed terminal, but not a sleeping machine. On a
-macOS host, each window engine opens starts `caffeinate -s -w <pid>` on its
-command's process: `-s` holds off sleep while on power, `-w` ends it with the
-command. A Linux host should not suspend at all.
+tmux survives a closed terminal, but not a sleeping machine. A macOS
+host holds off sleep per window, while on power. A Linux host should not suspend at all.
 
 ## Lifecycle
 
