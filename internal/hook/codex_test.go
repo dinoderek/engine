@@ -126,6 +126,25 @@ func TestMergeGuardReadsCodexShellEvents(t *testing.T) {
 	}
 }
 
+// An unattended Codex session's request is only logged: Codex asks the hook
+// before auto-review, and a deny would pre-empt the review.
+func TestPermissionLeavesAnUnattendedCodexRequestToAutoReview(t *testing.T) {
+	var out, errs, log bytes.Buffer
+	p := Permission{Out: &out, Err: &errs, Unattended: true, Codex: true, Log: &log, Now: at}
+	if code := p.Handle(strings.NewReader(codexEvent(t, "PermissionRequest"))); code != 0 || errs.Len() != 0 || out.Len() != 0 {
+		t.Fatalf("exit %d, out %q, stderr %q", code, out.String(), errs.String())
+	}
+	var entry Entry
+	if err := json.Unmarshal(log.Bytes(), &entry); err != nil {
+		t.Fatalf("log %q: %v", log.String(), err)
+	}
+	if entry.Tool != "Bash" || entry.Decision != AutoReview || !strings.Contains(string(entry.Input), "touch $HOME/codex-cap-probe.txt") {
+		t.Errorf("entry %+v", entry)
+	}
+}
+
+// The hook reads Codex's request as it reads Claude's: outside a Codex
+// session engine launched, an unattended request is denied.
 func TestPermissionHandlesCodexRequests(t *testing.T) {
 	var out, errs, log bytes.Buffer
 	p := Permission{Out: &out, Err: &errs, Unattended: true, Log: &log, Now: at}

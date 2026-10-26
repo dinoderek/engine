@@ -40,14 +40,24 @@ type Permission struct {
 	Log io.Writer
 	// Unattended is true when nobody watches the session.
 	Unattended bool
-	Now        time.Time
+	// Codex is true in a Codex session engine launched. Codex asks the hook
+	// before its auto-review, which decides without a person, so the hook
+	// leaves the request to it.
+	Codex bool
+	Now   time.Time
 }
 
+// AutoReview is the logged decision on a Codex request the hook leaves to
+// auto-review.
+const AutoReview = "left to auto-review"
+
 // Handle reads a Claude Code or Codex PermissionRequest, or a Claude Code
-// PermissionDenied, event from in. An unattended session's request is denied:
-// the decision goes to Out and the request to Log. In an attended session it
-// writes nothing, so the harness shows its prompt as usual. A PermissionDenied event (auto mode
-// refusing a call) is only logged. It returns the process exit code.
+// PermissionDenied, event from in. An unattended Claude session's request is
+// denied: the decision goes to Out and the request to Log. An unattended
+// Codex session's request is only logged, and auto-review decides. In an
+// attended session it writes nothing, so the harness shows its prompt as
+// usual. A PermissionDenied event (auto mode refusing a call) is only logged.
+// It returns the process exit code.
 func (p Permission) Handle(in io.Reader) int {
 	var e permissionEvent
 	if err := json.NewDecoder(in).Decode(&e); err != nil {
@@ -59,6 +69,10 @@ func (p Permission) Handle(in io.Reader) int {
 	case "PermissionRequest":
 		if !p.Unattended {
 			return 0
+		}
+		if p.Codex {
+			entry.Decision = AutoReview
+			break
 		}
 		entry.Decision = "deny"
 		if err := writeDeny(p.Out); err != nil {

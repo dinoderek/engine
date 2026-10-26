@@ -11,8 +11,9 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// hostsTOML is a host config with two slots on mac, and a host that runs
-// Codex only. Tests replace @BIN@ with the fake harness's path.
+// hostsTOML is a host config with two slots on mac, a host that runs Codex
+// only and one that runs Claude only. Tests replace @BIN@ with the fake
+// harness's path. Codex's launch line quotes {clone}, as the real one does.
 const hostsTOML = `default_harness = "claude"
 gb_per_session = 8
 reserve_gb = 8
@@ -26,7 +27,7 @@ tiers.light    = { model = "haiku-x",  effort = "medium" }
 
 [harness.codex]
 max_sessions = 2
-launch = "{bin} -m {model} -c model_reasoning_effort={effort}"
+launch = "{bin} -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
 tiers.deep     = { model = "sol", effort = "high" }
 tiers.standard = { model = "sol", effort = "medium" }
 tiers.light    = { model = "luna", effort = "medium" }
@@ -44,6 +45,13 @@ harnesses = ["codex"]
 ram_gb = 24
 capabilities = ["linux"]
 bin = { codex = "~/bin/codex" }
+
+[host.cl]
+address = "me@cl"
+harnesses = ["claude"]
+ram_gb = 24
+capabilities = ["linux"]
+bin = { claude = "~/bin/claude" }
 `
 
 // home is a temp home directory with the host config, the host file, the
@@ -103,6 +111,7 @@ type tmuxFake struct {
 	codes   map[string]string
 	screens map[string]string
 	fail    error // every list-windows fails
+	openErr error // new-session and new-window fail
 	command string
 	calls   []string
 }
@@ -118,6 +127,9 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 	case "list-windows":
 		return f.list(line)
 	case "new-session", "new-window":
+		if f.openErr != nil {
+			return "", f.openErr
+		}
 		return "@9 %9\n", nil
 	case "split-window":
 		return "%10\n", nil

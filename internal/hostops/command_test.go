@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -131,8 +132,12 @@ func TestSpawnReadsTheKickoffFromStdin(t *testing.T) {
 	if code != 0 || reply["window"] != "@9" || reply["name"] != "r-7" || reply["protocol"] != float64(Protocol) || reply["host"] != "mac" || !strings.Contains(tm.command, "s the kickoff") || strings.Contains(tm.command, "kickoff\n") {
 		t.Errorf("exit %d, reply %v, command %s", code, reply, tm.command)
 	}
-	if run, ok, err := session.LatestRun(h.dir, "r-7"); err != nil || !ok || !run.Record.Heavy {
-		t.Errorf("--heavy is not in run.json: %+v, %v, %v", run, ok, err)
+	if run, ok, err := session.LatestRun(h.dir, "r-7"); err != nil || !ok || !run.Record.Heavy || run.Record.Harness != Claude {
+		t.Errorf("--heavy or the default harness is not in run.json: %+v, %v, %v", run, ok, err)
+	}
+	if code, reply, _ := call(t, d, "k\n", append(slices.Clone(args), "--run-id", "r-7-other", "--harness", "gemini")...); code != 1 || reply["refused"] != true ||
+		!strings.Contains(reply["error"].(string), `unknown harness "gemini"`) {
+		t.Errorf("--harness: exit %d, reply %v", code, reply)
 	}
 	code, reply, _ = call(t, d, "", args...)
 	if msg, _ := reply["error"].(string); code != 1 || !strings.Contains(msg, "the kickoff is empty") {

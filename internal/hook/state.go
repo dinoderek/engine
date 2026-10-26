@@ -23,8 +23,8 @@ type stateEvent struct {
 // names are the ones the state file takes.
 type State struct {
 	Err io.Writer
-	// Unattended is true when nobody watches the session: its permission
-	// requests are denied, so one never leaves the session waiting.
+	// Unattended is true when nobody watches the session: auto-review decides
+	// its permission requests, so one never leaves the session waiting.
 	Unattended bool
 	// Write records a signal in the session's state file.
 	Write func(Signal) error

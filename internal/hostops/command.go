@@ -20,14 +20,16 @@ const Usage = `usage: engine host <op> --json
 ops, each printing one JSON object:
   sync-repo --repo <owner/repo>      sync engine's clone of a repo
   spawn --repo <owner/repo> --task <n> --mode hands-off|gated --model <m>
-        --effort <e> --run-id <id> [--tier <t>] [--feature <owner/repo#n>]
-        [--heavy]                    launch a session; the kickoff is on stdin
+        --effort <e> --run-id <id> [--harness claude|codex] [--tier <t>]
+        [--feature <owner/repo#n>] [--heavy]
+                                     launch a session; the kickoff is on stdin
   status                             windows, Claude sessions, newest runs, free
                                      slots and free heavy slots
   collect --run-id <id>              a run directory and its run.json
   release --name <repo>-<task> [--failed]
-                                     close a session's window and remove its
-                                     worktree, kept when --failed
+                                     close a session's window, remove its
+                                     worktree, kept when --failed, and delete
+                                     its Codex profile
 `
 
 // Envelope is what every reply carries.
@@ -107,6 +109,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		fs.IntVar(&req.Task, "task", 0, "")
 		fs.StringVar(&req.Feature, "feature", "", "")
 		fs.StringVar(&req.Mode, "mode", "", "")
+		fs.StringVar(&req.Harness, "harness", "", "")
 		fs.StringVar(&req.Tier, "tier", "", "")
 		fs.StringVar(&req.Model, "model", "", "")
 		fs.StringVar(&req.Effort, "effort", "", "")

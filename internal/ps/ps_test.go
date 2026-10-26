@@ -108,7 +108,7 @@ func (f *fake) source() Source {
 
 // win is a live window of a Claude session in the state status gives it.
 func win(name, state string) hostops.Window {
-	return hostops.Window{Name: name, ID: "@1", Alive: true, Harness: hostops.Harness, State: state}
+	return hostops.Window{Name: name, ID: "@1", Alive: true, Harness: hostops.Claude, State: state}
 }
 
 func deadWin(name string) hostops.Window { return hostops.Window{Name: name, ID: "@7"} }

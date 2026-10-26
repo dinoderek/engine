@@ -45,6 +45,9 @@ func (s SSH) SyncRepo(repo string) (hostops.Synced, error) {
 func (s SSH) Spawn(r hostops.SpawnRequest) (hostops.Spawned, error) {
 	args := []string{"--repo", r.Repo, "--task", strconv.Itoa(r.Task), "--mode", r.Mode,
 		"--model", r.Model, "--effort", r.Effort, "--run-id", r.RunID}
+	if r.Harness != "" {
+		args = append(args, "--harness", r.Harness)
+	}
 	if r.Tier != "" {
 		args = append(args, "--tier", r.Tier)
 	}

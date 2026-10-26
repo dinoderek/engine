@@ -81,7 +81,7 @@ func ReadStatus(d Deps) (Status, error) {
 		return Status{}, err
 	}
 	s := Status{Slots: host.Slots(), HeavySlots: host.HeavySlots(), Windows: []Window{}, Agents: []session.Agent{}, Runs: []Run{}}
-	if host.Runs(Harness) {
+	if host.Runs(Claude) {
 		s.listAgents(d, host)
 	}
 	runs, err := session.LatestRuns(d.Home)
@@ -116,7 +116,7 @@ func ReadStatus(d Deps) (Status, error) {
 }
 
 func (s *Status) listAgents(d Deps, host hosts.Host) {
-	bin, err := host.BinPath(Harness, d.Home)
+	bin, err := host.BinPath(Claude, d.Home)
 	if err == nil {
 		var agents []session.Agent
 		if agents, err = session.ListAgents(d.Exec, bin); err == nil && agents != nil {
@@ -132,7 +132,7 @@ func (s *Status) listAgents(d Deps, host hosts.Host) {
 // newest run launched. A harness with no probe leaves it unknown.
 func (s *Status) probe(w *Window, r session.Run) {
 	switch r.Record.Harness {
-	case Harness:
+	case Claude:
 		if s.AgentsError != "" {
 			return
 		}

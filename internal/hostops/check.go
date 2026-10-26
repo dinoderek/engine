@@ -49,14 +49,18 @@ type CheckResult struct {
 // OK reports whether an unattended session would run here without a prompt.
 func (r CheckResult) OK() bool { return r.Closed && r.Finished && len(r.Denied) == 0 }
 
-// Check launches a throwaway hands-off session in a scratch folder, with this
-// host's launch line at the light tier, and has it do what an executor does
-// that has needed a prompt before: read the skill, read a file it wrote in
-// /tmp, run gh and engine, and close its own window. It reports every
-// permission request, a stall, and a step left undone. Each run gets its own
-// run directory, which it leaves in place.
-func Check(d Deps, out io.Writer) (CheckResult, error) {
-	cfg, host, err := checkHost(d)
+// Check launches a throwaway hands-off session of the harness (Claude when
+// empty) in a scratch folder, with this host's launch line at the light tier,
+// and has it do what an executor does that has needed a prompt before: read
+// the skill, read a file it wrote in /tmp, run gh and engine, and close its
+// own window. It reports every permission request, a stall, and a step left
+// undone. Each run gets its own run directory, which it leaves in place.
+func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
+	h, err := harnessFor(d, harnessName, CheckName)
+	if err != nil {
+		return CheckResult{}, err
+	}
+	cfg, host, err := checkHost(d, h.Name())
 	if err != nil {
 		return CheckResult{}, err
 	}
@@ -69,21 +73,29 @@ func Check(d Deps, out io.Writer) (CheckResult, error) {
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		return CheckResult{}, err
 	}
-	if err := session.TrustFolder(session.ClaudeConfig(d.Getenv, d.Home), work); err != nil {
-		return CheckResult{}, fmt.Errorf("trust %s for Claude Code: %w", work, err)
+	if err := h.Trust(work); err != nil {
+		return CheckResult{}, err
 	}
+	defer func() {
+		if err := h.Untrust(); err != nil {
+			fmt.Fprintf(out, "could not remove the check's trust: %v\n", err)
+		}
+	}()
 	// A marker left by anyone else must not read as this session's.
 	marker := filepath.Join(checkTmp, "engine-"+runID)
 	if err := os.Remove(marker); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return CheckResult{}, err
 	}
 	defer func() { _ = os.Remove(marker) }()
-	line, err := cfg.LaunchLine(host, hosts.Launch{Harness: Harness, Tier: hosts.Light, Name: CheckName, Clone: work, Home: d.Home})
+	line, err := cfg.LaunchLine(host, hosts.Launch{Harness: h.Name(), Tier: hosts.Light, Name: CheckName, Clone: work, Home: d.Home})
 	if err != nil {
 		return CheckResult{}, err
 	}
 	kickoff := CheckKickoff(filepath.Join(session.PluginDir(d.Getenv, d.Home), "skills", "engine", "SKILL.md"), marker)
-	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(d, line, runDir, HandsOff, kickoff), Log: filepath.Join(runDir, session.PaneLog)}
+	if h.Name() == Codex {
+		kickoff = CodexCheckKickoff(marker)
+	}
+	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(d, h, launch{line, runDir, HandsOff, kickoff}), Log: filepath.Join(runDir, session.PaneLog)}
 	opened, err := d.Tmux.Open(w)
 	if err != nil {
 		return CheckResult{}, fmt.Errorf("open the tmux window: %w", err)
@@ -109,8 +121,8 @@ func Check(d Deps, out io.Writer) (CheckResult, error) {
 }
 
 // checkHost runs the refusals that apply without a task: the token, the
-// host config, the harness binary and a free window name.
-func checkHost(d Deps) (*hosts.Config, hosts.Host, error) {
+// host config, the harness and its binary, and a free window name.
+func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, error) {
 	if _, err := readToken(d.Home); err != nil {
 		return nil, hosts.Host{}, err
 	}
@@ -118,10 +130,7 @@ func checkHost(d Deps) (*hosts.Config, hosts.Host, error) {
 	if err != nil {
 		return nil, hosts.Host{}, err
 	}
-	if !host.Runs(Harness) {
-		return nil, hosts.Host{}, refuse("host %s does not run %s", host.Name, Harness)
-	}
-	if err := checkBin(host, d.Home); err != nil {
+	if err := checkHarness(host, harness, d.Home); err != nil {
 		return nil, hosts.Host{}, err
 	}
 	ok, err := d.Tmux.HasWindow(CheckName)
@@ -143,6 +152,19 @@ func CheckKickoff(skill, marker string) string {
 		"4. Run `engine version` with Bash. " +
 		"5. Run `echo done >> " + marker + "` with Bash. " +
 		"6. Run `cd \"$HOME\" && tmux kill-window -t \"$TMUX_PANE\"` with Bash. " +
+		"If a step is denied, skip it and go on."
+}
+
+// CodexCheckKickoff is a Codex check session's first message: Codex reads
+// files through its shell, and the skill comes from engine's Codex plugin.
+func CodexCheckKickoff(marker string) string {
+	return "This is engine's preflight check, not a task: do exactly these steps, in order, and nothing else. " +
+		"1. Read the SKILL.md of the engine plugin's engine skill. " +
+		"2. Run `echo ok > " + marker + "`, then `cat " + marker + "`. " +
+		"3. Run `gh api user --jq .login`. " +
+		"4. Run `engine version`. " +
+		"5. Run `echo done >> " + marker + "`. " +
+		"6. Run `cd \"$HOME\" && tmux kill-window -t \"$TMUX_PANE\"`. " +
 		"If a step is denied, skip it and go on."
 }
 
@@ -209,10 +231,10 @@ func readDenied(path string) ([]string, error) {
 	return lines, scan.Err()
 }
 
-// RunCheck runs the check, prints its report to out, and reports whether an
-// unattended session here would run without a prompt.
-func RunCheck(d Deps, out io.Writer) (bool, error) {
-	r, err := Check(d, out)
+// RunCheck runs the check of the harness, prints its report to out, and
+// reports whether an unattended session here would run without a prompt.
+func RunCheck(d Deps, harness string, out io.Writer) (bool, error) {
+	r, err := Check(d, harness, out)
 	if err != nil {
 		return false, err
 	}

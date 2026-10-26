@@ -65,20 +65,20 @@ func TestSSHCallsTheOpsWithTheirFlags(t *testing.T) {
 
 func TestSSHSpawnPassesTheKickoffOnStdin(t *testing.T) {
 	f := &sshFake{replies: []reply{{stdout: `{"name":"r-7","window":"@4","run_dir":"/runs/x","worktree":"/wt","branch":"b","attach":"tmux attach",` + envelope + "}"}}}
-	req := hostops.SpawnRequest{Repo: "o/r", Task: 7, Feature: "o/r" + "#" + "3", Mode: "hands-off", Tier: "deep",
+	req := hostops.SpawnRequest{Repo: "o/r", Task: 7, Feature: "o/r" + "#" + "3", Mode: "hands-off", Harness: "codex", Tier: "deep",
 		Model: "opus", Effort: "high", RunID: "r-7-1", Kickoff: "it's $HOME\nsecond line", Heavy: true}
 	got, err := f.ssh("me@box").Spawn(req)
 	if err != nil || got.Window != "@4" || got.RunDir != "/runs/x" || got.Branch != "b" {
 		t.Fatalf("got %+v, %v", got, err)
 	}
-	if want := `'engine' 'host' 'spawn' '--json' '--repo' 'o/r' '--task' '7' '--mode' 'hands-off' '--model' 'opus' '--effort' 'high' '--run-id' 'r-7-1' '--tier' 'deep' '--feature' 'o/r` + "#" + `3' '--heavy'`; f.line(0) != want {
+	if want := `'engine' 'host' 'spawn' '--json' '--repo' 'o/r' '--task' '7' '--mode' 'hands-off' '--model' 'opus' '--effort' 'high' '--run-id' 'r-7-1' '--harness' 'codex' '--tier' 'deep' '--feature' 'o/r` + "#" + `3' '--heavy'`; f.line(0) != want {
 		t.Errorf("remote command\n got %s\nwant %s", f.line(0), want)
 	}
 	if f.calls[0].stdin != req.Kickoff {
 		t.Errorf("stdin %q", f.calls[0].stdin)
 	}
 	f = &sshFake{replies: []reply{{stdout: `{"name":"r-7",` + envelope + "}"}}}
-	if _, err := f.ssh("me@box").Spawn(hostops.SpawnRequest{Repo: "o/r", Task: 7, Kickoff: "k"}); err != nil || strings.Contains(f.line(0), "--tier") || strings.Contains(f.line(0), "--feature") || strings.Contains(f.line(0), "--heavy") {
+	if _, err := f.ssh("me@box").Spawn(hostops.SpawnRequest{Repo: "o/r", Task: 7, Kickoff: "k"}); err != nil || strings.Contains(f.line(0), "--harness") || strings.Contains(f.line(0), "--tier") || strings.Contains(f.line(0), "--feature") || strings.Contains(f.line(0), "--heavy") {
 		t.Errorf("optional flags: %v, %s", err, f.line(0))
 	}
 }

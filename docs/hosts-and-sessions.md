@@ -131,16 +131,17 @@ it:
    default branch, refusing a branch on `origin`, or a local one with
    commits (one without is remade);
 3. makes the worktree trusted by its harness, so no trust dialog blocks the
-   start (`claude.md`, "Starting");
+   start (`claude.md` and `codex.md`, "Starting");
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
    so the repo's `AGENTS.md` loads;
 5. runs the host's launch line at the card's tier (default `standard`), with
-   the flags the harness adds at start (`claude.md`, "Starting"). Then `--` and
+   the flags the harness adds at start (the same sections). Then `--` and
    the kickoff, the session's first message: `Execute <owner/repo#n> with the
    engine executor, <mode> mode. Reviewer model: <deep model>. run=<run-id>
    tmux=engine:<name> rc=<name>`. `/bin/sh` first exports `GH_TOKEN` from the
    token file, off every command line, `ENGINE_RUN_DIR` (the run directory),
-   and `ENGINE_UNATTENDED=1` in hands-off mode;
+   `ENGINE_HARNESS` (the harness), and `ENGINE_UNATTENDED=1` in hands-off
+   mode;
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
 The checks run in `engine start`, which also picks the model, effort and
@@ -154,7 +155,7 @@ host's `status`; the host's own `spawn` refuses anything else, such as a
 missing harness binary.
 An unreachable host is an error, not a refusal. A host on another protocol
 is refused, naming `engine setup --host <name>` (`operator-setup.md`). Designed, not built:
-`--harness codex`.
+`--harness codex`, which the host's `spawn` op already takes.
 
 **Preflight:** `engine start --check [--host <name>]` opens a throwaway hands-off session,
 `engine-check`, at the light tier, that reads the skill, reads a file it
