@@ -141,8 +141,9 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    Control session). `/bin/sh` first exports `GH_TOKEN` from the
    token file, off every command line, `ENGINE_RUN_DIR` (the run directory),
    `ENGINE_HARNESS` (the harness), and `ENGINE_UNATTENDED=1` in hands-off
-   mode, which a Codex session joined to remote control gets on its command
-   line instead (`codex.md`, "Starting");
+   mode. A Codex session joined to remote control gets the `ENGINE_*`
+   variables on its command line instead, and the token from the daemon
+   (`codex.md`, "Starting");
 6. writes `run.json` (`telemetry.md`) and prints how to attach.
 
 The checks run in `engine start`, which also picks the model, effort and

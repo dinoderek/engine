@@ -90,11 +90,15 @@ func (c codex) unjoinable(run session.Runner, bin, line string) string {
 }
 
 // daemonState is the status `codex app-server daemon version` printed:
-// running when a daemon runs. A command that exits non-zero found none; one
-// that cannot run, or prints no status, is unreadable.
+// running when a daemon runs. A command that exits non-zero found none, and
+// the last line of its errors says why; one that cannot run, or prints no
+// status, is unreadable.
 func daemonState(out string, err error) string {
 	var exit *session.ExitError
 	if errors.As(err, &exit) {
+		if lines := strings.Split(strings.TrimSpace(exit.Stderr), "\n"); lines[len(lines)-1] != "" {
+			return "not running (" + strings.TrimSpace(lines[len(lines)-1]) + ")"
+		}
 		return "not running"
 	}
 	if err != nil {

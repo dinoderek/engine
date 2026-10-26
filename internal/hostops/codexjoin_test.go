@@ -118,6 +118,30 @@ func TestSpawnCodexJoins(t *testing.T) {
 	}
 }
 
+// A joined session's run.json names its worktree before the window opens,
+// since its hooks find their run by it, and names the window once open.
+func TestSpawnCodexJoinedRecordComesFirst(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	h.engineCodex(t)
+	h.fakeCodex(t)
+	runDir := filepath.Join(h.dir, ".local/share/engine/runs/r-7-20260102T030405Z")
+	var early session.Record
+	var earlyErr error
+	tm := &tmuxFake{}
+	tm.opening = func() { early, earlyErr = session.ReadRecord(runDir) }
+	got, err := Spawn(codexSpawnDeps(t, h, tm, connected(h.dir), nil), codexRequest(HandsOff))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if earlyErr != nil || early.Worktree != got.Worktree || early.Harness != Codex || early.Mode != HandsOff || early.Tmux != "engine:" {
+		t.Errorf("run.json as the window opened: %+v, %v", early, earlyErr)
+	}
+	if rec, err := session.ReadRecord(runDir); err != nil || rec.Tmux != "engine:@9" {
+		t.Errorf("run.json after: %+v, %v", rec, err)
+	}
+}
+
 // A gated joined session's commands are not marked unattended.
 func TestSpawnCodexJoinsGated(t *testing.T) {
 	h := newHome(t, "mac")
@@ -286,6 +310,9 @@ func TestCodexJoinedTrustIsRemoved(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(config); string(got) != before {
 		t.Errorf("trust left after a failed open:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(h.dir, ".local/share/engine/runs/r-7-20260102T030405Z", session.RecordFile)); !os.IsNotExist(err) {
+		t.Errorf("run.json left after a failed open: %v", err)
 	}
 
 	h = newHome(t, "mac")

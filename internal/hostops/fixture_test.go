@@ -114,8 +114,10 @@ type tmuxFake struct {
 	openErr error // new-session and new-window fail
 	// awakeErr fails the keep-awake job, which the fake's Tmux then starts.
 	awakeErr error
-	command  string
-	calls    []string
+	// opening runs as the window opens.
+	opening func()
+	command string
+	calls   []string
 }
 
 func (f *tmuxFake) run(_ string, args ...string) (string, error) {
@@ -129,6 +131,9 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 	case "list-windows":
 		return f.list(line)
 	case "new-session", "new-window":
+		if f.opening != nil {
+			f.opening()
+		}
 		if f.openErr != nil {
 			return "", f.openErr
 		}
