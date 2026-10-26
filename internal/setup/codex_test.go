@@ -237,6 +237,20 @@ func TestCodexReportsTheOperatorsOwnState(t *testing.T) {
 	}
 }
 
+func TestWithoutAnOperatorDaemonNothingIsRead(t *testing.T) {
+	codex := settledCodex(boxHome)
+	codex.operatorDaemon = false
+	r := newCodexRig(t, codex)
+	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "7. codex: ok (codex-cli 0.164.0)\n") {
+		t.Fatalf("open or noisy:\n%s", r.out.String())
+	}
+	for _, cmd := range r.box.commands {
+		if cmd == boxCodex+" remote-control --json" {
+			t.Errorf("ran %q, which starts a foreground server when no daemon runs", cmd)
+		}
+	}
+}
+
 func TestACodexCheckThatFailsLeavesCodexOpenAfterClaudePasses(t *testing.T) {
 	r := newCodexRig(t, settledCodex(boxHome))
 	r.checkCodex = func() (bool, error) { return false, nil }

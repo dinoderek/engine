@@ -156,6 +156,11 @@ differs from an embedded one (Codex 0.164.0):
   `--dangerously-bypass-hook-trust` on the TUI, or a review prompt stops the
   session.
 
+`codex remote-control --json` reads a daemon only when one runs in that Codex
+home; without one it serves in the foreground, with remote control on, until
+stopped. Read it only once `codex app-server daemon version` reports
+`running`.
+
 A daemon started with its own `CODEX_HOME` reads its own `config.toml` and
 `hooks.json`, and a TUI run with the same `CODEX_HOME` joins it with `--remote
 unix://`, so engine's sessions can have a config apart from the operator's

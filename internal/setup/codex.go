@@ -93,12 +93,24 @@ func (r *runner) codexBinary() (outcome, error) {
 		c.missing = true
 		return r.codexAbsent(res)
 	}
-	state, err := r.t.sh(c.run("remote-control --json"), "")
+	notes, err := r.operatorNotes()
 	if err != nil {
 		return outcome{}, err
 	}
-	detail := strings.Join(append([]string{res.firstLine()}, operatorNotes(state)...), "; ")
+	detail := strings.Join(append([]string{res.firstLine()}, notes...), "; ")
 	return passed(detail), nil
+}
+
+// operatorNotes reads the operator's own Codex daemon, when one runs. Without
+// one, `codex remote-control --json` does not read anything: it runs a server
+// in the foreground, with remote control on, until it is stopped.
+func (r *runner) operatorNotes() ([]string, error) {
+	up, err := r.t.sh(r.codex.run("app-server daemon version"), "")
+	if err != nil || up.code != 0 || !strings.Contains(up.out, `"running"`) {
+		return nil, err
+	}
+	state, err := r.t.sh(r.codex.run("remote-control --json"), "")
+	return operatorNotes(state), err
 }
 
 // codexAbsent is the open item for a binary that does not run: a link to the
