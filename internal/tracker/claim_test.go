@@ -29,8 +29,35 @@ func TestParseClaim(t *testing.T) {
 	if c != want {
 		t.Errorf("got  %+v\nwant %+v", c, want)
 	}
-	if c.HarnessName() != "claude-code" {
+	if c.HarnessName() != "claude" {
 		t.Errorf("harness name %q", c.HarnessName())
+	}
+}
+
+func TestHarnessName(t *testing.T) {
+	for _, tc := range []struct{ harness, want string }{
+		{"Claude Code 2.1.310 (model)", "claude"},
+		{"cLaUdE cOdE 2.1.310", "claude"},
+		{"claude-code 2.1.310", "claude"},
+		{"CLAUDE-CODE 2.1.310", "claude"},
+		{"Codex 0.164.0 (model)", "codex"},
+		{"cOdEx 0.164.0", "codex"},
+		{"codex-cli 0.164.0", "codex"},
+		{"CODEX-CLI 0.164.0", "codex"},
+		{"Other Agent 1.0", "Other"},
+		{"Claude Coder 1.0", "Claude"},
+		{"codex-cli-extra 1.0", "codex-cli-extra"},
+		{"", ""},
+	} {
+		t.Run(tc.harness, func(t *testing.T) {
+			claim := Claim{Harness: tc.harness}
+			if got := claim.HarnessName(); got != tc.want {
+				t.Errorf("HarnessName() = %q, want %q", got, tc.want)
+			}
+			if claim.Harness != tc.harness {
+				t.Errorf("raw harness changed to %q", claim.Harness)
+			}
+		})
 	}
 }
 
