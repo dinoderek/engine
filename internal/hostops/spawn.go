@@ -55,6 +55,7 @@ type spawn struct {
 	cfg    *hosts.Config
 	host   hosts.Host
 	h      harness
+	bin    string // the harness binary
 }
 
 // Spawn creates the task's worktree in engine's clone, which sync-repo has
@@ -93,7 +94,8 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 		return Spawned{}, fmt.Errorf("%w; %s", err, left)
 	}
 	log := filepath.Join(s.runDir, session.PaneLog)
-	command := launchCommand(d, s.h, launch{line, s.runDir, s.Mode, s.Kickoff})
+	remote, remoteWarning := s.remote(d)
+	command := launchCommand(d, s.h, launch{line, s.runDir, s.Mode, s.Kickoff, remote})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
 		if uerr := s.h.Untrust(); uerr != nil {
@@ -106,10 +108,25 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	}
 	out := Spawned{Name: s.name, Window: opened.ID, RunDir: s.runDir, Worktree: wt.Path, Branch: wt.Branch,
 		Attach: "tmux attach -t '=" + session.Name + ":" + opened.ID + "'"}
+	var warnings []string
 	if opened.AwakeErr != nil {
-		out.Warning = "the host may sleep while the session runs: " + opened.AwakeErr.Error()
+		warnings = append(warnings, "the host may sleep while the session runs: "+opened.AwakeErr.Error())
 	}
+	if remoteWarning != "" {
+		warnings = append(warnings, remoteWarning)
+	}
+	out.Warning = strings.Join(warnings, "; ")
 	return out, nil
+}
+
+// remote asks the harness whether the session can join the host's remote
+// control, when the caller lets sessions join. It only reads the daemon's
+// state.
+func (s spawn) remote(d Deps) (flags, warning string) {
+	if !d.JoinRemote {
+		return "", ""
+	}
+	return s.h.Remote(d.Exec, s.bin)
 }
 
 // checkSpawn runs spawn's refusals. It only reads files and tmux's window
@@ -129,7 +146,7 @@ func checkSpawn(d Deps, r SpawnRequest) (spawn, error) {
 	if s.cfg, s.host, err = openHost(d.Home); err != nil {
 		return spawn{}, err
 	}
-	if err := checkHarness(s.host, s.h.Name(), d.Home); err != nil {
+	if s.bin, err = checkHarness(s.host, s.h.Name(), d.Home); err != nil {
 		return spawn{}, err
 	}
 	taken, err := d.Tmux.HasWindow(s.name)

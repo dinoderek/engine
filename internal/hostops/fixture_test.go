@@ -112,8 +112,10 @@ type tmuxFake struct {
 	screens map[string]string
 	fail    error // every list-windows fails
 	openErr error // new-session and new-window fail
-	command string
-	calls   []string
+	// awakeErr fails the keep-awake job, which the fake's Tmux then starts.
+	awakeErr error
+	command  string
+	calls    []string
 }
 
 func (f *tmuxFake) run(_ string, args ...string) (string, error) {
@@ -133,6 +135,8 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 		return "@9 %9\n", nil
 	case "split-window":
 		return "%10\n", nil
+	case "run-shell":
+		return "", f.awakeErr
 	case "respawn-pane":
 		f.command = args[len(args)-1]
 	case "capture-pane":
@@ -157,7 +161,13 @@ func (f *tmuxFake) list(line string) (string, error) {
 	return strings.Join(out, "\n") + "\n", nil
 }
 
-func (f *tmuxFake) tmux() *session.Tmux { return &session.Tmux{Run: f.run, Bin: "tmux"} }
+func (f *tmuxFake) tmux() *session.Tmux {
+	t := &session.Tmux{Run: f.run, Bin: "tmux"}
+	if f.awakeErr != nil {
+		t.Awake = "caffeinate"
+	}
+	return t
+}
 
 // readOnly reports a tmux call that changes something.
 func (f *tmuxFake) readOnly(t *testing.T) {
