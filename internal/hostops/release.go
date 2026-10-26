@@ -18,12 +18,13 @@ type Released struct {
 	WorktreeKept bool   `json:"worktree_kept"`
 	// Note says what went wrong without failing the release: why a worktree
 	// was kept when the run had not failed, a run.json it could not read, or
-	// a Codex profile it could not delete.
+	// Codex trust it could not remove.
 	Note string `json:"note,omitempty"`
 }
 
 // Release closes the session's window if it is still open, deletes engine's
-// Codex profile for it, and removes the worktree of its newest run, unless
+// Codex profile for it and its folder's trust in engine's Codex config.toml,
+// and removes the worktree of its newest run, unless
 // the run failed: a failed run's worktree is kept for the operator. Removal
 // is git's plain `worktree remove`, which keeps a worktree with uncommitted
 // changes, and the branch always stays.
@@ -45,15 +46,15 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 		}
 		r.WindowClosed = true
 	}
-	// The profile goes whatever the harness: a spawn that failed before
-	// run.json was written may have left one.
-	if err := (codex{d: d, profile: session.CodexProfile(name)}).Untrust(); err != nil {
-		r.Note = err.Error()
+	run, ok, err := session.LatestRun(d.Home, name)
+	// Codex's trust goes whatever the harness: a spawn that failed before
+	// run.json was written may have left its profile.
+	if uerr := (codex{d: d, profile: session.CodexProfile(name)}).Untrust(run.Record.Worktree); uerr != nil {
+		r.Note = uerr.Error()
 	}
 	// An unreadable run.json fails the release only when no run of this
 	// session could be read; otherwise the newest readable one is released,
 	// and the note says what was skipped.
-	run, ok, err := session.LatestRun(d.Home, name)
 	if !ok || run.Record.Worktree == "" {
 		return r, err
 	}

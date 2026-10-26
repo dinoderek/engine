@@ -89,6 +89,7 @@ func (d Deps) HostClient(host hosts.Host, remoteHost bool) remote.Client {
 	}
 	return remote.Local{Deps: hostops.Deps{
 		Run: d.Run, Exec: d.Exec, Tmux: d.Tmux, Home: d.Home, Getenv: d.Getenv, Now: d.Now, BaseURL: d.BaseURL, Sleep: d.Sleep,
+		JoinRemote: true,
 	}}
 }
 

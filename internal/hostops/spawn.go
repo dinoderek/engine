@@ -90,15 +90,15 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	if err != nil {
 		return Spawned{}, fmt.Errorf("%w; %s", err, left)
 	}
-	if err := s.h.Trust(wt.Path); err != nil {
+	joined, joinWarning := s.join(d, line)
+	if err := s.h.Trust(wt.Path, clone.Path, joined); err != nil {
 		return Spawned{}, fmt.Errorf("%w; %s", err, left)
 	}
 	log := filepath.Join(s.runDir, session.PaneLog)
-	remote, remoteWarning := s.remote(d)
-	command := launchCommand(d, s.h, launch{line, s.runDir, s.Mode, s.Kickoff, remote})
+	command := launchCommand(d, s.h, launch{line: line, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
-		if uerr := s.h.Untrust(); uerr != nil {
+		if uerr := s.h.Untrust(wt.Path); uerr != nil {
 			left += "; " + uerr.Error()
 		}
 		return Spawned{}, fmt.Errorf("open the tmux window: %w; %s", err, left)
@@ -112,21 +112,20 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	if opened.AwakeErr != nil {
 		warnings = append(warnings, "the host may sleep while the session runs: "+opened.AwakeErr.Error())
 	}
-	if remoteWarning != "" {
-		warnings = append(warnings, remoteWarning)
+	if joinWarning != "" {
+		warnings = append(warnings, joinWarning)
 	}
 	out.Warning = strings.Join(warnings, "; ")
 	return out, nil
 }
 
-// remote asks the harness whether the session can join the host's remote
-// control, when the caller lets sessions join. It only reads the daemon's
-// state.
-func (s spawn) remote(d Deps) (flags, warning string) {
+// join asks the harness whether the session joins the host's remote
+// control, when the caller lets sessions join. It only reads.
+func (s spawn) join(d Deps, line string) (bool, string) {
 	if !d.JoinRemote {
-		return "", ""
+		return false, ""
 	}
-	return s.h.Remote(d.Exec, s.bin)
+	return s.h.Join(d.Exec, s.bin, line)
 }
 
 // checkSpawn runs spawn's refusals. It only reads files and tmux's window

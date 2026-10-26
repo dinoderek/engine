@@ -52,10 +52,7 @@ func trustFolder(config, dir string, check func(string) (fileStamp, error)) erro
 	if target, err := filepath.EvalSymlinks(config); err == nil {
 		config = target
 	}
-	keys := []string{dir}
-	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
-		keys = append(keys, real)
-	}
+	keys := trustKeys(dir)
 	for range trustAttempts {
 		data, before, err := readConfig(config)
 		if err != nil {

@@ -16,8 +16,9 @@ func TestCodexHome(t *testing.T) {
 	}
 }
 
-// The profile trusts the folder and its resolved path, readable by its owner
-// only, and goes again with nothing left.
+// The profile trusts the folder and its resolved path, makes the clone a
+// writable root, is readable by its owner only, and goes again with nothing
+// left.
 func TestCodexProfile(t *testing.T) {
 	root := t.TempDir()
 	real := filepath.Join(root, "real")
@@ -29,7 +30,7 @@ func TestCodexProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := filepath.Join(root, "codex")
-	if err := WriteCodexProfile(home, CodexProfile("r-7"), link); err != nil {
+	if err := WriteCodexProfile(home, CodexProfile("r-7"), link, "/c/o/r"); err != nil {
 		t.Fatal(err)
 	}
 	path := CodexProfilePath(home, "engine-r-7")
@@ -39,9 +40,12 @@ func TestCodexProfile(t *testing.T) {
 	}
 	resolved, _ := filepath.EvalSymlinks(link)
 	for _, dir := range []string{link, resolved} {
-		if !strings.Contains(string(data), "[projects."+tomlString(dir)+"]\ntrust_level = \"trusted\"\n") {
+		if !strings.Contains(string(data), "[projects."+TOMLString(dir)+"]\ntrust_level = \"trusted\"\n") {
 			t.Errorf("profile does not trust %s:\n%s", dir, data)
 		}
+	}
+	if !strings.HasSuffix(string(data), "\n[sandbox_workspace_write]\nwritable_roots = [\"/c/o/r\"]\n") {
+		t.Errorf("profile does not make the clone writable:\n%s", data)
 	}
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("mode %v, %v", info.Mode(), err)
@@ -58,7 +62,7 @@ func TestCodexProfile(t *testing.T) {
 }
 
 func TestCodexProfileRefusesABadName(t *testing.T) {
-	if err := WriteCodexProfile(t.TempDir(), "../x", "/w"); err == nil || !strings.Contains(err.Error(), `codex profile "../x"`) {
+	if err := WriteCodexProfile(t.TempDir(), "../x", "/w", "/c"); err == nil || !strings.Contains(err.Error(), `codex profile "../x"`) {
 		t.Errorf("got %v", err)
 	}
 }
@@ -70,8 +74,8 @@ func TestTomlString(t *testing.T) {
 		"tab\there": `"tab\u0009here"`,
 		"día/ü":     `"día/ü"`,
 	} {
-		if got := tomlString(in); got != want {
-			t.Errorf("tomlString(%q) = %s, want %s", in, got, want)
+		if got := TOMLString(in); got != want {
+			t.Errorf("TOMLString(%q) = %s, want %s", in, got, want)
 		}
 	}
 }
