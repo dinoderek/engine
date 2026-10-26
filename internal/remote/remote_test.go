@@ -22,7 +22,7 @@ func TestLocalRunsTheOps(t *testing.T) {
 		"collect":   func() error { _, err := l.Collect("none"); return err },
 		"release":   func() error { _, err := l.Release("-x", false); return err },
 		"check": func() error {
-			ok, err := l.Check(&bytes.Buffer{})
+			ok, err := l.Check("", &bytes.Buffer{})
 			if ok {
 				return errors.New("a check that cannot run passed")
 			}

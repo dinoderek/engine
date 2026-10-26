@@ -264,3 +264,63 @@ func TestALightTaskHeldBackForSlotsIsLogged(t *testing.T) {
 		t.Errorf("log:\n%s", strings.Join(w.log, "\n"))
 	}
 }
+
+// onCodex makes c a Codex card.
+func onCodex(c tracker.Card) tracker.Card {
+	_, tier, _ := tracker.ParseHarnessTier(c.Body)
+	c.Body = strings.Replace(c.Body, "## Harness / tier\n"+string(tier), "## Harness / tier\ncodex "+string(tier), 1)
+	return c
+}
+
+// Codex has its own cap across hosts, 2: two Codex cards start, on whichever
+// hosts have the most free slots, and a third waits though slots are free,
+// while a Claude card starts beside them.
+func TestCodexCardsHoldCodexToItsCap(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Planned},
+		onCodex(card(2, "standard")), onCodex(card(3, "standard")), onCodex(card(4, "standard")), card(5, "standard"))
+	twoHosts(w, 3, 3)
+	acts := passOf(t, w)
+	if want := []string{"2@devbox", "3@mac", "5@devbox"}; !slices.Equal(w.placed, want) {
+		t.Errorf("placed %v, want %v", w.placed, want)
+	}
+	if got, want := waits(acts), []string{"4: codex is at its cap of 2 sessions"}; !slices.Equal(got, want) {
+		t.Errorf("waits %q, want %q", got, want)
+	}
+	if len(w.comments[ref(4)]) != 0 {
+		t.Errorf("a card waiting for the cap was commented on: %q", w.comments[ref(4)])
+	}
+}
+
+// A running Codex session counts against Codex's cap, not Claude's: with
+// Claude capped at 1, two Codex cards start and the third waits for Codex.
+func TestARunningCodexSessionCountsAgainstCodexOnly(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Executing},
+		onCodex(card(2, "standard")), onCodex(card(3, "standard")), onCodex(card(4, "standard")))
+	twoHosts(w, 3, 3)
+	w.limit = 1 // claude's cap, which no card here uses
+	passOf(t, w)
+	if want := []string{"2@devbox", "3@mac"}; !slices.Equal(w.placed, want) {
+		t.Fatalf("placed %v, want %v", w.placed, want)
+	}
+	if got := waits(passOf(t, w)); !slices.Equal(got, []string{"4: codex is at its cap of 2 sessions"}) {
+		t.Errorf("second pass waits %q", got)
+	}
+}
+
+// A Codex card goes only to a host that runs Codex; with none, it is
+// commented on once, and a Claude card is placed regardless.
+func TestACodexCardWaitsForAHostThatRunsCodex(t *testing.T) {
+	w := newWorld(t, []string{"engine:feature", Planned}, onCodex(card(2, "standard")), card(3, "standard"))
+	twoHosts(w, 2, 2)
+	w.hosts[0].harnesses, w.hosts[1].harnesses = []string{"claude"}, []string{"claude"}
+	acts := passOf(t, w)
+	if want := []string{"3@devbox"}; !slices.Equal(w.placed, want) {
+		t.Errorf("placed %v, want %v", w.placed, want)
+	}
+	if got, want := waits(acts), []string{"2: no host can take it: devbox does not run codex; mac does not run codex"}; !slices.Equal(got, want) {
+		t.Errorf("waits %q, want %q", got, want)
+	}
+	if len(w.comments[ref(2)]) != 1 {
+		t.Errorf("the card was commented on %d times, want once: %q", len(w.comments[ref(2)]), w.comments[ref(2)])
+	}
+}

@@ -40,7 +40,7 @@ func runSetup(args []string, env Env) int {
 	}
 	d := setup.Deps{
 		Home: env.Home, Getenv: env.Getenv, Exec: exec, GH: env.Exec, Info: env.Build,
-		Check: func(out io.Writer) (bool, error) { return start.Check(startDeps(env), host, out) },
+		Check: func(out io.Writer) (bool, error) { return start.Check(startDeps(env), host, "", out) },
 	}
 	closed, err := setup.Run(host, d, env.Out)
 	if err != nil {

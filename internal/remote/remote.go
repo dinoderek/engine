@@ -16,10 +16,10 @@ type Client interface {
 	Status() (hostops.Status, error)
 	Collect(runID string) (hostops.Collected, error)
 	Release(name string, failed bool) (hostops.Released, error)
-	// Check runs the preflight check on the host, prints its report to out,
-	// and reports whether an unattended session there would run without a
-	// prompt.
-	Check(out io.Writer) (bool, error)
+	// Check runs the preflight check of the harness (Claude when empty) on
+	// the host, prints its report to out, and reports whether an unattended
+	// session there would run without a prompt.
+	Check(harness string, out io.Writer) (bool, error)
 }
 
 // Local is this host.
@@ -43,6 +43,6 @@ func (l Local) Release(name string, failed bool) (hostops.Released, error) {
 	return hostops.Release(l.Deps, name, failed)
 }
 
-func (l Local) Check(out io.Writer) (bool, error) {
-	return hostops.RunCheck(l.Deps, hostops.Claude, out)
+func (l Local) Check(harness string, out io.Writer) (bool, error) {
+	return hostops.RunCheck(l.Deps, harness, out)
 }

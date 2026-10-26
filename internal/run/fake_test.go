@@ -52,6 +52,8 @@ type executor struct {
 	dir     string
 	status  string
 	heavy   bool
+	// harness is the card's, or claude.
+	harness string
 }
 
 // fakeHost is a host of the fake world.
@@ -193,6 +195,19 @@ func (h fakeHost) heavySlots() int { return cmp.Or(h.heavy, h.slots) }
 // heavyCaps are the fake world's heavy capabilities.
 var heavyCaps = []string{"ios", "vm"}
 
+// harnessOf is the harness a session of r runs: its card's, else claude. A
+// session started outside the feature runs claude.
+func (w *world) harnessOf(r tracker.Ref) string {
+	for _, c := range w.feature.Tasks {
+		if c.Ref == r {
+			if h, _, err := tracker.ParseHarnessTier(c.Body); err == nil && h != "" {
+				return h
+			}
+		}
+	}
+	return hostops.Claude
+}
+
 // heavy reports whether r is a task of the feature that requires a heavy
 // capability. A session started outside the feature is not.
 func (w *world) heavy(r tracker.Ref) bool {
@@ -227,7 +242,7 @@ func (w *world) status(h fakeHost) hostops.Status {
 		if e.host != h.name || e.window.ID == "" {
 			continue
 		}
-		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead, Harness: hostops.Claude}
+		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead, Harness: e.harness}
 		if !e.window.Dead && h.agentsDown == "" {
 			agent := session.Agent{Name: e.window.Name, Status: e.status}
 			st.Agents = append(st.Agents, agent)
@@ -264,7 +279,7 @@ func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 	name := fmt.Sprintf("r-%d", r.Number)
 	w.nextID++
 	heavy := w.heavy(r)
-	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy, heavy: heavy,
+	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy, heavy: heavy, harness: w.harnessOf(r),
 		window: session.WindowInfo{ID: fmt.Sprintf("@%d", w.nextID), Name: name}}
 	// Another host's run directory is on that host.
 	dir, err := session.RunDir(w.hostHome(host), session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
@@ -278,7 +293,7 @@ func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 		mode = "gated"
 	}
 	return session.WriteRecord(dir, session.Record{RunID: filepath.Base(dir), Task: r.String(), Name: name,
-		Mode: mode, Heavy: heavy, Harness: "claude", Tmux: "engine:" + e.window.ID, Spawned: w.now})
+		Mode: mode, Heavy: heavy, Harness: e.harness, Tmux: "engine:" + e.window.ID, Spawned: w.now})
 }
 
 // Start refuses as engine start does: an unknown host, a window of that

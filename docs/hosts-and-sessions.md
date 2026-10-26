@@ -109,17 +109,17 @@ branch. It holds letters, digits, `_`, `.` and `-`, and does not start with
 
 ## Starting a session: `engine start`
 
-`engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated] [--host <name>]`
-launches a Claude session from any directory, and returns once it is up.
-`--mode` defaults to `hands-off`; `--tier` replaces the card's. With no
+`engine start <owner/repo#n> [--harness <name>] [--tier deep|standard|light] [--mode hands-off|gated] [--host <name>]`
+launches a session from any directory, and returns once it is up.
+`--mode` defaults to `hands-off`; `--harness` and `--tier` replace the card's. With no
 `--host` the session runs on this machine; `--host` names another machine in
 `hosts.toml` and starts it there over SSH.
 
 It first refuses, changing nothing, when: the token file, host file,
 `hosts.toml` or this host's entry is missing; the task is closed, has a task
 state label or an open blocker, or is standalone without `engine:approved`;
-the card's harness is unknown (as a misspelt tier is), not Claude, or not run
-on the host; the host lacks a capability in the card's `## Requires`, even when
+the harness (`--harness`, else the card's, else the default) is unknown (as a
+misspelt tier is) or not run on the host, or its binary is not executable; the host lacks a capability in the card's `## Requires`, even when
 named; its window exists; or no slot is free, or no heavy slot for a heavy
 task. Then
 it:
@@ -154,14 +154,17 @@ refusals, and reads the window and free slots, heavy ones too, from the
 host's `status`; the host's own `spawn` refuses anything else, such as a
 missing harness binary.
 An unreachable host is an error, not a refusal. A host on another protocol
-is refused, naming `engine setup --host <name>` (`operator-setup.md`). Designed, not built:
-`--harness codex`, which the host's `spawn` op already takes.
+is refused, naming `engine setup --host <name>` (`operator-setup.md`). A
+harness's cap across hosts is placement's alone, so `engine start` does not
+check it.
 
-**Preflight:** `engine start --check [--host <name>]` opens a throwaway hands-off session,
+**Preflight:** `engine start --check [--harness <name>] [--host <name>]` (Claude
+without `--harness`) opens a throwaway hands-off session,
 `engine-check`, at the light tier, that reads the skill, reads a file it
 wrote in `/tmp`, runs `gh` and `engine`, and closes its window. It exits 1,
 printing what it met, when the session had a permission request denied,
-stalled or skipped a step.
+stalled or skipped a step. A Codex check also needs the session's hooks to
+have written its state file (`codex.md`).
 
 **Other ways to start:** a session started any other way runs the same
 executor, creates its own worktree, and is reachable only where it was

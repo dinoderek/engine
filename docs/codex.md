@@ -5,8 +5,8 @@
 ## Launch
 
 A host lists `codex` in its `harnesses` and pins its `bin` (`hosts-and-sessions.md`).
-The host's `spawn` and check ops launch Codex when the caller names it;
-`engine start` and `engine start --check` run Claude only for now
+`engine start --harness codex`, or a card whose Harness is `codex`, launches
+it, and `engine start --check --harness codex` checks it
 (`hosts-and-sessions.md`, "Starting a session").
 The harness's launch line and tiers:
 
@@ -97,6 +97,15 @@ fails a Codex turn. `status` reads the file for a window whose newest run is
 Codex's. A missing or unreadable file is unknown, never dead, and so is
 `ended` while the window lives. Codex's `notify` is not used, because it holds
 a single program and other tools already claim it (Computer Use on the Mac).
+
+## Check
+
+`engine start --check --harness codex` is the Claude check
+(`hosts-and-sessions.md`) with Codex's kickoff, which reads files through the
+shell. A Codex check fails when its window does not close (the report shows the
+last screen, where a prompt would be), or a step is skipped, or the session's
+hooks wrote no `harness-state.json`: that file is the proof they ran. Requests
+left to auto-review are listed, and fail nothing.
 
 ## Apps
 
