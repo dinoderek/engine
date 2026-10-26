@@ -79,6 +79,8 @@ the token it started with: after rotating it, stop the daemon with
 `CODEX_HOME=~/.local/share/engine/codex codex app-server daemon stop` and
 rerun setup; the same after a reboot, which stops the daemon. Setup reports the operator's own remote-control errors and ignored
 config keys, and fixes none.
+After setting up a Codex host, complete "Codex app pairing" below for each
+device that will control it.
 
 **Claude's one-time prompts.** Nobody is there to answer them in an engine
 window. When the preflight finds one, run `claude --permission-mode auto
@@ -99,6 +101,58 @@ checkout that enables the plugin, it updates the project's copy instead.
   coordinator's host and the phone's SSH app go in every other machine's
   `authorized_keys`;
 - on macOS, Remote Login turned on.
+
+## Codex app pairing
+
+Repeat this for **each Codex host and each controlling device**: the desktop
+app and the phone need separate pairings. Signing in and starting a connected
+daemon do not pair a device. Engine's Codex home has its own registration,
+apart from the operator's personal Codex home, even on the same machine.
+
+1. **Generate a fresh code on the target host**, after `engine setup`.
+   Use the host's pinned Codex binary from `hosts.toml`; these examples assume
+   `~/.local/bin/codex`:
+
+   ```bash
+   CODEX_HOME="$HOME/.local/share/engine/codex" \
+     "$HOME/.local/bin/codex" remote-control pair --json
+   ```
+
+   For another host, run it there over SSH. The quotes keep `$HOME` on the
+   target host:
+
+   ```bash
+   ssh <address> \
+     'CODEX_HOME="$HOME/.local/share/engine/codex" "$HOME/.local/bin/codex" remote-control pair --json'
+   ```
+
+   The reply contains `manualPairingCode`, `pairingCode`, `environmentId` and
+   `expiresAt`. A successful pairing consumes the code: generate another for
+   the next device, and replace an expired code. The QR and manual forms are
+   alternatives for the same pairing, not one code per form.
+2. **Desktop.** In the controlling ChatGPT/Codex desktop app, open
+   **Settings → Connections → Control other devices → Add**, and enter
+   `manualPairingCode`. Complete any account verification. The controlling
+   app and host must use the same ChatGPT account and workspace.
+3. **Phone.** Generate a new code on that host. Build
+   `https://chatgpt.com/codex/pair?pairing_code=<URL-encoded pairingCode>`
+   using the full `pairingCode`, not `manualPairingCode`. Open that link on
+   the phone, or render that exact URL as a QR code and scan it with the
+   phone's Camera. Follow the link into ChatGPT and approve the connection,
+   using the same account and workspace. Do not save live codes or links in
+   docs or tickets.
+4. **Identify and verify.** In the desktop connection's menu, use **Rename**
+   for a clear display name such as `engine-<host>`; this is the app's label,
+   separate from the daemon's reported name. On each controlling device,
+   select that connection and confirm a known engine-launched Codex thread
+   is visible. A running or connected daemon alone does not prove app access.
+   If a thread is missing, check the selected connection and the Codex home
+   used to generate the code: a personal daemon can advertise the same
+   machine name while holding different threads and pairings.
+
+If the app's pairing interface changes, use the current
+[CLI pairing reference](https://learn.chatgpt.com/docs/cli/reference#codex-remote-control)
+and [remote connections guide](https://learn.chatgpt.com/docs/remote-connections).
 
 ## A remote devbox
 
