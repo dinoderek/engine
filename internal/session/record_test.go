@@ -42,8 +42,8 @@ func TestRecord(t *testing.T) {
 	}
 }
 
-// A rewrite replaces run.json in one rename, readable by everyone, and leaves
-// no temporary file beside it.
+// A rewrite replaces run.json, readable by everyone, and leaves no temporary
+// file beside it.
 func TestWriteRecordReplacesTheFile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "run")
 	for _, tmux := range []string{"engine:", "engine:@9"} {
