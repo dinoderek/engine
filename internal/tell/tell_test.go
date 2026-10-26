@@ -191,10 +191,14 @@ func TestTellTypesIntoACodexWindow(t *testing.T) {
 			tm := &tmux{windows: "@1 %1 0 other\n@4 %9 0 r-7\n"}
 			d, g, slept := rig(t, "mac", claimHost, tm)
 			g.harness = "codex-cli 0.163.0 (gpt-6.1-sol)"
-			d.Run = (&ssh{tm: tm}).run
+			conn := &ssh{tm: tm}
+			d.Run = conn.run
 			told, err := Tell("r-7", "Use the second option.", d)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if remote := claimHost == "devbox"; told.Host != claimHost || (len(conn.calls) > 0) != remote {
+				t.Errorf("host %q, ssh calls %q", told.Host, conn.calls)
 			}
 			want := [][]string{{"send-keys", "-t", "=engine:@4", "-l", Pointer(commentURL)}, {"send-keys", "-t", "=engine:@4", "Enter"}}
 			if told.Window != "engine:@4" || fmt.Sprint(tm.keys) != fmt.Sprint(want) || len(*slept) != 1 || (*slept)[0] <= 0 {

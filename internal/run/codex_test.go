@@ -48,6 +48,11 @@ func TestACodexSessionAtAHardStopIsNotFlagged(t *testing.T) {
 		}
 		w.sleep(CheckEvery)
 	}
+	// The wait was seen, and deliberately not flagged.
+	dir, _ := w.NoteDir(ref(2))
+	if _, seen, err := session.ReadNote(dir, WaitingSince); err != nil || !seen {
+		t.Errorf("waiting-since note: seen %v, err %v", seen, err)
+	}
 	if c := w.comments[ref(2)]; len(c) != 0 {
 		t.Errorf("comments %q", c)
 	}
