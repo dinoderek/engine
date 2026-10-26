@@ -119,10 +119,9 @@ It first refuses, changing nothing, when: the token file, host file,
 `hosts.toml` or this host's entry is missing; the task is closed, has a task
 state label or an open blocker, or is standalone without `engine:approved`;
 the harness (`--harness`, else the card's, else the default) is unknown (as a
-misspelt tier is) or not run on the host, or its binary is not executable; the host lacks a capability in the card's `## Requires`, even when
-named; its window exists; or no slot is free, or no heavy slot for a heavy
-task. Then
-it:
+misspelt tier is) or not run on the host, or its binary is not executable;
+the host lacks a capability in the card's `## Requires`, even when named; its
+window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
 
 1. syncs engine's clone (`operator-setup.md`, "Machine user"): clones it over
    HTTPS on first use, fetches, and leaves it at the remote's default branch;
@@ -138,7 +137,8 @@ it:
    the flags the harness adds at start (the same sections). Then `--` and
    the kickoff, the session's first message: `Execute <owner/repo#n> with the
    engine executor, <mode> mode. Reviewer model: <deep model>. run=<run-id>
-   tmux=engine:<name> rc=<name>`. `/bin/sh` first exports `GH_TOKEN` from the
+   tmux=engine:<name> rc=<name>` (`rc=none` for Codex, which has no Remote
+   Control session). `/bin/sh` first exports `GH_TOKEN` from the
    token file, off every command line, `ENGINE_RUN_DIR` (the run directory),
    `ENGINE_HARNESS` (the harness), and `ENGINE_UNATTENDED=1` in hands-off
    mode;
@@ -191,7 +191,7 @@ hand and one started by the coordinator look the same.
 | --- | --- |
 | Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. |
 | Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
-| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT or Codex apps, through Codex remote control. |
+| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: not yet; a session engine starts runs embedded (`codex.md`, "Apps"). |
 
 Clients share one window: everyone sees the same screen and can type.
 

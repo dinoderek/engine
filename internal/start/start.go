@@ -409,13 +409,6 @@ func (p *plan) checkStatus(d Deps) error {
 	return nil
 }
 
-// Kickoff is the first message of the session: the executor's kickoff line,
-// plus the values its claim comment records.
-func Kickoff(task tracker.Ref, mode, reviewer, runID, name string) string {
-	return fmt.Sprintf("Execute %s with the engine executor, %s mode. Reviewer model: %s. run=%s tmux=%s:%s rc=%s",
-		task, mode, reviewer, runID, session.Name, name, name)
-}
-
 // launch has the host sync engine's clone, then spawn the session with the
 // model, effort and kickoff decided here.
 func (p plan) launch(d Deps) (Started, error) {
@@ -449,7 +442,7 @@ func (p plan) spawnRequest(runID string) hostops.SpawnRequest {
 	r := hostops.SpawnRequest{
 		Repo: p.repo.String(), Task: p.opts.Ref.Number, Mode: p.opts.Mode, Harness: p.harness, Tier: string(p.tier),
 		Model: p.model.Model, Effort: p.model.Effort, RunID: runID, Heavy: p.heavy,
-		Kickoff: Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name),
+		Kickoff: Kickoff(p.opts.Ref, KickoffArgs{Mode: p.opts.Mode, Reviewer: p.reviewer, RunID: runID, Name: p.name, RC: remoteControl(p.harness, p.name)}),
 	}
 	if p.task.Parent != nil {
 		r.Feature = p.task.Parent.String()

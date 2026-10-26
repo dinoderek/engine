@@ -297,6 +297,9 @@ func TestHarnessFromTheCardOrTheFlag(t *testing.T) {
 			if r.Harness != c.want || r.Model != c.model || r.Effort != c.effort {
 				t.Errorf("spawn request %+v, want %s on %s at %s", r, c.want, c.model, c.effort)
 			}
+			if wantRC := map[string]string{"claude": " rc=r-7", "codex": " rc=none"}[c.want]; !strings.HasSuffix(r.Kickoff, wantRC) {
+				t.Errorf("kickoff %q does not end in %q", r.Kickoff, wantRC)
+			}
 			if want := "Reviewer model: " + map[string]string{"claude": "opus-x", "codex": "sol"}[c.want]; !strings.Contains(r.Kickoff, want) {
 				t.Errorf("kickoff %q lacks %q", r.Kickoff, want)
 			}
