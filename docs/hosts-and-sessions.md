@@ -160,8 +160,8 @@ is refused, naming `engine setup --host <name>` (`operator-setup.md`). Designed,
 **Preflight:** `engine start --check [--host <name>]` opens a throwaway hands-off session,
 `engine-check`, at the light tier, that reads the skill, reads a file it
 wrote in `/tmp`, runs `gh` and `engine`, and closes its window. It exits 1,
-printing what it met, when the session hit a permission request, stalled or
-skipped a step.
+printing what it met, when the session had a permission request denied,
+stalled or skipped a step.
 
 **Other ways to start:** a session started any other way runs the same
 executor, creates its own worktree, and is reachable only where it was

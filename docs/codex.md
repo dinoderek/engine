@@ -102,4 +102,6 @@ a single program and other tools already claim it (Computer Use on the Mac).
 ## Apps
 
 The host runs the remote-control app-server (`codex remote-control start`),
-and the session's TUI connects to it with `--remote`.
+and a TUI joins it with `--remote`. A session engine launches runs embedded,
+because of its profile ("Starting"), so it does not join the app-server and
+the apps do not show it.

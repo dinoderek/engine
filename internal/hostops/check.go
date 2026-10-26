@@ -41,10 +41,17 @@ type CheckResult struct {
 	Screen string
 	// Finished is true when the session did every step.
 	Finished bool
-	// Denied are the permission requests and auto-mode refusals the
-	// session met, one line each.
+	// Denied are the permission requests the hook denied and the auto-mode
+	// refusals the session met, one line each.
 	Denied []string
+	// Reviewed are the Codex permission requests the hook left to
+	// auto-review, which decided them without a prompt.
+	Reviewed []string
 }
+
+// autoReview is the decision the permission hook logs for a request it left
+// to Codex's auto-review (hook.AutoReview; hostops cannot import hook).
+const autoReview = "left to auto-review"
 
 // OK reports whether an unattended session would run here without a prompt.
 func (r CheckResult) OK() bool { return r.Closed && r.Finished && len(r.Denied) == 0 }
@@ -114,7 +121,7 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	}
 	data, _ := os.ReadFile(marker)
 	r.Finished = strings.Contains(string(data), "done")
-	if r.Denied, err = readDenied(filepath.Join(runDir, session.PermissionLog)); err != nil {
+	if r.Denied, r.Reviewed, err = readPermissions(filepath.Join(runDir, session.PermissionLog)); err != nil {
 		return r, err
 	}
 	return r, nil
@@ -202,17 +209,17 @@ func find(windows []session.WindowInfo, id string) (session.WindowInfo, bool) {
 	return session.WindowInfo{}, false
 }
 
-// readDenied reads permissions.jsonl, if any, as one line per entry.
-func readDenied(path string) ([]string, error) {
+// readPermissions reads permissions.jsonl, if any, as one line per entry:
+// the denials, and apart from them the requests left to auto-review.
+func readPermissions(path string) (denied, reviewed []string, err error) {
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() { _ = f.Close() }()
-	var lines []string
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
 		var e struct {
@@ -220,15 +227,19 @@ func readDenied(path string) ([]string, error) {
 			Input                         json.RawMessage
 		}
 		if err := json.Unmarshal(scan.Bytes(), &e); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
+			return nil, nil, fmt.Errorf("%s: %w", path, err)
 		}
 		line := fmt.Sprintf("%s %s: %s", e.Tool, e.Input, e.Decision)
 		if e.Reason != "" {
 			line += " (" + e.Reason + ")"
 		}
-		lines = append(lines, line)
+		if e.Decision == autoReview {
+			reviewed = append(reviewed, line)
+		} else {
+			denied = append(denied, line)
+		}
 	}
-	return lines, scan.Err()
+	return denied, reviewed, scan.Err()
 }
 
 // RunCheck runs the check of the harness, prints its report to out, and
@@ -253,6 +264,12 @@ func ReportCheck(out io.Writer, r CheckResult) {
 	fmt.Fprintf(out, "%s no permission request was denied\n", mark[len(r.Denied) == 0])
 	for _, l := range r.Denied {
 		fmt.Fprintf(out, "     %s\n", l)
+	}
+	if len(r.Reviewed) > 0 {
+		fmt.Fprintln(out, "     auto-review decided, without a prompt:")
+		for _, l := range r.Reviewed {
+			fmt.Fprintf(out, "     %s\n", l)
+		}
 	}
 	if !r.OK() {
 		fmt.Fprintf(out, "an unattended session here would stop; see %s\n", r.RunDir)

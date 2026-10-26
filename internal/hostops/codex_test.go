@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -198,6 +199,34 @@ func TestCheckCodex(t *testing.T) {
 	}
 	if _, err := Check(d, "gemini", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "unknown harness") {
 		t.Errorf("unknown harness: %v", err)
+	}
+}
+
+// A request the hook left to auto-review is no denial: auto-review decided
+// it without a prompt, so the check passes and lists it apart.
+func TestCheckCodexAutoReviewIsNoDenial(t *testing.T) {
+	f := &checkTmux{openPolls: 1}
+	d, h, _ := checkDeps(t, f)
+	h.fakeCodex(t)
+	f.act = func() {
+		runDir := filepath.Join(d.Home, ".local/share/engine/runs", checkRun)
+		write(t, filepath.Join(runDir, session.PermissionLog),
+			`{"event":"PermissionRequest","tool":"Bash","input":{"command":"tmux kill-window"},"decision":"`+hook.AutoReview+`"}`+"\n", 0o600)
+		write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600)
+	}
+	r, err := Check(d, Codex, &bytes.Buffer{})
+	if err != nil || !r.OK() || len(r.Denied) != 0 || len(r.Reviewed) != 1 {
+		t.Fatalf("result %+v, %v", r, err)
+	}
+	var report bytes.Buffer
+	ReportCheck(&report, r)
+	for _, want := range []string{"ok   no permission request was denied", "auto-review decided", `Bash {"command":"tmux kill-window"}: ` + hook.AutoReview} {
+		if !strings.Contains(report.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, report.String())
+		}
+	}
+	if strings.Contains(report.String(), "FAIL") || strings.Contains(report.String(), "would stop") {
+		t.Errorf("report:\n%s", report.String())
 	}
 }
 
