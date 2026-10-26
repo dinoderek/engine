@@ -200,6 +200,9 @@ func TestRunCheckPrintsTheReportAndItsVerdict(t *testing.T) {
 	if ok, err := RunCheck(d, "", &out); !ok || err != nil || !strings.Contains(out.String(), "ok   the session did every step") {
 		t.Errorf("a clean check: %v, %v\n%s", ok, err, out.String())
 	}
+	if !strings.Contains(out.String(), "this takes about a minute\n") || strings.Contains(out.String(), "few minutes") {
+		t.Errorf("the progress line gives the wrong duration:\n%s", out.String())
+	}
 	stalled := &checkTmux{openPolls: 1 << 30}
 	d, _, _ = checkDeps(t, stalled)
 	out.Reset()
