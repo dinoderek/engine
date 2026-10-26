@@ -53,7 +53,8 @@ with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex (`codex login`). Setup copies the Mac's
 engine commit and Claude plugin version to the other hosts, so update both here
 first. Setup installs the Codex plugin only into engine's own Codex home, and
-sessions run from the host's own: install it there by hand on each Codex host,
+embedded sessions that cannot join engine's daemon use the host's own: install
+it there by hand on each Codex host,
 with `codex plugin marketplace add dinoderek/engine` and `codex plugin add
 engine@engine`. Setup prints these when the plugin is missing there.
 

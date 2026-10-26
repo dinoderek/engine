@@ -282,8 +282,8 @@ func (r *runner) engineCodexPlugin() (string, bool, error) {
 }
 
 // codexPluginStep installs engine's plugin into engine's Codex home, and
-// checks the operator's, which sessions still launch with and whose hooks
-// report their state. Setup leaves the operator's home alone: it prints the
+// checks the operator's for embedded sessions, whose hooks report their state.
+// Setup leaves the operator's home alone: it prints the
 // install for the operator to run.
 func (r *runner) codexPluginStep() (outcome, error) {
 	c := r.codex
@@ -302,7 +302,7 @@ func (r *runner) codexPluginStep() (outcome, error) {
 		return res, nil
 	}
 	install := c.run("plugin marketplace add "+engineRepo) + " && " + c.run("plugin add "+pluginID)
-	return open("the Codex plugin is not installed in the operator's Codex home, which sessions still launch with", r.t.onHost(install, false)), nil
+	return open("the Codex plugin is not installed in the operator's Codex home, which embedded sessions use when they cannot join engine's daemon", r.t.onHost(install, false)), nil
 }
 
 // installEnginePlugin installs engine's plugin from this repo's marketplace

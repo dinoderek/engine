@@ -111,7 +111,7 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.authLink, c.userAuth = "", false }},
 		{"engine's home rejects the login", "9. codex home: OPEN (engine's Codex home is not signed in)", "", "login'",
 			func(c *codexState) { c.loginBroken = true }},
-		{"the operator's home lacks the plugin", "10. codex plugin: OPEN", "not installed in the operator's Codex home",
+		{"the operator's home lacks the plugin", "10. codex plugin: OPEN", "not installed in the operator's Codex home, which embedded sessions use when they cannot join engine's daemon",
 			"ssh dev@box '" + boxCodex + " plugin marketplace add dinoderek/engine && " + boxCodex + " plugin add engine@engine'",
 			func(c *codexState) { c.userPlugin = "" }},
 		{"the marketplace is unreachable", "10. codex plugin: OPEN", "codex plugin marketplace add dinoderek/engine failed: marketplace unreachable",
