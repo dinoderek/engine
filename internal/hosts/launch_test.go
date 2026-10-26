@@ -82,6 +82,25 @@ func TestLaunchLineFailures(t *testing.T) {
 	}
 }
 
+// {clone} sits inside quotes in Codex's launch line, so a clone path that is
+// not a plain word fails; a launch line without {clone} takes any.
+func TestLaunchLineNeedsAPlainClone(t *testing.T) {
+	c, err := Parse(docExample(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mac := c.Hosts["mac"]
+	for _, clone := range []string{"/home/my user/r", `/c/"]x`, "/c/$(x)"} {
+		_, err := c.LaunchLine(mac, Launch{Harness: "codex", Tier: Light, Name: "r-1", Clone: clone, Home: "/home/me"})
+		if err == nil || !strings.Contains(err.Error(), "not a plain word") {
+			t.Errorf("codex, clone %q: %v", clone, err)
+		}
+	}
+	if _, err := c.LaunchLine(mac, Launch{Harness: "claude", Tier: Light, Name: "r-1", Clone: "/home/my user/r", Home: "/home/me"}); err != nil {
+		t.Errorf("claude: %v", err)
+	}
+}
+
 func TestBinPath(t *testing.T) {
 	h := Host{Name: "mac", Bin: map[string]string{"claude": "~/bin/claude", "codex": "/usr/bin/codex", "x": "bin/x"}}
 	cases := map[string]string{"claude": "/home/me/bin/claude", "codex": "/usr/bin/codex"}

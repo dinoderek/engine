@@ -28,13 +28,6 @@ const (
 	Gated    = "gated"
 )
 
-// Harness is the only harness the ops launch.
-const Harness = "claude"
-
-// Codex is a harness whose sessions status can read, from the state file its
-// hooks write to the run directory.
-const Codex = "codex"
-
 // Deps are the outside world: the CLIs, the home directory, the environment
 // and the clock. Tests replace each one.
 type Deps struct {
@@ -87,14 +80,18 @@ func openHost(home string) (*hosts.Config, hosts.Host, error) {
 	return cfg, host, nil
 }
 
-// checkBin refuses a host whose harness binary is not an executable file.
-func checkBin(host hosts.Host, home string) error {
-	bin, err := host.BinPath(Harness, home)
+// checkHarness refuses a host that does not run the harness, or whose
+// harness binary is not an executable file.
+func checkHarness(host hosts.Host, harness, home string) error {
+	if !host.Runs(harness) {
+		return refuse("host %s does not run %s", host.Name, harness)
+	}
+	bin, err := host.BinPath(harness, home)
 	if err != nil {
 		return refuse("%v", err)
 	}
 	if info, err := os.Stat(bin); err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
-		return refuse("%s is not an executable %s binary (hosts.toml, host %s, bin)", bin, Harness, host.Name)
+		return refuse("%s is not an executable %s binary (hosts.toml, host %s, bin)", bin, harness, host.Name)
 	}
 	return nil
 }

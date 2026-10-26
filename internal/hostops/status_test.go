@@ -43,8 +43,8 @@ func TestStatus(t *testing.T) {
 	}
 	at := fixedNow()
 	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Harness: Codex, Spawned: at})
-	newest := writeRun(t, h, session.Record{RunID: "r-1-b", Name: "r-1", Harness: Harness, Spawned: at.Add(time.Hour)})
-	other := writeRun(t, h, session.Record{RunID: "r-2-a", Name: "r-2", Harness: Harness, Spawned: at})
+	newest := writeRun(t, h, session.Record{RunID: "r-1-b", Name: "r-1", Harness: Claude, Spawned: at.Add(time.Hour)})
+	other := writeRun(t, h, session.Record{RunID: "r-2-a", Name: "r-2", Harness: Claude, Spawned: at})
 	d := Deps{Tmux: tm.tmux(), Home: h.dir,
 		Exec: agentsFake(`[{"pid":1,"name":"r-1","status":"busy"},{"pid":2,"name":"r-2","status":"waiting","waitingFor":"a permission"}]`, nil)}
 	got, err := ReadStatus(d)
@@ -57,15 +57,15 @@ func TestStatus(t *testing.T) {
 		// Only a session that is not working shows its screen; a signal
 		// leaves no exit code. The newest run picks the probe.
 		Windows: []Window{
-			{Name: "r-1", ID: "@1", Alive: true, Harness: Harness, State: session.StateWorking},
-			{Name: "r-2", ID: "@2", Alive: true, Harness: Harness, State: session.StateWaiting, WaitingFor: "a permission", Screen: "Allow this read?"},
+			{Name: "r-1", ID: "@1", Alive: true, Harness: Claude, State: session.StateWorking},
+			{Name: "r-2", ID: "@2", Alive: true, Harness: Claude, State: session.StateWaiting, WaitingFor: "a permission", Screen: "Allow this read?"},
 			{Name: "r-3", ID: "@3", ExitCode: &two, Screen: "Error: not logged in"},
 			{Name: "r-4", ID: "@4"},
 		},
 		Agents: []session.Agent{{PID: 1, Name: "r-1", Status: "busy"}, {PID: 2, Name: "r-2", Status: "waiting", WaitingFor: "a permission"}},
 		Runs: []Run{
-			{Name: "r-1", Dir: newest, Record: session.Record{RunID: "r-1-b", Name: "r-1", Harness: Harness, Spawned: at.Add(time.Hour)}},
-			{Name: "r-2", Dir: other, Record: session.Record{RunID: "r-2-a", Name: "r-2", Harness: Harness, Spawned: at}},
+			{Name: "r-1", Dir: newest, Record: session.Record{RunID: "r-1-b", Name: "r-1", Harness: Claude, Spawned: at.Add(time.Hour)}},
+			{Name: "r-2", Dir: other, Record: session.Record{RunID: "r-2-a", Name: "r-2", Harness: Claude, Spawned: at}},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -77,7 +77,7 @@ func TestStatus(t *testing.T) {
 func TestStatusWithoutClaudeAgents(t *testing.T) {
 	h := newHome(t, "mac")
 	tm := &tmuxFake{windows: []string{"@1 %1 0 r-1"}, screens: map[string]string{"@1": "a screen"}}
-	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Harness: Harness, Spawned: fixedNow()})
+	writeRun(t, h, session.Record{RunID: "r-1-a", Name: "r-1", Harness: Claude, Spawned: fixedNow()})
 	got, err := ReadStatus(Deps{Tmux: tm.tmux(), Home: h.dir, Exec: agentsFake("", errors.New("not signed in"))})
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestStatusWithoutClaudeAgents(t *testing.T) {
 	// Nothing says the session is working, so its state is unknown and its
 	// screen is shown.
 	if w := got.Windows[0]; !strings.Contains(got.AgentsError, "not signed in") || len(got.Agents) != 0 ||
-		w.Harness != Harness || w.State != "" || w.Screen != "a screen" || got.FreeSlots != 1 {
+		w.Harness != Claude || w.State != "" || w.Screen != "a screen" || got.FreeSlots != 1 {
 		t.Errorf("status %+v", got)
 	}
 }

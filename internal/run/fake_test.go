@@ -227,7 +227,7 @@ func (w *world) status(h fakeHost) hostops.Status {
 		if e.host != h.name || e.window.ID == "" {
 			continue
 		}
-		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead, Harness: hostops.Harness}
+		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead, Harness: hostops.Claude}
 		if !e.window.Dead && h.agentsDown == "" {
 			agent := session.Agent{Name: e.window.Name, Status: e.status}
 			st.Agents = append(st.Agents, agent)

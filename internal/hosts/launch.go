@@ -45,7 +45,8 @@ func (h Host) BinPath(harness, home string) (string, error) {
 // LaunchLine expands the harness's launch line for host h into a shell
 // command. Every value is quoted for the shell unless it is a plain word, so
 // a placeholder that stands as its own word stays one argument. A placeholder
-// inside quotes in the launch line gets no such protection.
+// inside quotes in the launch line gets no such protection, so {clone}, which
+// Codex's line quotes, must expand to a plain word.
 func (c *Config) LaunchLine(h Host, l Launch) (string, error) {
 	harness, ok := c.Harnesses[l.Harness]
 	if !ok {
@@ -64,6 +65,10 @@ func (c *Config) LaunchLine(h Host, l Launch) (string, error) {
 	bin, err := h.BinPath(l.Harness, l.Home)
 	if err != nil {
 		return "", err
+	}
+	if strings.Contains(harness.Launch, "{clone}") && !plainWord.MatchString(l.Clone) {
+		return "", fmt.Errorf("the clone path %q is not a plain word, which {clone} needs: "+
+			"keep the home directory's path to letters, digits and _./:=@%%+,-", l.Clone)
 	}
 	r := strings.NewReplacer(
 		"{bin}", ShellWord(bin),

@@ -24,6 +24,8 @@ func TestPermissionHook(t *testing.T) {
 		{"unattended, no run directory", map[string]string{"ENGINE_UNATTENDED": "1"}, true, false, ""},
 		{"unattended, missing run directory", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": filepath.Join(dir, "gone")}, true, false, "open the permission log"},
 		{"attended", map[string]string{"ENGINE_RUN_DIR": dir}, false, false, ""},
+		{"unattended Codex", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir, "ENGINE_HARNESS": "codex"}, false, true, ""},
+		{"unattended Claude", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir, "ENGINE_HARNESS": "claude"}, true, true, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

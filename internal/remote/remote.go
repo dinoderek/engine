@@ -43,4 +43,6 @@ func (l Local) Release(name string, failed bool) (hostops.Released, error) {
 	return hostops.Release(l.Deps, name, failed)
 }
 
-func (l Local) Check(out io.Writer) (bool, error) { return hostops.RunCheck(l.Deps, out) }
+func (l Local) Check(out io.Writer) (bool, error) {
+	return hostops.RunCheck(l.Deps, hostops.Claude, out)
+}

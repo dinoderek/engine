@@ -29,7 +29,7 @@ const (
 )
 
 // Harness is the only harness engine start launches.
-const Harness = hostops.Harness
+const Harness = hostops.Claude
 
 // stateLabels are the task states that mean the task is taken or finished
 // badly: a task carrying one is not started again.

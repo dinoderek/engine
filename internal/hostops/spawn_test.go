@@ -66,7 +66,7 @@ func TestSpawn(t *testing.T) {
 }
 
 // TestLaunchCommand pins the window's command: the token from its file, the
-// run directory, the unattended mark in hands-off mode only, the Claude
+// run directory, the harness, the unattended mark in hands-off mode only, the Claude
 // config directory, the caller's model, and the kickoff after --.
 func TestLaunchCommand(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "cfg dir")
@@ -84,6 +84,7 @@ func TestLaunchCommand(t *testing.T) {
 		}
 		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `
 		script += `export ENGINE_RUN_DIR=` + filepath.Join(h.dir, ".local/share/engine/runs/r-7-20260102T030405Z") + ` && `
+		script += `export ENGINE_HARNESS=claude && `
 		if c.mode == HandsOff {
 			script += `export ENGINE_UNATTENDED=1 && `
 		} else {

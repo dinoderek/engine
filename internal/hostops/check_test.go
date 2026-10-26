@@ -78,7 +78,7 @@ func TestCheckPasses(t *testing.T) {
 	d, h, sleeps := checkDeps(t, f)
 	f.act = func() { write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600) }
 	var out bytes.Buffer
-	r, err := Check(d, &out)
+	r, err := Check(d, "", &out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestCheckReportsAStallAndDenials(t *testing.T) {
 			`{"event":"PermissionRequest","tool":"Read","input":{"file_path":"/opt/x"},"decision":"deny"}`+"\n"+
 				`{"event":"PermissionDenied","tool":"Bash","input":{"command":"rm"},"decision":"denied by auto mode","reason":"[Destruction]"}`+"\n", 0o600)
 	}
-	r, err := Check(d, &bytes.Buffer{})
+	r, err := Check(d, "", &bytes.Buffer{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestCheckRefusals(t *testing.T) {
 			}
 			return "", nil
 		}
-		if _, err := Check(d, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "a check is running") {
+		if _, err := Check(d, "", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "a check is running") {
 			t.Errorf("got %v", err)
 		}
 	})
@@ -145,7 +145,7 @@ func TestCheckRefusals(t *testing.T) {
 		if err := os.Remove(filepath.Join(h.dir, ".config/engine/github-token")); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Check(d, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "token") {
+		if _, err := Check(d, "", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "token") {
 			t.Errorf("got %v", err)
 		}
 	})
@@ -155,7 +155,7 @@ func TestCheckRefusals(t *testing.T) {
 		f.act = func() {
 			write(t, filepath.Join(d.Home, ".local/share/engine/runs", checkRun, session.PermissionLog), "{", 0o600)
 		}
-		if _, err := Check(d, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "permissions.jsonl") {
+		if _, err := Check(d, "", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "permissions.jsonl") {
 			t.Errorf("got %v", err)
 		}
 	})
@@ -165,7 +165,7 @@ func TestCheckIgnoresAStaleMarker(t *testing.T) {
 	f := &checkTmux{}
 	d, _, _ := checkDeps(t, f)
 	write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600)
-	r, err := Check(d, &bytes.Buffer{})
+	r, err := Check(d, "", &bytes.Buffer{})
 	if err != nil || r.Finished || r.OK() {
 		t.Errorf("result %+v, %v", r, err)
 	}
@@ -174,7 +174,7 @@ func TestCheckIgnoresAStaleMarker(t *testing.T) {
 func TestCheckStopsWaitingForADeadWindow(t *testing.T) {
 	f := &checkTmux{dead: true, screen: "Error: not logged in"}
 	d, _, sleeps := checkDeps(t, f)
-	r, err := Check(d, &bytes.Buffer{})
+	r, err := Check(d, "", &bytes.Buffer{})
 	if err != nil || r.Closed || *sleeps != 1 || r.Screen != "Error: not logged in" || !f.killed {
 		t.Errorf("result %+v, %v, sleeps %d, killed %v", r, err, *sleeps, f.killed)
 	}
@@ -184,7 +184,7 @@ func TestCheckClosesTheWindowWhenPollingFails(t *testing.T) {
 	f := &checkTmux{listErr: errors.New("tmux died")}
 	d, _, _ := checkDeps(t, f)
 	f.act = func() { write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\n", 0o600) }
-	if _, err := Check(d, &bytes.Buffer{}); err == nil || !f.killed {
+	if _, err := Check(d, "", &bytes.Buffer{}); err == nil || !f.killed {
 		t.Errorf("err %v, killed %v", err, f.killed)
 	}
 	if _, err := os.Stat(filepath.Join(checkTmp, "engine-"+checkRun)); !os.IsNotExist(err) {
@@ -197,19 +197,19 @@ func TestRunCheckPrintsTheReportAndItsVerdict(t *testing.T) {
 	d, _, _ := checkDeps(t, f)
 	f.act = func() { write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600) }
 	var out bytes.Buffer
-	if ok, err := RunCheck(d, &out); !ok || err != nil || !strings.Contains(out.String(), "ok   the session did every step") {
+	if ok, err := RunCheck(d, "", &out); !ok || err != nil || !strings.Contains(out.String(), "ok   the session did every step") {
 		t.Errorf("a clean check: %v, %v\n%s", ok, err, out.String())
 	}
 	stalled := &checkTmux{openPolls: 1 << 30}
 	d, _, _ = checkDeps(t, stalled)
 	out.Reset()
-	if ok, err := RunCheck(d, &out); ok || err != nil || !strings.Contains(out.String(), "would stop") {
+	if ok, err := RunCheck(d, "", &out); ok || err != nil || !strings.Contains(out.String(), "would stop") {
 		t.Errorf("a stalled check: %v, %v\n%s", ok, err, out.String())
 	}
 	if err := os.Remove(filepath.Join(d.Home, ".config/engine/github-token")); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := RunCheck(d, &bytes.Buffer{}); ok || !isRefusal(err) {
+	if ok, err := RunCheck(d, "", &bytes.Buffer{}); ok || !isRefusal(err) {
 		t.Errorf("a check that cannot run: %v, %v", ok, err)
 	}
 }

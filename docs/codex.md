@@ -5,8 +5,10 @@
 ## Launch
 
 A host lists `codex` in its `harnesses` and pins its `bin` (`hosts-and-sessions.md`).
-Engine does not start Codex sessions yet (`hosts-and-sessions.md`, "Starting a
-session"). The harness's launch line and tiers:
+The host's `spawn` and check ops launch Codex when the caller names it;
+`engine start` and `engine start --check` run Claude only for now
+(`hosts-and-sessions.md`, "Starting a session").
+The harness's launch line and tiers:
 
 ```toml
 [harness.codex]
@@ -18,7 +20,28 @@ tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 ```
 
 `{model}` and `{effort}` come from the tier. `{clone}` is engine's clone of
-the repo.
+the repo. It sits inside quotes, so it must expand to a plain word: engine's
+clone paths are, under a home directory whose path is one, and a launch line
+with `{clone}` fails otherwise.
+
+## Starting
+
+`spawn` writes engine's profile for the session,
+`$CODEX_HOME/engine-<repo>-<task>.config.toml` (`~/.codex` without
+`CODEX_HOME`), which trusts the worktree and its resolved path. After the
+launch line come `-p engine-<repo>-<task>`, which layers that profile on the
+user's config, `--dangerously-bypass-hook-trust`, then `--` and the kickoff.
+`release` deletes the profile. The window also exports `ENGINE_HARNESS=codex`.
+
+- **Folder trust.** The profile holds it: a session starts without the
+  trust prompt, and the user's `config.toml` is untouched. A `-c
+  'projects."<path>".trust_level=…'` does not hold it; the prompt still shows.
+  A profile makes Codex run embedded, without the shared app-server.
+- **Hook trust.** Codex runs a hook only once its hash is trusted, and
+  otherwise asks for a review first, which would stop an unattended start.
+  Engine-launched sessions bypass that, as Claude sessions run a repo's hooks
+  once engine trusts the folder. The bypass is per invocation, and covers every
+  enabled hook.
 
 ## Installing the skill
 
@@ -28,8 +51,9 @@ permission` and `engine hook pre-tool-use` on their events. The repo's
 `.agents/plugins/marketplace.json` lists it. `codex plugin marketplace add
 dinoderek/engine` then `codex plugin add engine@engine` install it. The two
 manifests carry one version: the versions lane fails when they differ.
-Codex runs a plugin's hooks only once they are reviewed and trusted: review
-them in the first session after an install and after each update.
+In a session engine did not launch, Codex runs a plugin's hooks only once
+they are reviewed and trusted: review them in the first such session after an
+install and after each update.
 
 ## Permission mode
 
@@ -45,15 +69,20 @@ The sandbox needs two exceptions for executors:
   (`sandbox_workspace_write.writable_roots`), because a worktree's git
   metadata lives in the main clone's `.git/worktrees/`, outside the worktree.
 
-All Codex settings are passed per session with `-c`. The host's own
-`~/.codex/config.toml` is never edited.
+All Codex settings are passed per session, with `-c` or the session's
+profile. The host's own `~/.codex/config.toml` is never edited.
 
 ## Guards
 
 `engine hook pre-tool-use` and `engine hook permission` read Codex's events as
 they read Claude's (`claude.md`, "Hooks"): Codex's shell
-call is a `Bash` tool call with the same `tool_input.command`, and its
-`PermissionRequest` takes the same `deny` decision. The guards behave the same.
+call is a `Bash` tool call with the same `tool_input.command`. The merge guard
+behaves the same.
+
+Codex sends `PermissionRequest` before auto-review, so a `deny` there would
+pre-empt the review. With `ENGINE_UNATTENDED=1` and `ENGINE_HARNESS=codex`,
+the permission hook only logs the request, as `left to auto-review`, and
+auto-review, which never prompts, decides.
 
 ## Session signals
 
@@ -72,4 +101,6 @@ a single program and other tools already claim it (Computer Use on the Mac).
 ## Apps
 
 The host runs the remote-control app-server (`codex remote-control start`),
-and the session's TUI connects to it with `--remote`.
+and a TUI joins it with `--remote`. A session engine launches runs embedded,
+because of its profile ("Starting"), so it does not join the app-server and
+the apps do not show it.

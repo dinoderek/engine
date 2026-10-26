@@ -27,8 +27,8 @@ commands:
   version                   print the engine version
   labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the merge guard, for Claude Code and Codex: reads the event on stdin
-  hook permission           deny and log permission requests in unattended sessions
-                            (Claude Code and Codex)
+  hook permission           log permission requests in unattended sessions, and deny
+                            Claude Code's (Codex's auto-review decides its own)
   hook state                record a Codex session's state from its hook event
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
@@ -257,7 +257,8 @@ func hostDeps(env Env) hostops.Deps {
 // permissionHook runs the permission hook, logging to the run directory that
 // engine start exported, when there is one.
 func permissionHook(env Env) int {
-	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: env.Getenv(session.UnattendedVar) == "1", Now: env.Now()}
+	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: env.Getenv(session.UnattendedVar) == "1",
+		Codex: env.Getenv(session.HarnessVar) == hostops.Codex, Now: env.Now()}
 	if dir := env.Getenv(session.RunDirVar); dir != "" {
 		f, err := os.OpenFile(filepath.Join(dir, session.PermissionLog), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {

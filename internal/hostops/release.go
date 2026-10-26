@@ -17,14 +17,16 @@ type Released struct {
 	Worktree     string `json:"worktree,omitempty"`
 	WorktreeKept bool   `json:"worktree_kept"`
 	// Note says what went wrong without failing the release: why a worktree
-	// was kept when the run had not failed, or a run.json it could not read.
+	// was kept when the run had not failed, a run.json it could not read, or
+	// a Codex profile it could not delete.
 	Note string `json:"note,omitempty"`
 }
 
-// Release closes the session's window if it is still open, and removes the
-// worktree of its newest run, unless the run failed: a failed run's worktree
-// is kept for the operator. Removal is git's plain `worktree remove`, which
-// keeps a worktree with uncommitted changes, and the branch always stays.
+// Release closes the session's window if it is still open, deletes engine's
+// Codex profile for it, and removes the worktree of its newest run, unless
+// the run failed: a failed run's worktree is kept for the operator. Removal
+// is git's plain `worktree remove`, which keeps a worktree with uncommitted
+// changes, and the branch always stays.
 func Release(d Deps, name string, failed bool) (Released, error) {
 	if !nameRe.MatchString(name) {
 		return Released{}, refuse("session name %q: use letters, digits, _, . and -, not starting with -", name)
@@ -43,6 +45,11 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 		}
 		r.WindowClosed = true
 	}
+	// The profile goes whatever the harness: a spawn that failed before
+	// run.json was written may have left one.
+	if err := (codex{d: d, profile: session.CodexProfile(name)}).Untrust(); err != nil {
+		r.Note = err.Error()
+	}
 	// An unreadable run.json fails the release only when no run of this
 	// session could be read; otherwise the newest readable one is released,
 	// and the note says what was skipped.
@@ -51,7 +58,7 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 		return r, err
 	}
 	if err != nil {
-		r.Note = err.Error()
+		r.Note = strings.TrimPrefix(r.Note+"; "+err.Error(), "; ")
 	}
 	if _, err := os.Stat(run.Record.Worktree); errors.Is(err, fs.ErrNotExist) {
 		return r, nil
