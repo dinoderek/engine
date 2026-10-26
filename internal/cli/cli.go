@@ -255,37 +255,37 @@ func hostDeps(env Env) hostops.Deps {
 	return hostops.Deps{Run: env.Run, Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
 }
 
-// permissionHook runs the permission hook, logging to the run directory that
-// engine start exported, when there is one.
+// permissionHook runs the permission hook, logging to the run directory of
+// the session's run, when there is one.
 func permissionHook(env Env) int {
-	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: env.Getenv(session.UnattendedVar) == "1",
-		Codex: env.Getenv(session.HarnessVar) == hostops.Codex, Now: env.Now()}
-	if dir := env.Getenv(session.RunDirVar); dir != "" {
-		f, err := os.OpenFile(filepath.Join(dir, session.PermissionLog), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	run, in := findHookRun(env)
+	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: run.unattended, Codex: run.harness == hostops.Codex, Now: env.Now()}
+	if run.dir != "" {
+		f, err := os.OpenFile(filepath.Join(run.dir, session.PermissionLog), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			fmt.Fprintln(env.Err, "engine hook: open the permission log:", err)
 		} else {
 			h.Log = f
-			code := h.Handle(env.In)
+			code := h.Handle(in)
 			if err := f.Close(); err != nil {
 				fmt.Fprintln(env.Err, "engine hook: close the permission log:", err)
 			}
 			return code
 		}
 	}
-	return h.Handle(env.In)
+	return h.Handle(in)
 }
 
-// stateHook records the session's state in the run directory that engine
-// start exported. Outside an engine run there is none, and it does nothing.
+// stateHook records the session's state in the run directory of the session's
+// run. Outside an engine run there is none, and it does nothing.
 func stateHook(env Env) int {
-	dir := env.Getenv(session.RunDirVar)
-	if dir == "" {
+	run, in := findHookRun(env)
+	if run.dir == "" {
 		return 0
 	}
-	h := hook.State{Err: env.Err, Unattended: env.Getenv(session.UnattendedVar) == "1"}
+	h := hook.State{Err: env.Err, Unattended: run.unattended}
 	h.Write = func(sig hook.Signal) error {
-		return session.WriteHarnessState(dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID})
+		return session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID})
 	}
-	return h.Handle(env.In)
+	return h.Handle(in)
 }
