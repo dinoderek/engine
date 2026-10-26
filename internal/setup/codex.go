@@ -307,7 +307,7 @@ func (r *runner) codexPluginStep() (outcome, error) {
 func (r *runner) installEnginePlugin() (outcome, error) {
 	c := r.codex
 	have, installed, err := r.engineCodexPlugin()
-	if err != nil || (installed && (r.want.plugin == "" || have == r.want.plugin)) {
+	if err != nil || (installed && atLeast(have, r.want.plugin)) {
 		return passed(have), err
 	}
 	for _, args := range []string{"plugin marketplace add " + engineRepo, "plugin marketplace upgrade engine", "plugin add " + pluginID} {
@@ -325,30 +325,29 @@ func (r *runner) installEnginePlugin() (outcome, error) {
 		return outcome{}, err
 	case !found:
 		return open(pluginID+" is not enabled in engine's Codex home after the install", r.rerun()), nil
-	case r.want.plugin != "" && after != r.want.plugin:
-		return open(fmt.Sprintf("the marketplace gives Codex plugin %s there and this host has %s; merge the plugin change first", after, r.want.plugin), r.rerun()), nil
+	case !atLeast(after, r.want.plugin):
+		return open(fmt.Sprintf("the marketplace gives Codex plugin %s there, older than this host's %s; merge the plugin change first", after, r.want.plugin), r.rerun()), nil
 	}
 	return changed(fmt.Sprintf("%s, was %s", after, orNone(have))), nil
 }
 
-// daemonState reads engine's daemon: whether it runs, and the state of its
-// remote control.
-func (r *runner) daemonState() (bool, string, error) {
-	c := r.codex
-	up, err := r.t.sh(c.inEngine("app-server daemon version"), "")
-	if err != nil {
-		return false, "", err
-	}
-	if up.code != 0 || !strings.Contains(up.out, `"running"`) {
-		return false, "", nil
-	}
-	rc, err := r.t.sh(c.inEngine("remote-control --json"), "")
-	return true, remoteState(rc), err
-}
+// remoteArgs is what the daemon's process carries when it was started with
+// remote control on. `codex remote-control --json` does not tell: it is not
+// per Codex home, and when it finds no daemon it serves in the foreground.
+const remoteArgs = " --remote-control"
 
-// remoteOn reports whether a state means remote control is turned on, whether
-// or not its connection is up.
-func remoteOn(state string) bool { return state != remoteDisabled && state != "unreadable" }
+// daemonState reads engine's daemon: whether it runs, and whether its process
+// was started with remote control on.
+func (r *runner) daemonState() (up, remoteOn bool, err error) {
+	c := r.codex
+	res, err := r.t.sh(c.inEngine("app-server daemon version"), "")
+	if err != nil || res.code != 0 || !strings.Contains(res.out, `"running"`) {
+		return false, false, err
+	}
+	ps, err := r.t.sh(fmt.Sprintf("ps -ww -eo args= | grep -F -- %s | grep -qF -- %s && echo on || echo off",
+		hosts.ShellWord(c.engineHome()+"/packages/"), hosts.ShellWord(remoteArgs)), "")
+	return true, ps.firstLine() == "on", err
+}
 
 // daemonStart is the command that starts engine's daemon with remote control
 // on and the machine user's token in its environment. The token comes from
@@ -365,12 +364,12 @@ func (r *runner) codexDaemon() (outcome, error) {
 	if r.codex.missing {
 		return r.codexBlocked(), nil
 	}
-	up, state, err := r.daemonState()
+	up, on, err := r.daemonState()
 	if err != nil {
 		return outcome{}, err
 	}
-	if up && remoteOn(state) {
-		return passed("running; remote control " + state), nil
+	if up && on {
+		return passed("running; remote control on"), nil
 	}
 	// A start exits 1 when the connection to the apps is errored, though the
 	// daemon runs with remote control on: judge it by what runs afterwards.
@@ -379,14 +378,14 @@ func (r *runner) codexDaemon() (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	if up, state, err = r.daemonState(); err != nil {
+	if up, on, err = r.daemonState(); err != nil {
 		return outcome{}, err
 	}
 	switch {
 	case !up:
 		return open("engine's daemon is not running after the start: "+res.lastLine(), r.t.onHost(start, false)), nil
-	case !remoteOn(state):
-		return open(fmt.Sprintf("remote control is %s after the start: %s", state, res.lastLine()), r.t.onHost(start, false)), nil
+	case !on:
+		return open("remote control is off after the start: "+res.lastLine(), r.t.onHost(start, false)), nil
 	}
-	return changed("started; remote control " + state), nil
+	return changed("started; remote control on"), nil
 }

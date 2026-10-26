@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -82,12 +83,8 @@ var (
 	rcErrored  = regexp.MustCompile(`Remote control is enabled on .+ but the connection is errored`)
 )
 
-// remoteStates are the connection states `codex remote-control --json` prints
-// for a daemon that has remote control on or off.
-const (
-	remoteDisabled = "disabled"
-	remoteErrored  = "errored"
-)
+// remoteErrored is the state of a connection that is not up.
+const remoteErrored = "errored"
 
 // remoteState reads the output of `codex remote-control --json`: the status it
 // prints, errored for the exit that says the connection is, else unreadable.
@@ -110,11 +107,44 @@ func remoteState(res result) string {
 // remote-control --json` on the operator's home.
 func operatorNotes(res result) []string {
 	var notes []string
-	if state := remoteState(res); state != "connected" {
+	if state := remoteState(res); state != "connected" && state != "unreadable" {
 		notes = append(notes, "the operator's remote control is "+state)
 	}
 	for _, m := range ignoredKey.FindAllStringSubmatch(ansiColor.ReplaceAllString(res.errOut, ""), -1) {
 		notes = append(notes, fmt.Sprintf("%s is ignored in %s", m[2], m[1]))
 	}
 	return notes
+}
+
+// atLeast reports whether version v is at least want, comparing dotted numbers.
+// An empty want asks for nothing. Versions that are not dotted numbers must be
+// equal.
+func atLeast(v, want string) bool {
+	if want == "" || v == want {
+		return true
+	}
+	have, need := strings.Split(v, "."), strings.Split(want, ".")
+	for i := 0; i < len(have) || i < len(need); i++ {
+		a, b := part(have, i), part(need, i)
+		if a < 0 || b < 0 {
+			return false
+		}
+		if a != b {
+			return a > b
+		}
+	}
+	return true
+}
+
+// part is the i-th number of a dotted version: 0 past its end, -1 when it is
+// not a number.
+func part(fields []string, i int) int {
+	if i >= len(fields) {
+		return 0
+	}
+	n, err := strconv.Atoi(fields[i])
+	if err != nil || n < 0 {
+		return -1
+	}
+	return n
 }

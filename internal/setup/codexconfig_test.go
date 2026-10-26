@@ -75,7 +75,7 @@ func TestRemoteState(t *testing.T) {
 		want string
 	}{
 		{"connected", result{out: `{"status":"connected"}`}, "connected"},
-		{"disabled", result{out: `{"status":"disabled"}`}, remoteDisabled},
+		{"disabled", result{out: `{"status":"disabled"}`}, "disabled"},
 		{"errored, with the log line before it", result{errOut: "\x1b[31mERROR\x1b[0m ignoring\nError: Remote control is enabled on Dinos-MacBook-Pro.local but the connection is errored.\n", code: 1}, remoteErrored},
 		{"no JSON", result{out: "something else"}, "unreadable"},
 		{"JSON without a status", result{out: `{"other":1}`}, "unreadable"},
@@ -103,6 +103,22 @@ func TestOperatorNotes(t *testing.T) {
 	for _, c := range cases {
 		if got := strings.Join(operatorNotes(c.res), "; "); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestAtLeast(t *testing.T) {
+	cases := []struct {
+		v, want string
+		ok      bool
+	}{
+		{"0.7.6", "", true}, {"", "", true}, {"0.7.6", "0.7.6", true}, {"0.7.8", "0.7.6", true}, {"0.7.10", "0.7.9", true},
+		{"0.8", "0.7.6", true}, {"0.7", "0.7.0", true}, {"0.7.5", "0.7.6", false}, {"0.6.9", "0.7.0", false}, {"", "0.7.6", false},
+		{"0.7.6-rc1", "0.7.6", false}, {"0.7.6", "0.7.x", false}, {"0.7.-1", "0.7.0", false},
+	}
+	for _, c := range cases {
+		if got := atLeast(c.v, c.want); got != c.ok {
+			t.Errorf("atLeast(%q, %q) = %v, want %v", c.v, c.want, got, c.ok)
 		}
 	}
 }

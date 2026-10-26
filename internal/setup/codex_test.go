@@ -31,7 +31,7 @@ func TestCodexStepsOnASettledHost(t *testing.T) {
 	out := r.out.String()
 	for _, want := range []string{
 		"7. codex: ok (codex-cli 0.164.0)", "8. codex sign-in: ok (Logged in using ChatGPT)", "9. codex home: ok (" + boxEngineH + ")",
-		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control connected)", "12. preflight: ok",
+		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control on)", "12. preflight: ok",
 		"checking --harness codex", "box is set up",
 	} {
 		if !strings.Contains(out, want) {
@@ -55,7 +55,7 @@ func TestCodexSetsUpAFreshHostAndStaysSafeToRerun(t *testing.T) {
 	out := r.out.String()
 	for _, want := range []string{
 		"9. codex home: changed (wrote config.toml, linked the login)", "10. codex plugin: changed (0.7.1, was none)",
-		"11. codex daemon: changed (started; remote control connected)", "12. preflight: ok",
+		"11. codex daemon: changed (started; remote control on)", "12. preflight: ok",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
@@ -118,13 +118,13 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.plugin, c.marketFail = "", true }},
 		{"the plugin is not enabled after the install", "10. codex plugin: OPEN", "is not enabled in engine's Codex home after the install", "engine setup --host box",
 			func(c *codexState) { c.plugin, c.leavesNothing = "", true }},
-		{"the marketplace is older than the caller", "10. codex plugin: OPEN", "gives Codex plugin 0.6.0 there and this host has 0.7.1", "engine setup --host box",
+		{"the marketplace is older than the caller", "10. codex plugin: OPEN", "gives Codex plugin 0.6.0 there, older than this host's 0.7.1", "engine setup --host box",
 			func(c *codexState) { c.plugin, c.pluginLeaves = "0.2.0", "0.6.0" }},
 		{"the daemon cannot start", "11. codex daemon: OPEN", "engine's daemon is not running after the start: cat: github-token: No such file or directory",
 			"ssh dev@box 't=\"$(cat /home/dev/.config/engine/github-token)\"",
-			func(c *codexState) { c.daemonUp, c.remote, c.startFail = false, "", true }},
-		{"remote control stays off", "11. codex daemon: OPEN", "remote control is disabled after the start", "remote-control start",
-			func(c *codexState) { c.daemonUp, c.remote, c.startLeaves = false, "", "disabled" }},
+			func(c *codexState) { c.daemonUp, c.rcOn, c.startFail = false, false, true }},
+		{"remote control stays off", "11. codex daemon: OPEN", "remote control is off after the start", "remote-control start",
+			func(c *codexState) { c.daemonUp, c.rcOn, c.startNoRC = false, false, true }},
 		{"the check finds a prompt", "12. preflight: OPEN", "an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'",
 			func(*codexState) {}},
 	}
@@ -185,7 +185,7 @@ func TestCodexSetupKeepsWhatIsAlreadyRight(t *testing.T) {
 	}{
 		{"an own login stays", func(c *codexState) { c.authLink = "FILE" }, ""},
 		{"a link elsewhere is repointed", func(c *codexState) { c.authLink = "/old/auth.json" }, "linked the login"},
-		{"the daemon runs with remote control off", func(c *codexState) { c.remote = remoteDisabled }, ""},
+		{"the daemon runs with remote control off", func(c *codexState) { c.rcOn = false }, ""},
 	}
 	for _, c := range cases {
 		codex := settledCodex(boxHome)
@@ -203,22 +203,10 @@ func TestCodexSetupKeepsWhatIsAlreadyRight(t *testing.T) {
 
 func TestAStartThatExitsOnAnErroredConnectionStillStartedTheDaemon(t *testing.T) {
 	codex := settledCodex(boxHome)
-	codex.daemonUp, codex.remote, codex.startLeaves = false, "", remoteErrored
+	codex.daemonUp, codex.rcOn, codex.startExit1 = false, false, true
 	r := newCodexRig(t, codex)
-	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "11. codex daemon: changed (started; remote control errored)") {
+	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "11. codex daemon: changed (started; remote control on)") {
 		t.Errorf("errored start:\n%s", r.out.String())
-	}
-}
-
-func TestADaemonWithAnErroredConnectionIsRunning(t *testing.T) {
-	codex := settledCodex(boxHome)
-	codex.remote = remoteErrored
-	r := newCodexRig(t, codex)
-	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "11. codex daemon: ok (running; remote control errored)") {
-		t.Errorf("errored connection:\n%s", r.out.String())
-	}
-	if codex.started != 0 {
-		t.Error("restarted a daemon that was on")
 	}
 }
 

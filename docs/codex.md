@@ -127,7 +127,7 @@ with the host's `CODEX_HOME` ("Starting", "Apps"):
 - **The daemon** is `codex remote-control start` in that home, with the machine
   user's token in its environment, read from its file. The start exits 1 when
   the connection to the apps is errored, though the daemon runs with remote
-  control on, so setup judges it by the daemon and its state afterwards.
+  control on, so setup judges it by the daemon afterwards ("Apps").
 
 ## Apps
 
@@ -156,10 +156,13 @@ differs from an embedded one (Codex 0.164.0):
   `--dangerously-bypass-hook-trust` on the TUI, or a review prompt stops the
   session.
 
-`codex remote-control --json` reads a daemon only when one runs in that Codex
-home; without one it serves in the foreground, with remote control on, until
-stopped. Read it only once `codex app-server daemon version` reports
-`running`.
+`codex remote-control --json` is not a read of one Codex home's daemon. With
+no daemon it serves in the foreground, with remote control on, until stopped;
+with `CODEX_HOME` set at engine's daemon it reported the machine's errored
+connection on the Mac, and a foreground failure on Linux. Setup judges
+engine's remote control by the daemon's process arguments (`--remote-control`),
+and reads the operator's state only once `codex app-server daemon version`
+reports a daemon running there.
 
 A daemon started with its own `CODEX_HOME` reads its own `config.toml` and
 `hooks.json`, and a TUI run with the same `CODEX_HOME` joins it with `--remote

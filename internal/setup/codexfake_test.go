@@ -41,9 +41,10 @@ type codexState struct {
 	// loginBroken makes engine's home reject the login it links.
 	loginBroken bool
 	daemonUp    bool
-	remote      string // the state engine's remote control reports
+	rcOn        bool // the daemon runs with remote control on
 	startFail   bool
-	startLeaves string // remote control state after a start; "" is connected
+	startNoRC   bool // a start leaves remote control off
+	startExit1  bool // a start exits 1 though the daemon runs, as on an errored connection
 	started     int
 }
 
@@ -52,7 +53,7 @@ func (c *codexState) engineHome() string { return c.home + "/.local/share/engine
 // settledCodex is a host with Codex fully set up.
 func settledCodex(home string) *codexState {
 	c := &codexState{home: home, userHome: home + "/.codex", bin: home + "/.local/bin/codex", signedIn: true, userAuth: true,
-		operatorRC: result{out: `{"status":"connected"}`}, plugin: callerPlugin, userPlugin: callerPlugin, operatorDaemon: true, daemonUp: true, remote: "connected"}
+		operatorRC: result{out: `{"status":"connected"}`}, plugin: callerPlugin, userPlugin: callerPlugin, operatorDaemon: true, daemonUp: true, rcOn: true}
 	cfg := withEngineBlock("[marketplaces.engine]\nsource_type = \"git\"\n", engineBlock(home))
 	c.config, c.authLink = &cfg, c.userHome+"/auth.json"
 	return c
@@ -62,7 +63,7 @@ func settledCodex(home string) *codexState {
 // engine's yet.
 func freshCodex(home string) *codexState {
 	c := settledCodex(home)
-	c.config, c.authLink, c.plugin, c.daemonUp, c.remote = nil, "", "", false, ""
+	c.config, c.authLink, c.plugin, c.daemonUp, c.rcOn = nil, "", "", false, false
 	return c
 }
 
@@ -101,6 +102,11 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 		b.mutate(cmd)
 		c.authLink = c.userHome + "/auth.json"
 		return 0, true
+	case strings.HasPrefix(cmd, "ps -ww -eo args="):
+		if c.rcOn && c.daemonUp {
+			return say("on\n")
+		}
+		return say("off\n")
 	case strings.HasPrefix(cmd, `t="$(cat `):
 		return c.start(b, cmd, errOut)
 	}
@@ -194,23 +200,8 @@ func (c *codexState) inEngine(b *box, args string, out, errOut io.Writer) (int, 
 		}
 		fmt.Fprintln(out, `{"status":"running","backend":"pid"}`)
 		return 0, true
-	case "remote-control --json":
-		return c.engineRemote(out, errOut), true
 	}
 	return 0, false
-}
-
-func (c *codexState) engineRemote(out, errOut io.Writer) int {
-	switch c.remote {
-	case "":
-		fmt.Fprint(errOut, "Error: no daemon")
-		return 1
-	case remoteErrored:
-		fmt.Fprint(errOut, "Error: Remote control is enabled on box but the connection is errored.")
-		return 1
-	}
-	fmt.Fprintf(out, `{"status":%q}`, c.remote)
-	return 0
 }
 
 // start is the daemon start. It must read the token from its file and never
@@ -222,11 +213,8 @@ func (c *codexState) start(b *box, cmd string, errOut io.Writer) (int, bool) {
 		return 1, true
 	}
 	c.started++
-	c.daemonUp, c.remote = true, "connected"
-	if c.startLeaves != "" {
-		c.remote = c.startLeaves
-	}
-	if c.remote == remoteErrored {
+	c.daemonUp, c.rcOn = true, !c.startNoRC
+	if c.startExit1 {
 		fmt.Fprint(errOut, "Starting app-server daemon with remote control enabled...\nError: Remote control is enabled on box but the connection is errored.")
 		return 1, true
 	}
