@@ -47,6 +47,35 @@ func lines(t *testing.T, path string) []string {
 	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 }
 
+// daemon plays `codex remote-control --json` with the reply it is given, and
+// records the commands it was asked to run.
+type daemon struct {
+	out   string
+	err   error
+	calls []string
+}
+
+func (d *daemon) run(name string, args ...string) (string, error) {
+	d.calls = append(d.calls, name+" "+strings.Join(args, " "))
+	return d.out, d.err
+}
+
+// up, down and errored are the daemon states a spawn can meet.
+func up() *daemon   { return &daemon{out: `{"status":"connected","serverName":"mac"}`} }
+func down() *daemon { return &daemon{out: `{"status":"disabled"}`} }
+func errored() *daemon {
+	return &daemon{err: &session.ExitError{Command: "codex remote-control --json", Code: 1,
+		Stderr: "ERROR codex_app_server: ignoring a key\n  user: `features.rcmp_client` is ignored.\nError: Remote control is enabled on mac but the connection is errored.\n"}}
+}
+
+// codexSpawnDeps are spawnDeps whose host-side Codex answers as d.
+func codexSpawnDeps(t *testing.T, h home, tm *tmuxFake, d *daemon, env map[string]string) Deps {
+	t.Helper()
+	deps := spawnDeps(t, h, (&gitFake{}).run, tm, env)
+	deps.Exec = d.run
+	return deps
+}
+
 func codexRequest(mode string) SpawnRequest {
 	r := request()
 	r.Harness, r.Mode, r.Model, r.Effort = Codex, mode, "sol", "high"
@@ -63,7 +92,8 @@ func TestSpawnCodex(t *testing.T) {
 	codexHome := filepath.Join(t.TempDir(), "codex home")
 	tm := &tmuxFake{}
 	req := codexRequest(HandsOff)
-	got, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, tm, map[string]string{"CODEX_HOME": codexHome}), req)
+	d := up()
+	got, err := Spawn(codexSpawnDeps(t, h, tm, d, map[string]string{"CODEX_HOME": codexHome}), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +110,13 @@ func TestSpawnCodex(t *testing.T) {
 	}
 	runWindow(t, tm.command)
 	want := []string{"-c", `sandbox_workspace_write.writable_roots=["` + clone + `"]`, "-m", "sol", "-c", "model_reasoning_effort=high",
-		"-p", "engine-r-7", "--dangerously-bypass-hook-trust", "--", req.Kickoff}
+		"-p", "engine-r-7", "--dangerously-bypass-hook-trust", "--remote", "unix://", "--", req.Kickoff}
+	if wantCalls := []string{filepath.Join(h.dir, "bin", "codex") + " remote-control --json"}; !slices.Equal(d.calls, wantCalls) {
+		t.Errorf("asked the daemon %q, want %q", d.calls, wantCalls)
+	}
+	if got.Warning != "" {
+		t.Errorf("warning %q with the daemon up", got.Warning)
+	}
 	if args := lines(t, argv); !slices.Equal(args, want) {
 		t.Errorf("argv\n got %q\nwant %q", args, want)
 	}
@@ -99,7 +135,7 @@ func TestSpawnCodexGatedDefaultHome(t *testing.T) {
 	h.clone(t)
 	_, env := h.fakeCodex(t)
 	tm := &tmuxFake{}
-	if _, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, tm, nil), codexRequest(Gated)); err != nil {
+	if _, err := Spawn(codexSpawnDeps(t, h, tm, up(), nil), codexRequest(Gated)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(h.dir, ".codex", "engine-r-7.config.toml")); err != nil {
@@ -110,6 +146,69 @@ func TestSpawnCodexGatedDefaultHome(t *testing.T) {
 		if strings.HasPrefix(v, "ENGINE_UNATTENDED=") || strings.HasPrefix(v, "CODEX_HOME=") {
 			t.Errorf("the window kept %s", v)
 		}
+	}
+}
+
+// A daemon that is not up never refuses the spawn: the session starts
+// without --remote, and the reply warns, naming the command that starts the
+// daemon and what the daemon said.
+func TestSpawnCodexWithoutRemoteControl(t *testing.T) {
+	cases := []struct {
+		name, state string
+		d           *daemon
+	}{
+		{"disabled", "is disabled", down()},
+		{"errored", "is errored (Remote control is enabled on mac but the connection is errored.)", errored()},
+		{"connecting", "is connecting", &daemon{out: `{"status":"connecting"}`}},
+		{"unreadable", "is in an unreadable state", &daemon{out: "Remote control is disabled on mac\n"}},
+		{"no status", "is in an unreadable state", &daemon{out: "{}"}},
+		{"failed to run", "is errored (codex: boom)", &daemon{err: errors.New("codex: boom")}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHome(t, "mac")
+			h.clone(t)
+			argv, _ := h.fakeCodex(t)
+			tm := &tmuxFake{}
+			got, err := Spawn(codexSpawnDeps(t, h, tm, c.d, nil), codexRequest(HandsOff))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{"Codex remote control " + c.state, "`codex remote-control start`"} {
+				if !strings.Contains(got.Warning, want) {
+					t.Errorf("warning %q lacks %q", got.Warning, want)
+				}
+			}
+			runWindow(t, tm.command)
+			if args := lines(t, argv); slices.Contains(args, "--remote") || args[len(args)-2] != "--" {
+				t.Errorf("argv %q joined remote control or lost the kickoff", args)
+			}
+		})
+	}
+}
+
+// A host that may sleep and a daemon that is down are both reported.
+func TestSpawnCodexWarnsOfEverything(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	h.fakeCodex(t)
+	tm := &tmuxFake{awakeErr: errors.New("no caffeinate")}
+	got, err := Spawn(codexSpawnDeps(t, h, tm, down(), nil), codexRequest(HandsOff))
+	want := "the host may sleep while the session runs: keeping the host awake: no caffeinate; Codex remote control is disabled on this host"
+	if err != nil || !strings.HasPrefix(got.Warning, want) {
+		t.Errorf("warning %q, %v; want it to start %q", got.Warning, err, want)
+	}
+}
+
+// A Claude spawn never asks about Codex's daemon.
+func TestSpawnClaudeDoesNotAskTheDaemon(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	d := up()
+	deps := spawnDeps(t, h, (&gitFake{}).run, &tmuxFake{}, nil)
+	deps.Exec = d.run
+	if got, err := Spawn(deps, request()); err != nil || got.Warning != "" || len(d.calls) != 0 {
+		t.Errorf("reply %+v, %v, asked %q", got, err, d.calls)
 	}
 }
 
@@ -133,7 +232,7 @@ func TestSpawnCodexRemovesTheProfileWhenTheWindowFails(t *testing.T) {
 	h.clone(t)
 	h.fakeCodex(t)
 	tm := &tmuxFake{openErr: errors.New("no server")}
-	_, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, tm, nil), codexRequest(HandsOff))
+	_, err := Spawn(codexSpawnDeps(t, h, tm, up(), nil), codexRequest(HandsOff))
 	if err == nil || !strings.Contains(err.Error(), "open the tmux window") {
 		t.Fatalf("err = %v", err)
 	}

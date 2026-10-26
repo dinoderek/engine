@@ -100,7 +100,14 @@ a single program and other tools already claim it (Computer Use on the Mac).
 
 ## Apps
 
-The host runs the remote-control app-server (`codex remote-control start`),
-and a TUI joins it with `--remote`. A session engine launches runs embedded,
-because of its profile ("Starting"), so it does not join the app-server and
-the apps do not show it.
+The host runs the remote-control daemon (`codex remote-control start`).
+`spawn` reads its state with `codex remote-control --json`, which changes
+nothing, and only a `connected` daemon gets the session: the launch adds
+`--remote unix://`, and the TUI joins the daemon, so the ChatGPT and Codex
+apps show it. In any other state (disabled, connecting, errored, a failed or
+unreadable reply) the session starts without `--remote`, embedded, because
+of its profile ("Starting"), and `spawn`'s reply carries a warning naming
+`codex remote-control start`, as for a host that may sleep. A down daemon
+never refuses a spawn. Codex has no flag that names a session, so the apps
+show its thread title, not `<repo>-<task>`, and the kickoff's `rc=` is
+unused. The preflight check does not join the daemon.

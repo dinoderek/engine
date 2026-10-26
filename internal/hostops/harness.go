@@ -1,7 +1,10 @@
 package hostops
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
@@ -32,8 +35,12 @@ type harness interface {
 	// Env is the shell that exports the harness's config location, ending
 	// in " && ": the tmux server's environment may differ from the caller's.
 	Env() string
-	// Args follow the launch line, ending with the kickoff.
-	Args(kickoff string) string
+	// Remote asks the host's remote-control daemon, through the harness binary
+	// bin, whether a session can join it. It returns the flags that join it
+	// to put in Args, and a warning when the session starts without.
+	Remote(run session.Runner, bin string) (flags, warning string)
+	// Args follow the launch line: the flags Remote returned, then the kickoff.
+	Args(remote, kickoff string) string
 }
 
 // harnessFor returns the harness called name, or Claude when name is empty,
@@ -77,7 +84,10 @@ func (c claude) Env() string {
 	return "unset CLAUDE_CONFIG_DIR && "
 }
 
-func (c claude) Args(kickoff string) string {
+// Remote is empty: Claude's launch line names the session for Remote Control.
+func (claude) Remote(session.Runner, string) (flags, warning string) { return "", "" }
+
+func (c claude) Args(_, kickoff string) string {
 	args := " --add-dir " + hosts.ShellWord(session.PluginDir(c.d.Getenv, c.d.Home)) + " --allowedTools"
 	for _, rule := range tmpReads {
 		args += " " + hosts.ShellWord(rule)
@@ -126,13 +136,59 @@ func (c codex) Env() string {
 	return "unset CODEX_HOME && "
 }
 
-func (c codex) Args(kickoff string) string {
-	return " -p " + hosts.ShellWord(c.profile) + " --dangerously-bypass-hook-trust -- " + hosts.ShellWord(kickoff)
+// remoteFlags join the host's remote-control daemon over its default socket.
+const remoteFlags = " --remote unix://"
+
+// Remote reads the daemon's state with `codex remote-control --json`, which
+// reports it without starting or stopping anything. Only a connected daemon
+// takes the session; in any other state, or when the state cannot be read,
+// the session starts without and the warning names the command that starts
+// the daemon.
+func (c codex) Remote(run session.Runner, bin string) (flags, warning string) {
+	out, err := run(bin, "remote-control", "--json")
+	state := daemonState(out, err)
+	if state == "connected" {
+		return remoteFlags, ""
+	}
+	return "", "Codex remote control is " + state + " on this host, so the session is not in the ChatGPT and Codex apps; " +
+		"run `codex remote-control start` on this host"
+}
+
+// daemonState is the connection state `codex remote-control --json` printed:
+// connected, connecting, disabled or errored. A command that fails reports
+// an errored connection, and an output with no state is unreadable.
+func daemonState(out string, err error) string {
+	if err != nil {
+		return "errored (" + lastLine(err) + ")"
+	}
+	var reply struct {
+		Status string `json:"status"`
+	}
+	if json.Unmarshal([]byte(out), &reply) != nil || reply.Status == "" {
+		return "in an unreadable state"
+	}
+	return reply.Status
+}
+
+// lastLine is the last line of err's message, without log-level noise
+// before it, such as Codex's complaint about an ignored config key.
+func lastLine(err error) string {
+	var exit *session.ExitError
+	msg := err.Error()
+	if errors.As(err, &exit) && strings.TrimSpace(exit.Stderr) != "" {
+		msg = exit.Stderr
+	}
+	lines := strings.Split(strings.TrimSpace(msg), "\n")
+	return strings.TrimSpace(strings.TrimPrefix(lines[len(lines)-1], "Error:"))
+}
+
+func (c codex) Args(remote, kickoff string) string {
+	return " -p " + hosts.ShellWord(c.profile) + " --dangerously-bypass-hook-trust" + remote + " -- " + hosts.ShellWord(kickoff)
 }
 
 // launch is what a window runs: the expanded launch line, the run directory,
-// the mode and the kickoff.
-type launch struct{ line, runDir, mode, kickoff string }
+// the mode, the kickoff and the flags that join remote control.
+type launch struct{ line, runDir, mode, kickoff, remote string }
 
 // launchCommand is a window's shell command. It runs under /bin/sh, whatever
 // tmux's default shell is: export the machine user's token from its file, so
@@ -150,6 +206,6 @@ func launchCommand(d Deps, h harness, l launch) string {
 	} else {
 		script += "unset " + session.UnattendedVar + " && "
 	}
-	script += h.Env() + "exec " + l.line + h.Args(l.kickoff)
+	script += h.Env() + "exec " + l.line + h.Args(l.remote, l.kickoff)
 	return "exec /bin/sh -c " + hosts.ShellWord(script)
 }
