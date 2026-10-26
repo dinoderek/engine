@@ -36,7 +36,8 @@ user's config, `--dangerously-bypass-hook-trust`, then `--` and the kickoff.
 - **Folder trust.** The profile holds it: a session starts without the
   trust prompt, and the user's `config.toml` is untouched. A `-c
   'projects."<path>".trust_level=…'` does not hold it; the prompt still shows.
-  A profile makes Codex run embedded, without the shared app-server; a joined session ignores it ("Apps").
+  A profile makes Codex run embedded, without the shared app-server; a joined
+  session ignores it ("Apps").
 - **Hook trust.** Codex runs a hook only once its hash is trusted, and
   otherwise asks for a review first, which would stop an unattended start.
   Engine-launched sessions bypass that, as Claude sessions run a repo's hooks
@@ -108,7 +109,7 @@ remote-control --json`, which changes nothing, and adds `--remote unix://` only
 when the state is `connected`. In any other state (disabled, connecting,
 errored, a failed or unreadable reply) the session starts embedded and
 `spawn`'s reply warns, naming `codex remote-control start`; a down daemon never
-refuses a spawn. Nothing sets `JoinRemote` yet, because a joined session
+refuses a spawn. Nothing sets `JoinRemote`, because a joined session
 differs from an embedded one (Codex 0.164.0):
 
 - The agent and its hooks run inside the daemon. They see the daemon's

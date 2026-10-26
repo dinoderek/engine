@@ -161,7 +161,10 @@ func (c codex) Remote(run session.Runner, bin string) (flags, warning string) {
 func daemonState(out string, err error) string {
 	var exit *session.ExitError
 	if errors.As(err, &exit) {
-		return "errored (" + lastLine(exit.Stderr) + ")"
+		if msg := lastLine(exit.Stderr); msg != "" {
+			return "errored (" + msg + ")"
+		}
+		return "errored"
 	}
 	if err != nil {
 		return "unreadable (" + err.Error() + ")"

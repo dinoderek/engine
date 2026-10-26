@@ -162,6 +162,7 @@ func TestSpawnCodexWithoutRemoteControl(t *testing.T) {
 		{"connecting", "is connecting", &daemon{out: `{"status":"connecting"}`}},
 		{"unreadable", "is unreadable", &daemon{out: "Remote control is disabled on mac\n"}},
 		{"no status", "is unreadable", &daemon{out: "{}"}},
+		{"no stderr", "is errored on this host", &daemon{err: &session.ExitError{Command: "codex remote-control --json", Code: 1}}},
 		{"failed to run", "is unreadable (codex: boom)", &daemon{err: errors.New("codex: boom")}},
 	}
 	for _, c := range cases {
