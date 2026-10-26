@@ -36,8 +36,8 @@ The fixture was created and linted at 11:48. `engine run
 dinoderek/engine#116` ran from 11:48:55 in window `engine:run-engine-116`,
 inside session `engine`, and held no slot. It set `engine:planned` at
 11:48:59, started #117 to #119 on the next pass, set `engine:verifying` at
-12:03:43, and posted the summary at 12:06:01. Then it set `engine:done`,
-closed #116 as completed and exited, with no window left to reap. The
+12:03:43, set `engine:done` at 12:05:58, posted the summary at 12:06:00,
+closed #116 as completed at 12:06:01 and exited, with no window left to reap. The
 engine#74 coordinator (`run-engine-74`) ran alongside it throughout.
 
 Each executor got one fresh reviewer, and each reviewer approved in one round.
@@ -58,7 +58,7 @@ Neither session sat on a prompt.
 | --- | --- |
 | 11:54:28 | `git fetch origin && git merge origin/main` |
 | 11:55:22, 11:55:55 | `./dev test` |
-| 11:56:43 | `git add … && git commit …` |
+| 11:56:43 | `git add … && git commit … && git fetch origin && git merge origin/main && git push -u origin task/engine-118` |
 | 11:57:11 | `git fetch origin && git merge origin/main` |
 | 11:58:28 | `./dev worktree release task/engine-118` |
 
@@ -71,7 +71,7 @@ Neither session sat on a prompt.
 | 11:55:10 | `./dev test` |
 | 11:55:35 | `git add … && git commit …` |
 | 11:58:59 | `git merge --no-edit origin/main` then `./dev test` |
-| 12:00:53 | a `python3` heredoc writing the PR body in `/tmp` |
+| 12:00:53 | a `python3` heredoc writing the PR body in `/tmp`, then `git fetch origin` and `git push -u origin task/engine-119` |
 | 12:02:39 | `./dev worktree release task/engine-119` |
 
 ## Codex session in use
@@ -110,9 +110,9 @@ free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
 | O1 Codex launch | Live: `engine run` started #118 and #119 through `spawn`, on the hosts' pinned `~/.local/bin/codex` with `hosts.toml`'s launch line, `--dangerously-bypass-hook-trust`, `-C <worktree>` and the kickoff as the first prompt (thread `Execute dinoderek/engine#118`). Both `run.json` files say `"harness": "codex"`. Joined sessions get folder trust from engine's Codex home, not a per-session profile (the engine#74 deviation of 09:52). Tests: `TestSpawnCodexJoins`, `TestSpawnCodexRefusals`, `TestHarnessFromTheCardOrTheFlag` | A refusal, live: none came up |
 | O2 session state | Live: `harness-state.json` in both run directories (`working`, `PostToolUse`, with the Codex session id). `status` gave each window `state` and `harness`, and `engine ps` read `working` from it on both hosts. `notify` is unused (`docs/codex.md`). Tests: `TestStateFromRecordedEvents`, `TestCodexRowsReadTheirWindowsState`, `TestRemoteCodexRowsReadTheirWindowsState`, `TestACodexSessionThatWaitsStallsOncePerWait` | A Codex executor seen `waiting` or `ended` by `ps` or `run`: neither session ever waited, and each closed its own window |
 | O3 no prompt unattended | Live: 16 requests over both logs, all `left to auto-review`, none denied, and no session stopped on a prompt. Both Codex executors merged with `--match-head-commit` (both commands are in the daemons' session transcripts). Tests: `TestPermissionLeavesAnUnattendedCodexRequestToAutoReview`, `TestMergeGuardReadsCodexShellEvents`, `TestCheckCodexStallsOnAPrompt` | The merge guard blocking a Codex merge, live: no executor tried a bare merge |
-| O4 plugin and `--check` | Live: setup item 9 installed the plugin in engine's Codex home on both hosts, and both joined executors ran the engine skill (claim, lock, review, report). `engine start --check --harness codex` passed on both hosts. Tests: `TestCodexPluginRegistersStateHook`, `TestCodexMarketplaceListsThePlugin`, `TestCheckCodex`, `TestCheckCodexFailsWithoutAStateFile` | The plugin in the operator's own `~/.codex`: item 10 is the operator's, still open |
-| O5 the apps | Live: both sessions joined their host's engine daemon with remote control on. The Mac daemon was connected to chatgpt.com, and each daemon's thread index lists its session. Tests: `TestSpawnCodexJoinsGated`, `TestSpawnCodexJoinedRecordComesFirst` | Seen in the ChatGPT or Codex app by eye: nobody watched the apps during an unattended run. `start`'s report wrongly said each session was not in the apps (Gaps) |
-| O6 placement and setup | Live: #119 (`linux`) on the devbox, #118 (`macos`) on the Mac, two Codex sessions at once, at the cap of 2 across hosts. `engine setup` and `--host devbox` ran items 7 to 11 (Codex installed, signed in, engine's home, the plugin there, the daemon). Tests: `TestTheHarnessCapCountsEveryHost`, `TestACardWhoseHarnessNoHostDefinesWaits`, `internal/setup`'s `TestCodex*` | A Codex task held back by the cap, live: there were only two; `TestTheHarnessCapCountsEveryHost` covers it |
+| O4 plugin and `--check` | Live: engine's Codex home holds the plugin (0.7.8, `plugins/cache/engine`) on both hosts, put there by item 10's first half, though item 10 ended open over the operator's home; both joined executors ran the engine skill (claim, lock, review, report). `engine start --check --harness codex` passed on both hosts. Tests: `TestCodexPluginRegistersStateHook`, `TestCodexMarketplaceListsThePlugin`, `TestCheckCodex`, `TestCheckCodexFailsWithoutAStateFile` | The plugin in the operator's own `~/.codex`: item 10 is the operator's, still open |
+| O5 the apps | Live: both sessions joined their host's engine daemon with remote control on. The Mac daemon was connected to chatgpt.com, and each daemon's thread index lists its session. Tests: `TestSpawnCodexJoinsGated`, `TestSpawnCodexJoinedRecordComesFirst` | Seen in the ChatGPT or Codex app by eye: nobody watched the apps during an unattended run. The devbox daemon's connection to chatgpt.com: its log holds no status change after 11:45, so only its `--remote-control` flag was seen. `start`'s report wrongly said each session was not in the apps (Gaps) |
+| O6 placement and setup | Live: #119 (`linux`) on the devbox, #118 (`macos`) on the Mac, two Codex sessions at once, at the cap of 2 across hosts. `engine setup` and `--host devbox` ran items 7 to 11: Codex installed, signed in, engine's home and the daemon `ok`, and item 10 open over the operator's home only. Tests: `TestTheHarnessCapCountsEveryHost`, `TestACardWhoseHarnessNoHostDefinesWaits`, `internal/setup`'s `TestCodex*` | A Codex task held back by the cap, live: there were only two; `TestTheHarnessCapCountsEveryHost` covers it |
 | O7 the fixture | This record | |
 | O8 slots | Live: the Mac's `status` gave 6 slots, at most 4 heavy, and two coordinator windows held none (3 free with 3 sessions open). Tests: `TestOnlySessionsHoldSlots`, `TestAHeavyTaskWaitsForAHeavySlotWhileALightOneStarts`, `TestHeavyTasksGoWhereAHeavySlotIsFree`, `internal/hosts` `TestHeavy` | A heavy task, live: the fixture had none |
 
@@ -122,7 +122,8 @@ free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
   printed `Codex apps  not in the ChatGPT or Codex apps: the session runs
   embedded` for both sessions, and both had joined. The line in
   `internal/start` is fixed text for any Codex start. It does not read
-  whether `spawn` joined.
+  whether `spawn` joined. Both Codex claims also read `Remote Control:
+  none`.
 - **Setup's preflight waits on the operator's Codex home.** Item 10 is open
   while the plugin is missing from `~/.codex`, and item 12 then does not run.
   Joined sessions never read that home. The preflights were run by hand.
