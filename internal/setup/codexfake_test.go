@@ -23,6 +23,7 @@ type codexState struct {
 	home, userHome string
 	bin            string // where the binary runs; "" is nowhere
 	onPath         string // what `command -v codex` finds when bin is absent
+	userPlugin     string // version of engine's plugin in the operator's home; "" is none
 	signedIn       bool   // the operator's Codex
 	userAuth       bool   // the operator's auth.json is a file
 	operatorRC     result // `codex remote-control --json` in the operator's home
@@ -50,7 +51,7 @@ func (c *codexState) engineHome() string { return c.home + "/.local/share/engine
 // settledCodex is a host with Codex fully set up.
 func settledCodex(home string) *codexState {
 	c := &codexState{home: home, userHome: home + "/.codex", bin: home + "/.local/bin/codex", signedIn: true, userAuth: true,
-		operatorRC: result{out: `{"status":"connected"}`}, plugin: callerPlugin, daemonUp: true, remote: "connected"}
+		operatorRC: result{out: `{"status":"connected"}`}, plugin: callerPlugin, userPlugin: callerPlugin, daemonUp: true, remote: "connected"}
 	cfg := withEngineBlock("[marketplaces.engine]\nsource_type = \"git\"\n", engineBlock(home))
 	c.config, c.authLink = &cfg, c.userHome+"/auth.json"
 	return c
@@ -140,6 +141,9 @@ func (c *codexState) operator(args string, out, errOut io.Writer) (int, bool) {
 			return 1, true
 		}
 		fmt.Fprintln(out, "Logged in using ChatGPT")
+		return 0, true
+	case "plugin list --json":
+		fmt.Fprint(out, codexPluginList(c.userPlugin))
 		return 0, true
 	case "remote-control --json":
 		fmt.Fprint(out, c.operatorRC.out)

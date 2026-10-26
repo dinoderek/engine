@@ -266,13 +266,34 @@ func (r *runner) engineCodexPlugin() (string, bool, error) {
 	return version, found, nil
 }
 
-// codexPluginStep installs engine's plugin from this repo's marketplace into
-// engine's Codex home, or brings it to the caller's version.
+// codexPluginStep installs engine's plugin into engine's Codex home, and
+// checks the operator's, which sessions still launch with and whose hooks
+// report their state. Setup leaves the operator's home alone: it prints the
+// install for the operator to run.
 func (r *runner) codexPluginStep() (outcome, error) {
 	c := r.codex
 	if c.missing {
 		return r.codexBlocked(), nil
 	}
+	res, err := r.installEnginePlugin()
+	if err != nil || res.state == stateOpen {
+		return res, err
+	}
+	list, err := r.t.sh(c.run("plugin list --json"), "")
+	if err != nil {
+		return outcome{}, err
+	}
+	if _, found := installedCodexPlugin(list.out); found {
+		return res, nil
+	}
+	install := c.run("plugin marketplace add "+engineRepo) + " && " + c.run("plugin add "+pluginID)
+	return open("the Codex plugin is not installed in the operator's Codex home, which sessions still launch with", r.t.onHost(install, false)), nil
+}
+
+// installEnginePlugin installs engine's plugin from this repo's marketplace
+// into engine's Codex home, or brings it to the caller's version.
+func (r *runner) installEnginePlugin() (outcome, error) {
+	c := r.codex
 	have, installed, err := r.engineCodexPlugin()
 	if err != nil || (installed && (r.want.plugin == "" || have == r.want.plugin)) {
 		return passed(have), err

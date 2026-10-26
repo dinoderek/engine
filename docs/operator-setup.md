@@ -55,7 +55,7 @@ engine commit and Claude plugin version to the other hosts, so update both here
 first. Setup installs the Codex plugin only into engine's own Codex home, and
 sessions run from the host's own: install it there by hand on each Codex host,
 with `codex plugin marketplace add dinoderek/engine` and `codex plugin add
-engine@engine`.
+engine@engine`. Setup prints these when the plugin is missing there.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
