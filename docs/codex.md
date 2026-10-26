@@ -80,9 +80,10 @@ call is a `Bash` tool call with the same `tool_input.command`. The merge guard
 behaves the same.
 
 Codex sends `PermissionRequest` before auto-review, so a `deny` there would
-pre-empt the review. With `ENGINE_UNATTENDED=1` and `ENGINE_HARNESS=codex`,
-the permission hook only logs the request, as `left to auto-review`, and
-auto-review, which never prompts, decides.
+pre-empt the review. In an unattended Codex run (`ENGINE_UNATTENDED=1` and
+`ENGINE_HARNESS=codex`, or found as "Session signals" says), the permission hook
+only logs the request, as `left to auto-review`, and auto-review, which never
+prompts, decides.
 
 ## Session signals
 
@@ -92,8 +93,13 @@ event that set it, the time and Codex's session ID. A prompt, or a finished
 tool call, makes the session `working`: the call after an approved permission
 request is how a `waiting` session resumes. A session start, `Stop`,
 `Interrupt` or attended permission request makes it `waiting`, and a session
-end `ended`. Outside an engine run the hook does nothing, and no hook ever
-fails a Codex turn. `status` reads the file for a window whose newest run is
+end `ended`. A session that joined a remote-control daemon runs its hooks in the
+daemon's environment, which has no `ENGINE_RUN_DIR`, `ENGINE_HARNESS` or
+`ENGINE_UNATTENDED`. Without `ENGINE_RUN_DIR`, the state and permission hooks
+take the event's `cwd`, find the run whose `run.json` names the deepest
+worktree holding it (the newest, if several), and read the harness and mode
+from that record. Outside any run's worktree the hook does nothing, and no
+hook ever fails a Codex turn. `status` reads the file for a window whose newest run is
 Codex's. A missing or unreadable file is unknown, never dead, and so is
 `ended` while the window lives. Codex's `notify` is not used, because it holds
 a single program and other tools already claim it (Computer Use on the Mac).

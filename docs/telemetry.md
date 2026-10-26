@@ -36,7 +36,9 @@ request the hook denied or, in Codex, left to auto-review, and per action
 auto mode refused, with the time,
 tool, input and decision (`Entry` in `internal/hook/permission.go`). The run ID
 is `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, the time its launch began. A preflight
-check's directory, `check-<time>`, stays, with no `run.json`.
+check's directory, `check-<time>`, stays, with no `run.json`. A hook that finds
+its run without `ENGINE_RUN_DIR` (`codex.md`, "Session signals") scans these
+directories for the `run.json` whose worktree holds the event's `cwd`.
 
 **At spawn,** the host's `spawn` op writes the identity its caller passed (all but the
 harness session ID), the effort, mode, session name, tmux target (by window
