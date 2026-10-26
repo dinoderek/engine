@@ -108,6 +108,24 @@ last screen, where a prompt would be), or a step is skipped, or the session's
 hooks wrote no `harness-state.json`: that file is the proof they ran. Requests
 left to auto-review are listed, and fail nothing.
 
+## Setup
+
+`engine setup` (`operator-setup.md`) gives a host that lists `codex` engine's
+own Codex home, `~/.local/share/engine/codex`, so engine's sessions have config
+apart from the operator's own, which setup never edits:
+
+- **`config.toml`.** Setup owns a block at its top: auto-review, the
+  `workspace-write` sandbox, `network_access`, and engine's clones as a writable
+  root. Hook trust is left to the launch. Codex's own tables follow the block
+  (the marketplace and plugin entries it writes, and folder trust). Setup
+  replaces the block and keeps the rest, then has Codex read the file strictly.
+- **The login** is a link to the operator's `auth.json`. A file already there is
+  engine's own login and stays.
+- **The plugin** installs from this repo's marketplace into that home, not the
+  operator's.
+- **The daemon** is `codex remote-control start` in that home, with the machine
+  user's token in its environment, read from its file.
+
 ## Apps
 
 The apps list sessions on a host's remote-control daemon (`codex remote-control

@@ -47,10 +47,13 @@ bin = { claude = "~/bin/claude" }
 `
 
 // callerHome is the Mac's home: host config, host file and token.
-func callerHome(t *testing.T) string {
+func callerHome(t *testing.T) string { return callerHomeWith(t, hostsTOML) }
+
+// callerHomeWith is callerHome with the host config toml.
+func callerHomeWith(t *testing.T, toml string) string {
 	t.Helper()
 	dir := t.TempDir()
-	for name, content := range map[string]string{"hosts.toml": hostsTOML, "host": "mac\n", "github-token": secret + "\n"} {
+	for name, content := range map[string]string{"hosts.toml": toml, "host": "mac\n", "github-token": secret + "\n"} {
 		path := filepath.Join(dir, ".config", "engine", name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -82,6 +85,7 @@ type box struct {
 	noSystemd   bool
 	masked      int // sleep targets masked
 	down        bool
+	codex       *codexState // nil is a host without Codex
 
 	mutations []string
 	commands  []string
@@ -128,6 +132,11 @@ const pluginIDForTest = "engine@engine"
 func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 	b.commands = append(b.commands, cmd)
 	say := func(format string, args ...any) int { fmt.Fprintf(out, format, args...); return 0 }
+	if b.codex != nil {
+		if code, ok := b.codex.answer(b, cmd, stdin, out, errOut); ok {
+			return code
+		}
+	}
 	switch {
 	case strings.HasPrefix(cmd, "for t in"):
 		return say("%s", strings.Join(b.missing, "\n"))
@@ -271,9 +280,11 @@ type rig struct {
 	out     strings.Builder
 	checked []string
 	check   func() (bool, error)
-	gh      func(env []string, name string, args ...string) (string, error)
-	info    version.Info
-	goMod   string // go.mod at the caller's commit, as GitHub serves it
+	// checkCodex is the check of the codex harness.
+	checkCodex func() (bool, error)
+	gh         func(env []string, name string, args ...string) (string, error)
+	info       version.Info
+	goMod      string // go.mod at the caller's commit, as GitHub serves it
 }
 
 func newRig(t *testing.T) *rig {
@@ -283,6 +294,7 @@ func newRig(t *testing.T) *rig {
 	r.local = &box{plugin: callerPlugin, files: map[string]string{}, badMode: map[string]bool{},
 		auth: `{"loggedIn":true,"authMethod":"claude.ai"}`, os: "Darwin", rev: "2a08a0c"}
 	r.check = func() (bool, error) { return true, nil }
+	r.checkCodex = r.check
 	r.gh = func(env []string, name string, args ...string) (string, error) {
 		if len(env) != 1 || env[0] != "GH_TOKEN="+secret {
 			return "", fmt.Errorf("gh got env %v", env)
@@ -325,8 +337,12 @@ func (r *rig) deps() Deps {
 			}
 			return ""
 		}, Exec: r.exec, GH: r.gh, Info: r.info,
-		Check: func(out io.Writer) (bool, error) {
+		Check: func(harness string, out io.Writer) (bool, error) {
 			fmt.Fprintln(out, "the check report")
+			if harness == "codex" {
+				r.checked = append(r.checked, "codex")
+				return r.checkCodex()
+			}
 			r.checked = append(r.checked, "checked")
 			return r.check()
 		},

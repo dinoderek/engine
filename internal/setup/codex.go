@@ -1,0 +1,360 @@
+package setup
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/dinoderek/engine/internal/hosts"
+)
+
+// codexHarness is the harness a host lists to get the Codex steps.
+const codexHarness = "codex"
+
+// codexTarget is what the Codex steps know about a host that lists codex, and
+// what the earlier ones found.
+type codexTarget struct {
+	bin      string // the pinned binary's absolute path
+	word     string // bin as a shell word
+	home     string // $HOME on the host
+	userHome string // the operator's Codex home on the host
+	// missing is set when step 7 found no usable binary; signedOut when step 8
+	// found the operator not signed in.
+	missing, signedOut bool
+}
+
+// engineHome is engine's own Codex home on the host.
+func (c *codexTarget) engineHome() string { return c.home + "/" + hosts.CodexHomeDir }
+
+// shellPath is the shell word for a file in dir.
+func shellPath(dir, name string) string { return hosts.ShellWord(dir + "/" + name) }
+
+// env is the prefix that points a command at engine's Codex home.
+func (c *codexTarget) env() string { return "CODEX_HOME=" + hosts.ShellWord(c.engineHome()) + " " }
+
+// run is a codex command in the operator's Codex home; inEngine is one in
+// engine's.
+func (c *codexTarget) run(args string) string      { return c.word + " " + args }
+func (c *codexTarget) inEngine(args string) string { return c.env() + c.word + " " + args }
+
+// codexBlocked is a step that needs the binary step 7 did not find.
+func (r *runner) codexBlocked() outcome {
+	return open("codex is not usable (step 7)", r.rerun())
+}
+
+// firstLine is the first non-empty line of the command's output, else of its
+// errors.
+func (res result) firstLine() string {
+	for _, text := range []string{res.out, res.errOut} {
+		if lines := (result{out: text}).lines(); len(lines) > 0 {
+			return lines[0]
+		}
+	}
+	return ""
+}
+
+// codexBinary reads the host's paths, checks that the pinned Codex runs, and
+// reports what is wrong with the operator's own Codex: a connection that is
+// not up, and config keys it ignores.
+func (r *runner) codexBinary() (outcome, error) {
+	c := r.codex
+	res, err := r.t.sh(`printf '%s\n%s\n' "$HOME" "${CODEX_HOME:-$HOME/.codex}"`, "")
+	if err != nil {
+		return outcome{}, err
+	}
+	if lines := res.lines(); res.code == 0 && len(lines) >= 2 {
+		c.home, c.userHome = lines[0], lines[1]
+	} else {
+		c.missing = true
+		return open("could not read the home directory: "+res.why(), r.rerun()), nil
+	}
+	bin, err := r.host.BinPath(codexHarness, c.home)
+	if err != nil {
+		c.missing = true
+		return open(err.Error(), r.rerun()), nil
+	}
+	c.bin, c.word = bin, hosts.ShellWord(bin)
+	res, err = r.t.sh(c.run("--version"), "")
+	if err != nil {
+		return outcome{}, err
+	}
+	if res.code != 0 {
+		c.missing = true
+		return r.codexAbsent(res)
+	}
+	state, err := r.t.sh(c.run("remote-control --json"), "")
+	if err != nil {
+		return outcome{}, err
+	}
+	detail := strings.Join(append([]string{res.firstLine()}, operatorNotes(state)...), "; ")
+	return passed(detail), nil
+}
+
+// codexAbsent is the open item for a binary that does not run: a link to the
+// one on the PATH, else the install.
+func (r *runner) codexAbsent(failed result) (outcome, error) {
+	c := r.codex
+	found, err := r.t.sh("command -v codex", "")
+	if err != nil {
+		return outcome{}, err
+	}
+	if elsewhere := found.firstLine(); found.code == 0 && elsewhere != c.bin {
+		link := "mkdir -p " + hosts.ShellWord(filepath.Dir(c.bin)) + " && ln -sf " + hosts.ShellWord(elsewhere) + " " + c.word
+		return open(fmt.Sprintf("codex is at %s, not at %s (hosts.toml)", elsewhere, c.bin), r.t.onHost(link, false)), nil
+	}
+	return open(fmt.Sprintf("codex does not run at %s (%s)", c.bin, failed.why()), "install Codex there (operator-setup.md), then "+r.rerun()), nil
+}
+
+// codexSignIn checks that the operator's Codex is signed in, which engine's
+// home links to.
+func (r *runner) codexSignIn() (outcome, error) {
+	c := r.codex
+	if c.missing {
+		return r.codexBlocked(), nil
+	}
+	res, err := r.t.sh(c.run("login status"), "")
+	if err != nil {
+		return outcome{}, err
+	}
+	if res.code == 0 {
+		return passed(res.firstLine()), nil
+	}
+	c.signedOut = true
+	login := c.run("login")
+	if r.t.remote() {
+		login += " --device-auth"
+	}
+	return open("not signed in to Codex", r.t.onHost(login, true)), nil
+}
+
+// piece is one part of a step: what it changed, and the open item it ended
+// on, if any.
+type piece struct {
+	did  string
+	stop *outcome
+}
+
+func stopped(detail, command string) piece {
+	o := open(detail, command)
+	return piece{stop: &o}
+}
+
+// codexHome brings engine's Codex home to what a session there needs: its
+// config.toml block, a valid config, and the operator's login linked in.
+func (r *runner) codexHome() (outcome, error) {
+	if r.codex.missing {
+		return r.codexBlocked(), nil
+	}
+	var did []string
+	for _, part := range []func() (piece, error){r.writeCodexConfig, r.checkCodexConfig, r.linkCodexLogin} {
+		p, err := part()
+		if err != nil {
+			return outcome{}, err
+		}
+		if p.stop != nil {
+			return *p.stop, nil
+		}
+		if p.did != "" {
+			did = append(did, p.did)
+		}
+	}
+	if len(did) == 0 {
+		return passed(r.codex.engineHome()), nil
+	}
+	return changed(strings.Join(did, ", ")), nil
+}
+
+// writeCodexConfig puts engine's block at the top of config.toml, keeping what
+// Codex wrote after it, and writes the file only when it differs.
+func (r *runner) writeCodexConfig() (piece, error) {
+	c := r.codex
+	file := shellPath(c.engineHome(), "config.toml")
+	cur, err := r.t.sh("cat "+file, "")
+	if err != nil {
+		return piece{}, err
+	}
+	existing := ""
+	if cur.code == 0 {
+		existing = cur.out
+	}
+	want := withEngineBlock(existing, engineBlock(c.home))
+	if cur.code == 0 && want == existing {
+		return piece{}, nil
+	}
+	tmp := shellPath(c.engineHome(), "config.toml.tmp")
+	res, err := r.t.sh("umask 077 && mkdir -p "+hosts.ShellWord(c.engineHome())+" && cat > "+tmp+" && mv "+tmp+" "+file, want)
+	if err != nil {
+		return piece{}, err
+	}
+	if res.code != 0 {
+		return stopped("write config.toml failed: "+res.why(), r.rerun()), nil
+	}
+	return piece{did: "wrote config.toml"}, nil
+}
+
+// checkCodexConfig has Codex read engine's config.toml strictly, so a key its
+// version dropped shows here and not in a session.
+func (r *runner) checkCodexConfig() (piece, error) {
+	cmd := r.codex.inEngine("app-server --strict-config --print-startup-config")
+	res, err := r.t.sh(cmd, "")
+	if err != nil {
+		return piece{}, err
+	}
+	if res.code != 0 {
+		return stopped("Codex rejects engine's config.toml: "+res.why(), r.t.onHost(cmd, false)), nil
+	}
+	return piece{}, nil
+}
+
+// linkCodexLogin links the operator's auth.json into engine's home, so one
+// sign-in serves both. A file already there is engine's own login and stays.
+// Then it checks that engine's home is signed in.
+func (r *runner) linkCodexLogin() (piece, error) {
+	c := r.codex
+	if c.signedOut || c.userHome == c.engineHome() {
+		return piece{}, nil
+	}
+	source, link := shellPath(c.userHome, "auth.json"), shellPath(c.engineHome(), "auth.json")
+	state, err := r.t.sh(fmt.Sprintf(`if [ -L %[2]s ]; then readlink %[2]s; elif [ -e %[2]s ]; then echo FILE; else echo NONE; fi`, source, link), "")
+	if err != nil {
+		return piece{}, err
+	}
+	did := ""
+	if have := state.firstLine(); have != "FILE" && have != c.userHome+"/auth.json" {
+		if p, err := r.makeLink(source, link); err != nil || p.stop != nil {
+			return p, err
+		}
+		did = "linked the login"
+	}
+	login := c.inEngine("login")
+	res, err := r.t.sh(c.inEngine("login status"), "")
+	if err != nil {
+		return piece{}, err
+	}
+	if res.code != 0 {
+		return stopped("engine's Codex home is not signed in", r.t.onHost(login, true)), nil
+	}
+	return piece{did: did}, nil
+}
+
+// makeLink points link at the operator's login, which must be a file.
+func (r *runner) makeLink(source, link string) (piece, error) {
+	c := r.codex
+	has, err := r.t.sh("[ -f "+source+" ]", "")
+	if err != nil {
+		return piece{}, err
+	}
+	if has.code != 0 {
+		return stopped("the operator's login is not a file at "+c.userHome+"/auth.json, so engine's home has none to link",
+			r.t.onHost(c.inEngine("login"), true)), nil
+	}
+	res, err := r.t.sh("umask 077 && mkdir -p "+hosts.ShellWord(c.engineHome())+" && ln -sfn "+source+" "+link, "")
+	if err != nil {
+		return piece{}, err
+	}
+	if res.code != 0 {
+		return stopped("link the login failed: "+res.why(), r.rerun()), nil
+	}
+	return piece{}, nil
+}
+
+// engineCodexPlugin is the version of engine's plugin in engine's Codex home,
+// and whether it is installed and enabled.
+func (r *runner) engineCodexPlugin() (string, bool, error) {
+	res, err := r.t.sh(r.codex.inEngine("plugin list --json"), "")
+	if err != nil {
+		return "", false, err
+	}
+	version, found := installedCodexPlugin(res.out)
+	return version, found, nil
+}
+
+// codexPluginStep installs engine's plugin from this repo's marketplace into
+// engine's Codex home, or brings it to the caller's version.
+func (r *runner) codexPluginStep() (outcome, error) {
+	c := r.codex
+	if c.missing {
+		return r.codexBlocked(), nil
+	}
+	have, installed, err := r.engineCodexPlugin()
+	if err != nil || (installed && (r.want.plugin == "" || have == r.want.plugin)) {
+		return passed(have), err
+	}
+	for _, args := range []string{"plugin marketplace add " + engineRepo, "plugin marketplace upgrade engine", "plugin add " + pluginID} {
+		res, err := r.t.sh(c.inEngine(args), "")
+		if err != nil {
+			return outcome{}, err
+		}
+		if res.code != 0 {
+			return open("codex "+args+" failed: "+res.why(), r.t.onHost(c.inEngine(args), false)), nil
+		}
+	}
+	after, found, err := r.engineCodexPlugin()
+	switch {
+	case err != nil:
+		return outcome{}, err
+	case !found:
+		return open(pluginID+" is not enabled in engine's Codex home after the install", r.rerun()), nil
+	case r.want.plugin != "" && after != r.want.plugin:
+		return open(fmt.Sprintf("the marketplace gives Codex plugin %s there and this host has %s; merge the plugin change first", after, r.want.plugin), r.rerun()), nil
+	}
+	return changed(fmt.Sprintf("%s, was %s", after, orNone(have))), nil
+}
+
+// daemonState reads engine's daemon: whether it runs, and the state of its
+// remote control.
+func (r *runner) daemonState() (bool, string, error) {
+	c := r.codex
+	up, err := r.t.sh(c.inEngine("app-server daemon version"), "")
+	if err != nil {
+		return false, "", err
+	}
+	if up.code != 0 || !strings.Contains(up.out, `"running"`) {
+		return false, "", nil
+	}
+	rc, err := r.t.sh(c.inEngine("remote-control --json"), "")
+	return true, remoteState(rc), err
+}
+
+// remoteOn reports whether a state means remote control is turned on, whether
+// or not its connection is up.
+func remoteOn(state string) bool { return state != remoteDisabled && state != "unreadable" }
+
+// daemonStart is the command that starts engine's daemon with remote control
+// on and the machine user's token in its environment. The token comes from
+// its file, so it is on no command line.
+func (r *runner) daemonStart() string {
+	c := r.codex
+	file := shellPath(hosts.ConfigDir(c.home), "github-token")
+	return fmt.Sprintf(`t="$(cat %s)" && [ -n "$t" ] && GH_TOKEN="$t" %s`, file, c.inEngine("remote-control start"))
+}
+
+// codexDaemon makes sure engine's own app-server daemon runs from engine's
+// Codex home with remote control on, and starts it when it does not.
+func (r *runner) codexDaemon() (outcome, error) {
+	if r.codex.missing {
+		return r.codexBlocked(), nil
+	}
+	up, state, err := r.daemonState()
+	if err != nil {
+		return outcome{}, err
+	}
+	if up && remoteOn(state) {
+		return passed("running; remote control " + state), nil
+	}
+	start := r.daemonStart()
+	res, err := r.t.sh(start, "")
+	if err != nil {
+		return outcome{}, err
+	}
+	if res.code != 0 {
+		return open("codex remote-control start failed: "+res.why(), r.t.onHost(start, false)), nil
+	}
+	if up, state, err = r.daemonState(); err != nil {
+		return outcome{}, err
+	}
+	if !up || !remoteOn(state) {
+		return open(fmt.Sprintf("engine's daemon is not up with remote control after the start (running %t, remote control %s)", up, state), r.t.onHost(start, false)), nil
+	}
+	return changed("started; remote control " + state), nil
+}
