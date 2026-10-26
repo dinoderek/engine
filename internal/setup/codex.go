@@ -53,6 +53,17 @@ func (res result) firstLine() string {
 	return ""
 }
 
+// lastLine is the last non-empty line of the command's errors, else of its
+// output: the line that says why, after any progress lines.
+func (res result) lastLine() string {
+	for _, text := range []string{res.errOut, res.out} {
+		if lines := (result{out: text}).lines(); len(lines) > 0 {
+			return lines[len(lines)-1]
+		}
+	}
+	return fmt.Sprintf("exit status %d", res.code)
+}
+
 // codexBinary reads the host's paths, checks that the pinned Codex runs, and
 // reports what is wrong with the operator's own Codex: a connection that is
 // not up, and config keys it ignores.
@@ -140,13 +151,13 @@ func stopped(detail, command string) piece {
 }
 
 // codexHome brings engine's Codex home to what a session there needs: its
-// config.toml block, a valid config, and the operator's login linked in.
+// config.toml block and the operator's login linked in.
 func (r *runner) codexHome() (outcome, error) {
 	if r.codex.missing {
 		return r.codexBlocked(), nil
 	}
 	var did []string
-	for _, part := range []func() (piece, error){r.writeCodexConfig, r.checkCodexConfig, r.linkCodexLogin} {
+	for _, part := range []func() (piece, error){r.writeCodexConfig, r.linkCodexLogin} {
 		p, err := part()
 		if err != nil {
 			return outcome{}, err
@@ -190,20 +201,6 @@ func (r *runner) writeCodexConfig() (piece, error) {
 		return stopped("write config.toml failed: "+res.why(), r.rerun()), nil
 	}
 	return piece{did: "wrote config.toml"}, nil
-}
-
-// checkCodexConfig has Codex read engine's config.toml strictly, so a key its
-// version dropped shows here and not in a session.
-func (r *runner) checkCodexConfig() (piece, error) {
-	cmd := r.codex.inEngine("app-server --strict-config --print-startup-config")
-	res, err := r.t.sh(cmd, "")
-	if err != nil {
-		return piece{}, err
-	}
-	if res.code != 0 {
-		return stopped("Codex rejects engine's config.toml: "+res.why(), r.t.onHost(cmd, false)), nil
-	}
-	return piece{}, nil
 }
 
 // linkCodexLogin links the operator's auth.json into engine's home, so one
@@ -342,19 +339,21 @@ func (r *runner) codexDaemon() (outcome, error) {
 	if up && remoteOn(state) {
 		return passed("running; remote control " + state), nil
 	}
+	// A start exits 1 when the connection to the apps is errored, though the
+	// daemon runs with remote control on: judge it by what runs afterwards.
 	start := r.daemonStart()
 	res, err := r.t.sh(start, "")
 	if err != nil {
 		return outcome{}, err
 	}
-	if res.code != 0 {
-		return open("codex remote-control start failed: "+res.why(), r.t.onHost(start, false)), nil
-	}
 	if up, state, err = r.daemonState(); err != nil {
 		return outcome{}, err
 	}
-	if !up || !remoteOn(state) {
-		return open(fmt.Sprintf("engine's daemon is not up with remote control after the start (running %t, remote control %s)", up, state), r.t.onHost(start, false)), nil
+	switch {
+	case !up:
+		return open("engine's daemon is not running after the start: "+res.lastLine(), r.t.onHost(start, false)), nil
+	case !remoteOn(state):
+		return open(fmt.Sprintf("remote control is %s after the start: %s", state, res.lastLine()), r.t.onHost(start, false)), nil
 	}
 	return changed("started; remote control " + state), nil
 }

@@ -29,7 +29,6 @@ type codexState struct {
 
 	config     *string // engine's config.toml; nil is none
 	authLink   string  // "", "FILE", or the link's target
-	strictFail string  // why Codex rejects engine's config
 	plugin     string  // version of engine's plugin in engine's home; "" is none
 	marketFail bool
 	// pluginLeaves is the version an install leaves, when not the caller's;
@@ -153,13 +152,6 @@ func (c *codexState) operator(args string, out, errOut io.Writer) (int, bool) {
 // inEngine answers the commands in engine's Codex home.
 func (c *codexState) inEngine(b *box, args string, out, errOut io.Writer) (int, bool) {
 	switch args {
-	case "app-server --strict-config --print-startup-config":
-		if c.strictFail != "" {
-			fmt.Fprint(errOut, c.strictFail)
-			return 1, true
-		}
-		fmt.Fprintln(out, `{"appServerVersion":"0.164.0"}`)
-		return 0, true
 	case "login status":
 		if !c.engineSignedIn() {
 			fmt.Fprintln(errOut, "Not logged in")
@@ -221,6 +213,10 @@ func (c *codexState) start(b *box, cmd string, errOut io.Writer) (int, bool) {
 	c.daemonUp, c.remote = true, "connected"
 	if c.startLeaves != "" {
 		c.remote = c.startLeaves
+	}
+	if c.remote == remoteErrored {
+		fmt.Fprint(errOut, "Starting app-server daemon with remote control enabled...\nError: Remote control is enabled on box but the connection is errored.")
+		return 1, true
 	}
 	return 0, true
 }

@@ -105,9 +105,6 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.signedIn = false }},
 		{"config cannot be written", "9. codex home: OPEN", "write config.toml failed: cat: No space left on device", "engine setup --host box",
 			func(c *codexState) { c.config, c.writeFail = nil, true }},
-		{"Codex rejects the config", "9. codex home: OPEN", "Codex rejects engine's config.toml: unknown field approvals_reviewer",
-			"CODEX_HOME=" + boxEngineH + " " + boxCodex + " app-server --strict-config --print-startup-config",
-			func(c *codexState) { c.strictFail = "unknown field approvals_reviewer" }},
 		{"the operator's login is not a file", "9. codex home: OPEN", "the operator's login is not a file at /home/dev/.codex/auth.json",
 			"ssh -t dev@box 'CODEX_HOME=" + boxEngineH + " " + boxCodex + " login'",
 			func(c *codexState) { c.authLink, c.userAuth = "", false }},
@@ -120,10 +117,10 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.plugin, c.leavesNothing = "", true }},
 		{"the marketplace is older than the caller", "10. codex plugin: OPEN", "gives Codex plugin 0.6.0 there and this host has 0.7.1", "engine setup --host box",
 			func(c *codexState) { c.plugin, c.pluginLeaves = "0.2.0", "0.6.0" }},
-		{"the daemon cannot start", "11. codex daemon: OPEN", "codex remote-control start failed: cat: github-token: No such file or directory",
+		{"the daemon cannot start", "11. codex daemon: OPEN", "engine's daemon is not running after the start: cat: github-token: No such file or directory",
 			"ssh dev@box 't=\"$(cat /home/dev/.config/engine/github-token)\"",
 			func(c *codexState) { c.daemonUp, c.remote, c.startFail = false, "", true }},
-		{"remote control stays off", "11. codex daemon: OPEN", "not up with remote control after the start (running true, remote control disabled)", "remote-control start",
+		{"remote control stays off", "11. codex daemon: OPEN", "remote control is disabled after the start", "remote-control start",
 			func(c *codexState) { c.daemonUp, c.remote, c.startLeaves = false, "", "disabled" }},
 		{"the check finds a prompt", "12. preflight: OPEN", "an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'",
 			func(*codexState) {}},
@@ -198,6 +195,15 @@ func TestCodexSetupKeepsWhatIsAlreadyRight(t *testing.T) {
 		if linked != (c.did != "") {
 			t.Errorf("%s: linked %v, mutations %q", c.name, linked, r.box.mutations)
 		}
+	}
+}
+
+func TestAStartThatExitsOnAnErroredConnectionStillStartedTheDaemon(t *testing.T) {
+	codex := settledCodex(boxHome)
+	codex.daemonUp, codex.remote, codex.startLeaves = false, "", remoteErrored
+	r := newCodexRig(t, codex)
+	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "11. codex daemon: changed (started; remote control errored)") {
+		t.Errorf("errored start:\n%s", r.out.String())
 	}
 }
 

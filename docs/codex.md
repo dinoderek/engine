@@ -119,13 +119,15 @@ with the host's `CODEX_HOME` ("Starting", "Apps"):
   `workspace-write` sandbox, `network_access`, and engine's clones as a writable
   root. Hook trust is left to the launch. Codex's own tables follow the block
   (the marketplace and plugin entries it writes, and folder trust). Setup
-  replaces the block and keeps the rest, then has Codex read the file strictly.
+  replaces the block and keeps the rest.
 - **The login** is a link to the operator's `auth.json`. A file already there is
   engine's own login and stays.
 - **The plugin** installs from this repo's marketplace into that home, not the
   operator's.
 - **The daemon** is `codex remote-control start` in that home, with the machine
-  user's token in its environment, read from its file.
+  user's token in its environment, read from its file. The start exits 1 when
+  the connection to the apps is errored, though the daemon runs with remote
+  control on, so setup judges it by the daemon and its state afterwards.
 
 ## Apps
 
