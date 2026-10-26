@@ -93,16 +93,18 @@ event that set it, the time and Codex's session ID. A prompt, or a finished
 tool call, makes the session `working`: the call after an approved permission
 request is how a `waiting` session resumes. A session start, `Stop`,
 `Interrupt` or attended permission request makes it `waiting`, and a session
-end `ended`. A session that joined a remote-control daemon runs its hooks in the
-daemon's environment, which has no `ENGINE_RUN_DIR`, `ENGINE_HARNESS` or
+end `ended`. A session that joined a remote-control daemon runs its hooks in
+the daemon's environment, which has no `ENGINE_RUN_DIR`, `ENGINE_HARNESS` or
 `ENGINE_UNATTENDED`. Without `ENGINE_RUN_DIR`, the state and permission hooks
 take the event's `cwd`, find the run whose `run.json` names the deepest
 worktree holding it (the newest, if several), and read the harness and mode
-from that record. Outside any run's worktree the hook does nothing, and no
-hook ever fails a Codex turn. `status` reads the file for a window whose newest run is
-Codex's. A missing or unreadable file is unknown, never dead, and so is
-`ended` while the window lives. Codex's `notify` is not used, because it holds
-a single program and other tools already claim it (Computer Use on the Mac).
+from that record. Only a Codex run is taken: a Claude session always has its
+variables, and one opened by hand in a run's worktree is not that run's.
+Outside any run's worktree the hook does nothing, and no hook ever fails a
+Codex turn. `status` reads the file for a window whose newest run is Codex's. A
+missing or unreadable file is unknown, never dead, and so is `ended` while the
+window lives. Codex's `notify` is not used, because it holds a single program
+and other tools already claim it (Computer Use on the Mac).
 
 ## Check
 

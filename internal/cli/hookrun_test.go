@@ -111,7 +111,7 @@ func TestPermissionHookFindsItsRunByCwd(t *testing.T) {
 	}{
 		{"a hands-off Codex run is left to auto-review", func(h hookHome) string { return h.codex }, nil, false, func(h hookHome) string { return h.codexRun }, hook.AutoReview},
 		{"from a folder below the worktree", func(h hookHome) string { return filepath.Join(h.codex, "internal") }, nil, false, func(h hookHome) string { return h.codexRun }, hook.AutoReview},
-		{"a hands-off Claude run is denied", func(h hookHome) string { return h.claude }, nil, true, func(h hookHome) string { return h.claudeRun }, `"decision":"deny"`},
+		{"a Claude session by hand in a run's worktree prompts as usual", func(h hookHome) string { return h.claude }, nil, false, nil, ""},
 		{"a gated run prompts as usual", func(h hookHome) string { return h.gated }, nil, false, nil, ""},
 		{"elsewhere nothing happens", func(h hookHome) string { return h.home }, nil, false, nil, ""},
 		{"elsewhere, the variables still deny", func(h hookHome) string { return h.home }, map[string]string{session.UnattendedVar: "1"}, true, nil, ""},
