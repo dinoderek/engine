@@ -134,7 +134,7 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	if err != nil {
 		return CheckResult{}, fmt.Errorf("open the tmux window: %w", err)
 	}
-	fmt.Fprintf(out, "checking in %s:%s (run directory %s); this takes a few minutes\n", session.Name, opened.ID, runDir)
+	fmt.Fprintf(out, "checking in %s:%s (run directory %s); this takes about a minute\n", session.Name, opened.ID, runDir)
 	r.Closed, err = waitClosed(d, opened.ID)
 	if !r.Closed {
 		r.Screen, _ = d.Tmux.Capture(opened.ID, stallLines)
