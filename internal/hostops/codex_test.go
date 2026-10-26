@@ -170,6 +170,14 @@ func TestReleaseNotesAProfileItCannotDelete(t *testing.T) {
 	}
 }
 
+// writeCheckState plays the session's hook: it writes the state file in the
+// check's run directory.
+func writeCheckState(t *testing.T, d Deps, state string) {
+	t.Helper()
+	runDir := filepath.Join(d.Home, ".local/share/engine/runs", checkRun)
+	write(t, filepath.Join(runDir, session.StateFile), `{"state":"`+state+`","event":"Stop","time":"2026-01-02T03:04:05Z"}`+"\n", 0o600)
+}
+
 func TestCheckCodex(t *testing.T) {
 	f := &checkTmux{openPolls: 1}
 	d, h, _ := checkDeps(t, f)
@@ -179,9 +187,10 @@ func TestCheckCodex(t *testing.T) {
 	f.act = func() {
 		trusted, _ = os.ReadFile(profile)
 		write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600)
+		writeCheckState(t, d, session.StateEnded)
 	}
 	r, err := Check(d, Codex, &bytes.Buffer{})
-	if err != nil || !r.OK() {
+	if err != nil || !r.OK() || !r.Signalled || r.State != session.StateEnded {
 		t.Fatalf("result %+v, %v", r, err)
 	}
 	work := filepath.Join(r.RunDir, "work")
@@ -213,6 +222,7 @@ func TestCheckCodexAutoReviewIsNoDenial(t *testing.T) {
 		write(t, filepath.Join(runDir, session.PermissionLog),
 			`{"event":"PermissionRequest","tool":"Bash","input":{"command":"tmux kill-window"},"decision":"`+hook.AutoReview+`"}`+"\n", 0o600)
 		write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600)
+		writeCheckState(t, d, session.StateWorking)
 	}
 	r, err := Check(d, Codex, &bytes.Buffer{})
 	if err != nil || !r.OK() || len(r.Denied) != 0 || len(r.Reviewed) != 1 {
@@ -242,5 +252,55 @@ func TestClonePathIsAPlainWord(t *testing.T) {
 		if err != nil || hosts.ShellWord(path) != path {
 			t.Errorf("%s: clone path %s is not a plain word (%v)", repo, path, err)
 		}
+	}
+}
+
+// A Codex session that did every step but whose hooks wrote no state file
+// fails the check: engine would never see it work, wait or end.
+func TestCheckCodexFailsWithoutAStateFile(t *testing.T) {
+	f := &checkTmux{openPolls: 1}
+	d, h, _ := checkDeps(t, f)
+	h.fakeCodex(t)
+	f.act = func() { write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600) }
+	var out bytes.Buffer
+	ok, err := RunCheck(d, Codex, &out)
+	if ok || err != nil {
+		t.Fatalf("ok=%v, %v\n%s", ok, err, out.String())
+	}
+	for _, want := range []string{"ok   the session closed its own window", "ok   the session did every step",
+		"FAIL the session's hooks wrote its state (no state file in the run directory)", "would stop"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// A Codex session that sits on a prompt stalls the check; the report shows
+// its last screen and the state its hooks recorded.
+func TestCheckCodexStallsOnAPrompt(t *testing.T) {
+	f := &checkTmux{openPolls: 1 << 30, screen: "Allow Codex to run `rm`? [y/n]\n"}
+	d, h, _ := checkDeps(t, f)
+	h.fakeCodex(t)
+	f.act = func() { writeCheckState(t, d, session.StateWaiting) }
+	var out bytes.Buffer
+	ok, err := RunCheck(d, Codex, &out)
+	if ok || err != nil || !f.killed {
+		t.Fatalf("ok=%v, %v, killed %v\n%s", ok, err, f.killed, out.String())
+	}
+	for _, want := range []string{"FAIL the session closed its own window", "Allow Codex to run `rm`?", "ok   the session's hooks wrote its state (last: waiting)"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// Claude's check needs no state file: its state comes from claude agents.
+func TestCheckClaudeNeedsNoStateFile(t *testing.T) {
+	f := &checkTmux{openPolls: 1}
+	d, _, _ := checkDeps(t, f)
+	f.act = func() { write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600) }
+	var out bytes.Buffer
+	if ok, err := RunCheck(d, Claude, &out); !ok || err != nil || strings.Contains(out.String(), "hooks wrote") {
+		t.Errorf("ok=%v, %v\n%s", ok, err, out.String())
 	}
 }

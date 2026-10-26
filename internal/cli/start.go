@@ -8,7 +8,7 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-const startUsage = "usage: engine start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated] [--host <name>]\n       engine start --check [--host <name>]\n"
+const startUsage = "usage: engine start <owner/repo#n> [--harness <name>] [--tier deep|standard|light] [--mode hands-off|gated] [--host <name>]\n       engine start --check [--harness <name>] [--host <name>]\n"
 
 // startArgs are engine start's arguments: a task to start, or a check.
 type startArgs struct {
@@ -25,7 +25,7 @@ func runStart(args []string, env Env) int {
 		return 2
 	}
 	if a.Check {
-		return runCheck(a.Host, env)
+		return runCheck(a.Host, a.Harness, env)
 	}
 	if err := start.Run(a.Options, startDeps(env), env.Out); err != nil {
 		fmt.Fprintln(env.Err, "engine start:", err)
@@ -34,10 +34,11 @@ func runStart(args []string, env Env) int {
 	return 0
 }
 
-// runCheck runs the preflight check, on host, which is this one when empty,
-// and exits 1 when an unattended session there would stop.
-func runCheck(host string, env Env) int {
-	ok, err := start.Check(startDeps(env), host, env.Out)
+// runCheck runs the preflight check of harness (Claude when empty), on host,
+// which is this one when empty, and exits 1 when an unattended session there
+// would stop.
+func runCheck(host, harness string, env Env) int {
+	ok, err := start.Check(startDeps(env), host, harness, env.Out)
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine start --check:", err)
 		return 1
@@ -58,16 +59,16 @@ func startDeps(env Env) start.Deps {
 	return start.Deps{GH: env.Exec, Run: env.Run, Exec: env.Local, Tmux: env.Tmux, SSH: env.SSH, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
 }
 
-// parseStart reads the task and the --tier, --mode, --host and --check
-// flags, as `--flag value` or `--flag=value`, in any order. A check takes
-// only --host.
+// parseStart reads the task and the --harness, --tier, --mode, --host and
+// --check flags, as `--flag value` or `--flag=value`, in any order. A check
+// takes only --harness and --host.
 func parseStart(args []string) (startArgs, error) {
 	var a startArgs
 	var ref string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		name, value, inline := strings.Cut(arg, "=")
-		dst := map[string]*string{"--tier": &a.Tier, "--mode": &a.Mode, "--host": &a.Host}[name]
+		dst := map[string]*string{"--harness": &a.Harness, "--tier": &a.Tier, "--mode": &a.Mode, "--host": &a.Host}[name]
 		switch {
 		case arg == "--check":
 			a.Check = true

@@ -22,8 +22,10 @@ type hostFake struct {
 	calls     []string
 	spawned   []hostops.SpawnRequest
 	checked   bool
-	checkOK   bool
-	checkErr  error
+	// checkedHarness is the harness the last check named.
+	checkedHarness string
+	checkOK        bool
+	checkErr       error
 }
 
 func (f *hostFake) Status() (hostops.Status, error) {
@@ -43,8 +45,8 @@ func (f *hostFake) Spawn(r hostops.SpawnRequest) (hostops.Spawned, error) {
 		Attach: "tmux attach -t '=engine:@4'"}, nil
 }
 
-func (f *hostFake) Check(out io.Writer) (bool, error) {
-	f.checked = true
+func (f *hostFake) Check(harness string, out io.Writer) (bool, error) {
+	f.checked, f.checkedHarness = true, harness
 	_, _ = io.WriteString(out, "the report\n")
 	return f.checkOK, f.checkErr
 }
@@ -144,15 +146,15 @@ func TestCheckOnAHost(t *testing.T) {
 	f := &hostFake{checkOK: true}
 	d := remoteDeps(t, h, &ghFake{}, f)
 	var out bytes.Buffer
-	if ok, err := Check(d, "dev", &out); !ok || err != nil || !f.checked || out.String() != "the report\n" {
+	if ok, err := Check(d, "dev", "", &out); !ok || err != nil || !f.checked || f.checkedHarness != "" || out.String() != "the report\n" {
 		t.Errorf("ok=%v err=%v checked=%v out=%q", ok, err, f.checked, out.String())
 	}
 	f = &hostFake{checkOK: false}
-	if ok, err := Check(remoteDeps(t, h, &ghFake{}, f), "dev", &out); ok || err != nil || !f.checked {
-		t.Errorf("a failed check: ok=%v err=%v", ok, err)
+	if ok, err := Check(remoteDeps(t, h, &ghFake{}, f), "dev", "codex", &out); ok || err != nil || !f.checked || f.checkedHarness != "codex" {
+		t.Errorf("a failed check of codex: ok=%v err=%v harness=%q", ok, err, f.checkedHarness)
 	}
 	f = &hostFake{checkErr: errors.New("unreachable")}
-	if ok, err := Check(remoteDeps(t, h, &ghFake{}, f), "", &out); ok || err == nil || !f.checked {
+	if ok, err := Check(remoteDeps(t, h, &ghFake{}, f), "", "", &out); ok || err == nil || !f.checked {
 		t.Errorf("no host: ok=%v err=%v checked=%v", ok, err, f.checked)
 	}
 }
@@ -160,13 +162,32 @@ func TestCheckOnAHost(t *testing.T) {
 func TestCheckRefusesWhatItCannotReach(t *testing.T) {
 	h := newHome(t, "mac")
 	d := remoteDeps(t, h, &ghFake{}, &hostFake{})
-	_, err := Check(d, "nowhere", &bytes.Buffer{})
+	_, err := Check(d, "nowhere", "", &bytes.Buffer{})
 	var refused *RefusedError
 	if !errors.As(err, &refused) || !strings.Contains(err.Error(), `host "nowhere" is not in hosts.toml`) {
 		t.Errorf("unknown host: %v", err)
 	}
 	d.Home = t.TempDir()
-	if _, err := Check(d, "dev", &bytes.Buffer{}); !errors.As(err, &refused) || !strings.Contains(err.Error(), "read host config") {
+	if _, err := Check(d, "dev", "", &bytes.Buffer{}); !errors.As(err, &refused) || !strings.Contains(err.Error(), "read host config") {
 		t.Errorf("no host config: %v", err)
+	}
+}
+
+// With --host, the caller refuses a harness the host does not run before it
+// reaches the host, and sends one it does run in the spawn.
+func TestStartOnAnotherHostWithAHarness(t *testing.T) {
+	h := newHome(t, "mac")
+	gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3, body: card("deep")}}
+	f := &hostFake{status: hostops.Status{Slots: 3, FreeSlots: 1}}
+	err := Run(Options{Ref: ref(7), Host: "dev", Harness: "codex"}, remoteDeps(t, h, gh, f), &bytes.Buffer{})
+	var refused *RefusedError
+	if !errors.As(err, &refused) || !strings.Contains(err.Error(), "host dev does not run codex") || len(f.calls) != 0 {
+		t.Errorf("err = %v, calls %v", err, f.calls)
+	}
+	if err := Run(Options{Ref: ref(7), Host: "box", Harness: "codex"}, remoteDeps(t, h, gh, f), &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.spawned) != 1 || f.spawned[0].Harness != "codex" || f.spawned[0].Model != "sol" {
+		t.Errorf("spawned %+v", f.spawned)
 	}
 }
