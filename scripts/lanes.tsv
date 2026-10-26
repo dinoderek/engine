@@ -19,5 +19,5 @@ unit	required	*.go,go.mod,go.sum,testdata/	go test -race -count=1 ./...
 coverage	required	*.go,go.mod,go.sum,testdata/	dev check coverage -min 80
 file-length	required	*	dev check file-length -max 500 -exclude *.md,go.sum
 imports	required	*.go,go.mod,import-rules.tsv,import-baseline.tsv	dev check imports
-versions	required	go.mod,*.md,.github/,.golangci.yml	dev check versions
+versions	required	go.mod,*.md,plugin.json,.github/,.golangci.yml	dev check versions
 docs-check	required	*	dev check docs

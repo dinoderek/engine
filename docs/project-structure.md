@@ -25,8 +25,8 @@
 | `scripts/` | registries: lanes, import rules, doc budgets and baselines |
 | `docs/` | the persistent docs |
 | `design/` | ephemeral drafts: exempt from the doc rules, never cited |
-| `plugins/engine/` | the `engine` Claude Code plugin: its skills in `skills/<name>/SKILL.md`, its hooks in `plugins/engine/hooks/hooks.json` |
-| `.claude-plugin/` | the marketplace that publishes `plugins/` |
+| `plugins/engine/` | the `engine` plugin: its skills in `skills/<name>/SKILL.md`, its Claude hooks in `plugins/engine/hooks/hooks.json`, its Codex manifest and hooks in `plugins/engine/.codex-plugin/plugin.json` |
+| `.claude-plugin/`, `.agents/plugins/` | the Claude and Codex marketplaces that publish `plugins/` |
 | `.claude/` | this repo's Claude Code settings: it enables the `engine` plugin |
 | `.github/` | the CI workflow, Dependabot config, PR template and task-issue template |
 | `go.mod`, `go.sum` | the module, the Go version, and the dev tools |
@@ -49,8 +49,8 @@
   its line in the usage text.
 - **A skill:** `plugins/engine/skills/<name>/SKILL.md`, with any references
   in `references/` beside it, and a budget row in `scripts/doc-budgets.tsv`
-  for each file. Bump `version` in the plugin's `plugin.json`:
-  Claude Code sees an update only when it changes.
+  for each file. Bump `version` in both of the plugin's `plugin.json` files:
+  the harnesses see an update only when it changes.
 - **A doc:** a file in `docs/` with the Owns/Not here header, a row in
   `AGENTS.md`'s load-on-demand table, and, if it needs one, a budget in
   `scripts/doc-budgets.tsv`.

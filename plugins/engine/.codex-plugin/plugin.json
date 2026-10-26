@@ -1,0 +1,98 @@
+{
+  "name": "engine",
+  "version": "0.7.8",
+  "description": "The engine skill: plan, execute and review engine tasks, hands-off or gated, with a merge guard.",
+  "author": {
+    "name": "dinoderek"
+  },
+  "skills": "./skills/",
+  "hooks": {
+    "hooks": {
+      "PreToolUse": [
+        {
+          "matcher": "Bash",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook pre-tool-use"
+            }
+          ]
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook permission"
+            },
+            {
+              "type": "command",
+              "command": "engine hook state"
+            }
+          ]
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook state"
+            }
+          ]
+        }
+      ],
+      "SessionEnd": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook state"
+            }
+          ]
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook state"
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook state"
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook state"
+            }
+          ]
+        }
+      ],
+      "Interrupt": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "engine hook state"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

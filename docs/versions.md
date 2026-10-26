@@ -27,6 +27,7 @@ CI's setup-go reads the same line. Docs cite `go.mod`, never the version.
   `go-version-file: go.mod`, or pins an action by tag rather than by commit SHA
   with a version comment;
 - `.golangci.yml` sets its own Go version;
+- a plugin's Claude and Codex manifests (`plugin.json`) declare different versions;
 - a persistent doc (outside `design/`) restates a Go version.
 
 ## Upgrade policy
