@@ -168,7 +168,10 @@ func TestSpawnCodexEmbedded(t *testing.T) {
 		name, why string
 		d         func(home string) *daemon
 	}{
-		{"down", "engine's Codex daemon is not running", func(string) *daemon { return down() }},
+		{"down", "engine's Codex daemon is not running (Error: failed to connect); ", func(string) *daemon { return down() }},
+		{"down, no stderr", "engine's Codex daemon is not running; ", func(string) *daemon {
+			return &daemon{versionErr: &session.ExitError{Command: "codex app-server daemon version", Code: 1}}
+		}},
 		{"errored", "engine's Codex daemon is unreadable", func(string) *daemon { return errored() }},
 		{"stopped", "engine's Codex daemon is stopped", func(string) *daemon { return &daemon{version: `{"status":"stopped"}`} }},
 		{"failed to run", "engine's Codex daemon is unreadable (env: boom)", func(string) *daemon { return &daemon{versionErr: errors.New("env: boom")} }},

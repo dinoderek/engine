@@ -144,7 +144,9 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    mode. A Codex session joined to remote control gets the `ENGINE_*`
    variables on its command line instead, and the token from the daemon
    (`codex.md`, "Starting");
-6. writes `run.json` (`telemetry.md`) and prints how to attach.
+6. writes `run.json` (`telemetry.md`), before step 4 for a Codex session
+   joined to remote control, whose hooks find their run by it, and prints how
+   to attach.
 
 The checks run in `engine start`, which also picks the model, effort and
 kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
