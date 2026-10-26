@@ -28,6 +28,8 @@ permission` and `engine hook pre-tool-use` on their events. The repo's
 `.agents/plugins/marketplace.json` lists it. `codex plugin marketplace add
 dinoderek/engine` then `codex plugin add engine@engine` install it. The two
 manifests carry one version: the versions lane fails when they differ.
+Codex runs a plugin's hooks only once they are reviewed and trusted: review
+them in the first session after an install and after each update.
 
 ## Permission mode
 

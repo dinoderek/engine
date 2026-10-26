@@ -51,7 +51,8 @@ plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
 engine@engine`. Sign in to Claude Code
 with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex. Setup copies the Mac's engine commit and
-plugin version to the other hosts, so update both here first.
+Claude plugin version to the other hosts, so update both here first. It does
+not install the Codex plugin: install it by hand on each Codex host.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
