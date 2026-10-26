@@ -44,9 +44,9 @@ type Deps struct {
 	BaseURL string
 	// Sleep waits between the check's polls; nil is time.Sleep.
 	Sleep func(time.Duration)
-	// JoinRemote lets a spawn join the host's remote-control daemon when it
-	// is connected. Off, a session starts embedded and spawn never asks the
-	// daemon its state.
+	// JoinRemote lets a spawn and the check join engine's remote-control
+	// daemon when it runs with remote control on. Off, a session starts
+	// embedded and nothing asks the daemon its state. The commands set it.
 	JoinRemote bool
 }
 

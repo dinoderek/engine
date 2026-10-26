@@ -71,7 +71,8 @@ func TestCodexSetsUpAFreshHostAndStaysSafeToRerun(t *testing.T) {
 		}
 	}
 	start := lastWith(r.box.mutations, "remote-control start")
-	if !strings.Contains(start, `GH_TOKEN="$t" CODEX_HOME=`+boxEngineH+" "+boxCodex+" remote-control start") ||
+	// A daemon started from inside a session must not keep its run's variables.
+	if !strings.Contains(start, `unset ENGINE_RUN_DIR ENGINE_HARNESS ENGINE_UNATTENDED TMUX TMUX_PANE && GH_TOKEN="$t" CODEX_HOME=`+boxEngineH+" "+boxCodex+" remote-control start") ||
 		!strings.Contains(start, "cat "+boxHome+"/.config/engine/github-token") {
 		t.Errorf("start %q", start)
 	}

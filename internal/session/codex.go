@@ -30,27 +30,35 @@ func CodexProfilePath(codexHome, profile string) string {
 
 // WriteCodexProfile writes engine's profile for a session in codexHome: it
 // trusts dir, and its resolved path when that differs, so a session started
-// there skips Codex's folder-trust prompt. The user's config.toml is never
-// touched. The file is replaced in one rename.
-func WriteCodexProfile(codexHome, profile, dir string) error {
+// there skips Codex's folder-trust prompt, and makes clone a writable root,
+// because a worktree's git metadata lives in its clone. The user's
+// config.toml is never touched. The file is replaced in one rename.
+func WriteCodexProfile(codexHome, profile, dir, clone string) error {
 	if !validPart(profile) {
 		return fmt.Errorf("codex profile %q: use letters, digits, _, . and -", profile)
-	}
-	keys := []string{dir}
-	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
-		keys = append(keys, real)
 	}
 	var b strings.Builder
 	b.WriteString("# engine's profile for one session: it trusts the session's folder.\n")
 	b.WriteString("# engine host release deletes it.\n")
-	for _, k := range keys {
-		fmt.Fprintf(&b, "\n[projects.%s]\ntrust_level = \"trusted\"\n", tomlString(k))
+	for _, k := range trustKeys(dir) {
+		fmt.Fprintf(&b, "\n[projects.%s]\ntrust_level = \"trusted\"\n", TOMLString(k))
 	}
+	fmt.Fprintf(&b, "\n[sandbox_workspace_write]\nwritable_roots = [%s]\n", TOMLString(clone))
 	if err := os.MkdirAll(codexHome, 0o700); err != nil {
 		return err
 	}
 	_, err := replaceFile(CodexProfilePath(codexHome, profile), []byte(strings.TrimSuffix(b.String(), "\n")), 0o600, func() bool { return true })
 	return err
+}
+
+// trustKeys are the paths that trust dir: dir, and its resolved path when
+// that differs.
+func trustKeys(dir string) []string {
+	keys := []string{dir}
+	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
+		keys = append(keys, real)
+	}
+	return keys
 }
 
 // RemoveCodexProfile deletes engine's profile from codexHome, and reports
@@ -63,8 +71,8 @@ func RemoveCodexProfile(codexHome, profile string) (bool, error) {
 	return err == nil, err
 }
 
-// tomlString quotes s as a TOML basic string.
-func tomlString(s string) string {
+// TOMLString quotes s as a TOML basic string.
+func TOMLString(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
 	for _, r := range s {

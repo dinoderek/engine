@@ -23,7 +23,7 @@ func TestLaunchLineExpandsEveryPlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(got, "/home/me/.local/bin/codex ") || !strings.Contains(got, `["/c/o/r"]`) ||
+	if !strings.HasPrefix(got, "/home/me/.local/bin/codex ") ||
 		!strings.Contains(got, "-m gpt-6-luna -c model_reasoning_effort=medium") || strings.Contains(got, "{") {
 		t.Errorf("codex: %s", got)
 	}
@@ -82,19 +82,26 @@ func TestLaunchLineFailures(t *testing.T) {
 	}
 }
 
-// {clone} sits inside quotes in Codex's launch line, so a clone path that is
-// not a plain word fails; a launch line without {clone} takes any.
+// {clone} may sit inside quotes in a launch line, so a clone path that is not
+// a plain word fails; a launch line without {clone} takes any.
 func TestLaunchLineNeedsAPlainClone(t *testing.T) {
 	c, err := Parse(docExample(t))
 	if err != nil {
 		t.Fatal(err)
 	}
+	codex := c.Harnesses["codex"]
+	codex.Launch += ` -c 'sandbox_workspace_write.writable_roots=["{clone}"]'`
+	c.Harnesses["codex"] = codex
 	mac := c.Hosts["mac"]
 	for _, clone := range []string{"/home/my user/r", `/c/"]x`, "/c/$(x)"} {
 		_, err := c.LaunchLine(mac, Launch{Harness: "codex", Tier: Light, Name: "r-1", Clone: clone, Home: "/home/me"})
 		if err == nil || !strings.Contains(err.Error(), "not a plain word") {
 			t.Errorf("codex, clone %q: %v", clone, err)
 		}
+	}
+	got, err := c.LaunchLine(mac, Launch{Harness: "codex", Tier: Light, Name: "r-1", Clone: "/c/o/r", Home: "/home/me"})
+	if err != nil || !strings.Contains(got, `["/c/o/r"]`) {
+		t.Errorf("codex, a plain clone: %s, %v", got, err)
 	}
 	if _, err := c.LaunchLine(mac, Launch{Harness: "claude", Tier: Light, Name: "r-1", Clone: "/home/my user/r", Home: "/home/me"}); err != nil {
 		t.Errorf("claude: %v", err)

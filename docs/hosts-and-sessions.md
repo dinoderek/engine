@@ -141,8 +141,12 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    Control session). `/bin/sh` first exports `GH_TOKEN` from the
    token file, off every command line, `ENGINE_RUN_DIR` (the run directory),
    `ENGINE_HARNESS` (the harness), and `ENGINE_UNATTENDED=1` in hands-off
-   mode;
-6. writes `run.json` (`telemetry.md`) and prints how to attach.
+   mode. A Codex session joined to remote control gets the `ENGINE_*`
+   variables on its command line instead, and the token from the daemon
+   (`codex.md`, "Starting");
+6. writes `run.json` (`telemetry.md`; a Codex session joined to remote
+   control gets it before step 4, since its hooks find their run by it) and
+   prints how to attach.
 
 The checks run in `engine start`, which also picks the model, effort and
 kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
@@ -191,7 +195,7 @@ hand and one started by the coordinator look the same.
 | --- | --- |
 | Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. |
 | Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
-| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: none; a session engine starts runs embedded (`codex.md`, "Apps"). |
+| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT and Codex apps, when the session joined engine's remote-control daemon (`codex.md`, "Apps"). |
 
 Clients share one window: everyone sees the same screen and can type.
 

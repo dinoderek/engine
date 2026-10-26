@@ -13,7 +13,7 @@ import (
 
 // hostsTOML is a host config with two slots on mac, a host that runs Codex
 // only and one that runs Claude only. Tests replace @BIN@ with the fake
-// harness's path. Codex's launch line quotes {clone}, as the real one does.
+// harness's path.
 const hostsTOML = `default_harness = "claude"
 gb_per_session = 8
 reserve_gb = 8
@@ -27,7 +27,7 @@ tiers.light    = { model = "haiku-x",  effort = "medium" }
 
 [harness.codex]
 max_sessions = 2
-launch = "{bin} -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
+launch = "{bin} -c sandbox_workspace_write.network_access=true -m {model} -c model_reasoning_effort={effort}"
 tiers.deep     = { model = "sol", effort = "high" }
 tiers.standard = { model = "sol", effort = "medium" }
 tiers.light    = { model = "luna", effort = "medium" }
@@ -114,8 +114,10 @@ type tmuxFake struct {
 	openErr error // new-session and new-window fail
 	// awakeErr fails the keep-awake job, which the fake's Tmux then starts.
 	awakeErr error
-	command  string
-	calls    []string
+	// opening runs as the window opens.
+	opening func()
+	command string
+	calls   []string
 }
 
 func (f *tmuxFake) run(_ string, args ...string) (string, error) {
@@ -129,6 +131,9 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 	case "list-windows":
 		return f.list(line)
 	case "new-session", "new-window":
+		if f.opening != nil {
+			f.opening()
+		}
 		if f.openErr != nil {
 			return "", f.openErr
 		}

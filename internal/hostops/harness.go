@@ -1,10 +1,7 @@
 package hostops
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
@@ -21,26 +18,28 @@ const (
 // /private/tmp.
 var tmpReads = []string{"Read(//tmp/**)", "Read(//private/tmp/**)"}
 
-// harness is every step of a launch that differs between harnesses: how a
-// session's folder is trusted, where the harness keeps its config, and what
-// follows the host's launch line.
+// harness is every step of a launch that differs between harnesses: whether
+// the session joins a remote-control daemon, how its folder is trusted, where
+// the harness keeps its config, and what follows the host's launch line.
 type harness interface {
 	// Name is the harness's name in hosts.toml and run.json.
 	Name() string
-	// Trust makes dir trusted for the session, so no trust prompt blocks
-	// its start.
-	Trust(dir string) error
-	// Untrust undoes what Trust left that belongs to this session alone.
-	Untrust() error
+	// Join decides, through the harness binary bin, whether a session
+	// launched with the expanded launch line joins the host's remote-control
+	// daemon. It only reads. When the session starts without, warning says
+	// why.
+	Join(run session.Runner, bin, line string) (joined bool, warning string)
+	// Trust makes dir, a folder in clone, trusted for the session, so no
+	// trust prompt blocks its start.
+	Trust(dir, clone string, joined bool) error
+	// Untrust undoes what Trust left for dir that belongs to this session
+	// alone. An empty dir undoes only what needs no folder.
+	Untrust(dir string) error
 	// Env is the shell that exports the harness's config location, ending
 	// in " && ": the tmux server's environment may differ from the caller's.
-	Env() string
-	// Remote asks the host's remote-control daemon, through the harness binary
-	// bin, whether a session can join it. It returns the flags that join it
-	// to put in Args, and a warning when the session starts without.
-	Remote(run session.Runner, bin string) (flags, warning string)
-	// Args follow the launch line: the flags Remote returned, then the kickoff.
-	Args(remote, kickoff string) string
+	Env(joined bool) string
+	// Args follow the launch line, ending in the kickoff.
+	Args(l launch) string
 }
 
 // harnessFor returns the harness called name, or Claude when name is empty,
@@ -66,7 +65,10 @@ type claude struct{ d Deps }
 
 func (claude) Name() string { return Claude }
 
-func (c claude) Trust(dir string) error {
+// Join is false: Claude's launch line names the session for Remote Control.
+func (claude) Join(session.Runner, string, string) (bool, string) { return false, "" }
+
+func (c claude) Trust(dir, _ string, _ bool) error {
 	if err := session.TrustFolder(session.ClaudeConfig(c.d.Getenv, c.d.Home), dir); err != nil {
 		return fmt.Errorf("trust %s for Claude Code: %w", dir, err)
 	}
@@ -75,123 +77,30 @@ func (c claude) Trust(dir string) error {
 
 // Untrust leaves the folder trusted: the trust is a key in a file Claude
 // Code shares with every session.
-func (claude) Untrust() error { return nil }
+func (claude) Untrust(string) error { return nil }
 
-func (c claude) Env() string {
+func (c claude) Env(bool) string {
 	if dir := c.d.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
 		return "export CLAUDE_CONFIG_DIR=" + hosts.ShellWord(dir) + " && "
 	}
 	return "unset CLAUDE_CONFIG_DIR && "
 }
 
-// Remote is empty: Claude's launch line names the session for Remote Control.
-func (claude) Remote(session.Runner, string) (flags, warning string) { return "", "" }
-
-func (c claude) Args(_, kickoff string) string {
+func (c claude) Args(l launch) string {
 	args := " --add-dir " + hosts.ShellWord(session.PluginDir(c.d.Getenv, c.d.Home)) + " --allowedTools"
 	for _, rule := range tmpReads {
 		args += " " + hosts.ShellWord(rule)
 	}
-	return args + " -- " + hosts.ShellWord(kickoff)
+	return args + " -- " + hosts.ShellWord(l.kickoff)
 }
 
-// codex trusts the folder in engine's own profile for the session, which
-// the launch selects with -p, so the user's config.toml is never edited. It
-// runs the hooks of engine's Codex plugin without Codex's per-hash hook
-// trust, whose review prompt would stop an unattended launch.
-type codex struct {
-	d       Deps
-	profile string
+// launch is what a window runs: the expanded launch line, the session's
+// folder, the run directory, the mode, the kickoff, and whether the session
+// joins remote control.
+type launch struct {
+	line, dir, runDir, mode, kickoff string
+	joined                           bool
 }
-
-func (codex) Name() string { return Codex }
-
-func (c codex) home() string { return session.CodexHome(c.getenv, c.d.Home) }
-
-// getenv is Deps.Getenv, or an empty environment when that is nil, as in a
-// release whose caller set none.
-func (c codex) getenv(k string) string {
-	if c.d.Getenv == nil {
-		return ""
-	}
-	return c.d.Getenv(k)
-}
-
-func (c codex) Trust(dir string) error {
-	if err := session.WriteCodexProfile(c.home(), c.profile, dir); err != nil {
-		return fmt.Errorf("trust %s for Codex: %w", dir, err)
-	}
-	return nil
-}
-
-func (c codex) Untrust() error {
-	_, err := session.RemoveCodexProfile(c.home(), c.profile)
-	return err
-}
-
-func (c codex) Env() string {
-	if dir := c.getenv("CODEX_HOME"); dir != "" {
-		return "export CODEX_HOME=" + hosts.ShellWord(dir) + " && "
-	}
-	return "unset CODEX_HOME && "
-}
-
-// remoteFlags join the host's remote-control daemon over its default socket.
-const remoteFlags = " --remote unix://"
-
-// Remote reads the daemon's state with `codex remote-control --json`, which
-// reports it without starting or stopping anything. Only a connected daemon
-// takes the session; in any other state, or when the state cannot be read,
-// the session starts without and the warning names the command that starts
-// the daemon.
-func (c codex) Remote(run session.Runner, bin string) (flags, warning string) {
-	out, err := run(bin, "remote-control", "--json")
-	state := daemonState(out, err)
-	if state == "connected" {
-		return remoteFlags, ""
-	}
-	return "", "Codex remote control is " + state + " on this host, so the session is not in the ChatGPT and Codex apps; " +
-		"run `codex remote-control start` on this host"
-}
-
-// daemonState is the connection state `codex remote-control --json` printed:
-// connected, connecting, disabled or errored. A command that exits non-zero
-// reports an errored connection; one that cannot run, or prints no state, is
-// unreadable.
-func daemonState(out string, err error) string {
-	var exit *session.ExitError
-	if errors.As(err, &exit) {
-		if msg := lastLine(exit.Stderr); msg != "" {
-			return "errored (" + msg + ")"
-		}
-		return "errored"
-	}
-	if err != nil {
-		return "unreadable (" + err.Error() + ")"
-	}
-	var reply struct {
-		Status string `json:"status"`
-	}
-	if json.Unmarshal([]byte(out), &reply) != nil || reply.Status == "" {
-		return "unreadable"
-	}
-	return reply.Status
-}
-
-// lastLine is the last line of Codex's stderr, without the log-level noise
-// before it, such as its complaint about an ignored config key.
-func lastLine(stderr string) string {
-	lines := strings.Split(strings.TrimSpace(stderr), "\n")
-	return strings.TrimSpace(strings.TrimPrefix(lines[len(lines)-1], "Error:"))
-}
-
-func (c codex) Args(remote, kickoff string) string {
-	return " -p " + hosts.ShellWord(c.profile) + " --dangerously-bypass-hook-trust" + remote + " -- " + hosts.ShellWord(kickoff)
-}
-
-// launch is what a window runs: the expanded launch line, the run directory,
-// the mode, the kickoff and the flags that join remote control.
-type launch struct{ line, runDir, mode, kickoff, remote string }
 
 // launchCommand is a window's shell command. It runs under /bin/sh, whatever
 // tmux's default shell is: export the machine user's token from its file, so
@@ -209,6 +118,6 @@ func launchCommand(d Deps, h harness, l launch) string {
 	} else {
 		script += "unset " + session.UnattendedVar + " && "
 	}
-	script += h.Env() + "exec " + l.line + h.Args(l.remote, l.kickoff)
+	script += h.Env(l.joined) + "exec " + l.line + h.Args(l)
 	return "exec /bin/sh -c " + hosts.ShellWord(script)
 }

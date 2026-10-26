@@ -55,6 +55,10 @@ type CheckResult struct {
 	Signalled bool
 	// State is the state the file last recorded, when it is there.
 	State string
+	// Joined is true when the session joined the host's remote-control
+	// daemon, as a spawn would; Embedded says why it did not.
+	Joined   bool
+	Embedded string
 }
 
 // autoReview is the decision the permission hook logs for a request it left
@@ -77,7 +81,7 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	if err != nil {
 		return CheckResult{}, err
 	}
-	cfg, host, err := checkHost(d, h.Name())
+	cfg, host, bin, err := checkHost(d, h.Name())
 	if err != nil {
 		return CheckResult{}, err
 	}
@@ -90,35 +94,47 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		return CheckResult{}, err
 	}
-	if err := h.Trust(work); err != nil {
+	line, err := cfg.LaunchLine(host, hosts.Launch{Harness: h.Name(), Tier: hosts.Light, Name: CheckName, Clone: work, Home: d.Home})
+	if err != nil {
+		return CheckResult{}, err
+	}
+	r := CheckResult{RunDir: runDir, hooked: h.Name() == Codex}
+	if d.JoinRemote {
+		r.Joined, r.Embedded = h.Join(d.Exec, bin, line)
+	}
+	if err := h.Trust(work, work, r.Joined); err != nil {
 		return CheckResult{}, err
 	}
 	defer func() {
-		if err := h.Untrust(); err != nil {
+		if err := h.Untrust(work); err != nil {
 			fmt.Fprintf(out, "could not remove the check's trust: %v\n", err)
 		}
 	}()
+	// A joined session's hooks find their run by its folder, in run.json.
+	if r.Joined {
+		rec := session.Record{Schema: session.RecordSchema, RunID: runID, Host: host.Name, Harness: h.Name(), Tier: string(hosts.Light),
+			Mode: HandsOff, Name: CheckName, Worktree: work, PaneLog: filepath.Join(runDir, session.PaneLog), Spawned: d.Now().UTC()}
+		if err := session.WriteRecord(runDir, rec); err != nil {
+			return CheckResult{}, err
+		}
+	}
 	// A marker left by anyone else must not read as this session's.
 	marker := filepath.Join(checkTmp, "engine-"+runID)
 	if err := os.Remove(marker); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return CheckResult{}, err
 	}
 	defer func() { _ = os.Remove(marker) }()
-	line, err := cfg.LaunchLine(host, hosts.Launch{Harness: h.Name(), Tier: hosts.Light, Name: CheckName, Clone: work, Home: d.Home})
-	if err != nil {
-		return CheckResult{}, err
-	}
 	kickoff := CheckKickoff(filepath.Join(session.PluginDir(d.Getenv, d.Home), "skills", "engine", "SKILL.md"), marker)
 	if h.Name() == Codex {
 		kickoff = CodexCheckKickoff(marker)
 	}
-	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(d, h, launch{line, runDir, HandsOff, kickoff, ""}), Log: filepath.Join(runDir, session.PaneLog)}
+	l := launch{line: line, dir: work, runDir: runDir, mode: HandsOff, kickoff: kickoff, joined: r.Joined}
+	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(d, h, l), Log: filepath.Join(runDir, session.PaneLog)}
 	opened, err := d.Tmux.Open(w)
 	if err != nil {
 		return CheckResult{}, fmt.Errorf("open the tmux window: %w", err)
 	}
 	fmt.Fprintf(out, "checking in %s:%s (run directory %s); this takes a few minutes\n", session.Name, opened.ID, runDir)
-	r := CheckResult{RunDir: runDir, hooked: h.Name() == Codex}
 	r.Closed, err = waitClosed(d, opened.ID)
 	if !r.Closed {
 		r.Screen, _ = d.Tmux.Capture(opened.ID, stallLines)
@@ -141,26 +157,28 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 }
 
 // checkHost runs the refusals that apply without a task: the token, the
-// host config, the harness and its binary, and a free window name.
-func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, error) {
+// host config, the harness and its binary, and a free window name. It
+// returns the binary's path.
+func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, string, error) {
 	if _, err := readToken(d.Home); err != nil {
-		return nil, hosts.Host{}, err
+		return nil, hosts.Host{}, "", err
 	}
 	cfg, host, err := openHost(d.Home)
 	if err != nil {
-		return nil, hosts.Host{}, err
+		return nil, hosts.Host{}, "", err
 	}
-	if _, err := checkHarness(host, harness, d.Home); err != nil {
-		return nil, hosts.Host{}, err
+	bin, err := checkHarness(host, harness, d.Home)
+	if err != nil {
+		return nil, hosts.Host{}, "", err
 	}
 	ok, err := d.Tmux.HasWindow(CheckName)
 	if err != nil {
-		return nil, hosts.Host{}, refuse("cannot list the tmux windows: %v", err)
+		return nil, hosts.Host{}, "", refuse("cannot list the tmux windows: %v", err)
 	}
 	if ok {
-		return nil, hosts.Host{}, refuse("the tmux session %s already has a window %s: a check is running, or close it", session.Name, CheckName)
+		return nil, hosts.Host{}, "", refuse("the tmux session %s already has a window %s: a check is running, or close it", session.Name, CheckName)
 	}
-	return cfg, host, nil
+	return cfg, host, bin, nil
 }
 
 // CheckKickoff is the check session's first message.
@@ -269,6 +287,11 @@ func RunCheck(d Deps, harness string, out io.Writer) (bool, error) {
 // ReportCheck prints the check's findings.
 func ReportCheck(out io.Writer, r CheckResult) {
 	mark := map[bool]string{true: "ok  ", false: "FAIL"}
+	if r.Joined {
+		fmt.Fprintln(out, "ok   the session joined remote control")
+	} else if r.Embedded != "" {
+		fmt.Fprintf(out, "note %s\n", r.Embedded)
+	}
 	fmt.Fprintf(out, "%s the session closed its own window\n", mark[r.Closed])
 	if r.Screen != "" {
 		fmt.Fprintf(out, "     it stalled; its last screen:\n%s\n", indent(r.Screen))

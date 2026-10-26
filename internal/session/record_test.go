@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -38,5 +39,26 @@ func TestRecord(t *testing.T) {
 	if text := readFile(filepath.Join(runDir, RecordFile)); !strings.Contains(text, `"spawned": "2026-01-02T02:04:05Z"`) || !strings.Contains(text, `"heavy": true`) ||
 		strings.Contains(text, "feature") {
 		t.Errorf("run.json:\n%s", text)
+	}
+}
+
+// A rewrite replaces run.json, readable by everyone, and leaves no temporary
+// file beside it.
+func TestWriteRecordReplacesTheFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "run")
+	for _, tmux := range []string{"engine:", "engine:@9"} {
+		if err := WriteRecord(dir, Record{Name: "r-7", Tmux: tmux}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec, err := ReadRecord(dir)
+	if err != nil || rec.Tmux != "engine:@9" {
+		t.Errorf("record %+v, %v", rec, err)
+	}
+	if info, err := os.Stat(filepath.Join(dir, RecordFile)); err != nil || info.Mode().Perm() != 0o644 {
+		t.Errorf("mode %v, %v", info.Mode(), err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Errorf("left %v", entries)
 	}
 }

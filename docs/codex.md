@@ -13,31 +13,43 @@ The harness's launch line and tiers:
 ```toml
 [harness.codex]
 max_sessions = 2
-launch = "{bin} --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[\"{clone}\"]' -m {model} -c model_reasoning_effort={effort}"
+launch = "{bin} --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -m {model} -c model_reasoning_effort={effort}"
 tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }   # not Astra: Sol at high is close on coding, far cheaper
 tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
 tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 ```
 
-`{model}` and `{effort}` come from the tier. `{clone}` is engine's clone of
-the repo. It sits inside quotes, so it must expand to a plain word: engine's
-clone paths are, under a home directory whose path is one, and a launch line
-with `{clone}` fails otherwise.
+`{model}` and `{effort}` come from the tier. The line sets no writable root
+and no `--add-dir`: a joined session refuses both ("Apps"), so a line that
+has either keeps every session embedded, and `spawn` warns.
 
 ## Starting
 
-`spawn` writes engine's profile for the session,
-`$CODEX_HOME/engine-<repo>-<task>.config.toml` (`~/.codex` without
-`CODEX_HOME`), which trusts the worktree and its resolved path. After the
-launch line come `-p engine-<repo>-<task>`, which layers that profile on the
-user's config, `--dangerously-bypass-hook-trust`, then `--` and the kickoff.
-`release` deletes the profile. The window also exports `ENGINE_HARNESS=codex`.
+`spawn` joins engine's remote-control daemon when it can ("Apps"), and
+otherwise starts the session embedded. Either way the window exports
+`ENGINE_HARNESS=codex`, and `--dangerously-bypass-hook-trust`, then `--` and
+the kickoff, follow the launch line.
 
-- **Folder trust.** The profile holds it: a session starts without the
-  trust prompt, and the user's `config.toml` is untouched. A `-c
-  'projects."<path>".trust_level=…'` does not hold it; the prompt still shows.
-  A profile makes Codex run embedded, without the shared app-server; a joined
-  session ignores it ("Apps").
+- **Joined.** The window runs with `CODEX_HOME` at engine's Codex home
+  ("Setup"). `spawn` adds the worktree and its resolved path to that home's
+  `config.toml`, one `[projects."<path>"]` table each, and `release` removes
+  them. After the launch line come `-C <worktree>`, without which the daemon
+  starts the thread in its own working directory, `-c
+  shell_environment_policy.set={…}`,
+  which gives the agent's commands `ENGINE_RUN_DIR`, `ENGINE_HARNESS`, in
+  hands-off mode `ENGINE_UNATTENDED`, and the window's `TMUX` and
+  `TMUX_PANE`, then `--remote unix://`. The token is not passed: it is in
+  the daemon's environment.
+- **Embedded.** The window keeps the host's own `CODEX_HOME`. `spawn` writes
+  engine's profile for the session,
+  `$CODEX_HOME/engine-<repo>-<task>.config.toml` (`~/.codex` without
+  `CODEX_HOME`), which trusts the worktree and its resolved path and makes
+  engine's clone a writable root, and adds `-p engine-<repo>-<task>`, which
+  layers it on the user's config. `release` deletes it.
+
+- **Folder trust.** A `-c 'projects."<path>".trust_level=…'` does not hold
+  it; the prompt still shows. The profile or engine's `config.toml` does, and
+  the operator's own `config.toml` is untouched.
 - **Hook trust.** Codex runs a hook only once its hash is trusted, and
   otherwise asks for a review first, which would stop an unattended start.
   Engine-launched sessions bypass that, as Claude sessions run a repo's hooks
@@ -69,9 +81,11 @@ The sandbox needs two exceptions for executors:
 - **Engine's clone as a writable root**
   (`sandbox_workspace_write.writable_roots`), because a worktree's git
   metadata lives in the main clone's `.git/worktrees/`, outside the worktree.
+  An embedded session's profile names the clone; engine's `config.toml`
+  names every clone, for joined sessions.
 
-All Codex settings are passed per session, with `-c` or the session's
-profile. The host's own `~/.codex/config.toml` is never edited.
+The other settings are passed per session, with `-c`. The host's own
+`~/.codex/config.toml` is never edited.
 
 ## Guards
 
@@ -114,14 +128,17 @@ and other tools already claim it (Computer Use on the Mac).
 shell. A Codex check fails when its window does not close (the report shows the
 last screen, where a prompt would be), or a step is skipped, or the session's
 hooks wrote no `harness-state.json`: that file is the proof they ran. Requests
-left to auto-review are listed, and fail nothing.
+left to auto-review are listed, and fail nothing. The check joins engine's
+daemon as a spawn would, and then writes a `run.json` naming its folder, which
+the joined hooks find their run by; the report says whether it joined, and if
+not, why.
 
 ## Setup
 
 `engine setup` (`operator-setup.md`) gives a host that lists `codex` engine's
 own Codex home, `~/.local/share/engine/codex`, for engine's sessions to join, apart from the
-operator's own home, which setup never edits. Sessions still launch embedded,
-with the host's `CODEX_HOME` ("Starting", "Apps"):
+operator's own home, which setup never edits. A session that cannot join
+still launches embedded, with the host's `CODEX_HOME` ("Starting", "Apps"):
 
 - **`config.toml`.** Setup owns a block at its top: auto-review, the
   `workspace-write` sandbox, `network_access`, and engine's clones as a writable
@@ -133,27 +150,38 @@ with the host's `CODEX_HOME` ("Starting", "Apps"):
 - **The plugin** installs from this repo's marketplace into that home, not the
   operator's.
 - **The daemon** is `codex remote-control start` in that home, with the machine
-  user's token in its environment, read from its file. The start exits 1 when
+  user's token in its environment, read from its file, and without a session's
+  `ENGINE_*`, `TMUX` and `TMUX_PANE`, which joined hooks would otherwise take
+  for their own when setup runs inside a session. The start exits 1 when
   the connection to the apps is errored, though the daemon runs with remote
   control on, so setup judges it by the daemon afterwards ("Apps").
 
 ## Apps
 
 The apps list sessions on a host's remote-control daemon (`codex remote-control
-start`). A session engine launches runs embedded, because of its profile
-("Starting"), so the apps do not show it. `spawn` can join a connected daemon:
-with `Deps.JoinRemote` set, it reads the daemon's state with `codex
-remote-control --json`, which changes nothing, and adds `--remote unix://` only
-when the state is `connected`. In any other state (disabled, connecting,
-errored, a failed or unreadable reply) the session starts embedded and
-`spawn`'s reply warns, naming `codex remote-control start`; a down daemon never
-refuses a spawn. Nothing sets `JoinRemote`, because a joined session
-differs from an embedded one (Codex 0.164.0):
+start`). With `Deps.JoinRemote` set, as the `engine` commands set it, `spawn`
+joins engine's own daemon when it runs in engine's Codex home with remote
+control on: `codex app-server daemon version` there, which starts nothing,
+reports it running, and its process carries `--remote-control`. Otherwise
+(no daemon, remote control off, a reply that cannot be read, or a launch line
+with a writable root or `--add-dir`) the session starts embedded, and
+`spawn`'s reply warns, saying why and that `engine setup` starts the daemon; a
+down daemon never refuses a spawn. The apps' own connection is not read:
+`codex remote-control --json` is not a read of one Codex home's daemon. With
+no daemon it serves in the foreground, with remote control on, until stopped;
+at engine's daemon it reported the machine's errored connection on the Mac
+while the daemon's log said connected, and a foreground failure on Linux.
+Setup also reads the operator's state only once `codex app-server daemon
+version` reports a daemon running there.
+
+A joined session differs from an embedded one (Codex 0.164.0), which is why
+"Starting" launches it differently:
 
 - The agent and its hooks run inside the daemon. They see the daemon's
   environment, not the window's: `GH_TOKEN` and `ENGINE_*` exported by the
   window are lost. `-c shell_environment_policy.set={…}` reaches the agent's
-  commands, not the hooks, which get only the event, including its `cwd`.
+  commands, not the hooks, which get only the event, including its `cwd`
+  ("Session signals").
 - The session's profile (`-p`) is ignored. Folder trust comes from the
   daemon's `config.toml`, one entry per folder (a parent does not cover its
   children, and `-c projects."…".trust_level` does not stop the prompt).
@@ -164,17 +192,8 @@ differs from an embedded one (Codex 0.164.0):
   `--dangerously-bypass-hook-trust` on the TUI, or a review prompt stops the
   session.
 
-`codex remote-control --json` is not a read of one Codex home's daemon. With
-no daemon it serves in the foreground, with remote control on, until stopped;
-with `CODEX_HOME` set at engine's daemon it reported the machine's errored
-connection on the Mac, and a foreground failure on Linux. Setup judges
-engine's remote control by the daemon's process arguments (`--remote-control`),
-and reads the operator's state only once `codex app-server daemon version`
-reports a daemon running there.
-
 A daemon started with its own `CODEX_HOME` reads its own `config.toml` and
 `hooks.json`, and a TUI run with the same `CODEX_HOME` joins it with `--remote
-unix://`, so engine's sessions can have a config apart from the operator's
-manual ones. Codex has no flag that names a session, so the apps show its thread
-title, not `<repo>-<task>`, and the kickoff's `rc=` is unused. The preflight
-check never joins.
+unix://`, so engine's sessions have a config apart from the operator's manual
+ones. Codex has no flag that names a session, so the apps show its thread
+title, not `<repo>-<task>`, and the kickoff's `rc=` is unused.

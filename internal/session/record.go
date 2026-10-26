@@ -86,5 +86,7 @@ func WriteRecord(dir string, rec Record) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, RecordFile), append(data, '\n'), 0o644)
+	// One rename: a hook that looks for its run never reads half a file.
+	_, err = replaceFile(filepath.Join(dir, RecordFile), data, 0o644, func() bool { return true })
+	return err
 }
