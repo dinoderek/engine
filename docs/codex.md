@@ -111,8 +111,9 @@ left to auto-review are listed, and fail nothing.
 ## Setup
 
 `engine setup` (`operator-setup.md`) gives a host that lists `codex` engine's
-own Codex home, `~/.local/share/engine/codex`, so engine's sessions have config
-apart from the operator's own, which setup never edits:
+own Codex home, `~/.local/share/engine/codex`, for engine's sessions to join, apart from the
+operator's own home, which setup never edits. Sessions still launch embedded,
+with the host's `CODEX_HOME` ("Starting", "Apps"):
 
 - **`config.toml`.** Setup owns a block at its top: auto-review, the
   `workspace-write` sandbox, `network_access`, and engine's clones as a writable

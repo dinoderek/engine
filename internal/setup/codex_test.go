@@ -300,3 +300,16 @@ func TestAHostWithoutCodexRunsNoCodexSteps(t *testing.T) {
 		t.Errorf("checks %q", got)
 	}
 }
+
+func TestAFailingDefaultCodexCheckNamesTheCodexRemedy(t *testing.T) {
+	r := newCodexRig(t, settledCodex(boxHome))
+	r.home = callerHomeWith(t, strings.Replace(codexHostsTOML, `default_harness = "claude"`, `default_harness = "codex"`, 1))
+	r.check = func() (bool, error) { return false, nil }
+	if mustRun(t, r, "box") {
+		t.Fatal("closed")
+	}
+	out := r.out.String()
+	if !strings.Contains(out, "engine start --check --harness codex --host box") || strings.Contains(out, "claude --permission-mode") {
+		t.Errorf("out:\n%s", out)
+	}
+}

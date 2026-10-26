@@ -31,7 +31,8 @@ func engineBlock(home string) string {
 // withEngineBlock is config with the block at its top and the rest left as
 // Codex wrote it: the marketplace and plugin tables it adds, and any folder
 // trust. An earlier block is replaced: it runs from the header to the first
-// table other than its own.
+// table other than its own, so a top-level key Codex adds later, or one in a
+// file with no header, falls inside the block and is dropped by the next run.
 func withEngineBlock(config, block string) string {
 	rest := config
 	if strings.HasPrefix(config, configHeader) {

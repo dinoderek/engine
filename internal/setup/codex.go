@@ -215,7 +215,7 @@ func (r *runner) linkCodexLogin() (piece, error) {
 		return piece{}, nil
 	}
 	source, link := shellPath(c.userHome, "auth.json"), shellPath(c.engineHome(), "auth.json")
-	state, err := r.t.sh(fmt.Sprintf(`if [ -L %[2]s ]; then readlink %[2]s; elif [ -e %[2]s ]; then echo FILE; else echo NONE; fi`, source, link), "")
+	state, err := r.t.sh(fmt.Sprintf(`if [ -L %[1]s ]; then readlink %[1]s; elif [ -e %[1]s ]; then echo FILE; else echo NONE; fi`, link), "")
 	if err != nil {
 		return piece{}, err
 	}

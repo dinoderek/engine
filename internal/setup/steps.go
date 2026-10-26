@@ -323,6 +323,9 @@ func (r *runner) preflight(out io.Writer) (outcome, error) {
 // session would stop. A host that does not answer is an error.
 func (r *runner) check(harness string, out io.Writer) (outcome, error) {
 	clean, err := r.d.Check(harness, out)
+	if harness == "" {
+		harness = r.defaultHarness
+	}
 	var unreachable *remote.UnreachableError
 	switch {
 	case errors.As(err, &unreachable):

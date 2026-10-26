@@ -52,7 +52,10 @@ engine@engine`. Sign in to Claude Code
 with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex (`codex login`). Setup copies the Mac's
 engine commit and Claude plugin version to the other hosts, so update both here
-first.
+first. Setup installs the Codex plugin only into engine's own Codex home, and
+sessions run from the host's own: install it there by hand on each Codex host,
+with `codex plugin marketplace add dinoderek/engine` and `codex plugin add
+engine@engine`.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
@@ -64,17 +67,16 @@ only engine's own files (`~/.config/engine/`, `~/.local/bin/engine`,
 engine's own Codex home; Go's own cache holds the toolchain download. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one exact
 command, and it exits 1 while any item is open. It refuses a build that is
 dirty or not on GitHub, and a name that is not a machine in `hosts.toml`.
-With no `--host` it only checks this host.
+With no `--host` it checks this host, apart from the Codex steps, which act.
 
-**Codex, on a host that lists it.** The Mac too: setup acts on Codex there.
-It checks that the pinned Codex runs and is signed in, then builds engine's own
+**Codex, on a host that lists it.** The Mac too. Setup checks that the pinned Codex runs and is signed in, then builds engine's own
 Codex home (`codex.md`, "Setup"), and never edits `~/.codex`. Starting engine's
 daemon turns on remote control, which opens a connection to OpenAI's service for
 the ChatGPT and Codex apps. Signing in is yours: setup prints `codex login`, or,
 on another host, `ssh -t <address> codex login --device-auth`. The daemon keeps
 the token it started with: after rotating it, stop the daemon with
 `CODEX_HOME=~/.local/share/engine/codex codex app-server daemon stop` and
-rerun setup. Setup reports the operator's own remote-control errors and ignored
+rerun setup; the same after a reboot, which stops the daemon. Setup reports the operator's own remote-control errors and ignored
 config keys, and fixes none.
 
 **Claude's one-time prompts.** Nobody is there to answer them in an engine
