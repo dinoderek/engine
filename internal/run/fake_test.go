@@ -243,8 +243,13 @@ func (w *world) status(h fakeHost) hostops.Status {
 			continue
 		}
 		win := hostops.Window{Name: e.window.Name, ID: e.window.ID, Alive: !e.window.Dead, Harness: e.harness}
-		if !e.window.Dead && h.agentsDown == "" {
-			agent := session.Agent{Name: e.window.Name, Status: e.status}
+		// A Codex window's state is its state file's, whatever Claude Code's
+		// list says; Claude Code's list holds Claude sessions only.
+		switch agent := (session.Agent{Name: e.window.Name, Status: e.status}); {
+		case e.window.Dead:
+		case e.harness == hostops.Codex:
+			win.State = session.AgentState(agent)
+		case h.agentsDown == "":
 			st.Agents = append(st.Agents, agent)
 			win.State = session.AgentState(agent)
 		}

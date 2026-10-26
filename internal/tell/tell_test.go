@@ -1,6 +1,7 @@
 package tell
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,6 +69,7 @@ const (
 type gh struct {
 	t          *testing.T
 	host       string
+	harness    string
 	commentErr error
 	posted     string
 }
@@ -77,7 +79,7 @@ func (g *gh) run(env []string, name string, args ...string) (string, error) {
 		g.t.Errorf("unexpected command %s %v", name, args)
 		return "", errors.New("unexpected")
 	}
-	claim := fmt.Sprintf("Claim: r-7\nRun: r-7-20261024T000000Z\nHost: %s\nHarness: claude-code 2.1 (sonnet)\nMode: hands-off\nStarted by: engine start\nTmux: engine:r-7\nRemote Control: r-7\nBranch: task/r-7", g.host)
+	claim := fmt.Sprintf("Claim: r-7\nRun: r-7-20261024T000000Z\nHost: %s\nHarness: "+cmp.Or(g.harness, "claude-code 2.1 (sonnet)")+"\nMode: hands-off\nStarted by: engine start\nTmux: engine:r-7\nRemote Control: r-7\nBranch: task/r-7", g.host)
 	switch {
 	case args[1] == "search/issues":
 		return jsonOf(g.t, map[string]any{"incomplete_results": false, "items": []map[string]any{{
@@ -177,6 +179,28 @@ func TestTellCommentsAndTypes(t *testing.T) {
 	want := [][]string{{"send-keys", "-t", "=engine:@4", "-l", Pointer(commentURL)}, {"send-keys", "-t", "=engine:@4", "Enter"}}
 	if fmt.Sprint(tm.keys) != fmt.Sprint(want) || len(*slept) != 1 || (*slept)[0] <= 0 {
 		t.Errorf("keys %q, slept %v", tm.keys, *slept)
+	}
+}
+
+// A Codex window takes the same keys as a Claude one, on this host and over
+// ssh: the TUI submits the pointer typed as text and then an Enter pressed
+// after a pause.
+func TestTellTypesIntoACodexWindow(t *testing.T) {
+	for _, claimHost := range []string{"mac", "devbox"} {
+		t.Run(claimHost, func(t *testing.T) {
+			tm := &tmux{windows: "@1 %1 0 other\n@4 %9 0 r-7\n"}
+			d, g, slept := rig(t, "mac", claimHost, tm)
+			g.harness = "codex-cli 0.163.0 (gpt-6.1-sol)"
+			d.Run = (&ssh{tm: tm}).run
+			told, err := Tell("r-7", "Use the second option.", d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := [][]string{{"send-keys", "-t", "=engine:@4", "-l", Pointer(commentURL)}, {"send-keys", "-t", "=engine:@4", "Enter"}}
+			if told.Window != "engine:@4" || fmt.Sprint(tm.keys) != fmt.Sprint(want) || len(*slept) != 1 || (*slept)[0] <= 0 {
+				t.Errorf("told %+v, keys %q, slept %v", told, tm.keys, *slept)
+			}
+		})
 	}
 }
 
