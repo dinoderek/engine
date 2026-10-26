@@ -33,7 +33,9 @@ the kickoff, follow the launch line.
 - **Joined.** The window runs with `CODEX_HOME` at engine's Codex home
   ("Setup"). `spawn` adds the worktree and its resolved path to that home's
   `config.toml`, one `[projects."<path>"]` table each, and `release` removes
-  them. After the launch line come `-c shell_environment_policy.set={…}`,
+  them. After the launch line come `-C <worktree>`, without which the daemon
+  starts the thread in its own working directory, `-c
+  shell_environment_policy.set={…}`,
   which gives the agent's commands `ENGINE_RUN_DIR`, `ENGINE_HARNESS`, in
   hands-off mode `ENGINE_UNATTENDED`, and the window's `TMUX` and
   `TMUX_PANE`, then `--remote unix://`. The token is not passed: it is in
@@ -148,7 +150,9 @@ still launches embedded, with the host's `CODEX_HOME` ("Starting", "Apps"):
 - **The plugin** installs from this repo's marketplace into that home, not the
   operator's.
 - **The daemon** is `codex remote-control start` in that home, with the machine
-  user's token in its environment, read from its file. The start exits 1 when
+  user's token in its environment, read from its file, and without a session's
+  `ENGINE_*`, `TMUX` and `TMUX_PANE`, which joined hooks would otherwise take
+  for their own when setup runs inside a session. The start exits 1 when
   the connection to the apps is errored, though the daemon runs with remote
   control on, so setup judges it by the daemon afterwards ("Apps").
 
