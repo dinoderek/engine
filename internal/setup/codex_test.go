@@ -283,7 +283,7 @@ func TestACodexHostCheckingItselfAlsoActs(t *testing.T) {
 		t.Fatalf("items left open:\n%s", r.out.String())
 	}
 	out := r.out.String()
-	for _, want := range []string{"mac (this host, checked only)", "6. no suspend: ok (not Linux)", "7. codex: ok", "9. codex home: changed (wrote config.toml, linked the login)",
+	for _, want := range []string{"mac (this host; the Codex steps act)", "6. no suspend: ok (not Linux)", "7. codex: ok", "9. codex home: changed (wrote config.toml, linked the login)",
 		"10. codex plugin: changed (0.7.1, was none)", "11. codex daemon: changed", "12. preflight: ok"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
@@ -322,5 +322,23 @@ func TestAFailingDefaultCodexCheckNamesTheCodexRemedy(t *testing.T) {
 	out := r.out.String()
 	if !strings.Contains(out, "engine start --check --harness codex --host box") || strings.Contains(out, "claude --permission-mode") {
 		t.Errorf("out:\n%s", out)
+	}
+}
+
+func TestTheDaemonWaitsForTheLoginAndTheHome(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		break_ func(*codexState)
+	}{
+		{"signed out", func(c *codexState) { c.signedIn = false }},
+		{"the home cannot be written", func(c *codexState) { c.config, c.writeFail = nil, true }},
+	} {
+		codex := freshCodex(boxHome)
+		c.break_(codex)
+		r := newCodexRig(t, codex)
+		mustRun(t, r, "box")
+		if !strings.Contains(r.out.String(), "11. codex daemon: OPEN (engine's Codex home is not ready (steps 8 and 9))") || codex.started != 0 {
+			t.Errorf("%s: started %d:\n%s", c.name, codex.started, r.out.String())
+		}
 	}
 }

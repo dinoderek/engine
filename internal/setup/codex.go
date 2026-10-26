@@ -21,6 +21,8 @@ type codexTarget struct {
 	// missing is set when step 7 found no usable binary; signedOut when step 8
 	// found the operator not signed in.
 	missing, signedOut bool
+	// homeOpen is set when step 9 ended open.
+	homeOpen bool
 }
 
 // engineHome is engine's own Codex home on the host.
@@ -175,6 +177,7 @@ func (r *runner) codexHome() (outcome, error) {
 			return outcome{}, err
 		}
 		if p.stop != nil {
+			r.codex.homeOpen = true
 			return *p.stop, nil
 		}
 		if p.did != "" {
@@ -331,10 +334,16 @@ func (r *runner) installEnginePlugin() (outcome, error) {
 	return changed(fmt.Sprintf("%s, was %s", after, orNone(have))), nil
 }
 
-// remoteArgs is what the daemon's process carries when it was started with
-// remote control on. `codex remote-control --json` does not tell: it is not
-// per Codex home, and when it finds no daemon it serves in the foreground.
-const remoteArgs = " --remote-control"
+// remoteOnCommand prints on when a process runs from the Codex home's packages
+// with remote control on (the `--remote-control` argument), else off. The
+// daemon's own `codex remote-control --json` does not tell: it is not per Codex
+// home, and when it finds no daemon it serves in the foreground. It matches the process's own program
+// (the first field), so the shell and grep that run it, whose arguments only
+// mention the path, never match.
+func remoteOnCommand(engineHome string) string {
+	return fmt.Sprintf(`ps -ww -eo args= | awk -v p=%s 'index($1, p) == 1 && / --remote-control( |$)/ { on = 1 } END { print on ? "on" : "off" }'`,
+		hosts.ShellWord(engineHome+"/packages/"))
+}
 
 // daemonState reads engine's daemon: whether it runs, and whether its process
 // was started with remote control on.
@@ -344,8 +353,7 @@ func (r *runner) daemonState() (up, remoteOn bool, err error) {
 	if err != nil || res.code != 0 || !strings.Contains(res.out, `"running"`) {
 		return false, false, err
 	}
-	ps, err := r.t.sh(fmt.Sprintf("ps -ww -eo args= | grep -F -- %s | grep -qF -- %s && echo on || echo off",
-		hosts.ShellWord(c.engineHome()+"/packages/"), hosts.ShellWord(remoteArgs)), "")
+	ps, err := r.t.sh(remoteOnCommand(c.engineHome()), "")
 	return true, ps.firstLine() == "on", err
 }
 
@@ -363,6 +371,9 @@ func (r *runner) daemonStart() string {
 func (r *runner) codexDaemon() (outcome, error) {
 	if r.codex.missing {
 		return r.codexBlocked(), nil
+	}
+	if r.codex.signedOut || r.codex.homeOpen {
+		return open("engine's Codex home is not ready (steps 8 and 9)", r.rerun()), nil
 	}
 	up, on, err := r.daemonState()
 	if err != nil {

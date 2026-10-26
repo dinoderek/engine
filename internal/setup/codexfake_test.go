@@ -102,7 +102,7 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 		b.mutate(cmd)
 		c.authLink = c.userHome + "/auth.json"
 		return 0, true
-	case strings.HasPrefix(cmd, "ps -ww -eo args="):
+	case cmd == remoteOnCommand(eh):
 		if c.rcOn && c.daemonUp {
 			return say("on\n")
 		}

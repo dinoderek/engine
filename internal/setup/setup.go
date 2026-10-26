@@ -104,7 +104,7 @@ func Run(host string, d Deps, out io.Writer) (bool, error) {
 	}
 	r := &runner{d: d, t: t, host: h, defaultHarness: cfg.DefaultHarness, missing: map[string]bool{}}
 	if h.Runs(codexHarness) {
-		r.codex = &codexTarget{}
+		r.codex, r.t.acts = &codexTarget{}, true
 	}
 	if t.remote() {
 		if r.want, err = r.resolveWanted(); err != nil {
