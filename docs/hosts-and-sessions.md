@@ -191,7 +191,7 @@ hand and one started by the coordinator look the same.
 | --- | --- |
 | Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. |
 | Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
-| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: not yet; a session engine starts runs embedded (`codex.md`, "Apps"). |
+| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: none; a session engine starts runs embedded (`codex.md`, "Apps"). |
 
 Clients share one window: everyone sees the same screen and can type.
 
