@@ -44,6 +44,10 @@ type Deps struct {
 	BaseURL string
 	// Sleep waits between the check's polls; nil is time.Sleep.
 	Sleep func(time.Duration)
+	// JoinRemote lets a spawn join the host's remote-control daemon when it
+	// is connected. Off, a session starts embedded and spawn never asks the
+	// daemon its state.
+	JoinRemote bool
 }
 
 // RefusedError is an op that refused before it changed anything.
@@ -81,19 +85,19 @@ func openHost(home string) (*hosts.Config, hosts.Host, error) {
 }
 
 // checkHarness refuses a host that does not run the harness, or whose
-// harness binary is not an executable file.
-func checkHarness(host hosts.Host, harness, home string) error {
+// harness binary is not an executable file. It returns the binary's path.
+func checkHarness(host hosts.Host, harness, home string) (string, error) {
 	if !host.Runs(harness) {
-		return refuse("host %s does not run %s", host.Name, harness)
+		return "", refuse("host %s does not run %s", host.Name, harness)
 	}
 	bin, err := host.BinPath(harness, home)
 	if err != nil {
-		return refuse("%v", err)
+		return "", refuse("%v", err)
 	}
 	if info, err := os.Stat(bin); err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
-		return refuse("%s is not an executable %s binary (hosts.toml, host %s, bin)", bin, harness, host.Name)
+		return "", refuse("%s is not an executable %s binary (hosts.toml, host %s, bin)", bin, harness, host.Name)
 	}
-	return nil
+	return bin, nil
 }
 
 // Synced is sync-repo's reply.
