@@ -53,6 +53,35 @@ func TestRemoteRowsAreSettledFromStatus(t *testing.T) {
 	}
 }
 
+// A Codex claim on another host is settled from its window's state as one
+// here is: working, waiting, unknown while the state file is missing, and dead
+// once the window is gone or its command exited, whatever state it last wrote.
+func TestRemoteCodexRowsReadTheirWindowsState(t *testing.T) {
+	cw := func(name, state string, alive bool) hostops.Window {
+		return hostops.Window{Name: name, ID: "@" + name, Alive: alive, Harness: hostops.Codex, State: state}
+	}
+	var tasks []tracker.ClaimedTask
+	for _, n := range []string{"x-1", "x-2", "x-3", "x-4", "x-5"} {
+		c := onHost(task(int(n[2]-'0'), n, "engine:running"), "devbox")
+		c.Claim.Harness = "codex-cli 0.163.0 (gpt-6.1-sol)"
+		tasks = append(tasks, c)
+	}
+	f := &fake{tasks: tasks, statuses: map[string]hostops.Status{"devbox": {Windows: []hostops.Window{
+		cw("x-1", session.StateWorking, true), cw("x-2", session.StateWaiting, true), cw("x-3", "", true), cw("x-4", session.StateWaiting, false),
+	}}}}
+	l := list(t, f)
+	var got []string
+	for _, r := range l.Rows {
+		got = append(got, r.State+"/"+alive(r))
+	}
+	if want := []string{"working/alive", "waiting/alive", "running/alive", "dead/dead", "dead/dead"}; !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if len(l.Warnings) != 0 || !slices.Equal(f.calls, []string{"devbox"}) {
+		t.Errorf("warnings %q, calls %q", l.Warnings, f.calls)
+	}
+}
+
 // A failed call is unknown, never dead: the rows keep their label state with
 // null liveness, and the host warns once however many claims it holds.
 func TestRemoteFailedCallIsUnknown(t *testing.T) {

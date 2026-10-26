@@ -55,7 +55,16 @@ func TestRefusalsChangeNothing(t *testing.T) {
 		{name: "open blocker", issue: with(func(i *issue) { i.blockers = []int{5} }), want: "is blocked by open o/r#"},
 		{name: "misspelt tier on the card", issue: with(func(i *issue) { i.body = card("deeep") }),
 			want: `harness "deeep", which hosts.toml does not define (a misspelt tier?`},
-		{name: "codex", issue: with(func(i *issue) { i.body = card("codex, light") }), want: "engine start launches claude only"},
+		{name: "unknown --harness", opts: Options{Harness: "gemini"},
+			want: `--harness "gemini", which hosts.toml does not define (its harnesses are claude, codex)`},
+		{name: "--harness the host does not run", host: "dev", opts: Options{Harness: "codex"}, want: "host dev does not run codex"},
+		{name: "a codex card on a host that does not run it", host: "dev", issue: with(func(i *issue) { i.body = card("codex, light") }),
+			want: "host dev does not run codex"},
+		{name: "a claude card, --harness codex on a claude-only host", host: "dev", issue: with(func(i *issue) { i.body = card("claude, light") }),
+			opts: Options{Harness: "codex"}, want: "host dev does not run codex"},
+		{name: "no codex binary", opts: Options{Harness: "codex"}, want: "is not an executable codex binary"},
+		{name: "a codex card, no codex binary", issue: with(func(i *issue) { i.body = card("codex, light") }),
+			want: "is not an executable codex binary"},
 		{name: "host does not run claude", host: "box", want: "host box does not run claude"},
 		{name: "no harness binary", setup: removeFile("bin/claude"), want: "is not an executable claude binary"},
 		{name: "host lacks a required capability", issue: with(func(i *issue) { i.body = "## Requires\nios, macos\n\n" + card("deep") }),
@@ -204,7 +213,7 @@ func TestSpawnRequest(t *testing.T) {
 		// The caller decides the model and the kickoff; the host only
 		// launches them.
 		want := hostops.SpawnRequest{Repo: "o/r", Task: 7, Feature: ref(3).String(), Mode: mode, Tier: "deep",
-			Model: "opus-x", Effort: "high", RunID: "r-7-20260102T030405Z",
+			Harness: "claude", Model: "opus-x", Effort: "high", RunID: "r-7-20260102T030405Z",
 			Kickoff: "Execute " + ref(7).String() + " with the engine executor, " + mode + " mode. Reviewer model: opus-x. run=r-7-20260102T030405Z tmux=engine:r-7 rc=r-7"}
 		if got := p.spawnRequest("r-7-20260102T030405Z"); got != want {
 			t.Errorf("spawn request\n got %+v\nwant %+v", got, want)
@@ -249,4 +258,70 @@ func TestStartGoesThroughTheClient(t *testing.T) {
 		t.Errorf("report:\n%s", out.String())
 	}
 	tm.readOnly(t)
+}
+
+// codexHome is newHome with an executable fake Codex at ~/bin/codex.
+func codexHome(t *testing.T) home {
+	t.Helper()
+	h := newHome(t, "mac")
+	write(t, filepath.Join(h.dir, "bin", "codex"), "#!/bin/sh\nexit 0\n", 0o755)
+	return h
+}
+
+// The harness is the card's, or --harness, which replaces it as --tier
+// replaces the card's tier; its model and effort come from its own tiers.
+func TestHarnessFromTheCardOrTheFlag(t *testing.T) {
+	cases := []struct {
+		name    string
+		body    string
+		harness string
+		want    string
+		model   string
+		effort  string
+	}{
+		{"the default", card("deep"), "", "claude", "opus-x", "high"},
+		{"the card's", card("codex, standard"), "", "codex", "sol", "medium"},
+		{"the flag", card("deep"), "codex", "codex", "sol", "high"},
+		{"the flag over the card's", card("codex, light"), "claude", "claude", "haiku-x", "medium"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := codexHome(t)
+			gh := &ghFake{issue: issue{number: 7, state: "open", parent: 3, body: c.body}}
+			d := Deps{GH: gh.run, Tmux: &session.Tmux{Run: (&tmuxFake{}).run, Bin: "tmux"}, Home: h.dir, Getenv: func(string) string { return "" }}
+			p, err := check(Options{Ref: ref(7), Harness: c.harness}, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := p.spawnRequest("r-7-20260102T030405Z")
+			if r.Harness != c.want || r.Model != c.model || r.Effort != c.effort {
+				t.Errorf("spawn request %+v, want %s on %s at %s", r, c.want, c.model, c.effort)
+			}
+			if wantRC := map[string]string{"claude": " rc=r-7", "codex": " rc=none"}[c.want]; !strings.HasSuffix(r.Kickoff, wantRC) {
+				t.Errorf("kickoff %q does not end in %q", r.Kickoff, wantRC)
+			}
+			if want := "Reviewer model: " + map[string]string{"claude": "opus-x", "codex": "sol"}[c.want]; !strings.Contains(r.Kickoff, want) {
+				t.Errorf("kickoff %q lacks %q", r.Kickoff, want)
+			}
+		})
+	}
+}
+
+// A Codex session's report says it is not in the apps; a Claude session's
+// names Remote Control.
+func TestReportNamesTheHarnessApps(t *testing.T) {
+	h := codexHome(t)
+	for harness, want := range map[string]string{"codex": "ChatGPT or Codex apps", "claude": "Remote Control  r-7, in the Claude app"} {
+		c := &clientFake{}
+		gh := &ghFake{issue: startable}
+		d := Deps{GH: gh.run, Run: gitFake(t), Tmux: &session.Tmux{Run: (&tmuxFake{}).run, Bin: "tmux"}, Home: h.dir,
+			Getenv: func(string) string { return "" }, Now: fixedNow, Client: c}
+		var out bytes.Buffer
+		if err := Run(Options{Ref: ref(7), Harness: harness}, d, &out); err != nil {
+			t.Fatal(err)
+		}
+		if len(c.spawned) != 1 || c.spawned[0].Harness != harness || !strings.Contains(out.String(), want) {
+			t.Errorf("%s: spawned %+v, report:\n%s", harness, c.spawned, out.String())
+		}
+	}
 }

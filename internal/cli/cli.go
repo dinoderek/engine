@@ -39,10 +39,11 @@ commands:
                             it is done
   lint <owner/repo#n>       check a feature's plan: card sections, keys, cycles,
                             the acceptance task and shared open questions
-  start <owner/repo#n> [--tier deep|standard|light] [--mode hands-off|gated]
-        [--host <name>]     launch an executor session for a task, on this machine
+  start <owner/repo#n> [--harness <name>] [--tier deep|standard|light]
+        [--mode hands-off|gated] [--host <name>]
+                            launch an executor session for a task, on this machine
                             or on another one from hosts.toml
-  start --check [--host <name>]
+  start --check [--harness <name>] [--host <name>]
                             launch a throwaway session to find prompts that would
                             stop an unattended one
   setup [--host <name>]     bring a host to this engine's commit, plugin and config,

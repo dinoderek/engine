@@ -80,14 +80,19 @@ func (s SSH) Release(name string, failed bool) (hostops.Released, error) {
 	return reply, s.call("release", args, "", &reply)
 }
 
-// Check streams `engine start --check` on the host to out, after confirming
-// the host speaks this protocol, and reports whether it exited 0. Exit 1 is a
-// failed check, and its report is already in out.
-func (s SSH) Check(out io.Writer) (bool, error) {
+// Check streams `engine start --check` for the harness (the default when
+// empty) on the host to out, after confirming the host speaks this protocol,
+// and reports whether it exited 0. Exit 1 is a failed check, and its report is
+// already in out.
+func (s SSH) Check(harness string, out io.Writer) (bool, error) {
 	if _, _, _, err := s.exchange(probeOp, nil, ""); err != nil {
 		return false, err
 	}
-	code, err := s.Run(nil, out, out, ShellJoin([]string{"engine", "start", "--check"}))
+	command := []string{"engine", "start", "--check"}
+	if harness != "" {
+		command = append(command, "--harness", harness)
+	}
+	code, err := s.Run(nil, out, out, ShellJoin(command))
 	if err != nil {
 		return false, err
 	}

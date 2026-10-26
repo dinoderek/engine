@@ -9,6 +9,7 @@ package start
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,9 +29,6 @@ const (
 	Gated    = hostops.Gated
 )
 
-// Harness is the only harness engine start launches.
-const Harness = hostops.Claude
-
 // stateLabels are the task states that mean the task is taken or finished
 // badly: a task carrying one is not started again.
 var stateLabels = append(slices.Clone(tracker.ClaimLabels), "engine:failed")
@@ -41,6 +39,8 @@ const approved = "engine:approved"
 // Options are what the operator asks for.
 type Options struct {
 	Ref tracker.Ref
+	// Harness replaces the card's harness when set, as Tier replaces its tier.
+	Harness string
 	// Tier replaces the card's tier when set.
 	Tier string
 	// Mode is HandsOff or Gated; empty means HandsOff.
@@ -125,6 +125,7 @@ type plan struct {
 	task     tracker.Task
 	repo     session.Repo
 	name     string
+	harness  string
 	tier     hosts.Tier
 	model    hosts.TierModel
 	reviewer string
@@ -152,6 +153,17 @@ type Started struct {
 	// Warning is a problem the session runs despite, such as a host that
 	// may sleep.
 	Warning string
+	// Harness is the harness the session runs.
+	Harness string
+}
+
+// apps is the report line that says where the session shows in its harness's
+// apps.
+func apps(s Started) string {
+	if s.Harness == hostops.Codex {
+		return "Codex apps      not in the ChatGPT or Codex apps: the session runs embedded, so attach by tmux"
+	}
+	return fmt.Sprintf("Remote Control  %s, in the Claude app and at claude.ai/code", s.Name)
 }
 
 // Run starts the task's session and prints how to reach it.
@@ -282,18 +294,30 @@ func orNone(words []string) string {
 	return strings.Join(words, ", ")
 }
 
-// pickModel settles the harness and the tier: the card's, unless the
-// operator named a tier.
-func (p *plan) pickModel(Deps) error {
-	harness := p.task.Harness
+// pickHarness is the harness to launch: the operator's, else the card's,
+// else the default. It must be one hosts.toml defines.
+func (p *plan) pickHarness() (string, error) {
+	harness, whose, hint := p.opts.Harness, "--harness", ""
+	if harness == "" {
+		harness, whose = p.task.Harness, p.task.Ref.String()+" names harness"
+		hint = "a misspelt tier? tiers are deep, standard and light; "
+	}
 	if harness == "" {
 		harness = p.cfg.DefaultHarness
 	}
 	if _, ok := p.cfg.Harnesses[harness]; !ok {
-		return refuse("%s names harness %q, which hosts.toml does not define (a misspelt tier? tiers are deep, standard and light)", p.task.Ref, harness)
+		return "", refuse("%s %q, which hosts.toml does not define (%sits harnesses are %s)",
+			whose, harness, hint, strings.Join(slices.Sorted(maps.Keys(p.cfg.Harnesses)), ", "))
 	}
-	if harness != Harness {
-		return refuse("%s runs on %s; engine start launches %s only", p.task.Ref, harness, Harness)
+	return harness, nil
+}
+
+// pickModel settles the harness and the tier: the card's, unless the
+// operator named one.
+func (p *plan) pickModel(Deps) error {
+	harness, err := p.pickHarness()
+	if err != nil {
+		return err
 	}
 	if !p.host.Runs(harness) {
 		return refuse("host %s does not run %s", p.host.Name, harness)
@@ -314,7 +338,7 @@ func (p *plan) pickModel(Deps) error {
 	if err != nil {
 		return refuse("%v", err)
 	}
-	p.tier, p.model, p.reviewer = tier, model, reviewer.Model
+	p.harness, p.tier, p.model, p.reviewer = harness, tier, model, reviewer.Model
 	return nil
 }
 
@@ -324,12 +348,12 @@ func (p *plan) checkBin(d Deps) error {
 	if p.remote {
 		return nil
 	}
-	bin, err := p.host.BinPath(Harness, d.Home)
+	bin, err := p.host.BinPath(p.harness, d.Home)
 	if err != nil {
 		return refuse("%v", err)
 	}
 	if info, err := os.Stat(bin); err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
-		return refuse("%s is not an executable %s binary (hosts.toml, host %s, bin)", bin, Harness, p.host.Name)
+		return refuse("%s is not an executable %s binary (hosts.toml, host %s, bin)", bin, p.harness, p.host.Name)
 	}
 	return nil
 }
@@ -385,13 +409,6 @@ func (p *plan) checkStatus(d Deps) error {
 	return nil
 }
 
-// Kickoff is the first message of the session: the executor's kickoff line,
-// plus the values its claim comment records.
-func Kickoff(task tracker.Ref, mode, reviewer, runID, name string) string {
-	return fmt.Sprintf("Execute %s with the engine executor, %s mode. Reviewer model: %s. run=%s tmux=%s:%s rc=%s",
-		task, mode, reviewer, runID, session.Name, name, name)
-}
-
 // launch has the host sync engine's clone, then spawn the session with the
 // model, effort and kickoff decided here.
 func (p plan) launch(d Deps) (Started, error) {
@@ -409,7 +426,7 @@ func (p plan) launch(d Deps) (Started, error) {
 	s := Started{
 		Task: p.opts.Ref, Name: sp.Name, RunID: runID, RunDir: sp.RunDir,
 		Worktree: session.Worktree{Path: sp.Worktree, Branch: sp.Branch},
-		WindowID: sp.Window, Attach: sp.Attach, Warning: sp.Warning,
+		WindowID: sp.Window, Attach: sp.Attach, Warning: sp.Warning, Harness: p.harness,
 	}
 	if p.remote {
 		// The window is on another machine, so the paths and the attach
@@ -423,9 +440,9 @@ func (p plan) launch(d Deps) (Started, error) {
 // kickoff, or the planner's, at the chosen model.
 func (p plan) spawnRequest(runID string) hostops.SpawnRequest {
 	r := hostops.SpawnRequest{
-		Repo: p.repo.String(), Task: p.opts.Ref.Number, Mode: p.opts.Mode, Tier: string(p.tier),
+		Repo: p.repo.String(), Task: p.opts.Ref.Number, Mode: p.opts.Mode, Harness: p.harness, Tier: string(p.tier),
 		Model: p.model.Model, Effort: p.model.Effort, RunID: runID, Heavy: p.heavy,
-		Kickoff: Kickoff(p.opts.Ref, p.opts.Mode, p.reviewer, runID, p.name),
+		Kickoff: Kickoff(p.opts.Ref, KickoffArgs{Mode: p.opts.Mode, Reviewer: p.reviewer, RunID: runID, Name: p.name, RC: remoteControl(p.harness, p.name)}),
 	}
 	if p.task.Parent != nil {
 		r.Feature = p.task.Parent.String()
@@ -448,7 +465,7 @@ func report(out io.Writer, s Started) {
 	fmt.Fprintf(out, "  run record      %s\n", filepath.Join(s.RunDir, session.RecordFile))
 	fmt.Fprintf(out, "  worktree        %s (branch %s)\n", s.Worktree.Path, s.Worktree.Branch)
 	fmt.Fprintf(out, "  tmux window     %s (%s)\n", target, s.Name)
-	fmt.Fprintf(out, "  Remote Control  %s, in the Claude app and at claude.ai/code\n", s.Name)
+	fmt.Fprintf(out, "  %s\n", apps(s))
 	fmt.Fprintf(out, "Attach: engine attach %s (once the executor has posted its claim)\n", s.Name)
 	fmt.Fprintf(out, "    or: %s\n", s.Attach)
 	if s.Warning != "" {
@@ -456,12 +473,12 @@ func report(out io.Writer, s Started) {
 	}
 }
 
-// Check runs the preflight check on host, which is this one when empty, prints
-// its report, and reports whether an unattended session there would run without a
-// prompt.
-func Check(d Deps, host string, out io.Writer) (bool, error) {
+// Check runs the preflight check of harness (Claude when empty) on host,
+// which is this one when empty, prints its report, and reports whether an
+// unattended session there would run without a prompt.
+func Check(d Deps, host, harness string, out io.Writer) (bool, error) {
 	if host == "" {
-		return d.HostClient(hosts.Host{}, false).Check(out)
+		return d.HostClient(hosts.Host{}, false).Check(harness, out)
 	}
 	cfg, local, err := hosts.Open(hosts.ConfigDir(d.Home))
 	if err != nil {
@@ -471,5 +488,5 @@ func Check(d Deps, host string, out io.Writer) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return d.HostClient(target, isRemote).Check(out)
+	return d.HostClient(target, isRemote).Check(harness, out)
 }

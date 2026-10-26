@@ -44,9 +44,17 @@ type CheckResult struct {
 	// Denied are the permission requests the hook denied and the auto-mode
 	// refusals the session met, one line each.
 	Denied []string
+	// hooked is true for a harness whose hooks report its state, so the
+	// check must see the file.
+	hooked bool
 	// Reviewed are the Codex permission requests the hook left to
 	// auto-review, which decided them without a prompt.
 	Reviewed []string
+	// Signalled is true when the session's hooks wrote its state file. Only
+	// a harness whose state comes from hooks needs it: Codex.
+	Signalled bool
+	// State is the state the file last recorded, when it is there.
+	State string
 }
 
 // autoReview is the decision the permission hook logs for a request it left
@@ -54,7 +62,9 @@ type CheckResult struct {
 const autoReview = "left to auto-review"
 
 // OK reports whether an unattended session would run here without a prompt.
-func (r CheckResult) OK() bool { return r.Closed && r.Finished && len(r.Denied) == 0 }
+func (r CheckResult) OK() bool {
+	return r.Closed && r.Finished && len(r.Denied) == 0 && (r.Signalled || !r.hooked)
+}
 
 // Check launches a throwaway hands-off session of the harness (Claude when
 // empty) in a scratch folder, with this host's launch line at the light tier,
@@ -108,7 +118,7 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 		return CheckResult{}, fmt.Errorf("open the tmux window: %w", err)
 	}
 	fmt.Fprintf(out, "checking in %s:%s (run directory %s); this takes a few minutes\n", session.Name, opened.ID, runDir)
-	r := CheckResult{RunDir: runDir}
+	r := CheckResult{RunDir: runDir, hooked: h.Name() == Codex}
 	r.Closed, err = waitClosed(d, opened.ID)
 	if !r.Closed {
 		r.Screen, _ = d.Tmux.Capture(opened.ID, stallLines)
@@ -121,6 +131,9 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	}
 	data, _ := os.ReadFile(marker)
 	r.Finished = strings.Contains(string(data), "done")
+	if st, ok := session.ReadHarnessState(runDir); ok {
+		r.Signalled, r.State = true, st.State
+	}
 	if r.Denied, r.Reviewed, err = readPermissions(filepath.Join(runDir, session.PermissionLog)); err != nil {
 		return r, err
 	}
@@ -261,6 +274,9 @@ func ReportCheck(out io.Writer, r CheckResult) {
 		fmt.Fprintf(out, "     it stalled; its last screen:\n%s\n", indent(r.Screen))
 	}
 	fmt.Fprintf(out, "%s the session did every step\n", mark[r.Finished])
+	if r.hooked {
+		fmt.Fprintf(out, "%s the session's hooks wrote its state%s\n", mark[r.Signalled], lastState(r.State))
+	}
 	fmt.Fprintf(out, "%s no permission request was denied\n", mark[len(r.Denied) == 0])
 	for _, l := range r.Denied {
 		fmt.Fprintf(out, "     %s\n", l)
@@ -274,6 +290,14 @@ func ReportCheck(out io.Writer, r CheckResult) {
 	if !r.OK() {
 		fmt.Fprintf(out, "an unattended session here would stop; see %s\n", r.RunDir)
 	}
+}
+
+// lastState is the state the hooks last recorded, as a report suffix.
+func lastState(state string) string {
+	if state == "" {
+		return " (no state file in the run directory)"
+	}
+	return " (last: " + state + ")"
 }
 
 func indent(s string) string {

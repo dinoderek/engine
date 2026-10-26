@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 
 // runAsRemoteEngine is the `engine` of the remote host.
 func runAsRemoteEngine(args []string) int {
-	if len(args) == 2 && args[0] == "start" && args[1] == "--check" {
+	if len(args) >= 2 && args[0] == "start" && args[1] == "--check" && (len(args) == 2 || len(args) == 4 && args[2] == "--harness") {
 		fmt.Println("the remote check report")
 		if os.Getenv(checkExitVar) == "1" {
 			return 1
@@ -213,6 +213,19 @@ func TestStartOverSSHUnreachable(t *testing.T) {
 	}
 }
 
+// A check of another harness goes to the host as `engine start --check
+// --harness <name>`.
+func TestCheckOverSSHNamesTheHarness(t *testing.T) {
+	r := newSSHRig(t)
+	t.Setenv(checkExitVar, "0")
+	if ok, err := Check(r.deps, "dev", "codex", &bytes.Buffer{}); !ok || err != nil {
+		t.Errorf("a codex check: ok=%v err=%v", ok, err)
+	}
+	if calls := r.sshCalls(t); len(calls) != 2 || calls[1] != "me@dev 'engine' 'start' '--check' '--harness' 'codex'" {
+		t.Errorf("ssh calls = %q", calls)
+	}
+}
+
 func TestCheckOverSSHKeepsTheExitCode(t *testing.T) {
 	r := newSSHRig(t)
 	for _, tc := range []struct {
@@ -221,7 +234,7 @@ func TestCheckOverSSHKeepsTheExitCode(t *testing.T) {
 	}{{"0", true}, {"1", false}} {
 		t.Setenv(checkExitVar, tc.exit)
 		var out bytes.Buffer
-		ok, err := Check(r.deps, "dev", &out)
+		ok, err := Check(r.deps, "dev", "", &out)
 		if err != nil || ok != tc.want || out.String() != "the remote check report\n" {
 			t.Errorf("exit %s: ok=%v err=%v out=%q", tc.exit, ok, err, out.String())
 		}
@@ -231,11 +244,11 @@ func TestCheckOverSSHKeepsTheExitCode(t *testing.T) {
 		t.Errorf("ssh calls = %q", calls)
 	}
 	t.Setenv(sshModeVar, "oldproto")
-	if ok, err := Check(r.deps, "dev", &bytes.Buffer{}); ok || err == nil || !strings.Contains(err.Error(), "engine setup --host dev") {
+	if ok, err := Check(r.deps, "dev", "", &bytes.Buffer{}); ok || err == nil || !strings.Contains(err.Error(), "engine setup --host dev") {
 		t.Errorf("protocol mismatch: ok=%v err=%v", ok, err)
 	}
 	t.Setenv(sshModeVar, "down")
-	if ok, err := Check(r.deps, "dev", &bytes.Buffer{}); ok || err == nil || !strings.Contains(err.Error(), "unreachable") {
+	if ok, err := Check(r.deps, "dev", "", &bytes.Buffer{}); ok || err == nil || !strings.Contains(err.Error(), "unreachable") {
 		t.Errorf("unreachable: ok=%v err=%v", ok, err)
 	}
 }

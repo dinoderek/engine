@@ -197,13 +197,25 @@ func TestSSHCheck(t *testing.T) {
 	}{{0, true}, {1, false}} {
 		f := &sshFake{replies: []reply{probe, {stdout: "ok   closed\n", stderr: "warn\n", code: tc.code}}}
 		var out strings.Builder
-		ok, err := f.ssh("me@box").Check(&out)
+		ok, err := f.ssh("me@box").Check("", &out)
 		if err != nil || ok != tc.want || out.String() != "ok   closed\nwarn\n" {
 			t.Errorf("exit %d: ok=%v err=%v out=%q", tc.code, ok, err, out.String())
 		}
 		if got, want := f.line(1), `'engine' 'start' '--check'`; got != want || f.calls[1].args[len(f.calls[1].args)-2] != "me@box" {
 			t.Errorf("check call %q", f.calls[1].args)
 		}
+	}
+}
+
+// A harness other than the default goes to the remote check as --harness.
+func TestSSHCheckNamesTheHarness(t *testing.T) {
+	probe := reply{stdout: `{"error":"x","refused":true,` + envelope + "}", code: 1}
+	f := &sshFake{replies: []reply{probe, {stdout: "ok\n"}}}
+	if ok, err := f.ssh("me@box").Check("codex", io.Discard); !ok || err != nil {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if got, want := f.line(1), `'engine' 'start' '--check' '--harness' 'codex'`; got != want {
+		t.Errorf("check call %q, want %q", got, want)
 	}
 }
 
@@ -223,7 +235,7 @@ func TestSSHCheckFailures(t *testing.T) {
 	}
 	for _, tc := range cases {
 		f := &sshFake{replies: tc.replies}
-		ok, err := f.ssh("me@box").Check(io.Discard)
+		ok, err := f.ssh("me@box").Check("", io.Discard)
 		if ok || err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: ok=%v err=%v, want %q", tc.name, ok, err, tc.want)
 		}
