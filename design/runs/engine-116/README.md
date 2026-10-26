@@ -35,13 +35,15 @@ write the state (last `waiting`), and had no request denied. `engine start
 The fixture was created and linted at 11:48. `engine run
 dinoderek/engine#116` ran from 11:48:55 in window `engine:run-engine-116`,
 inside session `engine`, and held no slot. It set `engine:planned` at
-11:48:59, started #117 to #119 on the next pass, set `engine:verifying` at
-12:03:43, set `engine:done` at 12:05:58, posted the summary at 12:06:00,
-closed #116 as completed at 12:06:01 and exited, with no window left to reap. The
-engine#74 coordinator (`run-engine-74`) ran alongside it throughout.
+11:48:59, started #117 to #119 on the next pass and set `engine:executing` at
+11:54:18. It set `engine:verifying` at 12:03:43 and `engine:done` at 12:05:58,
+posted the summary at 12:06:00, closed #116 as completed at 12:06:01 and
+exited, with no window left to reap. The engine#74 coordinator
+(`run-engine-74`) ran alongside it throughout.
 
-Each executor got one fresh reviewer, and each reviewer approved in one round.
-The Codex reviewers were Codex subagents on `gpt-6.1-sol`. #117's was a
+Each executor with a PR (#117 to #119) got one fresh reviewer, and each
+reviewer approved in one round; #120 changed nothing and had none. The Codex
+reviewers were Codex subagents on `gpt-6.1-sol`. #117's was a
 Claude subagent on the `opus` alias. The merge lock went to #118 from 11:57:01
 to 11:58:22 and to #119 from 12:01:19 to 12:02:30. #119 merged `main` in
 before merging (338e382). #117 took no lock (see Gaps). #120, the last open
@@ -80,8 +82,9 @@ Neither session sat on a prompt.
   `dinoderek/engine#118  mac  Codex  working` and `dinoderek/engine#119
   devbox  Codex  working`. Both came from their windows' `state` in `status`.
 - **`engine tell engine-119 "…"`** at 11:55:36 commented on #119 and typed the
-  pointer into `engine:@0` on the devbox. The Codex TUI took it as a prompt,
-  and the session ran `gh issue view 119 … --json comments` on its next turn.
+  pointer into `engine:@0` on the devbox at 11:55:39. The Codex TUI took it
+  as a prompt, and the session read the issue's comments about 70 seconds
+  later (`gh issue view 119 … --json comments`, 11:56:48).
 - **`engine attach engine-119`**, run in a throwaway tmux session, showed the
   devbox's Codex screen over `ssh -t`: the TUI, `GPT-6.1-Sol medium ·
   …/task-engine-119`, and the window `0:engine-119*`. `C-b d` detached it,
@@ -89,12 +92,14 @@ Neither session sat on a prompt.
 - **The apps.** Both sessions joined engine's daemon. Their processes ran
   `… -C <worktree> … --remote unix://`, under daemons started from engine's
   Codex home with `--remote-control`. The Mac daemon that served #118
-  started at 11:32:46 and logged no websocket status: the `next_status=Connected`
-  line to chatgpt.com at 10:22:10 came from an earlier daemon process. The
-  Mac's `session_index.jsonl` lists thread `Execute dinoderek/engine#118`, and the devbox's lists `Execute
+  started at 11:32:46 and logged no websocket status: the
+  `next_status=Connected` line to chatgpt.com at 10:22:10 came from an
+  earlier daemon process. The Mac's `session_index.jsonl` lists thread
+  `Execute dinoderek/engine#118`, and the devbox's lists `Execute
   dinoderek/engine#119`. At the executor's hard stop, the operator opened
   the Codex app and saw the fixture's Codex sessions there (reported
-  12:46), though without meaningful names (Gaps).
+  12:46), though without meaningful names (Gaps). The ChatGPT app was not
+  checked.
 
 `status` at 11:57:01: the Mac reported `slots 6, heavy_slots 4, free_slots 3,
 free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
@@ -111,7 +116,7 @@ free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
 | O2 session state | Live: `harness-state.json` in both run directories (`working`, `PostToolUse`, with the Codex session id). `status` gave each window `state` and `harness`, and `engine ps` read `working` from it on both hosts. `notify` is unused (`docs/codex.md`). Tests: `TestStateFromRecordedEvents`, `TestCodexRowsReadTheirWindowsState`, `TestRemoteCodexRowsReadTheirWindowsState`, `TestACodexSessionThatWaitsStallsOncePerWait` | A Codex executor seen `waiting` or `ended` by `ps` or `run`: neither session ever waited, and each closed its own window |
 | O3 no prompt unattended | Live: 16 requests over both logs, all `left to auto-review`, none denied, and no session stopped on a prompt. Both Codex executors merged with `--match-head-commit` (both commands are in the daemons' session transcripts). Tests: `TestPermissionLeavesAnUnattendedCodexRequestToAutoReview`, `TestMergeGuardReadsCodexShellEvents`, `TestCheckCodexStallsOnAPrompt` | The merge guard blocking a Codex merge, live: no executor tried a bare merge |
 | O4 plugin and `--check` | Live: engine's Codex home holds the plugin (0.7.8, `plugins/cache/engine`) on both hosts, put there by item 10's first half, though item 10 ended open over the operator's home; both joined executors ran the engine skill (claim, lock, review, report). `engine start --check --harness codex` passed on both hosts. Tests: `TestCodexPluginRegistersStateHook`, `TestCodexMarketplaceListsThePlugin`, `TestCheckCodex`, `TestCheckCodexFailsWithoutAStateFile` | The plugin in the operator's own `~/.codex`: item 10 is the operator's, still open |
-| O5 the apps | Live: both sessions joined their host's engine daemon with remote control on. Each daemon's thread index lists its session. The operator saw the Codex sessions in the Codex app. Tests: `TestSpawnCodexJoinsGated`, `TestSpawnCodexJoinedRecordComesFirst` | Either daemon's connection to chatgpt.com, in its own log: neither process that served a session logged a websocket status; the operator's sighting stands for it |
+| O5 the apps | Live: both sessions joined their host's engine daemon with remote control on. Each daemon's thread index lists its session. The operator saw the Codex sessions in the Codex app. Tests: `TestSpawnCodexJoinsGated`, `TestSpawnCodexJoinedRecordComesFirst` | The ChatGPT app: not checked, only the Codex app was looked at. Either daemon's connection to chatgpt.com, in its own log: neither process that served a session logged a websocket status; the operator's sighting stands for it |
 | O6 placement and setup | Live: #119 (`linux`) on the devbox, #118 (`macos`) on the Mac, two Codex sessions at once, at the cap of 2 across hosts. `engine setup` and `--host devbox` ran items 7 to 11: Codex installed, signed in, engine's home and the daemon `ok`, and item 10 open over the operator's home only. Tests: `TestCodexCardsHoldCodexToItsCap`, `TestARunningCodexSessionCountsAgainstCodexOnly`, `TestTheHarnessCapCountsEveryHost` (across hosts), `TestACardWhoseHarnessNoHostDefinesWaits`, `internal/setup`'s `TestCodex*` | A Codex task held back by the cap, live: there were only two; `TestCodexCardsHoldCodexToItsCap` covers it |
 | O7 the fixture | This record | |
 | O8 slots | Live: the Mac's `status` gave 6 slots, at most 4 heavy, and two coordinator windows held none (3 free with 3 sessions open). Tests: `TestOnlySessionsHoldSlots`, `TestAHeavyTaskWaitsForAHeavySlotWhileALightOneStarts`, `TestHeavyTasksGoWhereAHeavySlotIsFree`, `internal/hosts` `TestHeavy` | A heavy task, live: the fixture had none |
@@ -123,7 +128,6 @@ free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
   Codex has no CLI flag for a name, so its threads show Codex's own titles.
   The 0.164.0 daemon's app-server protocol has `thread/name/set`, which could
   name a joined thread `engine-<task>` after the spawn.
-
 - **`start` says every Codex session runs embedded.** `engine run`'s log
   printed `Codex apps  not in the ChatGPT or Codex apps: the session runs
   embedded` for both sessions, and both had joined. The line in
@@ -155,6 +159,9 @@ free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
   engine#74's design put there. `harness-state.json` holds it.
 - **Small:** every request in both logs (gates, fetches, merges, commits,
   pushes, releases) crossed the sandbox and went to auto-review. The logs do
-  not hold its verdicts; every command ran, so it approved each one. Claim to merge
-  took 3 minutes on Codex on the Mac, 7.5 on the devbox (it merged
+  not hold its verdicts; every command ran, so it approved each one. Claim
+  to merge took 3 minutes on Codex on the Mac, 7.5 on the devbox (it merged
   `main` in and re-gated), and 3.5 on Claude.
+- **The fixture's acceptance tier.** This executor gave #120 the `standard`
+  tier (Sonnet), though the skill's `plan.md` gives acceptance tasks `deep`.
+  It was a fixture choice for a one-check task, and #120 passed.
