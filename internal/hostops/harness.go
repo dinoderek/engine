@@ -94,11 +94,12 @@ func (c claude) Args(l launch) string {
 	return args + " -- " + hosts.ShellWord(l.kickoff)
 }
 
-// launch is what a window runs: the expanded launch line, the run directory,
-// the mode, the kickoff, and whether the session joins remote control.
+// launch is what a window runs: the expanded launch line, the session's
+// folder, the run directory, the mode, the kickoff, and whether the session
+// joins remote control.
 type launch struct {
-	line, runDir, mode, kickoff string
-	joined                      bool
+	line, dir, runDir, mode, kickoff string
+	joined                           bool
 }
 
 // launchCommand is a window's shell command. It runs under /bin/sh, whatever

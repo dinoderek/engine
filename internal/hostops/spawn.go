@@ -95,7 +95,7 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 		return Spawned{}, fmt.Errorf("%w; %s", err, left)
 	}
 	log := filepath.Join(s.runDir, session.PaneLog)
-	command := launchCommand(d, s.h, launch{line: line, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined})
+	command := launchCommand(d, s.h, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
 		if uerr := s.h.Untrust(wt.Path); uerr != nil {

@@ -357,13 +357,18 @@ func (r *runner) daemonState() (up, remoteOn bool, err error) {
 	return true, ps.firstLine() == "on", err
 }
 
+// sessionVars are what a session's window exports for its own run, which
+// setup inherits when a session runs it. The daemon must not keep them: a
+// joined session's hooks run in its environment, and would write to that run.
+const sessionVars = "ENGINE_RUN_DIR ENGINE_HARNESS ENGINE_UNATTENDED TMUX TMUX_PANE"
+
 // daemonStart is the command that starts engine's daemon with remote control
-// on and the machine user's token in its environment. The token comes from
-// its file, so it is on no command line.
+// on, the machine user's token in its environment and no session's
+// variables. The token comes from its file, so it is on no command line.
 func (r *runner) daemonStart() string {
 	c := r.codex
 	file := shellPath(hosts.ConfigDir(c.home), "github-token")
-	return fmt.Sprintf(`t="$(cat %s)" && [ -n "$t" ] && GH_TOKEN="$t" %s`, file, c.inEngine("remote-control start"))
+	return fmt.Sprintf(`t="$(cat %s)" && [ -n "$t" ] && unset %s && GH_TOKEN="$t" %s`, file, sessionVars, c.inEngine("remote-control start"))
 }
 
 // codexDaemon makes sure engine's own app-server daemon runs from engine's

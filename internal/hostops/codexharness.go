@@ -158,10 +158,12 @@ func (c codex) Env(joined bool) string {
 }
 
 // Args join the daemon over its default socket in engine's Codex home, or
-// select the session's profile.
+// select the session's profile. A joined session names its folder with -C:
+// without it, the daemon starts the thread in its own working directory.
 func (c codex) Args(l launch) string {
 	if l.joined {
-		return " --dangerously-bypass-hook-trust -c " + sessionVars(l) + " --remote unix:// -- " + hosts.ShellWord(l.kickoff)
+		return " -C " + hosts.ShellWord(l.dir) + " --dangerously-bypass-hook-trust -c " + sessionVars(l) +
+			" --remote unix:// -- " + hosts.ShellWord(l.kickoff)
 	}
 	return " -p " + hosts.ShellWord(c.profile) + " --dangerously-bypass-hook-trust -- " + hosts.ShellWord(l.kickoff)
 }

@@ -106,7 +106,7 @@ func TestSpawnCodexJoins(t *testing.T) {
 	vars := `shell_environment_policy.set={ENGINE_RUN_DIR="` + got.RunDir + `",ENGINE_HARNESS="codex",ENGINE_UNATTENDED="1",` +
 		`TMUX="/tmp/tmux-501/default,42,0",TMUX_PANE="%9"}`
 	want := []string{"-c", "sandbox_workspace_write.network_access=true", "-m", "sol", "-c", "model_reasoning_effort=high",
-		"--dangerously-bypass-hook-trust", "-c", vars, "--remote", "unix://", "--", req.Kickoff}
+		"-C", got.Worktree, "--dangerously-bypass-hook-trust", "-c", vars, "--remote", "unix://", "--", req.Kickoff}
 	if args := lines(t, argv); !slices.Equal(args, want) {
 		t.Errorf("argv\n got %q\nwant %q", args, want)
 	}
@@ -361,7 +361,7 @@ func TestCheckCodexJoins(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(engineHome, "config.toml")); string(got) != before {
 		t.Errorf("trust left:\n%s", got)
 	}
-	for _, want := range []string{"export CODEX_HOME=" + engineHome, "--remote unix://", "shell_environment_policy.set="} {
+	for _, want := range []string{"export CODEX_HOME=" + engineHome, "-C " + work, "--remote unix://", "shell_environment_policy.set="} {
 		if !strings.Contains(f.command, want) {
 			t.Errorf("command lacks %q:\n%s", want, f.command)
 		}

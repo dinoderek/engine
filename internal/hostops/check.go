@@ -128,7 +128,7 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	if h.Name() == Codex {
 		kickoff = CodexCheckKickoff(marker)
 	}
-	l := launch{line: line, runDir: runDir, mode: HandsOff, kickoff: kickoff, joined: r.Joined}
+	l := launch{line: line, dir: work, runDir: runDir, mode: HandsOff, kickoff: kickoff, joined: r.Joined}
 	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(d, h, l), Log: filepath.Join(runDir, session.PaneLog)}
 	opened, err := d.Tmux.Open(w)
 	if err != nil {
