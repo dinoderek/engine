@@ -88,11 +88,10 @@ Neither session sat on a prompt.
   printing `[detached (from session engine)]`, and attach exited 0.
 - **The apps.** Both sessions joined engine's daemon. Their processes ran
   `… -C <worktree> … --remote unix://`, under daemons started from engine's
-  Codex home with `--remote-control`. The Mac daemon's log reads `remote
-  control websocket status changed … next_status=Connected` at 10:22:10, to
-  `wss://chatgpt.com/backend-api/wham/remote/control/server` as
-  `Dinos-MacBook-Pro.local`, with no later change. Its `session_index.jsonl`
-  lists thread `Execute dinoderek/engine#118`, and the devbox's lists `Execute
+  Codex home with `--remote-control`. The Mac daemon that served #118
+  started at 11:32:46 and logged no websocket status: the `next_status=Connected`
+  line to chatgpt.com at 10:22:10 came from an earlier daemon process. The
+  Mac's `session_index.jsonl` lists thread `Execute dinoderek/engine#118`, and the devbox's lists `Execute
   dinoderek/engine#119`. At the executor's hard stop, the operator opened
   the Codex app and saw the fixture's Codex sessions there (reported
   12:46), though without meaningful names (Gaps).
@@ -108,12 +107,12 @@ free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
 
 | # | Proved by | Not proved |
 | --- | --- | --- |
-| O1 Codex launch | Live: `engine run` started #118 and #119 through `spawn`, on the hosts' pinned `~/.local/bin/codex` with `hosts.toml`'s launch line, `--dangerously-bypass-hook-trust`, `-C <worktree>` and the kickoff as the first prompt (thread `Execute dinoderek/engine#118`). Both `run.json` files say `"harness": "codex"`. Joined sessions get folder trust from engine's Codex home, not a per-session profile (the engine#74 deviation of 09:52). Tests: `TestSpawnCodexJoins`, `TestSpawnCodexRefusals`, `TestHarnessFromTheCardOrTheFlag` | A refusal, live: none came up |
+| O1 Codex launch | Live: `engine run` started #118 and #119 through `spawn`, on the hosts' pinned `~/.local/bin/codex` with `hosts.toml`'s launch line, `--dangerously-bypass-hook-trust`, `-C <worktree>` and the kickoff as the first prompt (thread `Execute dinoderek/engine#118`). Both `run.json` files say `"harness": "codex"`. Joined sessions get folder trust from engine's Codex `config.toml`, and ignore `-p` (`docs/codex.md`, "Apps"). Tests: `TestSpawnCodexJoins`, `TestSpawnCodexRefusals`, `TestHarnessFromTheCardOrTheFlag` | A refusal, live: none came up |
 | O2 session state | Live: `harness-state.json` in both run directories (`working`, `PostToolUse`, with the Codex session id). `status` gave each window `state` and `harness`, and `engine ps` read `working` from it on both hosts. `notify` is unused (`docs/codex.md`). Tests: `TestStateFromRecordedEvents`, `TestCodexRowsReadTheirWindowsState`, `TestRemoteCodexRowsReadTheirWindowsState`, `TestACodexSessionThatWaitsStallsOncePerWait` | A Codex executor seen `waiting` or `ended` by `ps` or `run`: neither session ever waited, and each closed its own window |
 | O3 no prompt unattended | Live: 16 requests over both logs, all `left to auto-review`, none denied, and no session stopped on a prompt. Both Codex executors merged with `--match-head-commit` (both commands are in the daemons' session transcripts). Tests: `TestPermissionLeavesAnUnattendedCodexRequestToAutoReview`, `TestMergeGuardReadsCodexShellEvents`, `TestCheckCodexStallsOnAPrompt` | The merge guard blocking a Codex merge, live: no executor tried a bare merge |
 | O4 plugin and `--check` | Live: engine's Codex home holds the plugin (0.7.8, `plugins/cache/engine`) on both hosts, put there by item 10's first half, though item 10 ended open over the operator's home; both joined executors ran the engine skill (claim, lock, review, report). `engine start --check --harness codex` passed on both hosts. Tests: `TestCodexPluginRegistersStateHook`, `TestCodexMarketplaceListsThePlugin`, `TestCheckCodex`, `TestCheckCodexFailsWithoutAStateFile` | The plugin in the operator's own `~/.codex`: item 10 is the operator's, still open |
-| O5 the apps | Live: both sessions joined their host's engine daemon with remote control on. The Mac daemon was connected to chatgpt.com, and each daemon's thread index lists its session. The operator saw the Codex sessions in the Codex app. Tests: `TestSpawnCodexJoinsGated`, `TestSpawnCodexJoinedRecordComesFirst` | The devbox daemon's connection to chatgpt.com: its log holds no status change after 11:45, so only its `--remote-control` flag was seen. `start`'s report wrongly said each session was not in the apps (Gaps) |
-| O6 placement and setup | Live: #119 (`linux`) on the devbox, #118 (`macos`) on the Mac, two Codex sessions at once, at the cap of 2 across hosts. `engine setup` and `--host devbox` ran items 7 to 11: Codex installed, signed in, engine's home and the daemon `ok`, and item 10 open over the operator's home only. Tests: `TestTheHarnessCapCountsEveryHost`, `TestACardWhoseHarnessNoHostDefinesWaits`, `internal/setup`'s `TestCodex*` | A Codex task held back by the cap, live: there were only two; `TestTheHarnessCapCountsEveryHost` covers it |
+| O5 the apps | Live: both sessions joined their host's engine daemon with remote control on. Each daemon's thread index lists its session. The operator saw the Codex sessions in the Codex app. Tests: `TestSpawnCodexJoinsGated`, `TestSpawnCodexJoinedRecordComesFirst` | Either daemon's connection to chatgpt.com, in its own log: neither process that served a session logged a websocket status; the operator's sighting stands for it |
+| O6 placement and setup | Live: #119 (`linux`) on the devbox, #118 (`macos`) on the Mac, two Codex sessions at once, at the cap of 2 across hosts. `engine setup` and `--host devbox` ran items 7 to 11: Codex installed, signed in, engine's home and the daemon `ok`, and item 10 open over the operator's home only. Tests: `TestCodexCardsHoldCodexToItsCap`, `TestARunningCodexSessionCountsAgainstCodexOnly`, `TestTheHarnessCapCountsEveryHost` (across hosts), `TestACardWhoseHarnessNoHostDefinesWaits`, `internal/setup`'s `TestCodex*` | A Codex task held back by the cap, live: there were only two; `TestCodexCardsHoldCodexToItsCap` covers it |
 | O7 the fixture | This record | |
 | O8 slots | Live: the Mac's `status` gave 6 slots, at most 4 heavy, and two coordinator windows held none (3 free with 3 sessions open). Tests: `TestOnlySessionsHoldSlots`, `TestAHeavyTaskWaitsForAHeavySlotWhileALightOneStarts`, `TestHeavyTasksGoWhereAHeavySlotIsFree`, `internal/hosts` `TestHeavy` | A heavy task, live: the fixture had none |
 
@@ -146,9 +145,16 @@ free_heavy_slots 3`, for windows `run-engine-74` and `run-engine-116`
   `run.json` says `gpt-6.1-sol`. The Mac's TUI is Codex 0.163.0, and both
   daemons and the devbox's TUI are 0.164.0. Setup reports the Mac's 0.163.0
   as ok.
+- **Joined sessions' folder trust outlives them.** Engine's Codex
+  `config.toml` still trusts `…/task-engine-118` on the Mac and
+  `…/task-engine-119` on the devbox, though both worktrees are gone. Only the
+  `release` op removes these tables, and it never ran: each session closed its
+  own window, so `engine run` had nothing to reap. One table builds up per
+  Codex task.
 - **The session id.** `run.json` does not record the Codex session id, which
   engine#74's design put there. `harness-state.json` holds it.
-- **Small:** each `./dev test`, `git fetch` and worktree release crossed the
-  sandbox and went to auto-review, which approved every one. Claim to merge
+- **Small:** every request in both logs (gates, fetches, merges, commits,
+  pushes, releases) crossed the sandbox and went to auto-review. The logs do
+  not hold its verdicts; every command ran, so it approved each one. Claim to merge
   took 3 minutes on Codex on the Mac, 7.5 on the devbox (it merged
   `main` in and re-gated), and 3.5 on Claude.
