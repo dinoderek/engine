@@ -137,7 +137,7 @@ func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, error) {
 	if err != nil {
 		return nil, hosts.Host{}, err
 	}
-	if err := checkHarness(host, harness, d.Home); err != nil {
+	if _, err := checkHarness(host, harness, d.Home); err != nil {
 		return nil, hosts.Host{}, err
 	}
 	ok, err := d.Tmux.HasWindow(CheckName)

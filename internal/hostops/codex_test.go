@@ -72,7 +72,7 @@ func errored() *daemon {
 func codexSpawnDeps(t *testing.T, h home, tm *tmuxFake, d *daemon, env map[string]string) Deps {
 	t.Helper()
 	deps := spawnDeps(t, h, (&gitFake{}).run, tm, env)
-	deps.Exec = d.run
+	deps.Exec, deps.JoinRemote = d.run, true
 	return deps
 }
 
@@ -160,9 +160,9 @@ func TestSpawnCodexWithoutRemoteControl(t *testing.T) {
 		{"disabled", "is disabled", down()},
 		{"errored", "is errored (Remote control is enabled on mac but the connection is errored.)", errored()},
 		{"connecting", "is connecting", &daemon{out: `{"status":"connecting"}`}},
-		{"unreadable", "is in an unreadable state", &daemon{out: "Remote control is disabled on mac\n"}},
-		{"no status", "is in an unreadable state", &daemon{out: "{}"}},
-		{"failed to run", "is errored (codex: boom)", &daemon{err: errors.New("codex: boom")}},
+		{"unreadable", "is unreadable", &daemon{out: "Remote control is disabled on mac\n"}},
+		{"no status", "is unreadable", &daemon{out: "{}"}},
+		{"failed to run", "is unreadable (codex: boom)", &daemon{err: errors.New("codex: boom")}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -200,13 +200,33 @@ func TestSpawnCodexWarnsOfEverything(t *testing.T) {
 	}
 }
 
+// Unless the caller lets sessions join, a Codex spawn never asks the daemon
+// its state, adds no --remote and warns of nothing.
+func TestSpawnCodexDoesNotJoinByDefault(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	argv, _ := h.fakeCodex(t)
+	d := up()
+	tm := &tmuxFake{}
+	deps := spawnDeps(t, h, (&gitFake{}).run, tm, nil)
+	deps.Exec = d.run
+	got, err := Spawn(deps, codexRequest(HandsOff))
+	if err != nil || got.Warning != "" || len(d.calls) != 0 {
+		t.Fatalf("reply %+v, %v, asked %q", got, err, d.calls)
+	}
+	runWindow(t, tm.command)
+	if args := lines(t, argv); slices.Contains(args, "--remote") {
+		t.Errorf("argv %q joined remote control", args)
+	}
+}
+
 // A Claude spawn never asks about Codex's daemon.
 func TestSpawnClaudeDoesNotAskTheDaemon(t *testing.T) {
 	h := newHome(t, "mac")
 	h.clone(t)
 	d := up()
 	deps := spawnDeps(t, h, (&gitFake{}).run, &tmuxFake{}, nil)
-	deps.Exec = d.run
+	deps.Exec, deps.JoinRemote = d.run, true
 	if got, err := Spawn(deps, request()); err != nil || got.Warning != "" || len(d.calls) != 0 {
 		t.Errorf("reply %+v, %v, asked %q", got, err, d.calls)
 	}

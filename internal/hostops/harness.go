@@ -155,30 +155,30 @@ func (c codex) Remote(run session.Runner, bin string) (flags, warning string) {
 }
 
 // daemonState is the connection state `codex remote-control --json` printed:
-// connected, connecting, disabled or errored. A command that fails reports
-// an errored connection, and an output with no state is unreadable.
+// connected, connecting, disabled or errored. A command that exits non-zero
+// reports an errored connection; one that cannot run, or prints no state, is
+// unreadable.
 func daemonState(out string, err error) string {
+	var exit *session.ExitError
+	if errors.As(err, &exit) {
+		return "errored (" + lastLine(exit.Stderr) + ")"
+	}
 	if err != nil {
-		return "errored (" + lastLine(err) + ")"
+		return "unreadable (" + err.Error() + ")"
 	}
 	var reply struct {
 		Status string `json:"status"`
 	}
 	if json.Unmarshal([]byte(out), &reply) != nil || reply.Status == "" {
-		return "in an unreadable state"
+		return "unreadable"
 	}
 	return reply.Status
 }
 
-// lastLine is the last line of err's message, without log-level noise
-// before it, such as Codex's complaint about an ignored config key.
-func lastLine(err error) string {
-	var exit *session.ExitError
-	msg := err.Error()
-	if errors.As(err, &exit) && strings.TrimSpace(exit.Stderr) != "" {
-		msg = exit.Stderr
-	}
-	lines := strings.Split(strings.TrimSpace(msg), "\n")
+// lastLine is the last line of Codex's stderr, without the log-level noise
+// before it, such as its complaint about an ignored config key.
+func lastLine(stderr string) string {
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
 	return strings.TrimSpace(strings.TrimPrefix(lines[len(lines)-1], "Error:"))
 }
 

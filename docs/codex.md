@@ -36,7 +36,7 @@ user's config, `--dangerously-bypass-hook-trust`, then `--` and the kickoff.
 - **Folder trust.** The profile holds it: a session starts without the
   trust prompt, and the user's `config.toml` is untouched. A `-c
   'projects."<path>".trust_level=…'` does not hold it; the prompt still shows.
-  A profile makes Codex run embedded, without the shared app-server.
+  A profile makes Codex run embedded, without the shared app-server; a joined session ignores it ("Apps").
 - **Hook trust.** Codex runs a hook only once its hash is trusted, and
   otherwise asks for a review first, which would stop an unattended start.
   Engine-launched sessions bypass that, as Claude sessions run a repo's hooks
@@ -100,14 +100,34 @@ a single program and other tools already claim it (Computer Use on the Mac).
 
 ## Apps
 
-The host runs the remote-control daemon (`codex remote-control start`).
-`spawn` reads its state with `codex remote-control --json`, which changes
-nothing, and only a `connected` daemon gets the session: the launch adds
-`--remote unix://`, and the TUI joins the daemon, so the ChatGPT and Codex
-apps show it. In any other state (disabled, connecting, errored, a failed or
-unreadable reply) the session starts without `--remote`, embedded, because
-of its profile ("Starting"), and `spawn`'s reply carries a warning naming
-`codex remote-control start`, as for a host that may sleep. A down daemon
-never refuses a spawn. Codex has no flag that names a session, so the apps
-show its thread title, not `<repo>-<task>`, and the kickoff's `rc=` is
-unused. The preflight check does not join the daemon.
+The apps list sessions on a host's remote-control daemon (`codex remote-control
+start`). A session engine launches runs embedded, because of its profile
+("Starting"), so the apps do not show it. `spawn` can join a connected daemon:
+with `Deps.JoinRemote` set, it reads the daemon's state with `codex
+remote-control --json`, which changes nothing, and adds `--remote unix://` only
+when the state is `connected`. In any other state (disabled, connecting,
+errored, a failed or unreadable reply) the session starts embedded and
+`spawn`'s reply warns, naming `codex remote-control start`; a down daemon never
+refuses a spawn. Nothing sets `JoinRemote` yet, because a joined session
+differs from an embedded one (Codex 0.164.0):
+
+- The agent and its hooks run inside the daemon. They see the daemon's
+  environment, not the window's: `GH_TOKEN` and `ENGINE_*` exported by the
+  window are lost. `-c shell_environment_policy.set={…}` reaches the agent's
+  commands, not the hooks, which get only the event, including its `cwd`.
+- The session's profile (`-p`) is ignored. Folder trust comes from the
+  daemon's `config.toml`, one entry per folder (a parent does not cover its
+  children, and `-c projects."…".trust_level` does not stop the prompt).
+- `-c sandbox_workspace_write.writable_roots` and `--add-dir` are refused with
+  `--remote`: the daemon's `config.toml` holds them. `network_access`,
+  auto-review and the sandbox mode work from `-c` or from that file.
+- Hooks from the daemon's Codex home run in the daemon, and need
+  `--dangerously-bypass-hook-trust` on the TUI, or a review prompt stops the
+  session.
+
+A daemon started with its own `CODEX_HOME` reads its own `config.toml` and
+`hooks.json`, and a TUI run with the same `CODEX_HOME` joins it with `--remote
+unix://`, so engine's sessions can have a config apart from the operator's
+manual ones. Codex has no flag that names a session, so the apps show its thread
+title, not `<repo>-<task>`, and the kickoff's `rc=` is unused. The preflight
+check never joins.

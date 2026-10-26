@@ -55,6 +55,7 @@ type spawn struct {
 	cfg    *hosts.Config
 	host   hosts.Host
 	h      harness
+	bin    string // the harness binary
 }
 
 // Spawn creates the task's worktree in engine's clone, which sync-repo has
@@ -119,13 +120,13 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 }
 
 // remote asks the harness whether the session can join the host's remote
-// control. It only reads the daemon's state.
+// control, when the caller lets sessions join. It only reads the daemon's
+// state.
 func (s spawn) remote(d Deps) (flags, warning string) {
-	bin, err := s.host.BinPath(s.h.Name(), d.Home)
-	if err != nil {
-		return "", "remote control was not checked: " + err.Error()
+	if !d.JoinRemote {
+		return "", ""
 	}
-	return s.h.Remote(d.Exec, bin)
+	return s.h.Remote(d.Exec, s.bin)
 }
 
 // checkSpawn runs spawn's refusals. It only reads files and tmux's window
@@ -145,7 +146,7 @@ func checkSpawn(d Deps, r SpawnRequest) (spawn, error) {
 	if s.cfg, s.host, err = openHost(d.Home); err != nil {
 		return spawn{}, err
 	}
-	if err := checkHarness(s.host, s.h.Name(), d.Home); err != nil {
+	if s.bin, err = checkHarness(s.host, s.h.Name(), d.Home); err != nil {
 		return spawn{}, err
 	}
 	taken, err := d.Tmux.HasWindow(s.name)
