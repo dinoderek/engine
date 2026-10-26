@@ -6,7 +6,8 @@
 
 A host lists `codex` in its `harnesses` and pins its `bin` (`hosts-and-sessions.md`).
 The host's `spawn` and check ops launch Codex when the caller names it;
-`engine start` does not yet (`hosts-and-sessions.md`, "Starting a session").
+`engine start` and `engine start --check` run Claude only for now
+(`hosts-and-sessions.md`, "Starting a session").
 The harness's launch line and tiers:
 
 ```toml
@@ -35,9 +36,7 @@ user's config, `--dangerously-bypass-hook-trust`, then `--` and the kickoff.
 - **Folder trust.** The profile holds it: a session starts without the
   trust prompt, and the user's `config.toml` is untouched. A `-c
   'projects."<path>".trust_level=…'` does not hold it; the prompt still shows.
-  A profile makes Codex run embedded, without the shared app-server, so a
-  session joining the remote-control daemon needs another route: an entry in
-  `~/.codex/config.toml`, removed at release, is the operator-approved one.
+  A profile makes Codex run embedded, without the shared app-server.
 - **Hook trust.** Codex runs a hook only once its hash is trusted, and
   otherwise asks for a review first, which would stop an unattended start.
   Engine-launched sessions bypass that, as Claude sessions run a repo's hooks
