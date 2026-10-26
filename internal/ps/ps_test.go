@@ -408,7 +408,7 @@ func TestRowFields(t *testing.T) {
 	yes := true
 	want := Row{
 		Task: tracker.Ref{Repo: "o/r", Number: 42}.String(), Title: "task w-42", Session: "w-42", Run: "w-42-run", Host: "mac",
-		Harness: "claude-code", Branch: "task/w-42", State: Running, Alive: &yes,
+		Harness: "claude", Branch: "task/w-42", State: Running, Alive: &yes,
 		ClaimedAt: "2026-10-21T10:30:00Z", AgeSeconds: 5400,
 	}
 	if !reflect.DeepEqual(got, want) {

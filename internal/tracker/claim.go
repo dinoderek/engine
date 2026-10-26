@@ -25,9 +25,21 @@ type Claim struct {
 	PostedAt time.Time
 }
 
-// HarnessName is the harness's own name, such as claude-code.
+// HarnessName returns engine's name for a known harness, or the first word
+// of an unrecognised harness. The raw Harness field is unchanged.
 func (c Claim) HarnessName() string {
-	name, _, _ := strings.Cut(c.Harness, " ")
+	name, rest, _ := strings.Cut(c.Harness, " ")
+	switch strings.ToLower(name) {
+	case "claude-code":
+		return "claude"
+	case "claude":
+		word, _, _ := strings.Cut(rest, " ")
+		if strings.EqualFold(word, "Code") {
+			return "claude"
+		}
+	case "codex", "codex-cli":
+		return "codex"
+	}
 	return name
 }
 

@@ -49,9 +49,9 @@ func TestWriteTable(t *testing.T) {
 		t.Errorf("header %q", header)
 	}
 	for i, wantCells := range [][]string{
-		{tracker.Ref{Repo: "o/r", Number: 1}.String(), "mac", "claude-code", "working", "1h"},
+		{tracker.Ref{Repo: "o/r", Number: 1}.String(), "mac", "claude", "working", "1h"},
 		{tracker.Ref{Repo: "o/r", Number: 2}.String(), "devbox", "-", "in-review", "1h"},
-		{tracker.Ref{Repo: "o/r", Number: 30}.String(), "mac", "claude-code", "dead", "3d"},
+		{tracker.Ref{Repo: "o/r", Number: 30}.String(), "mac", "claude", "dead", "3d"},
 	} {
 		if got := strings.Fields(lines[i+1]); !reflect.DeepEqual(got, wantCells) {
 			t.Errorf("row %d: got %q, want %q", i, got, wantCells)
@@ -65,6 +65,32 @@ func TestWriteTable(t *testing.T) {
 				t.Errorf("column %s is not aligned in %q", col, l)
 			}
 		}
+	}
+}
+
+func TestWriteTableHarnessNames(t *testing.T) {
+	for _, tc := range []struct{ harness, want string }{
+		{"Claude Code 2.1.310", "claude"},
+		{"claude-code 2.1.310", "claude"},
+		{"Codex 0.164.0", "codex"},
+		{"codex-cli 0.164.0", "codex"},
+		{"Other Agent 1.0", "Other"},
+		{"", "-"},
+	} {
+		t.Run(tc.harness, func(t *testing.T) {
+			claimed := task(1, "w-1", "engine:running")
+			claimed.Claim.Harness = tc.harness
+			f := (&fake{tasks: []tracker.ClaimedTask{claimed}}).on(nil)
+			var out bytes.Buffer
+			if err := WriteTable(&out, list(t, f).Rows); err != nil {
+				t.Fatal(err)
+			}
+			lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+			cells := strings.Fields(lines[1])
+			if len(cells) != 5 || cells[2] != tc.want {
+				t.Errorf("harness column: got %q, want %q", cells, tc.want)
+			}
+		})
 	}
 }
 
