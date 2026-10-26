@@ -20,6 +20,17 @@ tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 `{model}` and `{effort}` come from the tier. `{clone}` is engine's clone of
 the repo.
 
+## Installing the skill
+
+`plugins/engine/.codex-plugin/plugin.json` points at the `skills/` tree the
+Claude plugin shares, and registers `engine hook state`, `engine hook
+permission` and `engine hook pre-tool-use` on their events. The repo's
+`.agents/plugins/marketplace.json` lists it. `codex plugin marketplace add
+dinoderek/engine` then `codex plugin add engine@engine` install it. The two
+manifests carry one version: the versions lane fails when they differ.
+Codex runs a plugin's hooks only once they are reviewed and trusted: review
+them in the first session after an install and after each update.
+
 ## Permission mode
 
 Sessions default to auto mode: the `workspace-write` sandbox, with Codex's

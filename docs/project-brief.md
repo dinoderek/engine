@@ -14,7 +14,7 @@ asks.
 | --- | --- |
 | Execution protocol | The phases, roles and state machine from requirements to merged feature. |
 | Coordinator | `engine`, a Go CLI for macOS and Linux. It drives a feature issue through planning and execution, spawning sessions on local or SSH hosts. No LLM. |
-| Skill | `engine`: what agents do when they plan, execute (hands-off or gated) and review. It ships from this repo as a Claude Code plugin. |
+| Skill | `engine`: what agents do when they plan, execute (hands-off or gated) and review. It ships from this repo as a Claude Code and Codex plugin. |
 | Plan sources | Plan and status storage behind one set of operations: GitHub Issues, which the coordinator drives, or an in-repo plan. |
 | Hosts | Each machine's harnesses, session slots and capabilities, and how to reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |

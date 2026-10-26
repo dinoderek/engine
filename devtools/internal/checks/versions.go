@@ -1,10 +1,12 @@
 package checks
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -48,7 +50,56 @@ func Versions(e Env) int {
 		}
 		problems = append(problems, fileVersionProblems(f, string(text))...)
 	}
-	return e.report(lane, problems, "go"+toolchain+" from go.mod everywhere; actions pinned by commit")
+	problems = append(problems, pluginVersionProblems(files, func(name string) (string, bool) {
+		text, err := os.ReadFile(filepath.Join(e.Root, name))
+		return string(text), err == nil
+	})...)
+	return e.report(lane, problems, "go"+toolchain+" from go.mod everywhere; actions pinned by commit; plugin manifests agree")
+}
+
+// pluginVersionProblems checks that each plugin carries a Claude and a Codex
+// manifest with the same version: both harnesses install one skills tree, so a
+// bump of one is a bump of the other.
+func pluginVersionProblems(files []string, read func(name string) (string, bool)) []string {
+	const claude, codex = "/.claude-plugin/plugin.json", "/.codex-plugin/plugin.json"
+	dirs := map[string]bool{}
+	for _, f := range files {
+		for _, suffix := range []string{claude, codex} {
+			if dir, ok := strings.CutSuffix(f, suffix); ok {
+				dirs[dir] = true
+			}
+		}
+	}
+	names := make([]string, 0, len(dirs))
+	for d := range dirs {
+		names = append(names, d)
+	}
+	sort.Strings(names)
+	var problems []string
+	for _, d := range names {
+		c, cok := manifestVersion(read, d+claude)
+		x, xok := manifestVersion(read, d+codex)
+		switch {
+		case !cok || !xok:
+			problems = append(problems, fmt.Sprintf("%s: needs a readable `version` in both %s and %s", d, claude[1:], codex[1:]))
+		case c != x:
+			problems = append(problems, fmt.Sprintf("%s: Claude manifest version %s and Codex manifest version %s differ", d, c, x))
+		}
+	}
+	return problems
+}
+
+// manifestVersion returns the version a plugin manifest declares.
+func manifestVersion(read func(name string) (string, bool), name string) (string, bool) {
+	text, ok := read(name)
+	if !ok {
+		return "", false
+	}
+	var m struct{ Version string }
+	if json.Unmarshal([]byte(text), &m) != nil || m.Version == "" {
+		return "", false
+	}
+	return m.Version, true
 }
 
 // goModProblems checks the go and toolchain lines and returns the toolchain

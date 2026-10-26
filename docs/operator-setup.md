@@ -46,10 +46,13 @@ name, one line, as claims post it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
 plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
-`claude plugin install engine@engine --scope user`. Sign in to Claude Code
+`claude plugin install engine@engine --scope user`, and for Codex
+`codex plugin marketplace add dinoderek/engine` and `codex plugin add
+engine@engine`. Sign in to Claude Code
 with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex. Setup copies the Mac's engine commit and
-plugin version to the other hosts, so update both here first.
+Claude plugin version to the other hosts, so update both here first. It does
+not install the Codex plugin: install it by hand on each Codex host.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and

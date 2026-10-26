@@ -258,6 +258,38 @@ func TestVersions(t *testing.T) {
 		`docs/a.md:1: restates a Go version ("go1.27")`)
 }
 
+func TestVersionsPluginManifests(t *testing.T) {
+	files := func(claude, codex string) map[string]string {
+		f := map[string]string{"go.mod": "module m\n\ngo 1.27.0\n\ntoolchain go1.27.2\n"}
+		if claude != "" {
+			f["plugins/p/.claude-plugin/plugin.json"] = claude
+		}
+		if codex != "" {
+			f["plugins/p/.codex-plugin/plugin.json"] = codex
+		}
+		return f
+	}
+	tests := []struct {
+		name          string
+		claude, codex string
+		want          int
+		contains      string
+	}{
+		{"match", `{"version":"0.7.7"}`, `{"version":"0.7.7"}`, 0, "plugin manifests agree"},
+		{"differ", `{"version":"0.7.7"}`, `{"version":"0.7.8"}`, 1, "plugins/p: Claude manifest version 0.7.7 and Codex manifest version 0.7.8 differ"},
+		{"codex missing", `{"version":"0.7.7"}`, "", 1, "plugins/p: needs a readable `version` in both"},
+		{"claude missing", "", `{"version":"0.7.7"}`, 1, "plugins/p: needs a readable `version` in both"},
+		{"no version", `{"version":"0.7.7"}`, `{"name":"p"}`, 1, "needs a readable `version`"},
+		{"bad json", `{"version":"0.7.7"}`, `{`, 1, "needs a readable `version`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e, out := tree(t, files(tt.claude, tt.codex), nil)
+			expect(t, Versions(e), tt.want, out, tt.contains)
+		})
+	}
+}
+
 func TestGoModProblems(t *testing.T) {
 	tests := map[string]string{
 		"module m\n":            "no `go` line",

@@ -15,8 +15,8 @@ The kickoff names the mode. If it names none, run **gated**.
 | Merge | On green, without asking | Say the PR is ready and wait for the operator's approval |
 | After merge | Report and clean up | Also list the next ready tasks, each with a kickoff line |
 
-Never enable auto-merge or merge with `--admin`. In Claude Code the plugin's
-merge guard blocks both, and any merge without `--match-head-commit`.
+Never enable auto-merge or merge with `--admin`. In Claude Code and Codex the
+plugin's merge guard blocks both, and any merge without `--match-head-commit`.
 
 ## GitHub identity
 
