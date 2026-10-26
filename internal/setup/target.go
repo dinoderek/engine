@@ -16,6 +16,8 @@ type target struct {
 	// address is how ssh reaches the host; empty for this host.
 	address string
 	exec    remote.Exec
+	// acts is set for this host when it also gets steps that change it.
+	acts bool
 }
 
 func (t target) remote() bool { return t.address != "" }
@@ -24,6 +26,9 @@ func (t target) remote() bool { return t.address != "" }
 func (t target) label() string {
 	if t.remote() {
 		return t.name + " (" + t.address + ")"
+	}
+	if t.acts {
+		return t.name + " (this host; the Codex steps act)"
 	}
 	return t.name + " (this host, checked only)"
 }

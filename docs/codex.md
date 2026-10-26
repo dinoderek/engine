@@ -116,6 +116,27 @@ last screen, where a prompt would be), or a step is skipped, or the session's
 hooks wrote no `harness-state.json`: that file is the proof they ran. Requests
 left to auto-review are listed, and fail nothing.
 
+## Setup
+
+`engine setup` (`operator-setup.md`) gives a host that lists `codex` engine's
+own Codex home, `~/.local/share/engine/codex`, for engine's sessions to join, apart from the
+operator's own home, which setup never edits. Sessions still launch embedded,
+with the host's `CODEX_HOME` ("Starting", "Apps"):
+
+- **`config.toml`.** Setup owns a block at its top: auto-review, the
+  `workspace-write` sandbox, `network_access`, and engine's clones as a writable
+  root. Hook trust is left to the launch. Codex's own tables follow the block
+  (the marketplace and plugin entries it writes, and folder trust). Setup
+  replaces the block and keeps the rest.
+- **The login** is a link to the operator's `auth.json`. A file already there is
+  engine's own login and stays.
+- **The plugin** installs from this repo's marketplace into that home, not the
+  operator's.
+- **The daemon** is `codex remote-control start` in that home, with the machine
+  user's token in its environment, read from its file. The start exits 1 when
+  the connection to the apps is errored, though the daemon runs with remote
+  control on, so setup judges it by the daemon afterwards ("Apps").
+
 ## Apps
 
 The apps list sessions on a host's remote-control daemon (`codex remote-control
@@ -142,6 +163,14 @@ differs from an embedded one (Codex 0.164.0):
 - Hooks from the daemon's Codex home run in the daemon, and need
   `--dangerously-bypass-hook-trust` on the TUI, or a review prompt stops the
   session.
+
+`codex remote-control --json` is not a read of one Codex home's daemon. With
+no daemon it serves in the foreground, with remote control on, until stopped;
+with `CODEX_HOME` set at engine's daemon it reported the machine's errored
+connection on the Mac, and a foreground failure on Linux. Setup judges
+engine's remote control by the daemon's process arguments (`--remote-control`),
+and reads the operator's state only once `codex app-server daemon version`
+reports a daemon running there.
 
 A daemon started with its own `CODEX_HOME` reads its own `config.toml` and
 `hooks.json`, and a TUI run with the same `CODEX_HOME` joins it with `--remote

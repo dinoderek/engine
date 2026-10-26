@@ -13,7 +13,7 @@
 | `internal/hostops/` | `engine host <op> --json`: the ops a host runs on itself for a caller, and the preflight check |
 | `internal/remote/` | the client that reaches a host's ops: `Local` is this host, in-process; `SSH` is another machine, and its tmux-over-SSH runner |
 | `internal/session/` | the local host's ops: clones, worktrees, tmux windows, keeping a Mac awake, live Claude sessions, folder trust, the run directory |
-| `internal/setup/` | `engine setup`: the seven steps that bring a host to the caller's engine commit, plugin and config |
+| `internal/setup/` | `engine setup`: the steps that bring a host to the caller's engine commit, plugin and config |
 | `internal/lint/` | `engine lint`: the plan rules |
 | `internal/run/` | `engine run`: the coordinator loop (`coordinator.md`) |
 | `internal/ps/` | `engine ps` |

@@ -297,21 +297,47 @@ func (r *runner) noSuspend() (outcome, error) {
 }
 
 // preflight runs `engine start --check` on the target, once nothing else is
-// open: a check cannot pass past a missing tool or a signed-out Claude.
+// open: a check cannot pass past a missing tool, a signed-out Claude or a
+// missing Codex. A host that lists codex is checked for Codex as well.
 func (r *runner) preflight(out io.Writer) (outcome, error) {
 	if r.opened > 0 {
 		return open("not run while items above are open", r.rerun()), nil
 	}
-	clean, err := r.d.Check(out)
+	harnesses := []string{""}
+	if r.codex != nil && r.defaultHarness != codexHarness {
+		harnesses = append(harnesses, codexHarness)
+	}
+	for _, harness := range harnesses {
+		if harness != "" {
+			fmt.Fprintf(out, "checking --harness %s\n", harness)
+		}
+		res, err := r.check(harness, out)
+		if err != nil || res.state == stateOpen {
+			return res, err
+		}
+	}
+	return passed("engine start --check passed"), nil
+}
+
+// check runs one harness's check, and is open when it fails or finds the
+// session would stop. A host that does not answer is an error.
+func (r *runner) check(harness string, out io.Writer) (outcome, error) {
+	clean, err := r.d.Check(harness, out)
+	if harness == "" {
+		harness = r.defaultHarness
+	}
 	var unreachable *remote.UnreachableError
 	switch {
 	case errors.As(err, &unreachable):
 		return outcome{}, err
 	case err != nil:
 		return open(err.Error(), r.rerun()), nil
+	case !clean && harness == codexHarness:
+		return open("an unattended Codex session there would stop; read the report above, then rerun",
+			"engine start --check --harness codex"+r.t.flag()), nil
 	case !clean:
 		return open("an unattended session there would stop; answer each prompt in a folder you trust, then rerun",
 			r.t.onHost("claude --permission-mode auto --remote-control", true)), nil
 	}
-	return passed("engine start --check passed"), nil
+	return passed(""), nil
 }

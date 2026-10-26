@@ -197,6 +197,11 @@ func ReadHostName(path string) (string, error) {
 // ConfigDir is where the host config lives under home.
 func ConfigDir(home string) string { return filepath.Join(home, ".config", "engine") }
 
+// CodexHomeDir is engine's own Codex home, under home: the config, login link,
+// plugin and app-server daemon that engine setup prepares for engine's Codex
+// sessions to join, apart from the operator's own Codex home.
+const CodexHomeDir = ".local/share/engine/codex"
+
 // Open loads hosts.toml and the host file from dir, and returns the config
 // with the host this machine is.
 func Open(dir string) (*Config, Host, error) {
