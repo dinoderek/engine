@@ -280,11 +280,14 @@ func (w *world) NoteDir(r tracker.Ref) (string, error) {
 	return filepath.Join(w.home, "notes", fmt.Sprint(r.Number)), nil
 }
 
-func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
+func (w *world) launch(r tracker.Ref, host, harness string, do behaviour) error {
+	if harness == "" {
+		harness = w.harnessOf(r)
+	}
 	name := fmt.Sprintf("r-%d", r.Number)
 	w.nextID++
 	heavy := w.heavy(r)
-	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy, heavy: heavy, harness: w.harnessOf(r),
+	e := &executor{ref: r, host: host, started: w.now, do: do, status: session.AgentBusy, heavy: heavy, harness: harness,
 		window: session.WindowInfo{ID: fmt.Sprintf("@%d", w.nextID), Name: name}}
 	// Another host's run directory is on that host.
 	dir, err := session.RunDir(w.hostHome(host), session.RunID(session.Repo{Owner: "o", Name: "r"}, r.Number, w.now))
@@ -304,7 +307,7 @@ func (w *world) launch(r tracker.Ref, host string, do behaviour) error {
 // Start refuses as engine start does: an unknown host, a window of that
 // name, live or dead, or no free slot on the host, or no free heavy slot for
 // a heavy task.
-func (w *world) Start(r tracker.Ref, host string) error {
+func (w *world) Start(r tracker.Ref, host, harness string) error {
 	i := slices.IndexFunc(w.fleet(), func(h fakeHost) bool { return h.name == host })
 	if i < 0 {
 		return fmt.Errorf("host %q is not in hosts.toml", host)
@@ -328,7 +331,7 @@ func (w *world) Start(r tracker.Ref, host string) error {
 	}
 	w.starts = append(w.starts, r)
 	w.placed = append(w.placed, fmt.Sprintf("%d@%s", r.Number, host))
-	return w.launch(r, host, w.do[r.Number])
+	return w.launch(r, host, harness, w.do[r.Number])
 }
 
 func (w *world) StartPlanner(r tracker.Ref) error {
@@ -339,7 +342,7 @@ func (w *world) StartPlanner(r tracker.Ref) error {
 		}
 	}
 	w.starts = append(w.starts, r)
-	return w.launch(r, "mac", behaviour{})
+	return w.launch(r, "mac", "claude", behaviour{})
 }
 
 func (w *world) AddLabels(r tracker.Ref, labels ...string) error {

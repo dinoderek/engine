@@ -104,6 +104,7 @@ func (h Host) Runs(harness string) bool { return slices.Contains(h.Harnesses, ha
 // Config is a validated hosts.toml.
 type Config struct {
 	DefaultHarness string
+	HarnessRatio   map[string]int
 	GBPerSession   int
 	ReserveGB      int
 	// HeavyCapabilities make a task heavy when its card requires one.

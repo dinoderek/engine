@@ -27,6 +27,10 @@ approved, or a lone task that failed.
 | Feature (`engine:approved`) | Drives the whole feature to `done`. It plans first if there are no tasks, then runs tasks as they become ready. |
 | Task | Runs only that task. It refuses to start while any blocker is open. |
 
+`--harness-ratio claude=4,codex=1` replaces the config ratio for this run.
+For harness scoring and host eligibility, load `hosts-and-sessions.md`,
+"Placement".
+
 **The reconcile loop.** Each pass reads state, works out what to do, and does
 it. The skill's `coordinate` mode
 (`plugins/engine/skills/engine/references/coordinate.md`) is the spec for a
