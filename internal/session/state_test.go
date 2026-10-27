@@ -14,6 +14,7 @@ func TestHarnessStateRoundTrips(t *testing.T) {
 	for _, want := range []HarnessState{
 		{State: StateWaiting, Event: "SessionStart", At: at, SessionID: "019a-codex"},
 		{State: StateWorking, Event: "UserPromptSubmit", At: at.Add(time.Minute)},
+		{State: StateLimited, Event: "Stop", At: at, ResetsAt: at.Add(time.Hour).Unix()},
 		{State: StateEnded, Event: "SessionEnd", At: at.Add(time.Hour), SessionID: "019a-codex"},
 	} {
 		if err := WriteHarnessState(dir, want); err != nil {
