@@ -131,6 +131,7 @@ func decode(root *node) (*Config, *Error) {
 	v.children(harnesses, "harness", func(name string, n *node) { c.Harnesses[name] = v.harness(name, n) })
 	hosts := r.table("host", true)
 	v.children(hosts, "host", func(name string, n *node) { c.Hosts[name] = v.host(c, name, n) })
+	c.HarnessRatio = v.ratio(c, r)
 	r.finish()
 	if hosts != nil && len(hosts.order) == 0 {
 		v.fail(hosts.line, "top level: no [host.<name>] is defined")
@@ -289,4 +290,21 @@ func (v *validator) hostBin(r *reader, h *Host) {
 		}
 	}
 	br.finish()
+}
+
+// ratio reads optional weights after the harness definitions are known.
+func (v *validator) ratio(c *Config, r *reader) map[string]int {
+	n := r.table("harness_ratio", false)
+	if n == nil {
+		return nil
+	}
+	rr := v.reader(n, "harness_ratio")
+	weights := map[string]int{}
+	for _, name := range n.order {
+		weights[name], _ = rr.number(name, true, 0)
+	}
+	if err := c.ValidateRatio(weights); err != nil {
+		v.fail(n.line, "%v", err)
+	}
+	return weights
 }

@@ -40,7 +40,7 @@ type World interface {
 	// NoteDir is where the coordinator keeps its own notes for ref.
 	NoteDir(ref tracker.Ref) (string, error)
 	// Start starts the task's session on the named host.
-	Start(task tracker.Ref, host string) error
+	Start(task tracker.Ref, host, harness string) error
 	StartPlanner(feature tracker.Ref) error
 	AddLabels(ref tracker.Ref, labels ...string) error
 	RemoveLabel(ref tracker.Ref, label string) error
@@ -206,7 +206,7 @@ func startTask(w World, v View, a Action) error {
 			w.Logf("release the last session of %s on %s: %v", a.Ref, s.Host, err)
 		}
 	}
-	start, host := func(r tracker.Ref) error { return w.Start(r, a.Host) }, a.Host
+	start, host := func(r tracker.Ref) error { return w.Start(r, a.Host, a.Harness) }, a.Host
 	if a.Kind == StartPlanner {
 		start, host = w.StartPlanner, v.Fleet.Local
 	}

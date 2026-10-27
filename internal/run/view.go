@@ -143,7 +143,8 @@ type Action struct {
 	// Label is the feature state SetLabel sets.
 	Label string
 	// Host is where StartTask starts the task.
-	Host string
+	Host    string
+	Harness string
 	// Text says why, for the log and for the comment the action posts.
 	Text    string
 	Session Session

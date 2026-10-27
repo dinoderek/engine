@@ -88,13 +88,13 @@ func (s System) NoteDir(ref tracker.Ref) (string, error) {
 	return filepath.Join(s.Home, filepath.FromSlash(session.RunsDir), session.TaskName(repo, ref.Number)+"-coordinator"), nil
 }
 
-func (s System) Start(task tracker.Ref, host string) error {
-	return start.Run(start.Options{Ref: task, Mode: start.HandsOff, Host: host}, s.Starts, s.Out)
+func (s System) Start(task tracker.Ref, host, harness string) error {
+	return start.Run(start.Options{Ref: task, Mode: start.HandsOff, Host: host, Harness: harness}, s.Starts, s.Out)
 }
 
 // Fleet reads every host's status, one call per host, all at once.
 func (s System) Fleet() Fleet {
-	f := Fleet{Local: s.Host.Name, DefaultHarness: s.Config.DefaultHarness, Caps: map[string]int{}, Heavy: s.Config.HeavyCapabilities}
+	f := Fleet{Local: s.Host.Name, DefaultHarness: s.Config.DefaultHarness, HarnessRatio: s.Config.HarnessRatio, Caps: map[string]int{}, Heavy: s.Config.HeavyCapabilities}
 	for name, h := range s.Config.Harnesses {
 		f.Caps[name] = h.MaxSessions
 	}

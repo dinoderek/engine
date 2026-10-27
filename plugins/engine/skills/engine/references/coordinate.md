@@ -1,20 +1,18 @@
 # Coordinate a feature
 
-You drive one approved feature to `done`, starting executors and watching
-them; `engine run` runs this pass as code. You never edit code, merge,
-claim a task, or answer a hard stop: hard stops go to the operator.
+Drive an approved feature to `done`; `engine run` implements this pass.
+Never edit code, merge, claim tasks or answer hard stops.
 
 | Kickoff | Executors start through |
 | --- | --- |
 | `Coordinate <feature> with engine` | `engine start`, read back with `engine ps --json` |
 | `Coordinate <feature> with native sessions` | Claude Code cloud sessions (below) |
 
-With neither named, use `engine` if `engine ps` runs here, else ask.
+Without either, use `engine` if `engine ps` runs, else ask.
 
 ## The pass
 
-Run a pass, then wait about 5 minutes, and repeat until the feature is
-`done`. Each pass, in order:
+Repeat every 5 minutes until `done`:
 
 1. **Read state.** The feature's labels and comments; each sub-issue's
    state, labels and blockers; every live session (`engine ps --json`, or
@@ -37,11 +35,16 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    2. then `deep` before `standard` before `light`;
    3. then the lowest issue number.
 
-   Skip a task whose session you started is alive and unclaimed. If it
-   died before claiming, @mention the operator once with its last screen,
-   close its window and start again. A failed start gets one
-   @mention on the task and rests 30 minutes, holding no slot.
-   A task no host could take gets one @mention, with why.
+   For unpinned cards, `harness_ratio` scores positive weights as
+   `(live sessions across hosts + 1) / weight`; lowest wins, ties prefer
+   `default_harness`, then name. Try the next harness if none fits. Count
+   pinned sessions and unclaimed live starts. No ratio uses `default_harness`;
+   the planner always does. Refuse unknown harnesses or all-zero weights.
+   `engine run --harness-ratio claude=4,codex=1` replaces the config ratio.
+
+   Skip live unclaimed starts. If one died, @mention once with its screen,
+   close it and retry. Failed starts @mention once and rest 30 minutes,
+   holding no slot. No eligible host gets one @mention with why.
 4. **Stalls.** A session is stalled when:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is open and
@@ -70,8 +73,8 @@ Run a pass, then wait about 5 minutes, and repeat until the feature is
    about every minute, and stop waiting for a busy one after 15 minutes. Leave
    gated sessions.
 
-Log each pass's actions. Move only the feature's labels, as above; executors
-own the task labels, except `engine:failed` and a dead holder's `engine:merging`.
+Log actions. Move only feature labels, `engine:failed` and a dead holder’s
+`engine:merging`.
 
 ## Native sessions
 

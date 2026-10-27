@@ -21,6 +21,7 @@ type Fleet struct {
 	// Local is this host's name: the planner starts here.
 	Local          string
 	DefaultHarness string
+	HarnessRatio   map[string]int
 	// Caps is each harness's max_sessions, across all hosts.
 	Caps map[string]int
 	// Heavy are the capabilities that make a task heavy.
@@ -156,40 +157,24 @@ func place(v View, cands []tracker.Card) []Action {
 	running := v.Fleet.running()
 	var acts []Action
 	for _, c := range cands {
-		harness, fits, why := v.Fleet.fits(c)
+		harness, best, why, notify := v.Fleet.choose(c, free, running)
 		if why != "" {
-			acts = append(acts, Action{Kind: Wait, Ref: c.Ref, Text: "no host can take it: " + why, Notify: !v.PlaceNoted[c.Ref]})
-			continue
-		}
-		if limit := v.Fleet.Caps[harness]; running[harness] >= limit {
-			acts = append(acts, Action{Kind: Wait, Ref: c.Ref, Text: fmt.Sprintf("%s is at its cap of %d sessions", harness, limit)})
+			acts = append(acts, Action{Kind: Wait, Ref: c.Ref, Text: why, Notify: notify && !v.PlaceNoted[c.Ref]})
 			continue
 		}
 		heavy := v.Fleet.heavy(c)
-		best, ok := pick(fits, free, heavy)
-		if !ok {
-			acts = append(acts, Action{Kind: Wait, Ref: c.Ref, Text: "no free " + slotKind(heavy) + " on " + slotList(fits, free, heavy)})
-			continue
-		}
 		free[best.Name] = free[best.Name].take(heavy)
 		running[harness]++
-		acts = append(acts, Action{Kind: StartTask, Ref: c.Ref, Host: best.Name, Text: "ready, on " + best.Name})
+		acts = append(acts, Action{Kind: StartTask, Ref: c.Ref, Host: best.Name, Harness: harness, Text: "ready, on " + best.Name})
 	}
 	return acts
 }
 
 // fits returns the card's harness and the hosts that could take it if they
 // had a free slot. When none could, why says what each host lacks.
-func (f Fleet) fits(c tracker.Card) (harness string, fits []HostLoad, why string) {
-	harness, _, err := tracker.ParseHarnessTier(c.Body)
-	if err != nil {
-		return "", nil, err.Error()
-	}
-	if harness == "" {
-		harness = f.DefaultHarness
-	}
+func (f Fleet) fits(c tracker.Card, harness string) (fits []HostLoad, why string) {
 	if _, ok := f.Caps[harness]; !ok {
-		return "", nil, fmt.Sprintf("hosts.toml defines no harness %q (a misspelt tier? tiers are deep, standard and light)", harness)
+		return nil, fmt.Sprintf("hosts.toml defines no harness %q (a misspelt tier? tiers are deep, standard and light)", harness)
 	}
 	var lacks []string
 	for _, h := range f.Hosts {
@@ -207,9 +192,9 @@ func (f Fleet) fits(c tracker.Card) (harness string, fits []HostLoad, why string
 		if len(lacks) == 0 {
 			lacks = []string{"hosts.toml has no host"}
 		}
-		return "", nil, strings.Join(lacks, "; ")
+		return nil, strings.Join(lacks, "; ")
 	}
-	return harness, fits, ""
+	return fits, ""
 }
 
 // heavy reports whether the card requires a heavy capability.
