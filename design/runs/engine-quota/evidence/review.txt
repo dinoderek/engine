@@ -1,0 +1,20 @@
+Reviewer: Codex, gpt-6.1-sol, fresh context.
+Reviewed head: 4a7c2cd, against origin/main.
+Verdict: CHANGES_REQUESTED
+
+Must-fix: the real limit disproves live O2/O3. Ask the operator to approve
+an additional failed-turn state source and reminder handling, or revise
+the objective. Review/product hard stop; do not merge or close as passed.
+
+Must-fix: replace the contradictory claim that O2/O3 are proved by tests
+with a distinction between intended scenario coverage and failed live
+acceptance. Applied in this checkpoint.
+
+Optional: retain coordinator start events and non-sensitive placement
+inputs. Applied in this checkpoint.
+
+Optional: trim unrelated pane text. Applied in this checkpoint.
+
+The reviewer found no credentials or tokens in the added evidence. The
+app-server and reminder documentation supported the source claims. This
+review does not approve completion or merge of the acceptance card.

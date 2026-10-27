@@ -65,7 +65,7 @@ Placement increments those counts for each start in the same pass:
 | --- | --- | --- | --- | --- |
 | #149 output errors | 13:35:33 / mac / Claude | 1, 2 | Lower Claude score; Mac had 5 free slots versus devbox 3 | Merged PR #153 at 13:42 UTC |
 | #150 quota isolation | 13:35:36 / mac / Claude | 2, 2 | Tie prefers `default_harness=claude`; Mac had 4 free slots versus devbox 3 | Merged PR #154 at 13:44 UTC |
-| #151 quota retention | 13:35:41 / devbox / Codex | 3, 2 | Lower Codex score; both hosts had 3 free slots, so devbox wins on fewer capabilities | Stopped on a real limit before claim; continued manually at 19:51 UTC |
+| #151 quota retention | 13:35:41 / devbox / Codex | 3, 2 | Lower Codex score; both hosts had 3 free slots, so devbox wins on fewer capabilities | Stopped on a real limit before claim; continued manually at 19:51 UTC; merged PR #156 at 19:54:20 UTC |
 | #152 acceptance | Pending | Pending | Pending | Pending |
 
 The [selected coordinator events](evidence/fixture-events.txt) retain the
@@ -81,14 +81,20 @@ its devbox pane, selected “Keep current model”, verified GPT-6.1-Sol medium,
 and sent literal `continue` then a separate Enter. This intervention did not
 change a pin, cap, model or harness; it was manual recovery.
 
-Pending: #151 and #152 merged PRs, coordinator exit and cleanup.
+PR #156 adds status-line retention regressions and merged as
+`56a96b69c29ae02fb92a667df8f4453aeab82fb8`. All three independent fixture
+test tasks are merged. At the 19:54 UTC checkpoint, #152, coordinator exit
+and cleanup remain pending; the existing fixture coordinator is still running.
 
 ## Objective evidence
 
 All nine required lanes of `./dev test` passed at 13:31 UTC against the
 tested implementation commit. A second complete run at 19:53 UTC also passed after merging fixture PRs
 #153 and #154. [Its summary](evidence/gates-1953.md) is retained.
-Final post-fixture gates are still pending; acceptance remains failed.
+After merging all three test PRs, the complete `./dev test` passed again at
+19:54 UTC: all nine lanes, including race tests and coverage. Its
+[summary](evidence/gates-1954.md) is retained. Final post-fixture gates are
+still pending; live acceptance remains failed.
 
 | Objective | Evidence | Kind |
 | --- | --- | --- |
