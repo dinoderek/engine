@@ -15,32 +15,32 @@ tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
 tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
 ```
 
-`{name}` is the session name, `<repo>-<task>`, and `{model}` and `{effort}` come
-from the tier.
+`{name}` is `<repo>-<task>`; `{model}` and `{effort}` come from the tier.
 
 ## Starting
 
-`engine start` (`hosts-and-sessions.md`, "Starting a session") does two things
-only Claude needs:
+`engine start` (`hosts-and-sessions.md`, "Starting a session") adds Claude-specific setup:
 
 - It sets `projects.<worktree>.hasTrustDialogAccepted` in `~/.claude.json` (or
   `$CLAUDE_CONFIG_DIR`'s), so the trust dialog, whose default exits, never
   shows.
+- It adds `--settings` with a `statusLine` command, `engine hook statusline`,
+  replacing the operator’s status line in engine sessions. The hook prints
+  the session name and five-hour quota, recording changed subscription readings
+  in the run directory (`telemetry.md`). Missing limits write nothing.
 - It adds `--add-dir <engine's plugin directory>` and a read-only rule for
-  `/tmp`. An added directory's skills load, and anyone can write to `/tmp`, so
-  reading the skill or a test's screenshots needs no prompt.
+  `/tmp`. This permits reading skills and test screenshots without a prompt.
 
 ## Permission mode
 
 Sessions run in **auto mode**, whose classifier approves or refuses most
-actions without a prompt. The launch line sets `--permission-mode auto`. Some
-actions still prompt. In a hands-off session the plugin's permission hook
+actions without a prompt. Some actions still prompt. In a hands-off session the plugin's permission hook
 denies every prompt instead of showing it, so the executor finds another route
 or raises a hard stop.
 
 ## Hooks
 
-The plugin ships a `PreToolUse` hook, `engine hook pre-tool-use`. It blocks a
+`engine hook pre-tool-use` blocks a
 Bash call that:
 
 - runs `gh pr merge` without `--match-head-commit`, or with `--auto` or
@@ -68,6 +68,5 @@ its worktree (its branch, in the claim's repo).
 
 ## Apps
 
-The launch line's `-n {name} --remote-control {name}` sets the session's name,
-`<repo>-<task>`, and shows it in the apps under that name. Remote Control needs
+The launch flags name the session in the apps. Remote Control needs
 the host signed in with a claude.ai account (`operator-setup.md`).

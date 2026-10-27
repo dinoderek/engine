@@ -37,7 +37,7 @@ func rows(t *testing.T) []Row {
 
 func TestWriteTable(t *testing.T) {
 	var out bytes.Buffer
-	if err := WriteTable(&out, rows(t)); err != nil {
+	if err := WriteTable(&out, Listing{Rows: rows(t)}); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
@@ -82,7 +82,7 @@ func TestWriteTableHarnessNames(t *testing.T) {
 			claimed.Claim.Harness = tc.harness
 			f := (&fake{tasks: []tracker.ClaimedTask{claimed}}).on(nil)
 			var out bytes.Buffer
-			if err := WriteTable(&out, list(t, f).Rows); err != nil {
+			if err := WriteTable(&out, list(t, f)); err != nil {
 				t.Fatal(err)
 			}
 			lines := strings.Split(strings.TrimSpace(out.String()), "\n")
@@ -96,7 +96,7 @@ func TestWriteTableHarnessNames(t *testing.T) {
 
 func TestWriteTableEmpty(t *testing.T) {
 	var out bytes.Buffer
-	if err := WriteTable(&out, nil); err != nil || out.String() != "no claimed tasks\n" {
+	if err := WriteTable(&out, Listing{}); err != nil || out.String() != "no claimed tasks\n" {
 		t.Errorf("got %q, %v", out.String(), err)
 	}
 }
@@ -104,21 +104,25 @@ func TestWriteTableEmpty(t *testing.T) {
 func TestWriteJSONParsesBack(t *testing.T) {
 	want := rows(t)
 	var out bytes.Buffer
-	if err := WriteJSON(&out, want); err != nil {
+	if err := WriteJSON(&out, Listing{Rows: want}); err != nil {
 		t.Fatal(err)
 	}
-	var got []Row
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+	var listing Listing
+	got := &listing.Rows
+	if err := json.Unmarshal(out.Bytes(), &listing); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !reflect.DeepEqual(*got, want) {
 		t.Errorf("got  %+v\nwant %+v", got, want)
 	}
 	// Unknown liveness is null, not false, and a missing field is left out.
-	var generic []map[string]any
-	if err := json.Unmarshal(out.Bytes(), &generic); err != nil {
+	var object struct {
+		Sessions []map[string]any `json:"sessions"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &object); err != nil {
 		t.Fatal(err)
 	}
+	generic := object.Sessions
 	if v, ok := generic[1]["alive"]; !ok || v != nil {
 		t.Errorf("alive of a remote row: %v, %v", v, ok)
 	}
@@ -132,7 +136,7 @@ func TestWriteJSONParsesBack(t *testing.T) {
 
 func TestWriteJSONEmptyIsAnArray(t *testing.T) {
 	var out bytes.Buffer
-	if err := WriteJSON(&out, nil); err != nil || strings.TrimSpace(out.String()) != "[]" {
+	if err := WriteJSON(&out, Listing{}); err != nil || strings.TrimSpace(out.String()) != "{\n  \"quota\": {},\n  \"sessions\": []\n}" {
 		t.Errorf("got %q, %v", out.String(), err)
 	}
 }

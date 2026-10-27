@@ -136,7 +136,7 @@ func TestRealStart(t *testing.T) {
 	got := readFile(record)
 	for _, want := range []string{
 		"arg:--model\narg:haiku-x\narg:--effort\narg:medium\narg:-n\narg:r-7\narg:--remote-control\narg:r-7\n" +
-			"arg:--add-dir\narg:" + filepath.Join(h.dir, ".claude/plugins/cache/engine") + "\narg:--allowedTools\narg:Read(//tmp/**)\narg:Read(//private/tmp/**)\narg:--\n" + kickoff,
+			"arg:--add-dir\narg:" + filepath.Join(h.dir, ".claude/plugins/cache/engine") + "\narg:--allowedTools\narg:Read(//tmp/**)\narg:Read(//private/tmp/**)\narg:--settings\narg:{\"statusLine\":{\"type\":\"command\",\"command\":\"engine hook statusline\"}}\narg:--\n" + kickoff,
 		"token:tok\n", "/task-r-7\n",
 	} {
 		if !strings.Contains(got, want) {

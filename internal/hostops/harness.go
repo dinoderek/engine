@@ -91,6 +91,7 @@ func (c claude) Args(l launch) string {
 	for _, rule := range tmpReads {
 		args += " " + hosts.ShellWord(rule)
 	}
+	args += " --settings " + hosts.ShellWord(`{"statusLine":{"type":"command","command":"engine hook statusline"}}`)
 	return args + " -- " + hosts.ShellWord(l.kickoff)
 }
 

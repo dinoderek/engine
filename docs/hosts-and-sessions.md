@@ -4,8 +4,7 @@
 
 ## Hosts
 
-A host is somewhere sessions run. Each one declares the harnesses it runs, how
-many sessions it holds, and its capabilities. Capabilities are declared, never inferred.
+Each host declares its harnesses, session capacity and capabilities. Declare capabilities explicitly.
 
 **One file, every host.** The host config is `~/.config/engine/hosts.toml`,
 the same file on every host, because any host can run the coordinator. Edit
@@ -187,7 +186,7 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an array. Each claim is settled from the `status` of the host it names, this one's read in process, one call per host with a claim, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
+| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `needs-human`, `in-review`, `running` or `dead`) and age. `--json` prints an object with `quota` and `sessions`. Quota lines above the table show each harness’s newest reading across responding hosts; expired windows read 0%. Each claim is settled from the `status` of the host it names, this one's read in process, one call per configured host, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
 
 ## Connecting to a session
 
@@ -197,9 +196,9 @@ hand and one started by the coordinator look the same.
 | Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
 | Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT and Codex apps, when the session joined engine's remote-control daemon (`codex.md`, "Apps"). |
 
-Clients share one window: everyone sees the same screen and can type.
+Clients share the screen and input.
 
-Each harness's apps are set up in its own doc: `claude.md` and `codex.md`.
+For app setup changes, load `claude.md` or `codex.md`.
 
 ## tmux setup
 
