@@ -75,6 +75,10 @@ type Session struct {
 	// ResetsAt is its reset in epoch seconds, or zero if unknown.
 	Limited  bool
 	ResetsAt int64
+	// ResumeAt and the alert notes belong to this reset and session start.
+	ResumeAt   time.Time
+	FarNoted   bool
+	StuckNoted bool
 	// Waiting is true when its window's state, from status, is waiting.
 	Waiting      bool
 	WaitingSince time.Time
@@ -94,7 +98,7 @@ func (s Session) flagged(at time.Time) bool {
 
 // waited reports whether the session has waited for input for d by now.
 func (s Session) waited(now time.Time, d time.Duration) bool {
-	return s.Live && !s.Limited && s.Waiting && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
+	return s.Live && !s.Limited && s.ResetsAt <= 0 && s.Waiting && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
 }
 
 // View is everything one pass decides on.
@@ -134,6 +138,8 @@ const (
 	SetLabel     Kind = "label"
 	ReportLint   Kind = "lint"
 	Stall        Kind = "stall"
+	Resume       Kind = "resume"
+	LimitAlert   Kind = "limit-alert"
 	Fail         Kind = "fail"
 	Reap         Kind = "reap"
 	Finish       Kind = "finish"

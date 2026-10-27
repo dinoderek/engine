@@ -18,6 +18,7 @@ func TestALimitedSessionNeverStalls(t *testing.T) {
 		e.status = session.AgentWaiting
 		passOf(t, w)
 		e.limited = true
+		e.resetsAt = t0.Add(time.Hour).Unix()
 		checks(t, w, 30)
 		s := gather(t, w).Sessions[ref(2)]
 		if !s.Live || !s.Limited || s.Waiting || s.ResetsAt != t0.Add(time.Hour).Unix() {
@@ -29,6 +30,7 @@ func TestALimitedSessionNeverStalls(t *testing.T) {
 		if claimed {
 			// Clearing the limit begins a fresh wait; it cannot inherit the old one.
 			e.limited = false
+			e.resetsAt = 0
 			checks(t, w, 1)
 			if len(w.comments[ref(2)]) != 0 {
 				t.Fatal("inherited an expired wait")

@@ -53,8 +53,9 @@ type executor struct {
 	status  string
 	heavy   bool
 	// harness is the card's, or claude.
-	harness string
-	limited bool
+	harness  string
+	limited  bool
+	resetsAt int64
 }
 
 // fakeHost is a host of the fake world.
@@ -98,6 +99,7 @@ type world struct {
 	comments map[tracker.Ref][]string
 	closed   bool
 	log      []string
+	resumed  []Session
 }
 
 func newWorld(t *testing.T, labels []string, cards ...tracker.Card) *world {

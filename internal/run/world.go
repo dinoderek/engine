@@ -51,6 +51,8 @@ type World interface {
 	// Release closes the session's window on host, and removes its
 	// worktree unless it has changes.
 	Release(host, name string) (hostops.Released, error)
+	// Resume types continue into an engine window on its host.
+	Resume(s Session) error
 	Now() time.Time
 	Logf(format string, args ...any)
 }
@@ -169,6 +171,10 @@ func Apply(w World, v View, acts []Action) bool {
 			err = reportLint(w, v)
 		case Stall:
 			err = stall(w, v, a)
+		case Resume:
+			err = resume(w, v, a)
+		case LimitAlert:
+			err = limitAlert(w, v, a)
 		case Fail:
 			err = fail(w, v, a)
 		case Reap:
@@ -288,14 +294,7 @@ func reportLint(w World, v View) error {
 
 // stall comments on a stalled session, with the last screen its host sent.
 func stall(w World, v View, a Action) error {
-	body := mention(w, v.Operator) + "engine run: " + a.Text + "."
-	if screen := strings.TrimRight(a.Session.Screen, "\n"); screen != "" && (a.Session.Live || a.Session.DeadWindow) {
-		body += " Its last screen:\n\n```text\n" + screen + "\n```"
-	}
-	if a.Session.Live {
-		body += fmt.Sprintf("\n\nAttach with `engine attach %s`.", a.Session.Name)
-	}
-	if err := w.Comment(a.Ref, body); err != nil {
+	if err := w.Comment(a.Ref, sessionReport(w, v, a)); err != nil {
 		return err
 	}
 	dir, err := w.NoteDir(a.Ref)
@@ -303,6 +302,17 @@ func stall(w World, v View, a Action) error {
 		return err
 	}
 	return session.WriteNote(dir, StallNoted, a.At)
+}
+
+func sessionReport(w World, v View, a Action) string {
+	body := mention(w, v.Operator) + "engine run: " + a.Text + "."
+	if screen := strings.TrimRight(a.Session.Screen, "\n"); screen != "" && (a.Session.Live || a.Session.DeadWindow) {
+		body += " Its last screen:\n\n```text\n" + screen + "\n```"
+	}
+	if a.Session.Live {
+		body += fmt.Sprintf("\n\nAttach with `engine attach %s`.", a.Session.Name)
+	}
+	return body
 }
 
 // release releases a session on its host, and logs a worktree it kept.

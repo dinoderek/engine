@@ -55,6 +55,11 @@ when a prompt or automatic resume fires. `limits.jsonl` retains each stop
 with those fields and its complete hook `input`, including error details,
 for inspection after the marker clears.
 
+The coordinator logs each resume attempt with the task, timestamp and
+`resumed-for=<resets_at>`. Its notes retain the attempt and limit-alert times
+per reset and session; for recovery semantics, load `coordinator.md`,
+“Limit recovery”.
+
 ## Pipeline
 
 1. Each machine that runs sessions runs an
