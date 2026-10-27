@@ -87,6 +87,7 @@ func ReadStatus(d Deps) (Status, error) {
 		now = d.Now
 	}
 	s := Status{Quota: session.ReadQuota(d.Home, now()), Slots: host.Slots(), HeavySlots: host.HeavySlots(), Windows: []Window{}, Agents: []session.Agent{}, Runs: []Run{}}
+	s.readCodexQuota(d, host, now)
 	if host.Runs(Claude) {
 		s.listAgents(d, host)
 	}

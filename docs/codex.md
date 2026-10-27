@@ -121,6 +121,17 @@ missing or unreadable file is unknown, never dead, and so is `ended` while the
 window lives. Codex's `notify` is not used, because it holds a single program
 and other tools already claim it (Computer Use on the Mac).
 
+## Quota
+
+On a host that runs Codex, `status` starts a short-lived `codex app-server
+--listen stdio://` with `CODEX_HOME` set to engine’s Codex home. After the
+initialization handshake it calls `account/rateLimits/read`, then terminates
+the process. Primary and secondary map to `five_hour` and `seven_day`;
+`resetsAt` is absolute epoch seconds and `observed_at` is the call time.
+Missing windows stay unknown. A failure or three-second deadline leaves
+Codex quota unknown without failing `status`. Fleet consumers use the newest
+reading per harness and clear usage after its reset.
+
 ## Check
 
 `engine start --check --harness codex` is the Claude check

@@ -98,7 +98,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | --- | --- |
 | `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it for the harness the caller names (Claude by default), opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
-| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (the newest observation across all runs), free slots and free heavy slots, and the last 20 screen lines of each window whose session is not working. |
+| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (Claude’s newest run observation and a live Codex reading), free slots and free heavy slots, and the last 20 screen lines of each window whose session is not working. |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
 | `release` | Closes the session's window if it is open, deletes its Codex profile, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
