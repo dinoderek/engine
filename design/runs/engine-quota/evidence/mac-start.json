@@ -1,0 +1,53 @@
+{
+  "protocol": 4,
+  "engine": "v0.0.0-20261027132219-b6262d0a2cf8 (b6262d0, go1.27.2)",
+  "host": "mac",
+  "slots": 6,
+  "free_slots": 5,
+  "heavy_slots": 4,
+  "free_heavy_slots": 4,
+  "quota": {
+    "claude": {
+      "harness": "claude",
+      "observed_at": 1793107421,
+      "windows": {
+        "five_hour": {
+          "used": 16,
+          "resets_at": 1793122200
+        },
+        "seven_day": {
+          "used": 69,
+          "resets_at": 1793293200
+        }
+      }
+    },
+    "codex": {
+      "harness": "codex",
+      "observed_at": 1793107810,
+      "windows": {
+        "five_hour": {
+          "used": 97,
+          "resets_at": 1793122362
+        },
+        "seven_day": {
+          "used": 51,
+          "resets_at": 1793603427
+        }
+      }
+    }
+  },
+  "windows": [
+    {
+      "id": "@0",
+      "name": "run-engine-131",
+      "alive": true
+    },
+    {
+      "id": "@1",
+      "name": "engine-138",
+      "alive": true,
+      "harness": "codex",
+      "state": "working"
+    }
+  ]
+}

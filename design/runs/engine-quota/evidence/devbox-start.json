@@ -1,0 +1,40 @@
+{
+  "protocol": 4,
+  "engine": "v0.0.0-20261027132219-b6262d0a2cf8 (go1.27.2)",
+  "host": "devbox",
+  "slots": 3,
+  "free_slots": 3,
+  "heavy_slots": 3,
+  "free_heavy_slots": 3,
+  "quota": {
+    "claude": {
+      "harness": "claude",
+      "observed_at": 1793107696,
+      "windows": {
+        "five_hour": {
+          "used": 19,
+          "resets_at": 1793122200
+        },
+        "seven_day": {
+          "used": 70,
+          "resets_at": 1793293200
+        }
+      }
+    },
+    "codex": {
+      "harness": "codex",
+      "observed_at": 1793107811,
+      "windows": {
+        "five_hour": {
+          "used": 97,
+          "resets_at": 1793122362
+        },
+        "seven_day": {
+          "used": 51,
+          "resets_at": 1793603427
+        }
+      }
+    }
+  },
+  "windows": []
+}
