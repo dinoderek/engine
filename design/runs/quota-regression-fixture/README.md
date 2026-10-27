@@ -3,7 +3,8 @@
 The acceptance record for fixture feature engine#148: three test-only tasks
 (#149, #150, #151) and this acceptance task (#152), run by
 `engine run --harness-ratio claude=1,codex=1` with no harness pins, on
-2026-10-27, host `mac`. Which harness ran each task is recorded by the parent
+2026-10-27. Hosts, from the claim comments: `mac` for #149, #150 and #152,
+`devbox` for #151. Which harness ran each task is recorded by the parent
 acceptance executor (engine#138), not here.
 
 ## Timeline (UTC)
@@ -57,7 +58,8 @@ Each sibling PR also records its own mutation runs: #153 seven,
 ## Learnings
 
 - **A stalled start claimed late.** #151 stayed unclaimed for about
-  6 hours 10 minutes after the stall @mention; this record does not show
-  what started it again. From its claim it merged in under 4 minutes.
+  6 hours 10 minutes after the stall @mention. It then claimed on `devbox`,
+  with no Remote Control; this record does not show what started it again.
+  From its claim it merged in under 4 minutes.
 - **Executors were fast:** claim to merge took 6 minutes for #149, 8 for
-  #150 and 3.5 for #151.
+  #150 and 3 for #151.
