@@ -15,7 +15,7 @@
 
 ## V1: `engine run`
 
-`engine run <owner/repo#n>` is started by hand, on one host, and drives Claude
+`engine run <owner/repo#n>` drives harness
 sessions through `engine start`, on whichever host placement picks
 (`hosts-and-sessions.md`, "Placement"). It stays alive until the work is done,
 you stop it, or the machine goes down, and logs one timestamped line per
@@ -48,7 +48,8 @@ The coordinator's notes live in `<repo>-<n>-coordinator` beside its own
 host's run directories, whichever host a session runs on: the host it last
 started each session on, `waiting-since` (written the first time it sees a
 session waiting, cleared when the session works again; "Session signals"),
-`resumed-for=<resets_at>` (epoch seconds, holding the attempt time),
+`limit-reset-<spawned>` (observed reset, retained until working),
+`resumed-for=<resets_at>` (attempt time),
 `limit-far=<resets_at>` and `limit-stuck=<resets_at>` (alert times),
 the stall it last reported, and having reported a failing lint or a task no
 host can take. The first note written makes the directory. A coordinator
@@ -174,6 +175,7 @@ flagged, and flags only another one.
 or `waiting` with a positive limit `resets_at`, once the reset plus 2 minutes
 has passed. It types literal `continue`, then Enter, as `engine tell` does,
 on the window’s host. Working, unknown and dead sessions are left alone.
+Observed limits persist through quota expiry while the window waits.
 The attempt is noted before typing, preventing duplicate text even if Enter
 fails, and logged with its reset. A later reset permits another attempt.
 Waiting with a limit reset also clears the ordinary stall timer.

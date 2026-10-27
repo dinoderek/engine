@@ -47,7 +47,7 @@ Repeat every 5 minutes until `done`:
    after reset: literal `continue`, then Enter. Note `resumed-for=<resets_at>`
    before typing; once per reset per session, also across restarts. Later
    resets allow another attempt. Working/unknown sessions stay untouched;
-   Claude auto-resume stays on. Still limited 10 minutes later: @mention once
+   Retain observed resets until working; Claude auto-resume stays on. Still limited 10 minutes later: @mention once
    with screen. Reset over 24 hours away: @mention once, no typing.
 
    Skip limit waits for stalls. Otherwise:

@@ -21,6 +21,32 @@ func resetNote(prefix string, s Session) string {
 	return prefix + "=" + strconv.FormatInt(s.ResetsAt, 10)
 }
 
+// A derived quota limit disappears from status when its quota window resets.
+// Retain that observation for a waiting window until it is seen working.
+// The start in the filename keeps a new session from inheriting an old limit.
+func keepLimit(dir string, s *Session, known bool) error {
+	if !known {
+		return nil
+	}
+	note := "limit-reset-" + strconv.FormatInt(s.Spawned.Unix(), 10)
+	if !s.Live || !s.Limited && !s.Waiting {
+		return session.ClearNote(dir, note)
+	}
+	if s.ResetsAt > 0 {
+		return session.WriteNote(dir, note, time.Unix(s.ResetsAt, 0))
+	}
+	if s.Waiting {
+		reset, ok, err := session.ReadNote(dir, note)
+		if err != nil {
+			return err
+		}
+		if ok {
+			s.ResetsAt = reset.Unix()
+		}
+	}
+	return nil
+}
+
 func readResumeNotes(dir string, s *Session) error {
 	if s.ResetsAt <= 0 {
 		return nil

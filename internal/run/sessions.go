@@ -77,6 +77,9 @@ func readSession(w World, ref tracker.Ref, fleet Fleet, claimHost string, now ti
 		return Session{Name: name, Host: host, Unknown: unknown}, unknown, nil
 	}
 	waitKnown := see(&s, run, name)
+	if err := keepLimit(dir, &s, waitKnown); err != nil {
+		return Session{}, false, err
+	}
 	if err := keepWaiting(dir, &s, waitKnown, now); err != nil {
 		return Session{}, false, err
 	}

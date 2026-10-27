@@ -201,3 +201,50 @@ func TestUnreadableResumeNoteStopsThePass(t *testing.T) {
 		t.Fatal("typed with unreadable notes")
 	}
 }
+
+func TestObservedLimitSurvivesTheQuotaReset(t *testing.T) {
+	w := limitedWorld(t, false)
+	checks(t, w, 2)
+	// The host drops its derived limit once live quota has expired. The
+	// coordinator's observation is still a limit record for this wait.
+	e := w.execs[ref(2)]
+	e.limited, e.resetsAt = false, 0
+	checks(t, w, 2)
+	if len(w.resumed) != 0 {
+		t.Fatal("resumed before grace period")
+	}
+	checks(t, w, 1)
+	if len(w.resumed) != 1 {
+		t.Fatalf("lost reset observation: %v", w.resumed)
+	}
+	checks(t, w, 11)
+	if len(w.resumed) != 1 || len(w.comments[ref(2)]) != 0 {
+		t.Fatalf("waiting limit: resumed %v, comments %v", w.resumed, w.comments)
+	}
+	// A successful automatic or coordinator resume clears the retained limit.
+	e.status = session.AgentBusy
+	checks(t, w, 1)
+	e.status = session.AgentWaiting
+	checks(t, w, 1)
+	if s := gather(t, w).Sessions[ref(2)]; s.ResetsAt != 0 || s.WaitingSince.IsZero() {
+		t.Fatalf("ordinary wait inherited limit: %+v", s)
+	}
+	checks(t, w, 10)
+	if c := w.comments[ref(2)]; len(c) != 1 || !strings.Contains(c[0], "waited for input") {
+		t.Fatalf("ordinary wait: %v", c)
+	}
+}
+
+func TestANewSessionDoesNotInheritAnObservedLimit(t *testing.T) {
+	w := limitedWorld(t, false)
+	passOf(t, w)
+	w.now = t0.Add(4 * time.Minute)
+	if err := w.launch(ref(2), "devbox", "claude", behaviour{}); err != nil {
+		t.Fatal(err)
+	}
+	w.execs[ref(2)].status = session.AgentWaiting
+	checks(t, w, 2)
+	if s := gather(t, w).Sessions[ref(2)]; s.ResetsAt != 0 || len(w.resumed) != 0 {
+		t.Fatalf("new session: %+v, resumed %v", s, w.resumed)
+	}
+}
