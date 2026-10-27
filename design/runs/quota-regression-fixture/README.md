@@ -31,9 +31,16 @@ unit (`go test -race -count=1 ./...`; `internal/hook`, `internal/ps` and
 ## The tests against their cards
 
 All three test files were read against their cards. Their tests were also run
-alone with `go test -count=1 -v -run <tests>` and `GOTOOLCHAIN` pinned from
-`go.mod`: all 13 `internal/ps` results, both `internal/session` tests and all
-11 `internal/hook` results passed. Then one temporary mutation per objective
+alone, with `GOTOOLCHAIN` set from go.mod's toolchain line:
+
+```sh
+go test -count=1 -v -run 'TestWriteReturnsWriterError|TestWriteSucceedsOnHealthyWriter' ./internal/ps
+go test -count=1 -v -run 'TestMergeQuotaKeepsHarnessesIndependentAcrossHosts|TestMergeQuotaReturnsCopiesOfWindows' ./internal/session
+go test -count=1 -v -run 'TestStatuslineRetainsLastValidQuota' ./internal/hook
+```
+
+All 13 `internal/ps` results, both `internal/session` tests and all 11
+`internal/hook` results passed. Then one temporary mutation per objective
 went into the product code, and the tests were run against it. Every mutation
 was reverted; afterwards `git diff origin/main -- internal` was empty.
 
@@ -59,7 +66,7 @@ Each sibling PR also records its own mutation runs: #153 seven,
 
 - **A stalled start claimed late.** #151 stayed unclaimed for about
   6 hours 10 minutes after the stall @mention. It then claimed on `devbox`,
-  with no Remote Control; this record does not show what started it again.
-  From its claim it merged in under 4 minutes.
+  with no Remote Control, under the same run ID and `Started by: engine
+  start`. This record does not show why the claim was late.
 - **Executors were fast:** claim to merge took 6 minutes for #149, 8 for
   #150 and 3 for #151.
