@@ -5,21 +5,62 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "engine hook pre-tool-use" }
+          {
+            "type": "command",
+            "command": "engine hook pre-tool-use"
+          }
         ]
       }
     ],
     "PermissionRequest": [
       {
         "hooks": [
-          { "type": "command", "command": "engine hook permission" }
+          {
+            "type": "command",
+            "command": "engine hook permission"
+          }
         ]
       }
     ],
     "PermissionDenied": [
       {
         "hooks": [
-          { "type": "command", "command": "engine hook permission" }
+          {
+            "type": "command",
+            "command": "engine hook permission"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "rate_limit|billing_error",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "engine hook limit"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "quota_auto_resume_fired|quota_auto_resume_stale|quota_auto_resume_disabled",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "engine hook limit"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "engine hook limit"
+          }
         ]
       }
     ]

@@ -134,6 +134,9 @@ func settle(v view, row *Row, t tracker.ClaimedTask) {
 		default:
 			row.Alive = &yes
 			row.apply(w.State, w.WaitingFor)
+			if row.State == Limited {
+				row.ResetsAt = w.ResetsAt
+			}
 		}
 		return
 	}
@@ -154,6 +157,8 @@ func (r *Row) apply(state, waitingFor string) {
 		return
 	}
 	switch state {
+	case session.StateLimited:
+		r.State = Limited
 	case session.StateWorking:
 		r.State = Working
 	case session.StateWaiting:

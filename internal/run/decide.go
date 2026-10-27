@@ -104,7 +104,7 @@ func stalls(v View) []Action {
 	var acts []Action
 	for _, c := range v.Feature.Tasks {
 		s, ok := v.Sessions[c.Ref]
-		if !ok || !c.Open || s.Unknown {
+		if !ok || !c.Open || s.Unknown || s.Limited {
 			continue
 		}
 		if !s.Live {

@@ -4,8 +4,7 @@
 
 ## Strategy
 
-Store **raw** data in **standard formats** in object storage.
-Re-run analysis over raw data.
+Store raw data in standard formats in object storage for repeatable analysis.
 
 | Data | Format | Source |
 | --- | --- | --- |
@@ -49,6 +48,13 @@ seconds), and `windows` with optional `five_hour` and `seven_day` entries, each
 with `used` (percent) and `resets_at` (epoch seconds). The status-line hook
 atomically replaces it only when usage or reset times change.
 
+`limit.json` holds Claude's current usage stop: `since`, `resets_at` (epoch
+seconds; zero means unknown), `error`, and optional `notification_type` for
+stale or disabled auto-resume. Hooks replace it atomically and remove it
+when a prompt or automatic resume fires. `limits.jsonl` retains each stop
+with those fields and its complete hook `input`, including error details,
+for inspection after the marker clears.
+
 ## Pipeline
 
 1. Each machine that runs sessions runs an
@@ -72,8 +78,7 @@ fallback. Keep the bucket private.
   gates/
 ```
 
-The collector may forward OTLP to a dashboard backend; the bucket stays
-the system of record.
+The bucket is the system of record.
 
 ## Rules
 

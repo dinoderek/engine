@@ -71,6 +71,10 @@ type Session struct {
 	// its command exited. Only then is the window its own to close: tmux
 	// reuses ids after a restart.
 	DeadWindow bool
+	// Limited is true while a live window is stopped on a usage limit;
+	// ResetsAt is its reset in epoch seconds, or zero if unknown.
+	Limited  bool
+	ResetsAt int64
 	// Waiting is true when its window's state, from status, is waiting.
 	Waiting      bool
 	WaitingSince time.Time
@@ -90,7 +94,7 @@ func (s Session) flagged(at time.Time) bool {
 
 // waited reports whether the session has waited for input for d by now.
 func (s Session) waited(now time.Time, d time.Duration) bool {
-	return s.Live && s.Waiting && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
+	return s.Live && !s.Limited && s.Waiting && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
 }
 
 // View is everything one pass decides on.
