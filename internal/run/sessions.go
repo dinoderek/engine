@@ -77,10 +77,16 @@ func readSession(w World, ref tracker.Ref, fleet Fleet, claimHost string, now ti
 		return Session{Name: name, Host: host, Unknown: unknown}, unknown, nil
 	}
 	waitKnown := see(&s, run, name)
+	if err := keepLimit(dir, &s, waitKnown); err != nil {
+		return Session{}, false, err
+	}
 	if err := keepWaiting(dir, &s, waitKnown, now); err != nil {
 		return Session{}, false, err
 	}
 	s.StallNoted, _, err = session.ReadNote(dir, StallNoted)
+	if err == nil {
+		err = readResumeNotes(dir, &s)
+	}
 	return s, true, err
 }
 
@@ -147,7 +153,7 @@ func keepWaiting(dir string, s *Session, known bool, now time.Time) error {
 	if !known {
 		return nil
 	}
-	if !s.Live || !s.Waiting {
+	if !s.Live || !s.Waiting || s.ResetsAt > 0 {
 		return session.ClearNote(dir, WaitingSince)
 	}
 	since, ok, err := session.ReadNote(dir, WaitingSince)

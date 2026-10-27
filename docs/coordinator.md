@@ -15,7 +15,7 @@
 
 ## V1: `engine run`
 
-`engine run <owner/repo#n>` is started by hand, on one host, and drives Claude
+`engine run <owner/repo#n>` drives harness
 sessions through `engine start`, on whichever host placement picks
 (`hosts-and-sessions.md`, "Placement"). It stays alive until the work is done,
 you stop it, or the machine goes down, and logs one timestamped line per
@@ -40,7 +40,7 @@ Passes run every 5 minutes. Between passes, a session check runs every 60
 seconds. It reads every host's `status`, parallel calls, and
 never GitHub, and starts a pass early when a session has started, ended,
 become known or unknown, changed state or limit reset, or has
-waited long enough to stall. A pass reads sessions and fleet quota from those replies, keeping the newest observation per harness; expired windows read 0%. Designed, not built: a pass on each webhook event
+waited long enough to stall or resume from a limit. A pass reads sessions and fleet quota from those replies, keeping the newest observation per harness; expired windows read 0%. Designed, not built: a pass on each webhook event
 (`gh webhook forward` to a localhost endpoint), and coalescing events that
 arrive mid-pass.
 
@@ -48,10 +48,14 @@ The coordinator's notes live in `<repo>-<n>-coordinator` beside its own
 host's run directories, whichever host a session runs on: the host it last
 started each session on, `waiting-since` (written the first time it sees a
 session waiting, cleared when the session works again; "Session signals"),
+`limit-reset-<spawned>` (observed reset, retained until working),
+`resumed-for=<resets_at>` (attempt time),
+`limit-far=<resets_at>` and `limit-stuck=<resets_at>` (alert times),
 the stall it last reported, and having reported a failing lint or a task no
 host can take. The first note written makes the directory. A coordinator
 restarted on another host has none of them, so its stall timers start
-again.
+again. Resume and limit-alert notes survive restarts on the same host; notes
+older than a session start are ignored.
 
 At done, `engine run` posts the summary and closes the feature (a lone task
 has neither), then re-reads the work and every host's sessions each minute.
@@ -166,6 +170,21 @@ the issue. The coordinator @mentions you on the task's issue, with the last
 screen the host's `status` sent (it sends one for a window whose session is
 not working), once per session start or wait: it notes the start or wait it
 flagged, and flags only another one.
+
+**Limit recovery.** Each session check resumes an engine window still `limited`,
+or `waiting` with a positive limit `resets_at`, once the reset plus 2 minutes
+has passed. It types literal `continue`, then Enter, as `engine tell` does,
+on the window’s host. Working, unknown and dead sessions are left alone.
+Observed limits persist through quota expiry while the window waits.
+The attempt is noted before typing, preventing duplicate text even if Enter
+fails, and logged with its reset. A later reset permits another attempt.
+Waiting with a limit reset also clears the ordinary stall timer.
+
+Still `limited` 10 minutes after the attempt: one @mention with the last
+screen. A reset more than 24 hours away: one @mention immediately and no
+typing while it remains that far away. Both alerts are once per reset and
+session. Claude’s own automatic resume stays on. Recovery also covers
+unclaimed engine windows and the feature’s planner.
 
 ## Identity and notifications
 

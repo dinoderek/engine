@@ -62,6 +62,9 @@ func planStep(v View) ([]Action, bool) {
 	case started && planner.Unknown:
 		return nil, true
 	case started && planner.Live:
+		if acts := limitActions(v, f.Ref); len(acts) > 0 {
+			return acts, true
+		}
 		if planner.waited(v.Now, StallWait) && !planner.flagged(planner.WaitingSince) {
 			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner, At: planner.WaitingSince,
 				Text: fmt.Sprintf("the planner %s has waited for input for %s", planner.Name, StallWait)}}, true
@@ -104,7 +107,10 @@ func stalls(v View) []Action {
 	var acts []Action
 	for _, c := range v.Feature.Tasks {
 		s, ok := v.Sessions[c.Ref]
-		if !ok || !c.Open || s.Unknown || s.Limited {
+		if c.Open {
+			acts = append(acts, limitActions(v, c.Ref)...)
+		}
+		if !ok || !c.Open || s.Unknown || s.Limited || s.Waiting && s.ResetsAt > 0 {
 			continue
 		}
 		if !s.Live {

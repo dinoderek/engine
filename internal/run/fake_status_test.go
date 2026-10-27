@@ -1,8 +1,6 @@
 package run
 
 import (
-	"time"
-
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -29,7 +27,10 @@ func (w *world) status(h fakeHost) hostops.Status {
 			win.State = session.AgentState(agent)
 		}
 		if e.limited && win.Alive {
-			win.State, win.ResetsAt = session.StateLimited, t0.Add(time.Hour).Unix()
+			win.State, win.ResetsAt = session.StateLimited, e.resetsAt
+		}
+		if e.resetsAt != 0 && win.Alive && win.State != session.StateWorking {
+			win.ResetsAt = e.resetsAt
 		}
 		if win.State != session.StateWorking {
 			win.Screen = "Do you want to proceed?\n"

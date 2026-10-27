@@ -95,7 +95,9 @@ func passDue(w World, v View, down outages) bool {
 		}
 	}
 	next.Sessions = fresh
-	return slices.ContainsFunc(Decide(next), func(a Action) bool { return a.Kind == Stall || a.Kind == Reap })
+	return slices.ContainsFunc(Decide(next), func(a Action) bool {
+		return a.Kind == Stall || a.Kind == Reap || a.Kind == Resume || a.Kind == LimitAlert
+	})
 }
 
 // windDown runs after the work is done. Every CheckEvery it releases each

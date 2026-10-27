@@ -78,6 +78,28 @@ func (s System) Release(host, name string) (hostops.Released, error) {
 	return s.Client(h).Release(name, false)
 }
 
+// Resume uses tell's literal typing and separate Enter, on the window's host.
+func (s System) Resume(win Session) error {
+	host, ok := s.Config.Hosts[win.Host]
+	if !ok {
+		return fmt.Errorf("host %q is not in hosts.toml", win.Host)
+	}
+	tm := s.Starts.Tmux
+	if win.Host != s.Host.Name {
+		tm = &session.Tmux{Bin: "tmux", Run: remote.TmuxRunner(s.Starts.Exec, host.Address), Sleep: s.Starts.Sleep}
+	}
+	windows, err := tm.Windows()
+	if err != nil {
+		return err
+	}
+	for _, w := range windows {
+		if w.ID == win.WindowID && w.Name == win.Name && !w.Dead {
+			return tm.Type(w.ID, "continue")
+		}
+	}
+	return fmt.Errorf("no live engine window %s (%s) on %s", win.Name, win.WindowID, win.Host)
+}
+
 // NoteDir is <runs>/<repo>-<n>-coordinator, beside the runs it watches. It
 // is made by the first note written there, not by asking for the path.
 func (s System) NoteDir(ref tracker.Ref) (string, error) {
