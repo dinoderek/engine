@@ -33,7 +33,7 @@ func runPs(args []string, env Env) int {
 	if len(args) == 1 {
 		write = ps.WriteJSON
 	}
-	if err := write(env.Out, listing.Rows); err != nil {
+	if err := write(env.Out, listing); err != nil {
 		fmt.Fprintln(env.Err, "engine ps:", err)
 		return 1
 	}
@@ -50,6 +50,7 @@ func listClaimed(env Env) (ps.Listing, error) {
 		return ps.Listing{}, err
 	}
 	src := psSource(env, host, token)
+	src.Hosts = cfg.HostNames()
 	src.Status = hostStatus(env, cfg, host.Name)
 	return ps.List(src)
 }

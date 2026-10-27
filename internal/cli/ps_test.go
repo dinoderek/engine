@@ -222,8 +222,9 @@ func TestPsJSON(t *testing.T) {
 	if code := e.run("--json"); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.errOut.String())
 	}
-	var rows []ps.Row
-	if err := json.Unmarshal(e.out.Bytes(), &rows); err != nil {
+	var listing ps.Listing
+	rows := []ps.Row{}
+	if err := decodePsRows(e.out.Bytes(), &listing, &rows); err != nil {
 		t.Fatalf("%v\n%s", err, e.out.String())
 	}
 	if len(rows) != 2 || rows[0].State != ps.Working || rows[0].Alive == nil || !*rows[0].Alive ||
@@ -237,8 +238,9 @@ func TestPsSettlesAClaimOnAnotherHostFromItsStatus(t *testing.T) {
 	if code := e.run("--json"); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.errOut.String())
 	}
-	var rows []ps.Row
-	if err := json.Unmarshal(e.out.Bytes(), &rows); err != nil || len(rows) != 2 {
+	var listing ps.Listing
+	rows := []ps.Row{}
+	if err := decodePsRows(e.out.Bytes(), &listing, &rows); err != nil || len(rows) != 2 {
 		t.Fatalf("%v: %s", err, e.out.String())
 	}
 	if rows[0].State != ps.Waiting || rows[0].Alive == nil || !*rows[0].Alive {
@@ -260,8 +262,9 @@ func TestPsUnreachableHostIsUnknown(t *testing.T) {
 	if code := e.run("--json"); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.errOut.String())
 	}
-	var rows []ps.Row
-	if err := json.Unmarshal(e.out.Bytes(), &rows); err != nil || len(rows) != 2 {
+	var listing ps.Listing
+	rows := []ps.Row{}
+	if err := decodePsRows(e.out.Bytes(), &listing, &rows); err != nil || len(rows) != 2 {
 		t.Fatalf("%v: %s", err, e.out.String())
 	}
 	if rows[1].State != ps.InReview || rows[1].Alive != nil {
@@ -279,7 +282,7 @@ func TestPsHostNotInConfigIsUnknown(t *testing.T) {
 	if code := e.run("--json"); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.errOut.String())
 	}
-	if !strings.Contains(e.errOut.String(), `"devbox" is not in hosts.toml`) || len(e.sshed) != 0 {
+	if !strings.Contains(e.errOut.String(), `"devbox" is not in hosts.toml`) {
 		t.Errorf("stderr %q, ssh %q", e.errOut.String(), e.sshed)
 	}
 }
@@ -342,8 +345,9 @@ func TestPsReadsALocalCodexWindowsState(t *testing.T) {
 		if code := e.run("--json"); code != 0 {
 			t.Fatalf("exit %d: %s", code, e.errOut.String())
 		}
-		var rows []ps.Row
-		if err := json.Unmarshal(e.out.Bytes(), &rows); err != nil || len(rows) != 2 {
+		var listing ps.Listing
+		rows := []ps.Row{}
+		if err := decodePsRows(e.out.Bytes(), &listing, &rows); err != nil || len(rows) != 2 {
 			t.Fatalf("%v: %s", err, e.out.String())
 		}
 		if rows[0].State != state || rows[0].Alive == nil || !*rows[0].Alive {
@@ -358,4 +362,10 @@ func TestPsUsageListsIt(t *testing.T) {
 	if !strings.Contains(out.String(), "ps [--json]") {
 		t.Errorf("usage: %s", out.String())
 	}
+}
+
+func decodePsRows(data []byte, listing *ps.Listing, rows *[]ps.Row) error {
+	err := json.Unmarshal(data, listing)
+	*rows = listing.Rows
+	return err
 }

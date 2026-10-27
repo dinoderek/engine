@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"github.com/dinoderek/engine/internal/session"
 	"io"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -26,7 +28,11 @@ func Age(d time.Duration) string {
 
 // WriteTable prints the rows as aligned columns under a header, or says there
 // are none. A host or harness the claim left out shows as -.
-func WriteTable(w io.Writer, rows []Row) error {
+func WriteTable(w io.Writer, listing Listing) error {
+	if err := writeQuota(w, listing.Quota); err != nil {
+		return err
+	}
+	rows := listing.Rows
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no claimed tasks")
 		return err
@@ -40,13 +46,41 @@ func WriteTable(w io.Writer, rows []Row) error {
 	return tw.Flush()
 }
 
-// WriteJSON prints the rows as one indented JSON array: [] when there are
-// none, never null.
-func WriteJSON(w io.Writer, rows []Row) error {
-	if rows == nil {
-		rows = []Row{}
+// WriteJSON prints quota and sessions together, with empty objects and arrays.
+func WriteJSON(w io.Writer, listing Listing) error {
+	if listing.Rows == nil {
+		listing.Rows = []Row{}
+	}
+	if listing.Quota == nil {
+		listing.Quota = map[string]session.Quota{}
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(rows)
+	return enc.Encode(listing)
+}
+
+func writeQuota(w io.Writer, quota map[string]session.Quota) error {
+	names := make([]string, 0, len(quota))
+	for name := range quota {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		line := name
+		for _, key := range []string{"five_hour", "seven_day"} {
+			window, ok := quota[name].Windows[key]
+			if !ok {
+				continue
+			}
+			label, format := "5h", "15:04"
+			if key == "seven_day" {
+				label, format = "7d", "Mon 15:04"
+			}
+			line += fmt.Sprintf("  %s %g%% (resets %s)", label, window.Used, time.Unix(window.ResetsAt, 0).Local().Format(format))
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	return nil
 }

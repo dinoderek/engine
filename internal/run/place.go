@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"github.com/dinoderek/engine/internal/session"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
@@ -247,4 +249,15 @@ func (f Fleet) status(name string) (hostops.Status, error) {
 		return hostops.Status{}, errors.New(h.Unreachable)
 	}
 	return h.Status, nil
+}
+
+// Quota is the newest reading per harness from hosts that answered.
+func (f Fleet) Quota(now time.Time) map[string]session.Quota {
+	readings := []map[string]session.Quota{}
+	for _, host := range f.Hosts {
+		if host.Unreachable == "" {
+			readings = append(readings, host.Status.Quota)
+		}
+	}
+	return session.MergeQuota(now, readings...)
 }

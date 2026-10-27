@@ -3,6 +3,7 @@ package hostops
 import (
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
@@ -13,6 +14,7 @@ const ScreenLines = 20
 
 // Status is status's reply: what this host's sessions are doing now.
 type Status struct {
+	Quota map[string]session.Quota `json:"quota,omitempty"`
 	// Slots is how many sessions the host runs at once, and FreeSlots how
 	// many more it can start: only a live window with a run recorded under
 	// its name holds one. HeavySlots is how many of them may be heavy, and
@@ -80,7 +82,11 @@ func ReadStatus(d Deps) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	s := Status{Slots: host.Slots(), HeavySlots: host.HeavySlots(), Windows: []Window{}, Agents: []session.Agent{}, Runs: []Run{}}
+	now := time.Now
+	if d.Now != nil {
+		now = d.Now
+	}
+	s := Status{Quota: session.ReadQuota(d.Home, now()), Slots: host.Slots(), HeavySlots: host.HeavySlots(), Windows: []Window{}, Agents: []session.Agent{}, Runs: []Run{}}
 	if host.Runs(Claude) {
 		s.listAgents(d, host)
 	}

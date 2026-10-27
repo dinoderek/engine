@@ -36,12 +36,11 @@ it. The skill's `coordinate` mode
 (`plugins/engine/skills/engine/references/coordinate.md`) is the spec for a
 pass, so an agent coordinator and `engine run` behave the same.
 
-A pass runs every 5 minutes. Between passes, a session check runs every 60
-seconds. It reads every host's `status`, one call per host in parallel, and
+Passes run every 5 minutes. Between passes, a session check runs every 60
+seconds. It reads every host's `status`, parallel calls, and
 never GitHub, and starts a pass early when a session has started, ended,
 become known or unknown, or changed between working and waiting, or has
-waited long enough to stall. A pass reads its sessions from the same
-replies. Designed, not built: a pass on each webhook event
+waited long enough to stall. A pass reads sessions and fleet quota from those replies, keeping the newest observation per harness; expired windows read 0%. Designed, not built: a pass on each webhook event
 (`gh webhook forward` to a localhost endpoint), and coalescing events that
 arrive mid-pass.
 
@@ -99,7 +98,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | --- | --- |
 | `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it for the harness the caller names (Claude by default), opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
-| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, the free slots and free heavy slots (a live window takes one only if it has a run), and the last 20 screen lines of each window whose session is not working. |
+| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (the newest observation across all runs), free slots and free heavy slots, and the last 20 screen lines of each window whose session is not working. |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
 | `release` | Closes the session's window if it is open, deletes its Codex profile, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
@@ -130,8 +129,7 @@ again.
   checkout for the repo's worktree command. There is no per-host path config.
 - **Requirements for an SSH host:** key-based SSH, plus `engine`, `tmux`, `gh`,
   and the harness CLIs, signed in.
-- The coordinator can run on any host, including one that is also running
-  sessions.
+- The coordinator can share a host with sessions.
 
 ## Session signals
 

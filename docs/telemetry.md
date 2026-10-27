@@ -4,9 +4,8 @@
 
 ## Strategy
 
-Store **raw** data in **standard formats** in **cheap object storage**.
-Analysis comes later and can be re-run over the raw data. Nothing is
-summarised away at capture time.
+Store **raw** data in **standard formats** in object storage.
+Re-run analysis over raw data.
 
 | Data | Format | Source |
 | --- | --- | --- |
@@ -17,7 +16,7 @@ summarised away at capture time.
 
 ## Run record
 
-One `run.json` per session, written at spawn and finalised at exit:
+`run.json` is written at spawn and finalised at exit:
 
 - **Identity:** run ID, repo, feature, task, host, harness, tier, model,
   whether it is heavy (`hosts-and-sessions.md`, "Hosts"), and the harness
@@ -34,8 +33,7 @@ One `run.json` per session, written at spawn and finalised at exit:
 window's raw output) and `permissions.jsonl`: one JSON line per permission
 request the hook denied or, in Codex, left to auto-review, and per action
 auto mode refused, with the time,
-tool, input and decision (`Entry` in `internal/hook/permission.go`). The run ID
-is `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, the time its launch began. A preflight
+tool, input and decision (`Entry` in `internal/hook/permission.go`). Run IDs are `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, using launch time. A preflight
 check's directory, `check-<time>`, stays, with no `run.json`. A hook that finds
 its run without `ENGINE_RUN_DIR` (`codex.md`, "Session signals") scans these
 directories for the `run.json` whose worktree holds the event's `cwd`.
@@ -45,6 +43,11 @@ harness session ID), the effort, mode, session name, tmux target (by window
 id, such as `engine:@3`), branch, worktree, the pane log's path and the spawn
 time, with `schema: 1`. `Record` in `internal/session/record.go` holds the
 field names. Whatever writes the later fields keeps these and adds its own.
+
+`quota.json` holds Claude subscription usage: `harness`, `observed_at` (epoch
+seconds), and `windows` with optional `five_hour` and `seven_day` entries, each
+with `used` (percent) and `resets_at` (epoch seconds). The status-line hook
+atomically replaces it only when usage or reset times change.
 
 ## Pipeline
 
@@ -58,9 +61,8 @@ field names. Whatever writes the later fields keeps these and adds its own.
 
 ## Storage
 
-Default: **Cloudflare R2**. Its free tier holds 10 GB, there are no egress
-fees, and it speaks the S3 API. Backblaze B2 is the fallback. The bucket is
-private.
+**Cloudflare R2**: 10 GB free, no egress fees, S3 API. Backblaze B2 is the
+fallback. Keep the bucket private.
 
 ```text
 <bucket>/<repo>/<feature>/<task>/<run-id>/
@@ -70,8 +72,8 @@ private.
   gates/
 ```
 
-Optional: the collector also forwards OTLP to a free hosted backend such as
-Grafana Cloud for live dashboards. The bucket stays the system of record.
+The collector may forward OTLP to a dashboard backend; the bucket stays
+the system of record.
 
 ## Rules
 

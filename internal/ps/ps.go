@@ -55,8 +55,10 @@ type Row struct {
 }
 
 // Source is where a listing reads from. Each host's status is read at most
-// once, and only when a claim names the host.
+// once, including hosts with no claim.
 type Source struct {
+	// Hosts lists configured hosts, including ones with no claim.
+	Hosts []string
 	// Claimed lists the claimed tasks.
 	Claimed func() ([]tracker.ClaimedTask, error)
 	// Local is this host's name in its host file.
@@ -74,8 +76,9 @@ type Source struct {
 // probe that failed. A failed probe leaves the liveness it would have settled
 // unknown.
 type Listing struct {
-	Rows     []Row
-	Warnings []string
+	Quota    map[string]session.Quota `json:"quota"`
+	Rows     []Row                    `json:"sessions"`
+	Warnings []string                 `json:"-"`
 }
 
 // List reads every claimed task and works out its state.
@@ -90,10 +93,22 @@ func List(src Source) (Listing, error) {
 	p := &probes{src: src}
 	var views map[string]view
 	if src.Status != nil {
-		views = p.statuses(claimHosts(tasks))
+		names := slices.Clone(src.Hosts)
+		for _, name := range claimHosts(tasks) {
+			if !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+		slices.Sort(names)
+		views = p.statuses(names)
 	}
 	now := src.Now()
-	var l Listing
+	l := Listing{Quota: map[string]session.Quota{}}
+	for _, v := range views {
+		if v.err == nil {
+			l.Quota = session.MergeQuota(now, l.Quota, v.status.Quota)
+		}
+	}
 	for _, t := range tasks {
 		row := claimRow(t, now)
 		if v, ok := views[t.Claim.Host]; ok {

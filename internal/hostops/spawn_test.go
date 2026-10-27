@@ -100,7 +100,7 @@ func TestLaunchCommand(t *testing.T) {
 		// The skill's directory is a working directory, /tmp is readable
 		// only, and -- keeps the variadic options from taking the kickoff.
 		script += `exec ` + h.bin + ` --permission-mode auto --model opus-y --effort high -n r-7 --remote-control r-7 ` +
-			`--add-dir ` + plugin + ` --allowedTools 'Read(//tmp/**)' 'Read(//private/tmp/**)' -- ` +
+			`--add-dir ` + plugin + ` --allowedTools 'Read(//tmp/**)' 'Read(//private/tmp/**)' --settings '{"statusLine":{"type":"command","command":"engine hook statusline"}}' -- ` +
 			`'Execute ` + ref(7) + ` with the engine executor, hands-off mode.'`
 		if want := "exec /bin/sh -c " + hosts.ShellWord(script); tm.command != want {
 			t.Errorf("command\n got %s\nwant %s", tm.command, want)
