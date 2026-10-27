@@ -1,0 +1,37 @@
+{
+  "default_harness": "claude",
+  "configured_harness_ratio": null,
+  "run_override": {
+    "claude": 1,
+    "codex": 1
+  },
+  "harness_caps": {
+    "claude": 10,
+    "codex": 10
+  },
+  "hosts": {
+    "mac": {
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "capabilities": [
+        "macos",
+        "ios",
+        "vm",
+        "docker"
+      ]
+    },
+    "devbox": {
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "capabilities": [
+        "linux",
+        "vm",
+        "docker"
+      ]
+    }
+  }
+}

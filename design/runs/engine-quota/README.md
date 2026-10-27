@@ -68,6 +68,10 @@ Placement increments those counts for each start in the same pass:
 | #151 quota retention | 13:35:41 / devbox / Codex | 3, 2 | Lower Codex score; both hosts had 3 free slots, so devbox wins on fewer capabilities | Stopped on a real limit before claim; continued manually at 19:51 UTC |
 | #152 acceptance | Pending | Pending | Pending | Pending |
 
+The [selected coordinator events](evidence/fixture-events.txt) retain the
+actual starts and stall; [placement inputs](evidence/placement-inputs.json)
+retain the relevant non-sensitive configuration values.
+
 All three ready tasks were actually dispatched, including Codex while quota
 was exhausted: quota does not gate starts. PR #153 adds writer-error
 regressions; PR #154 adds independent fleet-merge and copied-output tests.
@@ -82,8 +86,9 @@ Pending: #151 and #152 merged PRs, coordinator exit and cleanup.
 ## Objective evidence
 
 All nine required lanes of `./dev test` passed at 13:31 UTC against the
-tested implementation commit. The final post-fixture run is recorded below
-when the combined main is merged into this worktree.
+tested implementation commit. A second complete run at 19:53 UTC also passed after merging fixture PRs
+#153 and #154. [Its summary](evidence/gates-1953.md) is retained.
+Final post-fixture gates are still pending; acceptance remains failed.
 
 | Objective | Evidence | Kind |
 | --- | --- | --- |
@@ -113,8 +118,8 @@ Those earlier stops do not prove the new implementation: no `limit.json` or
 and devbox has no such implementation runs. Codex Stop hooks carry ordinary
 wait signals rather than a limit error; its new limited state is derived
 from quota. A hook input with a real limit error and an automatic coordinator
-resume are therefore not proved by these earlier events. O2/O3 are proved by
-the boundary and scenario tests listed above. No real limit is manufactured.
+resume are therefore not proved by these earlier events. The listed tests cover the intended boundary and coordinator scenarios;
+live O2/O3 acceptance failed as recorded below. No real limit is manufactured.
 
 ## Actual limit failure on the implementation under test
 
@@ -153,8 +158,7 @@ The [official hook documentation](https://learn.chatgpt.com/docs/hooks)
 lists no `StopFailure` event; its Stop input has no limit error or reset
 fields. The native failed-turn event offers additional evidence, but using
 it as a state source and handling the reminder requires a design decision
-beyond this acceptance card's test-only fixture. No product fix is smuggled
-into the evidence PR, and no automatic recovery is claimed.
+beyond this acceptance card's test-only fixture. Product code is unchanged; automatic recovery remains failed.
 
 Pending: final fixture and limit-history audit. The evidence remains a failed
 live acceptance for O2/O3 until an approved fix is verified.
