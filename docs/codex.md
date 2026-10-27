@@ -121,6 +121,14 @@ missing or unreadable file is unknown, never dead, and so is `ended` while the
 window lives. Codex's `notify` is not used, because it holds a single program
 and other tools already claim it (Computer Use on the Mac).
 
+`status` derives `limited` only from `waiting` plus a Codex quota window at
+100%. `resets_at` is the latest reset of the exhausted windows. Expired
+windows read 0%; unavailable quota leaves a waiting session waiting. Working
+always wins, and limited sessions never stall. An explicit `limited` state
+in `harness-state.json` takes precedence and supplies its `resets_at`, even
+without quota. Codex's `Stop` and `Interrupt` inputs carry no limit error or
+reset time, so the state hook records ordinary waits and `status` derives limits.
+
 ## Quota
 
 On a host that runs Codex, `status` starts a short-lived `codex app-server

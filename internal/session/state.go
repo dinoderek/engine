@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// The states of a session. A window's state is working, waiting or unknown
+// The states of a session. A window's state is working, waiting, limited or unknown
 // (""); ended appears only in a state file, and a live window whose file says
 // ended is unknown.
 const (
@@ -31,6 +31,7 @@ type HarnessState struct {
 	Event     string    `json:"event"`
 	At        time.Time `json:"at"`
 	SessionID string    `json:"session_id,omitempty"`
+	ResetsAt  int64     `json:"resets_at,omitempty"` // limit reset, epoch seconds
 }
 
 // WriteHarnessState writes the state file in dir atomically: a reader sees
@@ -54,7 +55,7 @@ func ReadHarnessState(dir string) (HarnessState, bool) {
 		return HarnessState{}, false
 	}
 	switch s.State {
-	case StateWorking, StateWaiting, StateEnded:
+	case StateWorking, StateWaiting, StateLimited, StateEnded:
 		return s, true
 	}
 	return HarnessState{}, false

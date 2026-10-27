@@ -158,10 +158,6 @@ func (s *Status) probe(w *Window, r session.Run) {
 			w.State, w.ResetsAt, w.WaitingFor = session.StateLimited, l.ResetsAt, ""
 		}
 	case Codex:
-		// Codex's hooks write the state file; a session that has ended
-		// while its window lives is unknown.
-		if st, ok := session.ReadHarnessState(r.Dir); ok && st.State != session.StateEnded {
-			w.State = st.State
-		}
+		s.probeCodex(w, r.Dir)
 	}
 }
