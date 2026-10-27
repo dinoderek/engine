@@ -6,6 +6,8 @@
 package hostops
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,6 +50,9 @@ type Deps struct {
 	// daemon when it runs with remote control on. Off, a session starts
 	// embedded and nothing asks the daemon its state. The commands set it.
 	JoinRemote bool
+	// CodexQuota reads account/rateLimits/read in engine's Codex home.
+	// Nil uses a short-lived app-server subprocess.
+	CodexQuota func(context.Context, string, string) (json.RawMessage, error)
 }
 
 // RefusedError is an op that refused before it changed anything.
