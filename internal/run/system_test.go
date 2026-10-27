@@ -110,10 +110,10 @@ func TestSystemStartsOnTheChosenHost(t *testing.T) {
 	devbox := recordingClient{statusClient: statusClient{st: hostops.Status{FreeSlots: 1}}, spawned: &spawned}
 	var out bytes.Buffer
 	s := System{Out: &out, Starts: start.Deps{GH: gh, Home: home, Now: func() time.Time { return t0 }, Client: devbox}}
-	if err := s.Start(ref(7), "devbox"); err != nil {
+	if err := s.Start(ref(7), "devbox", "claude"); err != nil {
 		t.Fatal(err)
 	}
-	if len(spawned) != 1 || spawned[0].Task != 7 || !strings.Contains(out.String(), "on devbox") {
+	if len(spawned) != 1 || spawned[0].Task != 7 || spawned[0].Harness != "claude" || !strings.Contains(out.String(), "on devbox") {
 		t.Errorf("spawned %+v, out %q", spawned, out.String())
 	}
 }

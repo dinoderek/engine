@@ -86,7 +86,7 @@ func TestTheHarnessCapCountsEveryHost(t *testing.T) {
 	w := newWorld(t, []string{"engine:feature", Planned}, card(2, "standard"), card(3, "standard"), card(4, "standard"))
 	twoHosts(w, 3, 3)
 	w.limit = 2
-	if err := w.Start(ref(9), "devbox"); err != nil { // a session of another feature
+	if err := w.Start(ref(9), "devbox", ""); err != nil { // a session of another feature
 		t.Fatal(err)
 	}
 	acts := passOf(t, w)

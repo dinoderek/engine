@@ -52,6 +52,7 @@ here first, then declared by the hosts that have it.
 
 ```toml
 default_harness = "claude"
+harness_ratio = { claude = 4, codex = 1 }
 gb_per_session = 8      # RAM one session and its gates need
 reserve_gb = 8          # RAM kept back for the host itself
 heavy_capabilities = ["ios", "vm"]
@@ -90,14 +91,20 @@ then the fewest capabilities, then the lowest name:
 
 - a free slot, from the host's `status` (a host whose `status` fails takes
   no task), and a free heavy slot too for a heavy task;
-- the task's harness (the card's, or the default), under its cap across
-  hosts;
+- the chosen harness, under its cap across hosts;
 - every capability in the card's `requires`.
 
-An unplaced task stays ready, logged with the reason each pass. If no host
-could take it with every slot free, the coordinator comments the reason on
-it once. The planner starts on the coordinator's host. How the coordinator
-reaches each host is in `coordinator.md`.
+For each unpinned card, `harness_ratio` scores positive-weight harnesses by
+`(live sessions across all hosts + 1) / weight`. Lowest wins; ties prefer
+`default_harness`, then name. If no host fits, try the next harness. Counts
+include pinned cards and unclaimed starts with recorded live windows. Zero
+weights exclude unpinned starts. Without a ratio, use `default_harness`.
+Unknown harnesses and all-zero ratios are refused. The planner uses
+`default_harness`.
+
+An unplaced task stays ready, logged each pass. If none could take it with
+all slots free, comment once. The planner starts locally. For host calls,
+load `coordinator.md`.
 
 ## Naming
 
