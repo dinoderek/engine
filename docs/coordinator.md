@@ -39,7 +39,7 @@ pass, so an agent coordinator and `engine run` behave the same.
 Passes run every 5 minutes. Between passes, a session check runs every 60
 seconds. It reads every host's `status`, parallel calls, and
 never GitHub, and starts a pass early when a session has started, ended,
-become known or unknown, or changed between working and waiting, or has
+become known or unknown, changed state or limit reset, or has
 waited long enough to stall. A pass reads sessions and fleet quota from those replies, keeping the newest observation per harness; expired windows read 0%. Designed, not built: a pass on each webhook event
 (`gh webhook forward` to a localhost endpoint), and coalescing events that
 arrive mid-pass.
@@ -63,10 +63,9 @@ The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it
 skips any task whose session is still alive, on any host that answers.
 
-The coordinator's GitHub adapter and `engine lint` implement the skill's plan
-sources (`plugins/engine/skills/engine/references/plan-sources.md`) and its
-lint rules (`plugins/engine/skills/engine/references/plan.md`). The skill is
-the spec; the code follows it.
+For changes to GitHub plan storage or lint, load the skill's
+`plugins/engine/skills/engine/references/plan-sources.md` or
+`plugins/engine/skills/engine/references/plan.md`.
 
 ## Later: `engine serve`
 
@@ -139,7 +138,7 @@ is waiting for input. Three sources:
 
 1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
 2. **The harness**, for "waiting for input". `status` gives each window of
-   session `engine` a `harness` and a `state`, `working` or `waiting`, from
+   session `engine` a `harness` and a `state`, `working`, `waiting` or `limited`, from
    the probe of the harness its newest `run.json` names, as each harness doc
    says (`claude.md`, "Session list"; `codex.md`, "Session signals").
    Anything else, including a window with no run, is unknown, never dead.
@@ -154,7 +153,10 @@ the reply's harness list shows it (`claude.md`, "Session list"); otherwise
 its liveness is unknown. A failed call leaves it unknown too. A session in
 `needs-human` or `in-review` keeps that state while alive.
 
-**Stalls.** A window the coordinator opened whose task has not claimed in
+**Stalls.** Limited sessions never stall, including before claiming. Their
+`waiting-since` is cleared; a later ordinary wait starts a fresh timer.
+Claude limit markers carry `resets_at`; busy wins over a marker.
+A window the coordinator opened whose task has not claimed in
 time is stalled before the claim, for example on a prompt (the skill's
 `coordinate` mode sets the time). One that ended before claiming is reported
 once, then started again. A session whose `waiting-since` is 10

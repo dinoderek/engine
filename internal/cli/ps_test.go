@@ -81,8 +81,8 @@ type psEnv struct {
 func newPsEnv(t *testing.T, host string) *psEnv {
 	t.Helper()
 	e := &psEnv{t: t, home: t.TempDir(), claude: `[{"pid":1,"cwd":"/w","name":"r-1","status":"busy"}]`, status: map[string]string{
-		"me@devbox": `{"protocol":3,"engine":"x","host":"devbox","slots":3,"free_slots":2,"windows":[{"name":"r-2","id":"@1","alive":true,"harness":"codex"}],"agents":[],"runs":[]}`,
-		"me@mac":    `{"protocol":3,"engine":"x","host":"mac","slots":4,"free_slots":3,"windows":[{"name":"r-1","id":"@1","alive":true,"harness":"claude","state":"waiting"}],"agents":[{"pid":1,"cwd":"/w","name":"r-1","status":"waiting"}],"runs":[]}`,
+		"me@devbox": `{"protocol":4,"engine":"x","host":"devbox","slots":3,"free_slots":2,"windows":[{"name":"r-2","id":"@1","alive":true,"harness":"codex"}],"agents":[],"runs":[]}`,
+		"me@mac":    `{"protocol":4,"engine":"x","host":"mac","slots":4,"free_slots":3,"windows":[{"name":"r-1","id":"@1","alive":true,"harness":"claude","state":"waiting"}],"agents":[{"pid":1,"cwd":"/w","name":"r-1","status":"waiting"}],"runs":[]}`,
 	}}
 	e.spawned("r-1", "claude", time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC))
 	if err := os.MkdirAll(filepath.Join(e.home, ".config", "engine"), 0o700); err != nil {

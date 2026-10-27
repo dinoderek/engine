@@ -90,7 +90,7 @@ func passDue(w World, v View, down outages) bool {
 	}
 	for ref, s := range fresh {
 		old, ok := v.Sessions[ref]
-		if !ok || old.Live != s.Live || old.Waiting != s.Waiting || old.Unknown != s.Unknown {
+		if !ok || old.Live != s.Live || old.Waiting != s.Waiting || old.Limited != s.Limited || old.ResetsAt != s.ResetsAt || old.Unknown != s.Unknown {
 			return true
 		}
 	}

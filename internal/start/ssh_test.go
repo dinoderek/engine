@@ -191,7 +191,7 @@ func TestStartOverSSHProtocolMismatch(t *testing.T) {
 	r := newSSHRig(t)
 	t.Setenv(sshModeVar, "oldproto")
 	err := Run(Options{Ref: ref(7), Host: "dev"}, r.deps, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "host dev speaks protocol 2 (engine old), this engine speaks 3; run: engine setup --host dev") {
+	if err == nil || !strings.Contains(err.Error(), "host dev speaks protocol 2 (engine old), this engine speaks 4; run: engine setup --host dev") {
 		t.Errorf("err = %v", err)
 	}
 	if got := r.sshCalls(t); len(got) != 1 {

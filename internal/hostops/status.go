@@ -48,11 +48,13 @@ type Window struct {
 	ExitCode *int `json:"exit_code,omitempty"`
 	// Harness is the harness the window's newest run launched, and State
 	// what its session is doing, from that harness's probe: working, waiting,
-	// or unknown (left out). A dead window, or one with no run, is unknown.
+	// limited, or unknown (left out). A dead window, or one with no run, is unknown.
 	Harness string `json:"harness,omitempty"`
 	State   string `json:"state,omitempty"`
 	// WaitingFor says what a waiting session needs, when its harness says.
 	WaitingFor string `json:"waiting_for,omitempty"`
+	// ResetsAt is the usage limit reset, in epoch seconds, or zero if unknown.
+	ResetsAt int64 `json:"resets_at,omitempty"`
 	// Screen is the last ScreenLines lines of a window whose session is not
 	// working.
 	Screen string `json:"screen,omitempty"`
@@ -149,8 +151,11 @@ func (s *Status) probe(w *Window, r session.Run) {
 				if w.State == session.StateWaiting {
 					w.WaitingFor = a.WaitingFor
 				}
-				return
+				break
 			}
+		}
+		if l, ok := session.ReadLimit(r.Dir); ok && w.State != session.StateWorking {
+			w.State, w.ResetsAt, w.WaitingFor = session.StateLimited, l.ResetsAt, ""
 		}
 	case Codex:
 		// Codex's hooks write the state file; a session that has ended

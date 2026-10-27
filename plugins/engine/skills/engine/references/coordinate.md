@@ -5,7 +5,7 @@ Never edit code, merge, claim tasks or answer hard stops.
 
 | Kickoff | Executors start through |
 | --- | --- |
-| `Coordinate <feature> with engine` | `engine start`, read back with `engine ps --json` |
+| `Coordinate <feature> with engine` | `engine start`, read with `engine ps --json` |
 | `Coordinate <feature> with native sessions` | Claude Code cloud sessions (below) |
 
 Without either, use `engine` if `engine ps` runs, else ask.
@@ -19,7 +19,7 @@ Repeat every 5 minutes until `done`:
    each cloud session's status); and the sessions you started, with when.
 2. **Plan if needed.** An `engine:approved` feature with no sub-issues gets a
    planner session, kickoff `Plan breakdown <feature>`, unless one you
-   started for it is alive or has ended. When the feature is `engine:approved`,
+   started is alive or ended. When the feature is `engine:approved`,
    has sub-issues and no planner is alive, lint the plan (`engine lint
    <feature>`, else by hand with `plan.md`'s lint list). If it passes, set
    `engine:planned`; if not, comment the failures on the feature and
@@ -45,7 +45,7 @@ Repeat every 5 minutes until `done`:
    Skip live unclaimed starts. If one died, @mention once with its screen,
    close it and retry. Failed starts @mention once and rest 30 minutes,
    holding no slot. No eligible host gets one @mention with why.
-4. **Stalls.** A session is stalled when:
+4. **Stalls.** Skip `limited` sessions, including before claiming. Otherwise:
    - it has not claimed its task 5 minutes after you started it; or
    - it has been waiting for input for 10 minutes and its task is open and
      not `engine:needs-human`.

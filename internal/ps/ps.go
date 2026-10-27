@@ -20,6 +20,7 @@ import (
 
 // The states a row shows.
 const (
+	Limited    = "limited"     // stopped on a harness usage limit
 	Working    = "working"     // alive, and the harness says it is working
 	Waiting    = "waiting"     // alive, and the harness says it waits for input
 	Running    = "running"     // holds the task; nothing says more
@@ -50,6 +51,7 @@ type Row struct {
 	// started by hand and Claude Code does not list it.
 	Alive      *bool  `json:"alive"`
 	WaitingFor string `json:"waiting_for,omitempty"`
+	ResetsAt   int64  `json:"resets_at,omitempty"`
 	ClaimedAt  string `json:"claimed_at"`
 	AgeSeconds int64  `json:"age_seconds"`
 }

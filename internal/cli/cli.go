@@ -30,6 +30,7 @@ commands:
   hook permission           log permission requests in unattended sessions, and deny
                             Claude Code's (Codex's auto-review decides its own)
   hook statusline           record Claude quota and print its status line
+  hook limit                record or clear a Claude usage limit
   hook state                record a Codex session's state from its hook event
   gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
@@ -144,6 +145,13 @@ func runHook(args []string, env Env) int {
 	if len(args) == 1 && args[0] == "statusline" {
 		if err := hook.Statusline(env.In, env.Out, env.Getenv(session.RunDirVar), env.Now()); err != nil {
 			fmt.Fprintln(env.Err, "engine hook statusline:", err)
+			return 1
+		}
+		return 0
+	}
+	if len(args) == 1 && args[0] == "limit" {
+		if err := hook.Limit(env.In, env.Getenv(session.RunDirVar), env.Now()); err != nil {
+			fmt.Fprintln(env.Err, "engine hook limit:", err)
 			return 1
 		}
 		return 0

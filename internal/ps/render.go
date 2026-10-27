@@ -38,10 +38,14 @@ func WriteTable(w io.Writer, listing Listing) error {
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "TASK\tHOST\tHARNESS\tSTATE\tAGE")
+	fmt.Fprintln(tw, "TASK\tHOST\tHARNESS\tSTATE\tAGE\tRESETS")
 	for _, r := range rows {
 		age := Age(time.Duration(r.AgeSeconds) * time.Second)
-		fmt.Fprintln(tw, strings.Join([]string{r.Task, cmp.Or(r.Host, "-"), cmp.Or(r.Harness, "-"), r.State, age}, "\t"))
+		reset := "-"
+		if r.ResetsAt > 0 {
+			reset = time.Unix(r.ResetsAt, 0).Local().Format("Mon 15:04")
+		}
+		fmt.Fprintln(tw, strings.Join([]string{r.Task, cmp.Or(r.Host, "-"), cmp.Or(r.Harness, "-"), r.State, age, reset}, "\t"))
 	}
 	return tw.Flush()
 }

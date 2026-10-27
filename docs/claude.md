@@ -40,21 +40,23 @@ or raises a hard stop.
 
 ## Hooks
 
-`engine hook pre-tool-use` blocks a
-Bash call that:
+`engine hook pre-tool-use` blocks Bash merges without
+`--match-head-commit`, with `--auto` or `--admin`, or through the REST or
+GraphQL API. `engine gh` counts as `gh`.
 
-- runs `gh pr merge` without `--match-head-commit`, or with `--auto` or
-  `--admin`;
-- merges through `gh api`, REST or GraphQL.
+`engine hook permission` runs on `PermissionRequest` and `PermissionDenied`.
+With `ENGINE_UNATTENDED=1` it denies prompts, naming the Permission hard stop;
+otherwise Claude prompts. It records denials and auto-mode refusals
+in the run directory (`telemetry.md`).
 
-`engine gh …` counts as `gh` for both.
-
-It also ships `engine hook permission`, run on `PermissionRequest` and
-`PermissionDenied`. When `ENGINE_UNATTENDED=1`, it denies every permission
-request with a message naming the Permission hard stop, instead of a prompt
-nobody would answer. It logs each request it denies, and in any session each
-auto-mode refusal, to the run directory (`telemetry.md`). Without
-`ENGINE_UNATTENDED`, Claude Code prompts as usual.
+`engine hook limit` handles `StopFailure` errors `rate_limit|billing_error`,
+writing `limit.json` and logging the full input. It takes `resets_at` from
+the event or its `error_details` object, else the session's `quota.json`:
+the latest reset among exhausted windows, else the five-hour reset.
+`Notification` `quota_auto_resume_fired` and `UserPromptSubmit` clear the
+marker; `quota_auto_resume_stale` and `quota_auto_resume_disabled` retain
+it and record their type. Unknown resets stay zero. Claude's
+`autoContinueAtUsageLimit` stays enabled.
 
 ## Session list
 
@@ -62,7 +64,9 @@ auto-mode refusal, to the run directory (`telemetry.md`). Without
 in tmux, with its `pid`, `cwd`, `name`, `sessionId` and `status`. `busy` is
 working; `waiting` and `idle` are waiting for input, because only a prompt
 moves the session on. For a window whose newest run is Claude's, `status`
-takes the state of the session of the window's name. `engine ps` finds one
+takes the state of the session of the window's name. A limit marker makes
+a live, non-busy window `limited`, with `resets_at`; busy wins. An unavailable
+session list leaves state unknown. `engine ps` finds one
 started by hand by its name (`<repo>-<task>`), then, on its own host only, by
 its worktree (its branch, in the claim's repo).
 

@@ -131,6 +131,8 @@ func see(s *Session, h HostLoad, name string) bool {
 	for _, win := range h.Status.Windows {
 		if win.ID == s.WindowID && win.Name == name {
 			s.Live, s.DeadWindow, s.Screen = win.Alive, !win.Alive, win.Screen
+			s.Limited = win.Alive && win.State == session.StateLimited
+			s.ResetsAt = win.ResetsAt
 			s.Waiting = win.Alive && win.State == session.StateWaiting
 			known = !win.Alive || win.State != ""
 		}

@@ -45,20 +45,20 @@ func TestWriteTable(t *testing.T) {
 		t.Fatalf("got:\n%s", out.String())
 	}
 	header := strings.Fields(lines[0])
-	if !reflect.DeepEqual(header, []string{"TASK", "HOST", "HARNESS", "STATE", "AGE"}) {
+	if !reflect.DeepEqual(header, []string{"TASK", "HOST", "HARNESS", "STATE", "AGE", "RESETS"}) {
 		t.Errorf("header %q", header)
 	}
 	for i, wantCells := range [][]string{
-		{tracker.Ref{Repo: "o/r", Number: 1}.String(), "mac", "claude", "working", "1h"},
-		{tracker.Ref{Repo: "o/r", Number: 2}.String(), "devbox", "-", "in-review", "1h"},
-		{tracker.Ref{Repo: "o/r", Number: 30}.String(), "mac", "claude", "dead", "3d"},
+		{tracker.Ref{Repo: "o/r", Number: 1}.String(), "mac", "claude", "working", "1h", "-"},
+		{tracker.Ref{Repo: "o/r", Number: 2}.String(), "devbox", "-", "in-review", "1h", "-"},
+		{tracker.Ref{Repo: "o/r", Number: 30}.String(), "mac", "claude", "dead", "3d", "-"},
 	} {
 		if got := strings.Fields(lines[i+1]); !reflect.DeepEqual(got, wantCells) {
 			t.Errorf("row %d: got %q, want %q", i, got, wantCells)
 		}
 	}
 	// Aligned: every column starts where the header's does.
-	for _, col := range []string{"HOST", "HARNESS", "STATE", "AGE"} {
+	for _, col := range []string{"HOST", "HARNESS", "STATE", "AGE", "RESETS"} {
 		at := strings.Index(lines[0], col)
 		for _, l := range lines[1:] {
 			if at > len(l) || l[at-1] != ' ' || l[at] == ' ' {
@@ -87,7 +87,7 @@ func TestWriteTableHarnessNames(t *testing.T) {
 			}
 			lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 			cells := strings.Fields(lines[1])
-			if len(cells) != 5 || cells[2] != tc.want {
+			if len(cells) != 6 || cells[2] != tc.want {
 				t.Errorf("harness column: got %q, want %q", cells, tc.want)
 			}
 		})

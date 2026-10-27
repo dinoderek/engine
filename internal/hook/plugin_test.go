@@ -122,3 +122,18 @@ func TestCodexMarketplaceListsThePlugin(t *testing.T) {
 		t.Errorf("manifest names %q, marketplace lists %q", manifest.Name, p.Name)
 	}
 }
+
+func TestClaudePluginRegistersLimitHook(t *testing.T) {
+	var plugin struct{ Hooks hookGroups }
+	readJSON(t, "../../plugins/engine/hooks/hooks.json", &plugin)
+	for event, matcher := range map[string]string{
+		"StopFailure":      "rate_limit|billing_error",
+		"Notification":     "quota_auto_resume_fired|quota_auto_resume_stale|quota_auto_resume_disabled",
+		"UserPromptSubmit": "",
+	} {
+		want := map[string][]string{matcher: {"engine hook limit"}}
+		if got := plugin.Hooks.commands(event); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: got %v, want %v", event, got, want)
+		}
+	}
+}
