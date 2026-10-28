@@ -1,0 +1,22 @@
+{
+  "coordinator_events": [
+    "2026-10-28T00:48:16Z resume dinoderek/engine#138: continue; resumed-for=1793148339"
+  ],
+  "stored_user_events": [
+    {
+      "timestamp": "2026-10-28T00:48:17.487Z",
+      "type": "response_item",
+      "payload": {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "continue"
+          }
+        ]
+      }
+    }
+  ],
+  "interpretation": "The coordinator injected continue. The transcript role user does not establish operator authorship."
+}

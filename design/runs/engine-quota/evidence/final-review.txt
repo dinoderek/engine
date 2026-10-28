@@ -1,3 +1,8 @@
+Executor provenance correction (2026-10-28): this historical review was
+given under the mistaken premise that the operator had approved the design.
+That premise is withdrawn. The review supplies no operator authorization;
+both design and acceptance-proof decisions remain pending. Original review:
+
 Reviewer: Codex / gpt-6.1-sol, fresh context.
 Reviewed head: 42fa38f9f81f88ac626bec32b8cc06e71541b4ef against origin/main.
 Verdict: CHANGES_REQUESTED
