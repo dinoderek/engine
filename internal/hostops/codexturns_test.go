@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -116,5 +117,68 @@ func TestCodexTurnReadingsTryTheEmbeddedHome(t *testing.T) {
 	got := codexTurnReadings(d, host, []session.WindowInfo{{Name: "r-1"}}, runs)
 	if len(homes) != 2 || homes[1] != filepath.Join(h.dir, ".codex") || string(got["a"]) != failedCodexTurn {
 		t.Fatalf("homes %v, turns %s", homes, got["a"])
+	}
+}
+
+func TestCodexHistoryReadsOnlyLiveEngineThreads(t *testing.T) {
+	h := newHome(t, "mac")
+	at := fixedNow()
+	runs := map[string]session.Run{}
+	var windows []session.WindowInfo
+	for _, tc := range []struct {
+		name, harness, state, id string
+		dead                     bool
+	}{
+		{"active", Codex, session.StateWorking, "active-id", false},
+		{"dead", Codex, session.StateWorking, "dead-id", true},
+		{"ended", Codex, session.StateEnded, "ended-id", false},
+		{"claude", Claude, session.StateWorking, "claude-id", false},
+		{"missing", Codex, "", "", false},
+		{"no-id", Codex, session.StateWorking, "", false},
+	} {
+		dir := writeRun(t, h, session.Record{RunID: tc.name, Name: tc.name, Harness: tc.harness, Spawned: at})
+		runs[tc.name] = session.Run{Dir: dir, Record: session.Record{Harness: tc.harness}}
+		windows = append(windows, session.WindowInfo{Name: tc.name, Dead: tc.dead})
+		if tc.state != "" {
+			if err := session.WriteHarnessState(dir, session.HarnessState{State: tc.state, SessionID: tc.id, At: at}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	windows = append(windows, session.WindowInfo{Name: "no-run"})
+	_, host, err := openHost(h.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	d := Deps{Home: h.dir, CodexTurns: func(_ context.Context, _, _ string, ids []string) (map[string]json.RawMessage, error) {
+		calls++
+		if len(ids) != 1 || ids[0] != "active-id" {
+			t.Fatalf("read unrelated threads: %v", ids)
+		}
+		return map[string]json.RawMessage{"active-id": json.RawMessage(failedCodexTurn), "unasked-id": json.RawMessage(failedCodexTurn)}, nil
+	}}
+	got := codexTurnReadings(d, host, windows, runs)
+	if calls != 1 || len(got) != 1 || len(got["active-id"]) == 0 {
+		t.Fatalf("calls %d, readings %v", calls, got)
+	}
+}
+
+func TestRecordedCodexUsageFailure(t *testing.T) {
+	data, err := os.ReadFile("testdata/codex-usage-limit.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at, err := time.Parse(time.RFC3339Nano, "2026-10-27T13:33:11.668825Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := session.HarnessState{State: session.StateWorking, Event: "PostToolUse", At: at}
+	if !codexStateLimited(data, st, time.Unix(1793107602, 0)) {
+		t.Fatal("recorded usage failure remained working")
+	}
+	st.At = time.Unix(1793107992, 0)
+	if codexStateLimited(data, st, time.Unix(1793107602, 0)) {
+		t.Fatal("recorded old failure overrode newer work")
 	}
 }
