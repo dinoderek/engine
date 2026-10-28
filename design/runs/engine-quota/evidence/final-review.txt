@@ -1,0 +1,16 @@
+Reviewer: Codex / gpt-6.1-sol, fresh context.
+Reviewed head: 42fa38f9f81f88ac626bec32b8cc06e71541b4ef against origin/main.
+Verdict: CHANGES_REQUESTED
+
+Must-fix: the record truthfully lists a new post-fix real limit and automatic
+resume as unproved live. The acceptance card requires observed limited state
+and resume when a real limit occurs; its scenario-only fallback applies
+otherwise. The original real limit failed. Approval of the corrective design
+does not explicitly waive that proof requirement. Obtain the operator's
+explicit acceptance of these proof limits, or validate live recovery when a
+limit naturally occurs. Do not manufacture a costly limit.
+
+No code correctness findings. Captured-event regression, history precedence,
+bounded subprocess reads, reset retention and launch settings appear sound.
+All nine final-head gates passed. The record distinguishes the original
+failure, manual recovery, regression proof and remaining live uncertainty.

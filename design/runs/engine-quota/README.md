@@ -257,3 +257,14 @@ Codex supplies no such hook error; its failed-turn input is captured above
 and replayed by `TestRecordedCodexUsageFailure`. The corrected failure path
 and subsequent recovery timing are proved at their assigned test boundaries,
 with the original failed live run and manual intervention retained.
+
+## Final review checkpoint
+
+The fresh full-diff gpt-6.1-sol review at `42fa38f` found no code correctness
+issue and confirmed all nine gates passed. It returned CHANGES_REQUESTED
+solely because the card conditionally requires observed live recovery after
+a real limit; approving the fix did not explicitly waive that evidence.
+The [review](evidence/final-review.txt) is retained. Completion waits for an
+explicit operator decision accepting the stated regression/scenario proof
+limits, or a naturally occurring post-fix live limit and observed recovery.
+No acceptance PR is merged, no task is closed, and no live pass is claimed.
