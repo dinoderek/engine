@@ -102,7 +102,7 @@ func codexTurnFailed(data json.RawMessage, st session.HarnessState) bool {
 		return false
 	}
 	t := reply.Data[0]
-	if st.TurnID != "" && st.TurnID != t.ID {
+	if st.TurnID != "" && st.TurnID != t.ID && t.StartedAt <= st.At.Unix() {
 		return false
 	}
 	return t.Status == "failed" && t.Error.Info == "usageLimitExceeded" && t.StartedAt > 0 &&

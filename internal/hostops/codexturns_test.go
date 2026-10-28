@@ -24,6 +24,7 @@ func TestFailedCodexTurnOverridesOnlyOlderHooks(t *testing.T) {
 		{"same second tool", failedCodexTurn, "turn-a", 1000, true},
 		{"legacy hook", failedCodexTurn, "", 999, true},
 		{"later hook", failedCodexTurn, "turn-a", 1001, false},
+		{"newer failed turn", failedCodexTurn, "prior-turn", 899, true},
 		{"new prompt same second", failedCodexTurn, "turn-b", 1000, false},
 		{"new in-flight turn", `{"data":[{"id":"turn-b","status":"interrupted","startedAt":1001,"completedAt":null},` + strings.TrimPrefix(failedCodexTurn, `{"data":[`), "turn-b", 1001, false},
 		{"completed", strings.Replace(failedCodexTurn, `"failed"`, `"completed"`, 1), "turn-a", 999, false},
