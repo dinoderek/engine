@@ -1,0 +1,25 @@
+engine setup: devbox (address omitted)
+1. tools: ok
+2. engine: changed (02b0d7a go1.27.2, was a204da2 go1.27.2)
+3. plugin: ok (0.7.11)
+4. config: ok
+5. sign-in: ok (claude.ai)
+6. no suspend: ok (masked)
+7. codex: ok (codex-cli 0.164.0)
+8. codex sign-in: ok (Logged in using ChatGPT)
+9. codex home: ok (engine Codex home path omitted)
+10. codex plugin: ok (0.7.11)
+11. codex daemon: ok (running; remote control on)
+checking in engine:@0 (run directory omitted); this takes about a minute
+ok   the session closed its own window
+ok   the session did every step
+ok   no permission request was denied
+checking --harness codex
+checking in engine:@0 (run directory omitted); this takes about a minute
+ok   the session joined remote control
+ok   the session closed its own window
+ok   the session did every step
+ok   the session's hooks wrote its state (last: working)
+ok   no permission request was denied
+12. preflight: ok (engine start --check passed)
+devbox is set up
