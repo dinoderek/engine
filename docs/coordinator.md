@@ -175,7 +175,8 @@ flagged, and flags only another one.
 or `waiting` with a positive limit `resets_at`, once the reset plus 2 minutes
 has passed. It types literal `continue`, then Enter, as `engine tell` does,
 on the window’s host. Working, unknown and dead sessions are left alone.
-Observed limits persist through quota expiry while the window waits.
+Observed resets persist across quota expiry for waiting or limited windows.
+Unknown resets are not resumed.
 The attempt is noted before typing, preventing duplicate text even if Enter
 fails, and logged with its reset. A later reset permits another attempt.
 Waiting with a limit reset also clears the ordinary stall timer.

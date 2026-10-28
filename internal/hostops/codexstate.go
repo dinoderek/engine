@@ -2,11 +2,10 @@ package hostops
 
 import "github.com/dinoderek/engine/internal/session"
 
-// probeCodex prefers an explicit hook limit, otherwise deriving one only
-// from a waiting session and exhausted live quota. Working always wins;
-// an unreadable or ended session remains unknown while its window lives.
-func (s *Status) probeCodex(w *Window, dir string) {
-	st, ok := session.ReadHarnessState(dir)
+// probeCodex supplements hook state with a newer failed usage-limit turn.
+// Without that failure, only waiting plus exhausted quota derives a limit.
+func (s *Status) probeCodex(w *Window, r session.Run) {
+	st, ok := session.ReadHarnessState(r.Dir)
 	if !ok || st.State == session.StateEnded {
 		return
 	}
@@ -15,7 +14,11 @@ func (s *Status) probeCodex(w *Window, dir string) {
 		w.ResetsAt = st.ResetsAt
 		return
 	}
-	if st.State != session.StateWaiting {
+	failed := codexStateLimited(s.codexTurns[st.SessionID], st, r.Record.Spawned)
+	if failed {
+		w.State = session.StateLimited
+	}
+	if st.State != session.StateWaiting && !failed {
 		return
 	}
 	for _, q := range s.Quota[Codex].Windows {

@@ -35,14 +35,12 @@ func keepLimit(dir string, s *Session, known bool) error {
 	if s.ResetsAt > 0 {
 		return session.WriteNote(dir, note, time.Unix(s.ResetsAt, 0))
 	}
-	if s.Waiting {
-		reset, ok, err := session.ReadNote(dir, note)
-		if err != nil {
-			return err
-		}
-		if ok {
-			s.ResetsAt = reset.Unix()
-		}
+	reset, ok, err := session.ReadNote(dir, note)
+	if err != nil {
+		return err
+	}
+	if ok {
+		s.ResetsAt = reset.Unix()
 	}
 	return nil
 }

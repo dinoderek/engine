@@ -16,7 +16,7 @@ var stateAt = time.Date(2026, 10, 25, 22, 30, 0, 0, time.UTC)
 // hook package's tests run the full recordings.
 func recordedEvent(t *testing.T, name string) string {
 	t.Helper()
-	return `{"session_id":"` + codexSession + `","hook_event_name":"` + name + `","tool_name":"Bash"}`
+	return `{"session_id":"` + codexSession + `","turn_id":"turn-a","hook_event_name":"` + name + `","tool_name":"Bash"}`
 }
 
 const codexSession = "01a1752f-8cf9-7592-bdbd-7a42730e503a"
@@ -51,7 +51,7 @@ func TestStateHookWritesTheStateFile(t *testing.T) {
 				t.Fatalf("exit %d, stderr %q", code, stderr)
 			}
 			got, ok := session.ReadHarnessState(dir)
-			want := session.HarnessState{State: tt.want, Event: tt.event, At: stateAt, SessionID: codexSession}
+			want := session.HarnessState{State: tt.want, Event: tt.event, At: stateAt, SessionID: codexSession, TurnID: "turn-a"}
 			if !ok || got != want {
 				t.Errorf("state %+v (read %v), want %+v", got, ok, want)
 			}

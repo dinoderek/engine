@@ -11,12 +11,14 @@ type Signal struct {
 	State     string
 	Event     string
 	SessionID string
+	TurnID    string
 }
 
 // stateEvent is the part of a Codex hook event that the state hook reads.
 type stateEvent struct {
 	Event     string `json:"hook_event_name"`
 	SessionID string `json:"session_id"`
+	TurnID    string `json:"turn_id"`
 }
 
 // State turns Codex's session events into the session's state. Its state
@@ -46,7 +48,7 @@ func (s State) Handle(in io.Reader) int {
 	if state == "" {
 		return 0
 	}
-	if err := s.Write(Signal{State: state, Event: e.Event, SessionID: e.SessionID}); err != nil {
+	if err := s.Write(Signal{State: state, Event: e.Event, SessionID: e.SessionID, TurnID: e.TurnID}); err != nil {
 		fmt.Fprintln(s.Err, "engine hook: record the session state:", err)
 		return 1
 	}

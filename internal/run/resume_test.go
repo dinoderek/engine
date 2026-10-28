@@ -248,3 +248,18 @@ func TestANewSessionDoesNotInheritAnObservedLimit(t *testing.T) {
 		t.Fatalf("new session: %+v, resumed %v", s, w.resumed)
 	}
 }
+
+func TestFailedTurnLimitKeepsResetAfterQuotaExpires(t *testing.T) {
+	w := limitedWorld(t, false)
+	checks(t, w, 2)
+	// Stored failure still proves limited after the live quota window expires.
+	w.execs[ref(2)].resetsAt = 0
+	checks(t, w, 3)
+	if len(w.resumed) != 1 || w.resumed[0].ResetsAt != t0.Add(3*time.Minute).Unix() {
+		t.Fatalf("lost failed-turn reset: %+v", w.resumed)
+	}
+	checks(t, w, 10)
+	if len(w.resumed) != 1 || len(w.comments[ref(2)]) != 1 || !strings.Contains(w.comments[ref(2)][0], "still limited") {
+		t.Fatalf("resumes %v, comments %v", w.resumed, w.comments)
+	}
+}

@@ -301,7 +301,7 @@ func stateHook(env Env) int {
 	}
 	h := hook.State{Err: env.Err, Unattended: run.unattended}
 	h.Write = func(sig hook.Signal) error {
-		return session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID})
+		return session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID})
 	}
 	return h.Handle(in)
 }

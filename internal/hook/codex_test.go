@@ -61,6 +61,9 @@ func TestStateFromRecordedEvents(t *testing.T) {
 				return
 			}
 			want := Signal{State: tt.want, Event: tt.event, SessionID: codexSession}
+			if tt.event != "SessionStart" && tt.event != "SessionEnd" {
+				want.TurnID = "01a17530-2040-7420-9c65-9723141e59e1"
+			}
 			if len(got) != 1 || got[0] != want {
 				t.Errorf("wrote %+v, want %+v", got, want)
 			}

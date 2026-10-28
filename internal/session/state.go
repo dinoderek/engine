@@ -31,6 +31,7 @@ type HarnessState struct {
 	Event     string    `json:"event"`
 	At        time.Time `json:"at"`
 	SessionID string    `json:"session_id,omitempty"`
+	TurnID    string    `json:"turn_id,omitempty"`
 	ResetsAt  int64     `json:"resets_at,omitempty"` // limit reset, epoch seconds
 }
 
