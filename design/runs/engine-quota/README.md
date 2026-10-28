@@ -7,12 +7,12 @@ fixture engine#148 across `mac` and `devbox`.
 ## Acceptance status
 
 The live fixture and both quota displays are verified. The original real
-Codex limit **failed** O2/O3; that failure remains recorded below. The executor
-incorrectly attributed an automated `continue` to operator approval, then
-implemented an unapproved candidate. Its regression/scenario tests and gates
-pass; those results do not authorize the design, installation or merge.
-A new post-fix real usage limit and automatic resume have **not** been
-observed; this record never counts the manual retry as automatic recovery.
+Codex limit **failed** O2/O3; that failure and the later misattributed
+continuation remain recorded below. The explicit
+[operator ruling](https://github.com/dinoderek/engine/issues/138#issuecomment-6472918838)
+authorizes the stored-turn fix, the hard-stop guard, and regression/scenario
+proof for corrected behavior. A NEW post-fix natural limit and automatic
+resume remain **Not proved**; no manual retry is counted as automatic.
 
 ## Setup
 
@@ -183,7 +183,8 @@ This demonstrates an alternative to parsing native rollout files. The
 [official app-server documentation](https://learn.chatgpt.com/docs/app-server)
 describes stored-turn reads without resuming and failed turns carrying errors.
 
-The unapproved candidate uses a newer failed usage-limit turn as
+The candidate now explicitly approved by the later operator ruling uses a
+newer failed usage-limit turn as
 explicit limit evidence, with observed quota reset retained for recovery;
 never let an old failed turn override a newer submitted turn. A separate
 reader's `notLoaded`/hydrated runtime state cannot prove that this embedded
@@ -198,7 +199,8 @@ would stay outside such a change.
 
 The coordinator supplied the stored `continue`; it was not a verified
 operator answer. The executor's `Decided by: operator` attribution is
-withdrawn. The unmerged candidate for #155 remains preserved in this branch:
+withdrawn. The later explicit ruling approves the candidate for #155;
+its code and provenance remain preserved in this branch:
 
 - Host status reads only known live engine Codex threads, in one bounded
   batch per home, and asks only for the newest stored turn without items.
@@ -297,9 +299,46 @@ continuation; no further host change or coordinator restart is made as part
 of this record correction. The separately running outer coordinator was not
 updated by replacing its on-disk binary.
 
-The task remains `engine:needs-human`. An explicit operator ruling is still
-needed for the proposed design, preserving hard stops against automatic
-resume, and either the narrowed regression/scenario proof basis or a new
-natural live recovery observation. An automated `continue` or an audit
+At this correction checkpoint, the task stayed `engine:needs-human`;
+operator rulings on design, hard-stop preservation and proof were pending. An automated `continue` or an audit
 message resolves none of those decisions. No PR, merge or closure follows
 from this correction.
+
+## Explicit ruling and hard-stop protection
+
+At 15:18 UTC on October 28, the supervisor relayed the actual operator
+answer: **“Approve this scope and proof.”** The
+[ruling](https://github.com/dinoderek/engine/issues/138#issuecomment-6472918838)
+explicitly authorizes the concrete engine#155 fix, an engine#158 guard
+against automatic resume of `needs-human` tasks, and regression/scenario
+proof that leaves a NEW post-fix natural limit/resume **Not proved**.
+It requires all gates and a fresh review of the final head before the
+hands-off PR/CI/merge workflow. This ruling supersedes the invalid approval
+attribution without erasing it; execution restored `engine:running` only
+after reading this explicit answer.
+
+`internal/run/resume.go` now excludes hard stops when deciding limit actions,
+then re-reads task labels immediately before any resume attempt. A newly
+raised hard stop or an unreadable tracker prevents input and does not write
+a resume-attempt note. A skipped stale action is logged as skipped, not as
+a resume. Ordinary recovery becomes available again only after the executor
+restores the task state on an explicit ruling.
+
+`internal/run/resume_hardstop_test.go` covers limited and waiting sessions,
+feature and standalone runs, no action/input/attempt note at a hard stop,
+recovery after restoration, a hard stop raised after the view was read,
+failed tracker recheck, and suppressed far/stuck-limit alerts. The skill's
+coordinator and ruling references describe the same boundary: automated
+`continue` never supplies an operator decision. Plugin manifests advance
+together to 0.7.12 so the updated instructions are published.
+
+The earlier final-review live-proof finding is resolved by this explicit
+operator ruling. A fresh review of the completed guard and final evidence
+is still required; all historical failure and proof-limit statements stay.
+
+The [explicit ruling snapshot](evidence/explicit-operator-ruling.json) retains
+its source and exact relayed answer. The complete guard build passed all
+nine required lanes at 15:23 UTC, including race tests, 94.6% statement
+coverage, docs and version consistency; [gate summary](evidence/gates-guard.md).
+No threshold, suppression, baseline or budget changed. Final-head fresh
+review and CI remain mandatory before the authorized merge.

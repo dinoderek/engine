@@ -171,10 +171,11 @@ screen the host's `status` sent (it sends one for a window whose session is
 not working), once per session start or wait: it notes the start or wait it
 flagged, and flags only another one.
 
-**Limit recovery.** Each session check resumes an engine window still `limited`,
+**Limit recovery.** Never resume `needs-human`; recheck labels before typing.
+Each session check resumes an engine window still `limited`,
 or `waiting` with a positive limit `resets_at`, once the reset plus 2 minutes
 has passed. It types literal `continue`, then Enter, as `engine tell` does,
-on the window’s host. Working, unknown and dead sessions are left alone.
+Working, unknown and dead sessions are left alone.
 Observed resets persist across quota expiry for waiting or limited windows.
 Unknown resets are not resumed.
 The attempt is noted before typing, preventing duplicate text even if Enter
@@ -184,7 +185,7 @@ Waiting with a limit reset also clears the ordinary stall timer.
 Still `limited` 10 minutes after the attempt: one @mention with the last
 screen. A reset more than 24 hours away: one @mention immediately and no
 typing while it remains that far away. Both alerts are once per reset and
-session. Claude’s own automatic resume stays on. Recovery also covers
+session. Recovery covers
 unclaimed engine windows and the feature’s planner.
 
 ## Identity and notifications

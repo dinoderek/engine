@@ -156,7 +156,9 @@ func lintState(w World, v *View) error {
 func Apply(w World, v View, acts []Action) bool {
 	over := false
 	for _, a := range acts {
-		w.Logf("%s %s: %s", a.Kind, a.Ref, logText(a))
+		if a.Kind != Resume {
+			w.Logf("%s %s: %s", a.Kind, a.Ref, logText(a))
+		}
 		var err error
 		switch a.Kind {
 		case StartTask:
