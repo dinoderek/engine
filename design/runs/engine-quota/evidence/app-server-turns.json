@@ -1,0 +1,24 @@
+{
+  "method": "thread/turns/list",
+  "turns": [
+    {
+      "id": "01a17ee7-8ba9-7a51-8ec7-58e32ef8d50a",
+      "status": "interrupted",
+      "error": null,
+      "startedAt": 1793130466,
+      "completedAt": null
+    },
+    {
+      "id": "01a17d8a-b40b-7092-b18f-73a18cf48510",
+      "status": "failed",
+      "error": {
+        "message": "You\u2019ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 5:32 PM.",
+        "codexErrorInfo": "usageLimitExceeded",
+        "additionalDetails": null,
+        "misalignment": null
+      },
+      "startedAt": 1793107604,
+      "completedAt": 1793107991
+    }
+  ]
+}

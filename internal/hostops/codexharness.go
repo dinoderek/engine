@@ -165,11 +165,15 @@ func (c codex) Env(joined bool) string {
 // select the session's profile. A joined session names its folder with -C:
 // without it, the daemon starts the thread in its own working directory.
 func (c codex) Args(l launch) string {
+	reminder := ""
+	if l.mode == HandsOff {
+		reminder = " -c notice.hide_rate_limit_model_nudge=true"
+	}
 	if l.joined {
-		return " -C " + hosts.ShellWord(l.dir) + " --dangerously-bypass-hook-trust -c " + sessionVars(l) +
+		return reminder + " -C " + hosts.ShellWord(l.dir) + " --dangerously-bypass-hook-trust -c " + sessionVars(l) +
 			" --remote unix:// -- " + hosts.ShellWord(l.kickoff)
 	}
-	return " -p " + hosts.ShellWord(c.profile) + " --dangerously-bypass-hook-trust -- " + hosts.ShellWord(l.kickoff)
+	return reminder + " -p " + hosts.ShellWord(c.profile) + " --dangerously-bypass-hook-trust -- " + hosts.ShellWord(l.kickoff)
 }
 
 // sessionVars is the shell for the -c value that gives a joined session's

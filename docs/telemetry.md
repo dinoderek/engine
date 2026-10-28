@@ -55,6 +55,10 @@ when a prompt or automatic resume fires. `limits.jsonl` retains each stop
 with those fields and its complete hook `input`, including error details,
 for inspection after the marker clears.
 
+`harness-state.json` retains Codex session and optional turn IDs with each
+hook state, so a newer prompt cannot inherit an older failed turn. Stored
+failed-turn input is read through app-server; it is not a limit hook event.
+
 The coordinator logs each resume attempt with the task, timestamp and
 `resumed-for=<resets_at>`. Its notes retain the attempt and limit-alert times
 per reset and session; for recovery semantics, load `coordinator.md`,

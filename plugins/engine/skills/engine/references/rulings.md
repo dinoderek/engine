@@ -82,6 +82,6 @@ session.
     and the permission rule that would allow it. The operator adds the rule
     in the session and tells you to retry.
 
-The repo's `AGENTS.md` may add classes, and they apply too. When the operator
+The repo's `AGENTS.md` may add classes, and they apply too. An automated `continue` is not an operator ruling. When the operator
 answers, read the answer (in the session or on the task), restore the label
 that `needs-human` replaced, and carry on.

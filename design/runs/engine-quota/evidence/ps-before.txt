@@ -1,0 +1,4 @@
+claude  5h 19% (resets 17:30)  7d 70% (resets Thu 17:00)
+codex  5h 95% (resets 17:32)  7d 51% (resets Mon 07:10)
+TASK                  HOST  HARNESS  STATE    AGE  RESETS
+dinoderek/engine#138  mac   codex    working  1m   -

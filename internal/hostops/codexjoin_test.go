@@ -105,7 +105,7 @@ func TestSpawnCodexJoins(t *testing.T) {
 	runWindow(t, tm.command, tmuxEnv...)
 	vars := `shell_environment_policy.set={ENGINE_RUN_DIR="` + got.RunDir + `",ENGINE_HARNESS="codex",ENGINE_UNATTENDED="1",` +
 		`TMUX="/tmp/tmux-501/default,42,0",TMUX_PANE="%9"}`
-	want := []string{"-c", "sandbox_workspace_write.network_access=true", "-m", "sol", "-c", "model_reasoning_effort=high",
+	want := []string{"-c", "sandbox_workspace_write.network_access=true", "-m", "sol", "-c", "model_reasoning_effort=high", "-c", "notice.hide_rate_limit_model_nudge=true",
 		"-C", got.Worktree, "--dangerously-bypass-hook-trust", "-c", vars, "--remote", "unix://", "--", req.Kickoff}
 	if args := lines(t, argv); !slices.Equal(args, want) {
 		t.Errorf("argv\n got %q\nwant %q", args, want)
@@ -212,7 +212,7 @@ func TestSpawnCodexEmbedded(t *testing.T) {
 			}
 			runWindow(t, tm.command, tmuxEnv...)
 			args := lines(t, argv)
-			if want := []string{"-p", "engine-r-7", "--dangerously-bypass-hook-trust", "--"}; !slices.Equal(args[6:10], want) || slices.Contains(args, "--remote") {
+			if want := []string{"-p", "engine-r-7", "--dangerously-bypass-hook-trust", "--"}; !slices.Equal(args[8:12], want) || args[6] != "-c" || args[7] != "notice.hide_rate_limit_model_nudge=true" || slices.Contains(args, "--remote") {
 				t.Errorf("argv %q", args)
 			}
 			if slices.Contains(lines(t, env), "CODEX_HOME="+engineHome) {

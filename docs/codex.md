@@ -104,7 +104,7 @@ prompts, decides.
 
 Codex's hooks run `engine hook state`, which writes `harness-state.json` to the
 run directory, atomically: the state (`working`, `waiting` or `ended`), the
-event that set it, the time and Codex's session ID. A prompt, or a finished
+event that set it, the time and Codex's session and turn IDs. A prompt, or a finished
 tool call, makes the session `working`: the call after an approved permission
 request is how a `waiting` session resumes. A session start, `Stop`,
 `Interrupt` or attended permission request makes it `waiting`, and a session
@@ -121,13 +121,22 @@ missing or unreadable file is unknown, never dead, and so is `ended` while the
 window lives. Codex's `notify` is not used, because it holds a single program
 and other tools already claim it (Computer Use on the Mac).
 
-`status` derives `limited` only from `waiting` plus a Codex quota window at
-100%. `resets_at` is the latest reset of the exhausted windows. Expired
-windows read 0%; unavailable quota leaves a waiting session waiting. Working
-always wins, and limited sessions never stall. An explicit `limited` state
-in `harness-state.json` takes precedence and supplies its `resets_at`, even
-without quota. Codex's `Stop` and `Interrupt` inputs carry no limit error or
-reset time, so the state hook records ordinary waits and `status` derives limits.
+`status` derives `limited` from waiting plus an exhausted quota window, or a
+newer stored failed turn with `usageLimitExceeded`, even when the last hook
+still says working. It reads only the newest turn with `thread/turns/list`,
+without resuming or sending a prompt. Hooks retain `turn_id`; a different or
+newer submitted turn wins over an old failure. Missing or failed history
+reads keep the hook state. Queries share a three-second deadline and try
+engine's Codex home, then the embedded home for missing threads.
+
+`resets_at` is the latest reset among exhausted windows, or zero when unknown.
+The coordinator retains an observed reset across quota expiry; a limit first
+seen after expiry can have no known reset and is not resumed automatically.
+An explicit hook `limited` supplies its own reset. Limited sessions never
+stall. Stop/Interrupt hook inputs contain no limit error, so failed-turn
+reads supplement ordinary hook waits. Hands-off launches suppress the
+model-switch reminder with `notice.hide_rate_limit_model_nudge=true`, keeping
+the selected model; gated launches keep the normal reminder.
 
 ## Quota
 

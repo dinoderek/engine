@@ -47,20 +47,30 @@ func (s *Status) readCodexQuota(d Deps, host hosts.Host, now func() time.Time) {
 // readCodexRateLimits starts no conversation. It closes the process and its
 // pipes after the reply, including on malformed output or deadline expiry.
 func readCodexRateLimits(ctx context.Context, bin, home string) (json.RawMessage, error) {
+	var data json.RawMessage
+	err := codexAppServer(ctx, bin, home, func(in io.Writer, out io.Reader) error {
+		var err error
+		data, err = exchangeCodexQuota(in, out)
+		return err
+	})
+	return data, err
+}
+
+func codexAppServer(ctx context.Context, bin, home string, exchange func(io.Writer, io.Reader) error) error {
 	cmd := exec.CommandContext(ctx, bin, "app-server", "--listen", "stdio://")
 	cmd.Env = append(os.Environ(), "CODEX_HOME="+home)
 	in, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = in.Close() }()
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = out.Close() }()
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		_ = cmd.Process.Kill()
@@ -68,10 +78,21 @@ func readCodexRateLimits(ctx context.Context, bin, home string) (json.RawMessage
 	}()
 	stop := context.AfterFunc(ctx, func() { _ = out.Close() })
 	defer stop()
-	return exchangeCodexQuota(in, out)
+	return exchange(in, out)
 }
 
 func exchangeCodexQuota(in io.Writer, out io.Reader) (json.RawMessage, error) {
+	scan, err := initializeCodex(in, out)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.WriteString(in, `{"id":2,"method":"account/rateLimits/read"}`+"\n"); err != nil {
+		return nil, err
+	}
+	return codexReply(scan, 2)
+}
+
+func initializeCodex(in io.Writer, out io.Reader) (*bufio.Scanner, error) {
 	if _, err := io.WriteString(in, `{"id":1,"method":"initialize","params":{"clientInfo":{"name":"engine","version":"1"}}}`+"\n"); err != nil {
 		return nil, err
 	}
@@ -80,10 +101,10 @@ func exchangeCodexQuota(in io.Writer, out io.Reader) (json.RawMessage, error) {
 	if _, err := codexReply(scan, 1); err != nil {
 		return nil, err
 	}
-	if _, err := io.WriteString(in, `{"method":"initialized","params":{}}`+"\n"+`{"id":2,"method":"account/rateLimits/read"}`+"\n"); err != nil {
+	if _, err := io.WriteString(in, `{"method":"initialized","params":{}}`+"\n"); err != nil {
 		return nil, err
 	}
-	return codexReply(scan, 2)
+	return scan, nil
 }
 
 func codexReply(scan *bufio.Scanner, id int) (json.RawMessage, error) {
@@ -100,7 +121,7 @@ func codexReply(scan *bufio.Scanner, id int) (json.RawMessage, error) {
 			continue
 		}
 		if len(reply.Error) != 0 || len(reply.Result) == 0 {
-			return nil, fmt.Errorf("codex quota request failed: %s", reply.Error)
+			return nil, fmt.Errorf("codex request failed: %s", reply.Error)
 		}
 		return reply.Result, nil
 	}

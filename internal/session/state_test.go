@@ -13,7 +13,7 @@ func TestHarnessStateRoundTrips(t *testing.T) {
 	at := time.Date(2026, 10, 25, 22, 0, 0, 0, time.UTC)
 	for _, want := range []HarnessState{
 		{State: StateWaiting, Event: "SessionStart", At: at, SessionID: "019a-codex"},
-		{State: StateWorking, Event: "UserPromptSubmit", At: at.Add(time.Minute)},
+		{State: StateWorking, Event: "UserPromptSubmit", At: at.Add(time.Minute), TurnID: "turn-a"},
 		{State: StateLimited, Event: "Stop", At: at, ResetsAt: at.Add(time.Hour).Unix()},
 		{State: StateEnded, Event: "SessionEnd", At: at.Add(time.Hour), SessionID: "019a-codex"},
 	} {

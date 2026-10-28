@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "id": "01a17d8a-b40b-7092-b18f-73a18cf48510",
+      "status": "failed",
+      "error": {
+        "codexErrorInfo": "usageLimitExceeded"
+      },
+      "startedAt": 1793107604,
+      "completedAt": 1793107991
+    }
+  ]
+}

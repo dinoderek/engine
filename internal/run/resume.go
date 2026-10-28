@@ -2,6 +2,7 @@ package run
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -35,14 +36,12 @@ func keepLimit(dir string, s *Session, known bool) error {
 	if s.ResetsAt > 0 {
 		return session.WriteNote(dir, note, time.Unix(s.ResetsAt, 0))
 	}
-	if s.Waiting {
-		reset, ok, err := session.ReadNote(dir, note)
-		if err != nil {
-			return err
-		}
-		if ok {
-			s.ResetsAt = reset.Unix()
-		}
+	reset, ok, err := session.ReadNote(dir, note)
+	if err != nil {
+		return err
+	}
+	if ok {
+		s.ResetsAt = reset.Unix()
 	}
 	return nil
 }
@@ -72,6 +71,9 @@ func readResumeNotes(dir string, s *Session) error {
 }
 
 func limitActions(v View, ref tracker.Ref) []Action {
+	if atHardStop(v, ref) {
+		return nil
+	}
 	s := v.Sessions[ref]
 	if !s.Live || s.Unknown || s.WindowID == "" || s.ResetsAt <= 0 || !s.Limited && !s.Waiting {
 		return nil
@@ -94,7 +96,22 @@ func limitActions(v View, ref tracker.Ref) []Action {
 	return []Action{a}
 }
 
+func atHardStop(v View, ref tracker.Ref) bool {
+	return ref == v.Feature.Ref && v.Feature.Has(NeedsHuman) || slices.ContainsFunc(v.Feature.Tasks, func(c tracker.Card) bool {
+		return c.Ref == ref && c.Has(NeedsHuman)
+	})
+}
+
 func resume(w World, v View, a Action) error {
+	card, _, err := w.Task(a.Ref)
+	if err != nil {
+		return fmt.Errorf("recheck task before automatic resume: %w", err)
+	}
+	if card.Has(NeedsHuman) {
+		w.Logf("skip automatic resume of %s: %s", a.Ref, NeedsHuman)
+		return nil
+	}
+	w.Logf("%s %s: %s", a.Kind, a.Ref, logText(a))
 	dir, err := w.NoteDir(a.Ref)
 	if err != nil {
 		return err

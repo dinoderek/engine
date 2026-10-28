@@ -1,0 +1,47 @@
+{
+  "quota": {
+    "claude": {
+      "harness": "claude",
+      "observed_at": 1793149173,
+      "windows": {
+        "five_hour": {
+          "used": 10,
+          "resets_at": 1793162400
+        },
+        "seven_day": {
+          "used": 80,
+          "resets_at": 1793293200
+        }
+      }
+    },
+    "codex": {
+      "harness": "codex",
+      "observed_at": 1793149248,
+      "windows": {
+        "five_hour": {
+          "used": 16,
+          "resets_at": 1793166503
+        },
+        "seven_day": {
+          "used": 70,
+          "resets_at": 1793603427
+        }
+      }
+    }
+  },
+  "sessions": [
+    {
+      "task": "dinoderek/engine#138",
+      "title": "Acceptance: quota, resume and harness ratio",
+      "session": "engine-138",
+      "run": "engine-138-20261027T132639Z",
+      "host": "mac",
+      "harness": "codex",
+      "branch": "task/engine-138",
+      "state": "waiting",
+      "alive": true,
+      "claimed_at": "2026-10-27T13:27:34Z",
+      "age_seconds": 41595
+    }
+  ]
+}

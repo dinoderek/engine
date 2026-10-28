@@ -1,6 +1,7 @@
 package hostops
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ const ScreenLines = 20
 
 // Status is status's reply: what this host's sessions are doing now.
 type Status struct {
+	codexTurns map[string]json.RawMessage
+
 	Quota map[string]session.Quota `json:"quota,omitempty"`
 	// Slots is how many sessions the host runs at once, and FreeSlots how
 	// many more it can start: only a live window with a run recorded under
@@ -97,6 +100,7 @@ func ReadStatus(d Deps) (Status, error) {
 	if err != nil {
 		s.RunsError = err.Error()
 	}
+	s.codexTurns = codexTurnReadings(d, host, windows, runs)
 	for _, w := range windows {
 		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
 		if code, ok := codes[w.ID]; ok && w.Dead {
@@ -158,6 +162,6 @@ func (s *Status) probe(w *Window, r session.Run) {
 			w.State, w.ResetsAt, w.WaitingFor = session.StateLimited, l.ResetsAt, ""
 		}
 	case Codex:
-		s.probeCodex(w, r.Dir)
+		s.probeCodex(w, r)
 	}
 }

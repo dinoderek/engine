@@ -52,7 +52,7 @@ func lines(t *testing.T, path string) []string {
 func TestSpawnCodexGatedDefaultHome(t *testing.T) {
 	h := newHome(t, "mac")
 	h.clone(t)
-	_, env := h.fakeCodex(t)
+	argv, env := h.fakeCodex(t)
 	tm := &tmuxFake{}
 	if _, err := Spawn(codexSpawnDeps(t, h, tm, down(), nil), codexRequest(Gated)); err != nil {
 		t.Fatal(err)
@@ -61,6 +61,9 @@ func TestSpawnCodexGatedDefaultHome(t *testing.T) {
 		t.Errorf("profile: %v", err)
 	}
 	runWindow(t, tm.command, "ENGINE_UNATTENDED=1", "CODEX_HOME=/elsewhere")
+	if strings.Contains(strings.Join(lines(t, argv), " "), "notice.hide_rate_limit_model_nudge") {
+		t.Fatal("gated session suppressed the reminder")
+	}
 	for _, v := range lines(t, env) {
 		if strings.HasPrefix(v, "ENGINE_UNATTENDED=") || strings.HasPrefix(v, "CODEX_HOME=") {
 			t.Errorf("the window kept %s", v)

@@ -53,6 +53,9 @@ type Deps struct {
 	// CodexQuota reads account/rateLimits/read in engine's Codex home.
 	// Nil uses a short-lived app-server subprocess.
 	CodexQuota func(context.Context, string, string) (json.RawMessage, error)
+	// CodexTurns reads the newest stored turn for each engine thread, without
+	// resuming it. Nil uses a short-lived app-server subprocess.
+	CodexTurns func(context.Context, string, string, []string) (map[string]json.RawMessage, error)
 }
 
 // RefusedError is an op that refused before it changed anything.

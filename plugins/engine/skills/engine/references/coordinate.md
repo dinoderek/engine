@@ -42,7 +42,7 @@ Repeat every 5 minutes until `done`:
    Skip live unclaimed starts. If one died, @mention once with its screen,
    close it and retry. Failed starts @mention once and rest 30 minutes,
    holding no slot. No eligible host gets one @mention with why.
-4. **Limits and stalls.** Each minute, for engine windows (unclaimed and
+4. **Limits and stalls.** Except `needs-human`, each minute, for engine windows (unclaimed and
    planner too): `limited`, or `waiting` with a limit reset, resumes 2 minutes
    after reset: literal `continue`, then Enter. Note `resumed-for=<resets_at>`
    before typing; once per reset per session, also across restarts. Later
