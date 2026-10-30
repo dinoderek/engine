@@ -50,7 +50,8 @@ A single script (e.g. `./dev`) has these verbs:
 - `deps`.
 
 A verb the repo has no use for yet, such as `deploy` with nothing to deploy,
-is left out, and the script's usage and the docs say so. Docs cite the verbs
+is left out, and the script's usage and the docs say so. Run with no verb,
+the script prints that usage and does nothing else: engine reads it. Docs cite the verbs
 and never restate the commands behind them.
 
 ### 4. Worktrees
@@ -62,8 +63,10 @@ and never restate the commands behind them.
   checkout, so the checkout's tools and `git status` never walk it.
   `worktree release` tears it all down. Engine runs `worktree create` as
   `dev worktree create <branch>` when the repo has an executable `dev` at its
-  root whose usage, printed when run with no verb, lists `worktree create`;
-  otherwise it falls back to a plain `git worktree add`.
+  root whose usage, printed when run with no verb, lists `worktree create`.
+  Otherwise, including when `dev` prints no such usage within three
+  minutes, it falls back to a plain `git worktree add`, which provisions
+  nothing.
 - Commit work in progress rather than stashing it, because the stash is shared
   across worktrees.
 

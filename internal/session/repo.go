@@ -64,6 +64,10 @@ type Repos struct {
 	Token string
 	// BaseURL is the host that serves "<owner>/<repo>.git"; GitHubURL when empty.
 	BaseURL string
+	// Probe runs a repo's own `dev` with no verb, to read its usage. It should
+	// carry a deadline (RunCommandWithin), since that `dev` is arbitrary code.
+	// Nil uses Run.
+	Probe RunFunc
 }
 
 // Path is where the clone of repo lives.

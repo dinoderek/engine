@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The tests here run real git against a bare repository in a temp dir. The
@@ -296,5 +297,28 @@ func TestCreateWorktreeRunsTheReposOwnCommandForReal(t *testing.T) {
 	}
 	if got := mustGit(t, wt.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "task/r-9" {
 		t.Errorf("worktree is on %q", got)
+	}
+}
+
+func TestCreateWorktreeFallsBackWhenTheReposDevNeverAnswers(t *testing.T) {
+	remote := newRemote(t, "main")
+	// Run with no verb, this dev starts something long-running instead of printing usage.
+	remote.commit(t, "main", "dev", "#!/bin/sh\nsleep 30\n", 0o755)
+	r := remote.repos(t)
+	r.Probe = RunCommandWithin(300 * time.Millisecond)
+	clone, err := r.Sync(mustRepo(t, "o/r"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	began := time.Now()
+	wt, err := r.CreateWorktree(clone, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(began); took > 15*time.Second {
+		t.Errorf("took %s: the probe must give up at its deadline", took)
+	}
+	if !samePath(t, wt.Path, clone.Path+"-worktrees/task-r-4") {
+		t.Errorf("worktree = %+v, want git's fallback path", wt)
 	}
 }

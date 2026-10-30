@@ -67,7 +67,7 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	if err != nil {
 		return Spawned{}, err
 	}
-	repos := session.Repos{Run: d.Run, Home: d.Home, Token: s.token, BaseURL: d.BaseURL}
+	repos := session.Repos{Run: d.Run, Probe: d.Probe, Home: d.Home, Token: s.token, BaseURL: d.BaseURL}
 	clone, err := repos.Open(s.repo)
 	if err != nil {
 		return Spawned{}, refuse("%v", err)

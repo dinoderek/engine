@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // worktreeCommand is the script a repo provides for creating a task
@@ -127,15 +128,25 @@ func (r Repos) worktreeOf(clone Clone, branch string) (string, error) {
 	return "", nil
 }
 
+// ProbeLimit bounds the run of a repo's `dev` that reads its usage. It is
+// generous because a `dev` may build itself, or fetch a toolchain, first.
+const ProbeLimit = 3 * time.Minute
+
 // createsWorktrees reports whether script is a `dev` that provides `worktree
 // create`. A repo may have its own unrelated `dev`, so being executable is not
 // enough: run with no verb, a `dev` prints its usage, which lists the verbs it
-// has. Its exit status is ignored, since printing usage usually fails.
+// has. Its exit status is ignored, since printing usage usually fails. A `dev`
+// that fails or times out before printing a usage that lists the verb counts
+// as not providing it.
 func (r Repos) createsWorktrees(clone Clone, script string) bool {
 	if !isExecutable(script) {
 		return false
 	}
-	usage, _ := r.Run(clone.Path, r.env(), script)
+	probe := r.Probe
+	if probe == nil {
+		probe = r.Run
+	}
+	usage, _ := probe(clone.Path, r.env(), script)
 	return strings.Contains(usage, "worktree create")
 }
 

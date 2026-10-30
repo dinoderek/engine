@@ -84,6 +84,35 @@ func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	if f.has("worktree add") {
 		t.Error("git worktree add ran besides the repo's command")
 	}
+	var probes []call
+	for _, c := range f.calls {
+		if c.line == script {
+			probes = append(probes, c)
+		}
+	}
+	if len(probes) != 1 || probes[0].dir != clone.Path || !reflect.DeepEqual(probes[0].env, ran[0].env) {
+		t.Errorf("the usage probe ran as %+v", probes)
+	}
+}
+
+func TestCreateWorktreeProbesWithProbeWhenSet(t *testing.T) {
+	r, clone, f, wt := worktreeFixture(t, true, 0o755)
+	var probed []string
+	// A dev that never answers: the probe gives up with no usage.
+	r.Probe = func(dir string, env []string, name string, args ...string) (string, error) {
+		probed = append(probed, strings.Join(append([]string{name}, args...), " "))
+		return "", errBoom
+	}
+	got, err := r.CreateWorktree(clone, 7)
+	if err != nil || got.Path != wt {
+		t.Fatalf("worktree = %+v, %v", got, err)
+	}
+	if want := []string{filepath.Join(clone.Path, "dev")}; !reflect.DeepEqual(probed, want) {
+		t.Errorf("probe ran %v, want %v", probed, want)
+	}
+	if f.has("worktree create") || !f.has("git worktree add") {
+		t.Errorf("a dev whose probe failed must fall back to git: %v", f.lines())
+	}
 }
 
 // devUsage is what a `dev` that provides worktrees prints when run with no verb.
@@ -125,6 +154,9 @@ func TestCreateWorktreeFallsBackToGit(t *testing.T) {
 			want := "git worktree add --quiet --no-track -b task/r-7 " + wt + " origin/main"
 			if !f.has(want) {
 				t.Errorf("commands %v lack %q", f.lines(), want)
+			}
+			if f.has(filepath.Join(clone.Path, "dev")) {
+				t.Errorf("probed a dev that is not executable: %v", f.lines())
 			}
 		})
 	}
