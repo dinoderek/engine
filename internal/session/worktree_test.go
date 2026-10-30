@@ -48,6 +48,8 @@ func worktreeFixture(t *testing.T, withDev bool, mode os.FileMode) (Repos, Clone
 	f.replies = []reply{
 		{key: "rev-parse --verify", err: errBoom},
 		{key: "worktree list", out: "worktree " + path + "\nHEAD abc\ndetached\n"},
+		{key: "worktree create"},
+		{key: filepath.Join(path, "dev"), out: devUsage, err: errBoom},
 	}
 	f.onRun = func(c call) {
 		if strings.Contains(c.line, "worktree create") || strings.Contains(c.line, "worktree add") {
@@ -81,6 +83,26 @@ func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	}
 	if f.has("worktree add") {
 		t.Error("git worktree add ran besides the repo's command")
+	}
+}
+
+// devUsage is what a `dev` that provides worktrees prints when run with no verb.
+const devUsage = "usage: ./dev <verb>\n\n  worktree create <branch>     new branch and worktree\n"
+
+func TestCreateWorktreeFallsBackToGitWhenTheReposDevHasNoWorktreeVerb(t *testing.T) {
+	r, clone, f, wt := worktreeFixture(t, true, 0o755)
+	// A repo's own unrelated ./dev, here an argparse script with other verbs.
+	f.replies[3].out = "usage: ./dev [-h] {test,docs} ...\n./dev: error: the following arguments are required: command\n"
+	got, err := r.CreateWorktree(clone, 7)
+	if err != nil || got.Path != wt || got.Branch != "task/r-7" {
+		t.Fatalf("worktree = %+v, %v", got, err)
+	}
+	if f.has("worktree create") {
+		t.Errorf("ran the repo's dev worktree create though its usage lacks it: %v", f.lines())
+	}
+	want := "git worktree add --quiet --no-track -b task/r-7 " + wt + " origin/main"
+	if !f.has(want) {
+		t.Errorf("commands %v lack %q", f.lines(), want)
 	}
 }
 

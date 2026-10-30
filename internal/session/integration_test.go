@@ -276,7 +276,9 @@ func TestCreateWorktreeRemakesOnlyALeftoverBranchWithNoWork(t *testing.T) {
 func TestCreateWorktreeRunsTheReposOwnCommandForReal(t *testing.T) {
 	remote := newRemote(t, "main")
 	// The repo's command puts the worktree somewhere of its own choosing.
+	// With no verb it prints its usage, which is how engine learns it has one.
 	script := "#!/bin/sh\nset -e\ncd \"$(dirname \"$0\")\"\n" +
+		"if [ $# -eq 0 ]; then echo 'usage: ./dev worktree create <branch>' >&2; exit 2; fi\n" +
 		"test \"$1 $2\" = 'worktree create'\n" +
 		"git worktree add --quiet --no-track -b \"$3\" \"$PWD-custom\" origin/main\n"
 	remote.commit(t, "main", "dev", script, 0o755)

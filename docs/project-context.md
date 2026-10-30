@@ -62,7 +62,8 @@ and never restate the commands behind them.
   checkout, so the checkout's tools and `git status` never walk it.
   `worktree release` tears it all down. Engine runs `worktree create` as
   `dev worktree create <branch>` when the repo has an executable `dev` at its
-  root, and otherwise falls back to a plain `git worktree add`.
+  root whose usage, printed when run with no verb, lists `worktree create`;
+  otherwise it falls back to a plain `git worktree add`.
 - Commit work in progress rather than stashing it, because the stash is shared
   across worktrees.
 
