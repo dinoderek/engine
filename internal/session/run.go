@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -26,9 +27,10 @@ func RunCommand(dir string, env []string, name string, args ...string) (string, 
 	return string(out), err
 }
 
-// RunCommandWithin is RunCommand under a deadline: past it, the process is
-// killed, its pipes are closed a second later even if children still hold
-// them, and the call returns what it printed with an error.
+// RunCommandWithin is RunCommand under a deadline: past it, the process and
+// everything it started (its process group) are killed, its pipes are closed a
+// second later even if something still holds them, and the call returns what
+// it printed with an error.
 func RunCommandWithin(limit time.Duration) RunFunc {
 	return func(dir string, env []string, name string, args ...string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), limit)
@@ -36,6 +38,8 @@ func RunCommandWithin(limit time.Duration) RunFunc {
 		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), env...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 		cmd.WaitDelay = time.Second
 		out, err := cmd.CombinedOutput()
 		if ctx.Err() != nil {

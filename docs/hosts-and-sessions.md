@@ -133,8 +133,9 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    HTTPS on first use, fetches, and leaves it at the remote's default branch;
 2. creates the worktree on `task/<repo>-<task>`, with the repo's own
    `worktree create` when it provides one (`project-context.md`,
-   "Worktrees"), else `git worktree add` from the default branch, refusing a branch on `origin`, or a local one with
-   commits (one without is remade);
+   "Worktrees"), else `git worktree add` from the default branch, refusing
+   a branch on `origin`, or a local one with commits (one without is
+   remade);
 3. makes the worktree trusted by its harness, so no trust dialog blocks the
    start (`claude.md` and `codex.md`, "Starting");
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
