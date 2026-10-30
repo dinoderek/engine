@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // worktreeCommand is the script a repo provides for creating a task
@@ -31,11 +32,11 @@ func Branch(repo Repo, task int) string {
 
 // CreateWorktree creates the worktree for a task in clone, branched from the
 // remote's default branch. It uses the repo's own command, `./dev worktree
-// create <branch>`, when the clone has an executable `dev` at its root, since
-// that command also provisions what the task needs. Otherwise it runs
-// `git worktree add`, beside the clone in <clone>-worktrees/. It refuses when
-// the task's worktree already exists, or its branch holds work, so it never
-// reuses leftovers.
+// create <branch>`, when the clone has an executable `dev` at its root whose
+// usage lists that verb, since that command also provisions what the task
+// needs. Otherwise it runs `git worktree add`, beside the clone in
+// <clone>-worktrees/. It refuses when the task's worktree already exists, or
+// its branch holds work, so it never reuses leftovers.
 func (r Repos) CreateWorktree(clone Clone, task int) (Worktree, error) {
 	if task < 1 {
 		return Worktree{}, fmt.Errorf("task number must be positive, got %d", task)
@@ -52,7 +53,7 @@ func (r Repos) CreateWorktree(clone Clone, task int) (Worktree, error) {
 	if err := r.refuseExisting(clone, branch); err != nil {
 		return Worktree{}, err
 	}
-	if script := filepath.Join(clone.Path, worktreeCommand); isExecutable(script) {
+	if script := filepath.Join(clone.Path, worktreeCommand); r.createsWorktrees(clone, script) {
 		_, err = r.Run(clone.Path, r.env(), script, "worktree", "create", branch)
 	} else {
 		dir := clone.Path + "-worktrees/" + strings.ReplaceAll(branch, "/", "-")
@@ -125,6 +126,28 @@ func (r Repos) worktreeOf(clone Clone, branch string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// ProbeLimit bounds the run of a repo's `dev` that reads its usage. It is
+// generous because a `dev` may build itself, or fetch a toolchain, first.
+const ProbeLimit = 3 * time.Minute
+
+// createsWorktrees reports whether script is a `dev` that provides `worktree
+// create`. A repo may have its own unrelated `dev`, so being executable is not
+// enough: run with no verb, a `dev` prints its usage, which lists the verbs it
+// has. Its exit status is ignored, since printing usage usually fails. A `dev`
+// that fails or times out before printing a usage that lists the verb counts
+// as not providing it.
+func (r Repos) createsWorktrees(clone Clone, script string) bool {
+	if !isExecutable(script) {
+		return false
+	}
+	probe := r.Probe
+	if probe == nil {
+		probe = r.Run
+	}
+	usage, _ := probe(clone.Path, r.env(), script)
+	return strings.Contains(usage, "worktree create")
 }
 
 func isExecutable(path string) bool {

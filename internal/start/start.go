@@ -55,9 +55,11 @@ type Deps struct {
 	// GH runs gh for the tracker reads.
 	GH tracker.Runner
 	// Run runs git and gh for engine's clone and the worktree.
-	Run  session.RunFunc
-	Tmux *session.Tmux
-	Home string
+	Run session.RunFunc
+	// Probe reads a repo's own `dev` usage under a deadline; nil uses Run.
+	Probe session.RunFunc
+	Tmux  *session.Tmux
+	Home  string
 	// Getenv reads CLAUDE_CONFIG_DIR.
 	Getenv func(string) string
 	Now    func() time.Time
@@ -88,7 +90,7 @@ func (d Deps) HostClient(host hosts.Host, remoteHost bool) remote.Client {
 		return remote.SSH{Name: host.Name, Address: host.Address, Exec: run}
 	}
 	return remote.Local{Deps: hostops.Deps{
-		Run: d.Run, Exec: d.Exec, Tmux: d.Tmux, Home: d.Home, Getenv: d.Getenv, Now: d.Now, BaseURL: d.BaseURL, Sleep: d.Sleep,
+		Run: d.Run, Probe: d.Probe, Exec: d.Exec, Tmux: d.Tmux, Home: d.Home, Getenv: d.Getenv, Now: d.Now, BaseURL: d.BaseURL, Sleep: d.Sleep,
 		JoinRemote: true,
 	}}
 }

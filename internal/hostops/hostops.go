@@ -35,6 +35,8 @@ const (
 type Deps struct {
 	// Run runs git and gh for engine's clones and worktrees.
 	Run session.RunFunc
+	// Probe reads a repo's own `dev` usage under a deadline; nil uses Run.
+	Probe session.RunFunc
 	// Exec runs the host's own CLIs, such as claude agents.
 	Exec session.Runner
 	Tmux *session.Tmux

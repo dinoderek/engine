@@ -48,6 +48,8 @@ func worktreeFixture(t *testing.T, withDev bool, mode os.FileMode) (Repos, Clone
 	f.replies = []reply{
 		{key: "rev-parse --verify", err: errBoom},
 		{key: "worktree list", out: "worktree " + path + "\nHEAD abc\ndetached\n"},
+		{key: "worktree create"},
+		{key: filepath.Join(path, "dev"), out: devUsage, err: errBoom},
 	}
 	f.onRun = func(c call) {
 		if strings.Contains(c.line, "worktree create") || strings.Contains(c.line, "worktree add") {
@@ -82,6 +84,55 @@ func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	if f.has("worktree add") {
 		t.Error("git worktree add ran besides the repo's command")
 	}
+	var probes []call
+	for _, c := range f.calls {
+		if c.line == script {
+			probes = append(probes, c)
+		}
+	}
+	if len(probes) != 1 || probes[0].dir != clone.Path || !reflect.DeepEqual(probes[0].env, ran[0].env) {
+		t.Errorf("the usage probe ran as %+v", probes)
+	}
+}
+
+func TestCreateWorktreeProbesWithProbeWhenSet(t *testing.T) {
+	r, clone, f, wt := worktreeFixture(t, true, 0o755)
+	var probed []string
+	// A dev that never answers: the probe gives up with no usage.
+	r.Probe = func(dir string, env []string, name string, args ...string) (string, error) {
+		probed = append(probed, strings.Join(append([]string{name}, args...), " "))
+		return "", errBoom
+	}
+	got, err := r.CreateWorktree(clone, 7)
+	if err != nil || got.Path != wt {
+		t.Fatalf("worktree = %+v, %v", got, err)
+	}
+	if want := []string{filepath.Join(clone.Path, "dev")}; !reflect.DeepEqual(probed, want) {
+		t.Errorf("probe ran %v, want %v", probed, want)
+	}
+	if f.has("worktree create") || !f.has("git worktree add") {
+		t.Errorf("a dev whose probe failed must fall back to git: %v", f.lines())
+	}
+}
+
+// devUsage is what a `dev` that provides worktrees prints when run with no verb.
+const devUsage = "usage: ./dev <verb>\n\n  worktree create <branch>     new branch and worktree\n"
+
+func TestCreateWorktreeFallsBackToGitWhenTheReposDevHasNoWorktreeVerb(t *testing.T) {
+	r, clone, f, wt := worktreeFixture(t, true, 0o755)
+	// A repo's own unrelated ./dev, here an argparse script with other verbs.
+	f.replies[3].out = "usage: ./dev [-h] {test,docs} ...\n./dev: error: the following arguments are required: command\n"
+	got, err := r.CreateWorktree(clone, 7)
+	if err != nil || got.Path != wt || got.Branch != "task/r-7" {
+		t.Fatalf("worktree = %+v, %v", got, err)
+	}
+	if f.has("worktree create") {
+		t.Errorf("ran the repo's dev worktree create though its usage lacks it: %v", f.lines())
+	}
+	want := "git worktree add --quiet --no-track -b task/r-7 " + wt + " origin/main"
+	if !f.has(want) {
+		t.Errorf("commands %v lack %q", f.lines(), want)
+	}
 }
 
 func TestCreateWorktreeFallsBackToGit(t *testing.T) {
@@ -103,6 +154,9 @@ func TestCreateWorktreeFallsBackToGit(t *testing.T) {
 			want := "git worktree add --quiet --no-track -b task/r-7 " + wt + " origin/main"
 			if !f.has(want) {
 				t.Errorf("commands %v lack %q", f.lines(), want)
+			}
+			if f.has(filepath.Join(clone.Path, "dev")) {
+				t.Errorf("probed a dev that is not executable: %v", f.lines())
 			}
 		})
 	}

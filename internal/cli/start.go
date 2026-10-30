@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/start"
 	"github.com/dinoderek/engine/internal/tracker"
 )
@@ -56,7 +57,7 @@ func checkCode(ok bool) int {
 
 // startDeps is what engine start, and engine run's starts, launch with.
 func startDeps(env Env) start.Deps {
-	return start.Deps{GH: env.Exec, Run: env.Run, Exec: env.Local, Tmux: env.Tmux, SSH: env.SSH, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
+	return start.Deps{GH: env.Exec, Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Exec: env.Local, Tmux: env.Tmux, SSH: env.SSH, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
 }
 
 // parseStart reads the task and the --harness, --tier, --mode, --host and
