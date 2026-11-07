@@ -5,17 +5,17 @@ Never edit code, merge, claim tasks or answer hard stops.
 
 | Kickoff | Executors start through |
 | --- | --- |
-| `Coordinate <feature> with engine` | `engine start`, read with `engine ps --json` |
+| `Coordinate <feature> with engine` | `engine start`, read with `engine ps --github --json` |
 | `Coordinate <feature> with native sessions` | Claude Code cloud sessions (below) |
 
-Without either, use `engine` if `engine ps` runs, else ask.
+Without either, use `engine` if `engine ps --github` runs, else ask.
 
 ## The pass
 
 Repeat every 5 minutes until `done`:
 
 1. **Read state.** Feature labels/comments; task states/blockers; live sessions
-   (`engine ps --json` or cloud status); your starts and times.
+   (`engine ps --github --json` or cloud status); your starts and times.
 2. **Plan if needed.** An `engine:approved` feature with no sub-issues gets a
    planner session, kickoff `Plan breakdown <feature>`, unless one you
    started is alive or ended. When the feature is `engine:approved`,

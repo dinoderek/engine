@@ -196,7 +196,7 @@ hand and one started by the coordinator look the same.
 | Where | How |
 | --- | --- |
 | Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `limited`, `needs-human`, `in-review`, `running` or `dead`) and age. Limited rows show their reset time; JSON carries `resets_at` in epoch seconds. `--json` prints an object with `quota` and `sessions`. Quota lines above the table show each harness’s newest reading across responding hosts; expired windows read 0%. Each claim is settled from the `status` of the host it names, this one's read in process, one call per configured host, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
+| Terminal | `engine ps --github [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `limited`, `needs-human`, `in-review`, `running` or `dead`) and age. Limited rows show their reset time; JSON carries `resets_at` in epoch seconds. `--json` prints an object with `quota` and `sessions`. Quota lines above the table show each harness’s newest reading across responding hosts; expired windows read 0%. Each claim is settled from the `status` of the host it names, this one's read in process, one call per configured host, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
 
 ## Connecting to a session
 
@@ -232,5 +232,5 @@ host holds off sleep per window, while on power. A Linux host should not suspend
   the executor reads its inbox when it resumes.
 - **End:** after cleanup, a hands-off executor closes its own window; a gated
   one leaves it for the operator.
-- **Crash:** the window has died but the task is still `running`. `engine ps`
+- **Crash:** the window has died but the task is still `running`. `engine ps --github`
   shows it dead; a running coordinator marks it `failed`, keeping the worktree.

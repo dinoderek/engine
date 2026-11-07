@@ -38,7 +38,7 @@ commands:
   hook statusline           record Claude quota and print its status line
   hook limit                record or clear a Claude usage limit
   hook state                record a Codex session's state from its hook event
-  ps [--json]               list the claimed tasks and the state of their sessions
+  ps [--github] [--json]    list server tasks or GitHub claims
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
   tell <repo>-<task> <text> comment on a task's issue and point its session at it;
                             a lone - reads the text from stdin
@@ -98,7 +98,7 @@ func Run(args []string, env Env) int {
 		fmt.Fprint(env.Err, usage)
 		return 2
 	}
-	if serverCommand(args, env) {
+	if serverCommand(args) {
 		return controlcmd.Main(args, controlEnv(env))
 	}
 	switch args[0] {

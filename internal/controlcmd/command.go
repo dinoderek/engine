@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hosts"
 )
 
 // Env is the CLI boundary; tests replace streams, credentials and HTTP.
@@ -32,7 +33,7 @@ const Usage = "engine serve --db <path> --token-file <path> [--listen 127.0.0.1:
 	"engine plan|task show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
 	"engine lint <plan-id>\n" +
 	"engine task complete-external <task-id> --version <n> --pr <url>\n" +
-	"engine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
+	"engine ps\nengine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
 	"engine lock acquire|check|release [--attempt <id>] [--lock-token-file <path>]\n" +
@@ -99,13 +100,24 @@ func makeClient(e Env) (control.Client, error) {
 	if e.Client != nil {
 		return *e.Client, nil
 	}
+	dir := hosts.ConfigDir(e.Home)
 	url := e.Getenv("ENGINE_SERVER_URL")
 	if url == "" {
-		url = "http://127.0.0.1:7331"
+		var err error
+		url, err = hosts.ReadServerURL(dir)
+		if err != nil {
+			return control.Client{}, err
+		}
+	}
+	if url == "" {
+		url = "http://devbox:7331"
+	}
+	if _, err := control.Endpoint(url); err != nil {
+		return control.Client{}, err
 	}
 	path := e.Getenv("ENGINE_SERVER_TOKEN_FILE")
 	if path == "" {
-		path = filepath.Join(e.Home, ".config", "engine", "server-token")
+		path = filepath.Join(dir, "server-token")
 	}
 	token, err := control.ReadCredential(path)
 	return control.Client{URL: url, Token: token}, err

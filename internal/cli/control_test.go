@@ -68,12 +68,12 @@ func TestServerHookFindsJoinedSessionAndFailsClosedWithoutLock(t *testing.T) {
 }
 
 func TestServerCommandsRouteWithoutLegacyGitHubAccess(t *testing.T) {
-	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"start", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps", "--server"}, {"lint", "p2"}, {"task", "complete-external", "t3", "--version", "1", "--pr", "url"}} {
-		if !serverCommand(args, Env{}) {
+	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"start", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps"}, {"ps", "--server"}, {"lint", "p2"}, {"task", "complete-external", "t3", "--version", "1", "--pr", "url"}} {
+		if !serverCommand(args) {
 			t.Fatal(args)
 		}
 	}
-	if serverCommand([]string{"run", "o/r" + "#" + "2"}, Env{}) {
+	if serverCommand([]string{"run", "o/r" + "#" + "2"}) || serverCommand([]string{"ps", "--github"}) {
 		t.Fatal("legacy reference changed source")
 	}
 }
