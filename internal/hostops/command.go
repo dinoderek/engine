@@ -85,6 +85,13 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	var name string
 	var failed bool
 	run := map[string]func() (any, error){
+		"control-spawn": func() (any, error) {
+			r, err := readControl(in)
+			if err != nil {
+				return nil, err
+			}
+			return ControlSpawn(d, r)
+		},
 		"sync-repo": func() (any, error) { return SyncRepo(d, req.Repo) },
 		"spawn": func() (any, error) {
 			kickoff, err := io.ReadAll(in)

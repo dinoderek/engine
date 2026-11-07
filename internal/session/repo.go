@@ -16,6 +16,9 @@ import (
 // directory: one clone per repo, at <owner>/<repo> below it.
 const ReposDir = ".local/share/engine/repos"
 
+// ControlReposDir isolates ordinary-credential clones from machine-user configuration.
+const ControlReposDir = ".local/share/engine/control-repos"
+
 // GitHubURL is where engine clones from, over HTTPS.
 const GitHubURL = "https://github.com"
 
@@ -64,6 +67,10 @@ type Repos struct {
 	Token string
 	// BaseURL is the host that serves "<owner>/<repo>.git"; GitHubURL when empty.
 	BaseURL string
+	// Operator uses the host's ordinary Git credentials and identity.
+	Operator bool
+	// RemoteURL is an explicitly registered remote for an operator-owned clone.
+	RemoteURL string
 	// Probe runs a repo's own `dev` with no verb, to read its usage. It should
 	// carry a deadline (RunCommandWithin), since that `dev` is arbitrary code.
 	// Nil uses Run.
@@ -75,10 +82,17 @@ func (r Repos) Path(repo Repo) (string, error) {
 	if r.Home == "" {
 		return "", errors.New("no home directory to keep engine's clones in")
 	}
-	return filepath.Join(r.Home, filepath.FromSlash(ReposDir), repo.Owner, repo.Name), nil
+	dir := ReposDir
+	if r.Operator {
+		dir = ControlReposDir
+	}
+	return filepath.Join(r.Home, filepath.FromSlash(dir), repo.Owner, repo.Name), nil
 }
 
 func (r Repos) url(repo Repo) string {
+	if r.Operator && r.RemoteURL != "" {
+		return r.RemoteURL
+	}
 	base := r.BaseURL
 	if base == "" {
 		base = GitHubURL
@@ -89,6 +103,9 @@ func (r Repos) url(repo Repo) string {
 // checkToken refuses an empty token: gh would then fall back to the host's own
 // login, and the clone would act as the operator instead of the machine user.
 func (r Repos) checkToken() error {
+	if r.Operator {
+		return nil
+	}
 	if strings.TrimSpace(r.Token) == "" {
 		return errors.New("no machine-user token: engine would act as whoever gh is signed in as")
 	}
@@ -98,6 +115,9 @@ func (r Repos) checkToken() error {
 // env is added to every git and gh call: the token, and no prompting for
 // credentials, so a missing one fails instead of hanging.
 func (r Repos) env() []string {
+	if r.Operator {
+		return []string{"GIT_TERMINAL_PROMPT=0", "GH_TOKEN=", "GITHUB_TOKEN="}
+	}
 	return []string{"GH_TOKEN=" + r.Token, "GIT_TERMINAL_PROMPT=0"}
 }
 
@@ -197,12 +217,16 @@ func (r Repos) cloneIfMissing(repo Repo, path, want string) (bool, error) {
 	}
 	// A url.<base>.insteadOf rule would send the clone elsewhere, such as over
 	// SSH with the operator's key. ls-remote --get-url applies it, so refuse first.
-	if got, err := r.git("", "ls-remote", "--get-url", want); err != nil || got != want {
+	if got, err := r.git("", "ls-remote", "--get-url", want); !r.Operator && (err != nil || got != want) {
 		return false, rewriteError(want, got, err)
 	}
 	// The helper is passed here too, because the clone itself needs the token.
-	_, err = r.git("", "-c", "credential.helper=", "-c", "credential.helper="+credentialHelper,
-		"clone", "--quiet", want, path)
+	if r.Operator {
+		_, err = r.git("", "clone", "--quiet", "--", want, path)
+	} else {
+		_, err = r.git("", "-c", "credential.helper=", "-c", "credential.helper="+credentialHelper,
+			"clone", "--quiet", want, path)
+	}
 	if err != nil {
 		_ = os.RemoveAll(path) // a failed clone can leave a partial directory
 		return false, fmt.Errorf("clone %s: %w", repo, err)
@@ -218,6 +242,9 @@ func (r Repos) checkRemote(path, want string) error {
 	raw, err := r.git(path, "config", "--get", "remote.origin.url")
 	if err != nil || raw != want {
 		return fmt.Errorf("%s is not a clone of %s (origin is %q)", path, want, raw)
+	}
+	if r.Operator {
+		return nil
 	}
 	for _, args := range [][]string{{"remote", "get-url", "origin"}, {"remote", "get-url", "--push", "origin"}} {
 		if got, err := r.git(path, args...); err != nil || got != want {
@@ -239,6 +266,9 @@ func rewriteError(want, got string, err error) error {
 // The empty helper first drops any helper the host configures globally, such
 // as the operator's keychain, so pushes can only be the machine user's.
 func (r Repos) configure(path string) error {
+	if r.Operator {
+		return nil
+	}
 	login, email, err := r.machineUser()
 	if err != nil {
 		return err

@@ -103,7 +103,7 @@ is still true; the reviewer does.
 ## Setup
 
 Run `./dev doctor`. It installs Go with Homebrew if no Go is on `PATH`, then
-checks git, gh, the pinned toolchain, a C compiler for the race detector,
+checks git, gh, sqlite3, the pinned toolchain, a C compiler for the race detector,
 the modules, and the go.mod tools (golangci-lint, govulncheck), installing
 what Homebrew can. Anything else it reports as a gap with its fix. Any Go
 release can bootstrap: `./dev` sets `GOTOOLCHAIN` from go.mod, and Go downloads

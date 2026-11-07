@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/attach"
+	"github.com/dinoderek/engine/internal/controlcmd"
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/lint"
@@ -24,6 +25,11 @@ import (
 const usage = `usage: engine <command>
 
 commands:
+  serve                     run the private control server (engine serve --help)
+  repo, plan, task          manage server repositories, plans and tasks
+  updates, inbox            read durable task updates or operator messages
+  ask, reply, ack, resolve  exchange and resolve operator questions
+  lock, attempt             repository merge locks and execution attempts
   version                   print the engine version
   labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the merge guard, for Claude Code and Codex: reads the event on stdin
@@ -93,6 +99,9 @@ func Run(args []string, env Env) int {
 		fmt.Fprint(env.Err, usage)
 		return 2
 	}
+	if serverCommand(args, env) {
+		return controlcmd.Main(args, controlEnv(env))
+	}
 	switch args[0] {
 	case "version":
 		fmt.Fprintln(env.Out, version.Current())
@@ -137,7 +146,7 @@ func Run(args []string, env Env) int {
 // can be newer than the engine binary it calls.
 func runHook(args []string, env Env) int {
 	if len(args) == 1 && args[0] == "pre-tool-use" {
-		return hook.PreToolUse(env.In, env.Err)
+		return preToolUse(env)
 	}
 	if len(args) == 1 && args[0] == "permission" {
 		return permissionHook(env)

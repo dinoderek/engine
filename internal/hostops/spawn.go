@@ -16,6 +16,7 @@ import (
 // mode, the harness, the model and the kickoff. The tier, the feature and
 // whether the task is heavy are only recorded in run.json.
 type SpawnRequest struct {
+	control *ControlRequest
 	Repo    string // owner/name
 	Task    int
 	Feature string // owner/repo#n, or empty
@@ -68,6 +69,10 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 		return Spawned{}, err
 	}
 	repos := session.Repos{Run: d.Run, Probe: d.Probe, Home: d.Home, Token: s.token, BaseURL: d.BaseURL}
+	if s.control != nil {
+		repos.Operator = true
+		repos.RemoteURL = s.control.Remote
+	}
 	clone, err := repos.Open(s.repo)
 	if err != nil {
 		return Spawned{}, refuse("%v", err)
@@ -102,7 +107,12 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 			return Spawned{}, errors.Join(fmt.Errorf("write run.json: %w; %s", err, left), s.h.Untrust(wt.Path))
 		}
 	}
-	command := launchCommand(d, s.h, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined})
+	if s.control != nil {
+		if err := writeControl(s.runDir, *s.control); err != nil {
+			return Spawned{}, err
+		}
+	}
+	command := launchCommand(d, s.h, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined, control: s.control})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
 		if uerr := s.h.Untrust(wt.Path); uerr != nil {
@@ -144,8 +154,10 @@ func checkSpawn(d Deps, r SpawnRequest) (spawn, error) {
 		return spawn{}, err
 	}
 	var err error
-	if s.token, err = readToken(d.Home); err != nil {
-		return spawn{}, err
+	if s.control == nil {
+		if s.token, err = readToken(d.Home); err != nil {
+			return spawn{}, err
+		}
 	}
 	if s.h, err = harnessFor(d, s.Harness, s.name); err != nil {
 		return spawn{}, err
@@ -190,7 +202,7 @@ func (s *spawn) checkRequest(home string) error {
 			problems = append(problems, err.Error())
 		}
 	}
-	if s.Feature != "" {
+	if s.Feature != "" && s.control == nil {
 		if _, err := tracker.ParseRef(s.Feature); err != nil {
 			problems = append(problems, "feature: "+err.Error())
 		}
@@ -211,7 +223,8 @@ func (s *spawn) checkRequest(home string) error {
 
 func (s spawn) record(wt session.Worktree, window, log string, d Deps) session.Record {
 	return session.Record{
-		Schema: session.RecordSchema, RunID: s.RunID, Repo: s.repo.String(),
+		Control: s.control != nil,
+		Schema:  session.RecordSchema, RunID: s.RunID, Repo: s.repo.String(),
 		Task: tracker.Ref{Repo: s.repo.String(), Number: s.Task}.String(), Feature: s.Feature,
 		Host: s.host.Name, Harness: s.h.Name(), Tier: s.Tier, Model: s.Model, Effort: s.Effort,
 		Mode: s.Mode, Heavy: s.Heavy, Name: s.name, Tmux: session.Name + ":" + window,

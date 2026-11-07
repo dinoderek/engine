@@ -7,7 +7,10 @@
 Two programs share one Go module:
 
 - **`engine`**, the product: `cmd/engine` → `internal/cli` → one package per
-  command. `internal/cli` parses arguments and dispatches. Today:
+  command. `internal/cli` parses arguments and dispatches. `internal/control`
+  owns server records, transactions and HTTP; `internal/controlrun` adapts
+  reconcile decisions to server state; `internal/controlcmd` supplies the CLI
+  and daemon lifecycle. Other packages:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
   tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
   of a task issue and of the claim comments on every claimed task, and
@@ -35,8 +38,7 @@ Two programs share one Go module:
   runner) and `checks` (the lanes that are not one external command) →
   `baseline` and `repo` (git, go and file helpers).
 
-The designed components are the rest of the tracker adapter and the
-telemetry collector.
+The telemetry collector is designed.
 If you are building one, load its doc from the index in `AGENTS.md`.
 
 ## Layers and import rules
@@ -61,12 +63,12 @@ non-test imports. The reasons:
   host.
 - **Standard library only at runtime.** A new runtime dependency is a hard
   stop (`AGENTS.md`).
-- **Outside systems only through their CLIs** (`git`, `gh`, `tmux`, `ssh`, the
-  harnesses), behind an injectable runner such as `repo.Runner`, so tests
-  replace them.
-- **The coordinator is stateless.** It derives everything from the tracker
-  and the hosts on each pass, and never edits code or merges. If you are
-  changing that, load `coordinator.md`.
+- **External tools use injectable CLI runners**, including `sqlite3`.
+  Engine's own server exposes a versioned HTTP API.
+- **Coordination derives decisions from authoritative records and host
+  observations.** The server persists intent and execution identities.
+  Coordinators never edit code or merge. For server changes, load
+  `control-server.md`; for GitHub-mode changes, load `coordinator.md`.
 - **The reconcile core is a package with no CLI assumptions**, so a daemon can
   reuse it later. `internal/cli` stays a thin dispatcher.
 - **Tooling is Go too.** The repo has one toolchain. A lane is either one

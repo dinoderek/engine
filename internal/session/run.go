@@ -32,8 +32,13 @@ func RunCommand(dir string, env []string, name string, args ...string) (string, 
 // second later even if something still holds them, and the call returns what
 // it printed with an error.
 func RunCommandWithin(limit time.Duration) RunFunc {
+	return RunCommandContext(context.Background(), limit)
+}
+
+// RunCommandContext bounds a server operation by its lifetime and a deadline.
+func RunCommandContext(parent context.Context, limit time.Duration) RunFunc {
 	return func(dir string, env []string, name string, args ...string) (string, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), limit)
+		ctx, cancel := context.WithTimeout(parent, limit)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Dir = dir

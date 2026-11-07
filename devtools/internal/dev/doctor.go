@@ -67,6 +67,7 @@ func (t Tool) prerequisites() []prerequisite {
 	}
 	return []prerequisite{
 		{name: "git", check: onPath("git"), brew: "git", hint: "install git from https://git-scm.com/downloads"},
+		{name: "sqlite3 (control server)", check: onPath("sqlite3"), brew: "sqlite", hint: "install sqlite3 (brew install sqlite on macOS; apt-get install sqlite3 on Debian/Ubuntu)"},
 		{name: "gh (pull requests and CI)", check: onPath("gh"), brew: "gh", hint: "install the GitHub CLI from https://cli.github.com, then run gh auth login"},
 		{name: "Go toolchain pinned in go.mod", check: t.checkToolchain, hint: "run the verbs through ./dev, which sets GOTOOLCHAIN from go.mod"},
 		{name: "C toolchain (go test -race)", check: t.checkCgo, hint: "macOS: xcode-select --install; Linux: install gcc"},
