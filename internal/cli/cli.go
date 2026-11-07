@@ -19,6 +19,7 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tell"
 	"github.com/dinoderek/engine/internal/tracker"
+	"github.com/dinoderek/engine/internal/ui"
 	"github.com/dinoderek/engine/internal/version"
 )
 
@@ -30,6 +31,7 @@ commands:
   updates, inbox            read durable task updates or operator messages
   ask, reply, ack, resolve  exchange and resolve operator questions
   lock, attempt             repository merge locks and execution attempts
+  ui [--listen <addr>]      serve the read-only dashboard on loopback (127.0.0.1:7332)
   version                   print the engine version
   labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the merge guard, for Claude Code and Codex: reads the event on stdin
@@ -129,6 +131,10 @@ func Run(args []string, env Env) int {
 		return runHost(args[1:], env)
 	case "setup":
 		return runSetup(args[1:], env)
+	case "ui":
+		return ui.Main(args[1:], ui.Env{Out: env.Out, Err: env.Err, Now: env.Now, Connect: func() (ui.Caller, error) {
+			return controlcmd.Connect(controlEnv(env))
+		}})
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Out, usage)
 		return 0

@@ -96,6 +96,10 @@ func Main(args []string, e Env) int {
 	return 0
 }
 
+// Connect builds the operator's control client from the CLI configuration:
+// the server origin and credential every server command uses.
+func Connect(e Env) (control.Client, error) { return makeClient(e) }
+
 func makeClient(e Env) (control.Client, error) {
 	if e.Client != nil {
 		return *e.Client, nil

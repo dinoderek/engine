@@ -24,7 +24,7 @@ asks.
 
 Built: the control server and its CLI, `engine version`,
 `engine labels sync`, `engine start` (one Claude session on
-this machine, or another one over SSH), `engine host` (its ops), `engine ps`, `engine attach`, `engine tell`, `engine lint`, `engine run` (across hosts), the host config reader
+this machine, or another one over SSH), `engine host` (its ops), `engine ps`, `engine attach`, `engine tell`, `engine lint`, `engine run` (across hosts), `engine ui` (a read-only local dashboard), the host config reader
 (`internal/hosts`), the `engine` skill and its merge guard (a Claude Code
 plugin this repo publishes), and the repo's own tooling: `./dev` and its
 quality gates.
@@ -34,7 +34,7 @@ engine is the first worked example of the project context guideline's core.
 
 - **In:** the protocol, control server, coordinator, skill, GitHub compatibility,
   host config, telemetry design, and the project context guideline.
-- **Out:** a web UI, phone push, automatic tracker migration, and deploys:
+- **Out:** dashboard writes, phone push, automatic tracker migration, and deploys:
   engine has no deploy target, so `./dev` has no `deploy` verb.
 
 ## Stack

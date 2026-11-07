@@ -27,7 +27,9 @@ Two programs share one Go module:
   ops: `Local` calls them in-process, `SSH` over `ssh`), `internal/tell`
   (`engine tell`: comments on a task and points its session at it),
   `internal/lint` (`engine lint`: a feature's plan rules), `internal/run`
-  (`engine run`: the coordinator's loop, on top of the others). The commands
+  (`engine run`: the coordinator's loop, on top of the others), `internal/ui`
+  (`engine ui`: the loopback dashboard, which holds the operator credential and
+  forwards only fixed control reads). The commands
   share `internal/hosts`, the host config: it parses `hosts.toml` with an
   in-house reader of the TOML subset the config uses, validates it, works out
   each machine's slots and expands launch lines. `internal/session` is the

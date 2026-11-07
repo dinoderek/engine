@@ -14,10 +14,11 @@
 | `internal/attach/` | `engine attach` |
 | `internal/hosts/` | host config: parsing, validation, slots and launch lines |
 | `internal/hostops/` | `engine host <op> --json`: the ops a host runs on itself for a caller, and the preflight check |
-| `internal/remote/` | the client that reaches a host's ops: `Local` is this host, in-process; `SSH` is another machine, and its tmux-over-SSH runner |
+| `internal/remote/` | a host's ops client: `Local` in-process, `SSH` to another machine, with its tmux-over-SSH runner |
 | `internal/session/` | local clones, worktrees, tmux, harness sessions, trust and run files |
 | `internal/setup/` | `engine setup`: the steps that bring a host to the caller's engine commit, plugin and config |
 | `internal/lint/` | `engine lint`: the plan rules |
+| `internal/ui/` | `engine ui` and its embedded page |
 | `internal/run/` | `engine run`: the coordinator loop (`coordinator.md`) |
 | `internal/ps/` | `engine ps --github` |
 | `internal/start/` | `engine start` |
