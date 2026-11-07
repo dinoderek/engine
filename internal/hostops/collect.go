@@ -44,6 +44,9 @@ func Collect(d Deps, runID string) (Collected, error) {
 			return err
 		}
 		rel, err := filepath.Rel(dir, path)
+		if rel == "server-token" || rel == "merge-lock.json" {
+			return err
+		}
 		c.Files = append(c.Files, filepath.ToSlash(rel))
 		return err
 	})

@@ -12,6 +12,10 @@ session through to a merged PR. The operator is pulled in only by a hard stop.
 
 ## Modes
 
+For a `server planner <id>` or `server executor <id>` kickoff, load
+`references/server.md` and `references/rulings.md`. Its server mapping
+governs the workflow and plan source.
+
 | Mode | You are | Load |
 | --- | --- | --- |
 | `plan task [<issue>]` | Planning one task with the operator | `references/plan.md`, `references/plan-sources.md` |
@@ -53,8 +57,8 @@ The executor's steps are the same in every run mode.
    apply. Where the repo is silent, use `git worktree add` from the default
    branch, the repo's standard test command and a concise PR body, and say
    so.
-3. **One plan source.** A plan lives either in GitHub issues or in the repo's
-   plan files, never both. Read and update state only in that source.
+3. **One plan source.** A plan lives in the engine server, GitHub issues or
+   the repo's plan files. Read and update state only in that source.
    `references/plan-sources.md` says where each thing lives in each source.
 4. **Plans are never cited.** Code, tests and docs, other than the plan
    itself, never mention an issue number, plan path or task ID. Commit

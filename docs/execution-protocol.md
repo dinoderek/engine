@@ -17,8 +17,9 @@ changing what an agent does, change the skill.
   merge guard (`claude.md`, "Hooks"; `codex.md`, "Guards") blocks an unpinned,
   auto or admin merge through `gh`.
 - **One task = one session = one worktree = one PR.**
-- **One plan source per feature:** the tracker, or an in-repo plan that the
-  operator points the executor at. The coordinator drives only the tracker.
+- **One plan source per feature:** the engine server, GitHub, or an in-repo
+  plan. For server state, inbox and repository merge locks, load
+  `control-server.md`. Each coordinator reads only its chosen source.
 - **Plans are never cited** in code or docs. Commit messages and PR bodies
   may.
 - **Durable decisions graduate** into the repo's owning doc, in the PR that
@@ -131,7 +132,8 @@ There is no file ownership. Parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
 
-**One merge at a time.** Each sibling merge moves the default branch and
+**One merge at a time.** The server has one atomic merge lock per repository,
+covering every feature and standalone task. In GitHub mode, each sibling merge moves the default branch and
 forces a re-gate on every other open PR. So a feature has one merge lock,
 the `engine:merging` label: its holder merges the default branch, gates and
 merges, while the others wait before their last gate run.

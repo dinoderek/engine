@@ -2,8 +2,7 @@
 
 > **Owns:** the rules every session in this repo follows, and the index of every doc. **Not here:** the protocol a task follows (`docs/execution-protocol.md`), how each gate works (`docs/quality-gates.md`).
 
-The agent entrypoint (`CLAUDE.md` links to it). **Links are for depth, never
-for rules.**
+`CLAUDE.md` links here. **Links are for depth, never rules.**
 
 ## Non-negotiables
 
@@ -60,8 +59,9 @@ Read these at each session start:
 | If your task… | Load |
 | --- | --- |
 | changes how agents plan, execute or review | `plugins/engine/skills/engine/SKILL.md` and the reference it routes to |
-| changes phases, roles, task states or the protocol's principles | `docs/execution-protocol.md` |
+| changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
 | changes how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
+| changes server state, API, inbox or merge locks | `docs/control-server.md` |
 | changes host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changes a Claude or Codex session | `docs/claude.md`, `docs/codex.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
@@ -115,5 +115,4 @@ place per fact and keeping docs true: those are yours and the reviewer's.
    never merge or enable auto-merge without the operator's approval.
 7. **Cleanup.** `./dev worktree release <branch>`.
 
-Commits and reviews carry truthful attribution: the harness and the actual
-model. Never invent an identity.
+Attribute commits and reviews to the actual harness and model.

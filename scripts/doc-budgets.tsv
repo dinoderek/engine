@@ -23,6 +23,7 @@ budget	docs/architecture.md	650
 budget	docs/project-structure.md	550
 budget	docs/testing-strategy.md	500
 budget	docs/quality-gates.md	1100
+budget	docs/control-server.md	2000
 # Read at the start of every session: AGENTS.md plus its "Always load" list.
 set	always-load	4000	AGENTS.md,docs/project-brief.md,docs/architecture.md,docs/project-structure.md,docs/testing-strategy.md,docs/quality-gates.md
 ephemeral	design/
@@ -36,3 +37,4 @@ budget	plugins/engine/skills/engine/references/review.md	400
 budget	plugins/engine/skills/engine/references/rulings.md	800
 budget	plugins/engine/skills/engine/references/coordinate.md	800
 budget	plugins/engine/skills/engine/references/supervise.md	400
+budget	plugins/engine/skills/engine/references/server.md	1200

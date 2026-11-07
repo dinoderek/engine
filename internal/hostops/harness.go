@@ -2,6 +2,7 @@ package hostops
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
@@ -101,6 +102,7 @@ func (c claude) Args(l launch) string {
 type launch struct {
 	line, dir, runDir, mode, kickoff string
 	joined                           bool
+	control                          *ControlRequest
 }
 
 // launchCommand is a window's shell command. It runs under /bin/sh, whatever
@@ -111,6 +113,9 @@ type launch struct {
 func launchCommand(d Deps, h harness, l launch) string {
 	// An empty token would make gh fall back to the operator's own login.
 	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
+	if l.control != nil {
+		script = "unset GH_TOKEN GITHUB_TOKEN && export ENGINE_SERVER_URL=" + hosts.ShellWord(l.control.URL) + " ENGINE_SERVER_TOKEN_FILE=" + hosts.ShellWord(filepath.Join(l.runDir, "server-token")) + " ENGINE_ATTEMPT_ID=" + hosts.ShellWord(l.control.Attempt) + " && "
+	}
 	// The hooks log to the run directory and, unattended, deny or log.
 	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(l.runDir) + " && "
 	script += "export " + session.HarnessVar + "=" + h.Name() + " && "

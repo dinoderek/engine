@@ -4,6 +4,9 @@
 
 ## Hosts
 
+For server dispatch, ordinary Git credentials, isolated clones and execution
+credential files, load `control-server.md`.
+
 Each host declares its harnesses, session capacity and capabilities. Declare capabilities explicitly.
 
 **One file, every host.** The host config is `~/.config/engine/hosts.toml`,

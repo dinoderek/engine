@@ -4,6 +4,9 @@
 
 ## Shape
 
+For server coordination, storage, dispatch recovery and the operator inbox,
+load `control-server.md`. This document describes GitHub-mode coordination.
+
 - **Go, one binary (`engine`)** for macOS and Linux. The same binary runs on
   every host.
 - **Stateless.** Each pass derives everything from the tracker (issues, labels,
@@ -70,11 +73,6 @@ skips any task whose session is still alive, on any host that answers.
 For changes to GitHub plan storage or lint, load the skill's
 `plugins/engine/skills/engine/references/plan-sources.md` or
 `plugins/engine/skills/engine/references/plan.md`.
-
-## Later: `engine serve`
-
-A persistent daemon over many features, with a web UI. It runs the same
-reconcile core, which stays a package with no CLI assumptions.
 
 ## Reaching hosts
 

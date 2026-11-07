@@ -53,8 +53,9 @@ const RecordSchema = 1
 // Record is run.json as it is written at spawn. A field the run learns later,
 // such as the harness's own session ID, is added when it is known.
 type Record struct {
-	Schema int    `json:"schema"`
-	RunID  string `json:"run_id"`
+	Control bool   `json:"control,omitempty"`
+	Schema  int    `json:"schema"`
+	RunID   string `json:"run_id"`
 	// Repo is owner/name; Task and Feature are owner/repo#n.
 	Repo    string `json:"repo"`
 	Task    string `json:"task"`
