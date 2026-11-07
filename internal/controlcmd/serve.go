@@ -76,20 +76,26 @@ func serveMain(args []string, e Env) int {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	e.Context = ctx
-	service := control.Service{Store: store}
 	logf := func(format string, args ...any) { fmt.Fprintf(e.Err, format+"\n", args...) }
-	c := newCoordinator(service, *advertise, e)
-	obs := newObserver(store, e)
-	service.Reconcile = c.ConfirmEnded
-	service.Observe = obs.Observation
-	c.Service = service
-	c.Observer = obs
+	service, c, obs := wire(store, *advertise, e)
 	fmt.Fprintf(e.Out, "engine server listening on %s\n", ln.Addr())
 	if err = Serve(ctx, ln, control.Handler(service, token, logf), background(c.Run, obs.Run)); err != nil {
 		fmt.Fprintln(e.Err, "engine serve:", err)
 		return 1
 	}
 	return 0
+}
+
+// wire connects the command service, the coordinator and the session view's observer.
+func wire(store *control.Store, url string, e Env) (control.Service, *controlrun.Coordinator, *controlrun.Observer) {
+	service := control.Service{Store: store}
+	c := newCoordinator(service, url, e)
+	obs := newObserver(store, e)
+	service.Reconcile = c.ConfirmEnded
+	service.Observe = obs.Observation
+	c.Service = service
+	c.Observer = obs
+	return service, c, obs
 }
 
 func newCoordinator(service control.Service, url string, e Env) *controlrun.Coordinator {

@@ -158,7 +158,7 @@ this implementation.
 returns `sessions`: one row per item's current, unended attempt, ordered by
 item number. An empty view omits the field. The row and reference fields in
 `internal/control/sessions.go` are the whole contract: credentials, screens,
-run files and bodies never join them.
+run files, item bodies and full update bodies never join them.
 
 - `item`, `kind`, `title`, `repo`, `repo_slug` and `state` describe the plan or
   task and its workflow state. `role` is `planner` for a plan and `executor`
@@ -176,7 +176,8 @@ run files and bodies never join them.
   Acknowledgements and replies leave it; resolution clears it. Waiting
   without one is not a feedback request.
 - `latest` is the item's newest `say`, `ask`, `reply` or `resolved` update
-  with a body. A task's preview never shows its plan's messages.
+  with a body, excluding the coordinator's automatic notices. A task's
+  preview never shows its plan's messages.
 
 A reference has `item`, `update` (the `engine updates` sequence), `kind`,
 `author`, `at` and a one-line plain-text `summary`, cut to `SummaryRunes`.

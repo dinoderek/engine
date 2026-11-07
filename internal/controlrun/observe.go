@@ -128,7 +128,7 @@ func (o *Observer) start(st control.State, cfg *hosts.Config, name string) {
 	}
 	o.inflight[name] = true
 	o.reads.Add(1)
-	go o.read(st, h)
+	go o.read(h)
 }
 
 // needsRead is true when the host has no read in flight and an active
@@ -146,24 +146,35 @@ func (o *Observer) needsRead(st control.State, host string) bool {
 	return false
 }
 
-func (o *Observer) read(st control.State, h hosts.Host) {
+// read judges the host's reply against the attempts current when it
+// arrives: a slow host must not undo observations recorded meanwhile.
+func (o *Observer) read(h hosts.Host) {
 	defer o.reads.Done()
 	status, err := o.Client(h).Status()
 	l := run.HostLoad{Name: h.Name, Status: status}
 	if err != nil {
 		l.Unreachable = err.Error()
 	}
+	st, snapErr := o.Store.Snapshot()
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	delete(o.inflight, h.Name)
+	if snapErr != nil {
+		if o.Logf != nil {
+			o.Logf("observer: %v", snapErr)
+		}
+		return
+	}
 	o.putHost(st, l, true)
 }
 
 // Settle waits for the host reads in flight.
 func (o *Observer) Settle() { o.reads.Wait() }
 
-// Run refreshes immediately and then periodically until shutdown.
+// Run refreshes immediately and then periodically until shutdown. It returns
+// only after its host reads, which use the store, have finished.
 func (o *Observer) Run(ctx context.Context) {
+	defer o.Settle()
 	ticker := time.NewTicker(ObserveEvery)
 	defer ticker.Stop()
 	for {
@@ -195,7 +206,6 @@ func (o *Observer) prune(st control.State) {
 }
 
 func (o *Observer) putHost(st control.State, h run.HostLoad, configured bool) {
-	o.prune(st)
 	for _, at := range activeAttempts(st) {
 		if at.Host == h.Name {
 			o.put(st, at, h, configured)
@@ -209,7 +219,7 @@ func (o *Observer) put(st control.State, at control.Attempt, h run.HostLoad, con
 	e.at, e.state = o.now(), "unknown"
 	if configured {
 		item := st.Items[at.Item]
-		e.state = hostState(at, h, sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)))
+		e.state = hostState(at, h, st.Items[item.Repo].Slug, control.Number(item.ID))
 	}
 	if slices.Contains([]string{session.StateWorking, session.StateWaiting, session.StateLimited, "live"}, e.state) {
 		e.seen = e.at
@@ -227,20 +237,23 @@ func activeAttempts(st control.State) []control.Attempt {
 	return out
 }
 
-// hostState is what a host read says of an attempt. A reachable host without
-// the attempt's window confirms its exit, unless the dispatch is unfinished.
-func hostState(at control.Attempt, h run.HostLoad, name string) string {
-	if h.Unreachable != "" || h.Status.RunsError != "" {
-		return "unknown"
-	}
-	w, ok := matchWindow(at, h.Status, name)
+// hostState is what the coordinator's own observation of an attempt says, on
+// the host that runs it. A reachable host without the attempt's live window
+// confirms its exit, unless the dispatch is unfinished.
+func hostState(at control.Attempt, h run.HostLoad, slug string, number int) string {
+	s := observe(at, run.Fleet{Hosts: []run.HostLoad{h}}, slug, number)
 	switch {
-	case !ok && at.State == "dispatching":
+	case s.Unknown:
 		return "unknown"
-	case !ok || !w.Alive:
+	case !s.Live:
 		return "exited"
-	case slices.Contains([]string{session.StateWorking, session.StateWaiting, session.StateLimited}, w.State):
-		return w.State
+	case s.Limited:
+		return session.StateLimited
+	case s.Waiting:
+		return session.StateWaiting
+	}
+	if w, _ := matchWindow(at, h.Status, s.Name); w.State == session.StateWorking {
+		return session.StateWorking
 	}
 	return "live"
 }

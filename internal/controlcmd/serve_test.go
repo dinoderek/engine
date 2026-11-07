@@ -45,7 +45,10 @@ func TestObserverReachesHostsThroughTheHostConfig(t *testing.T) {
 	if c, ok := clients(hosts.Host{Name: "mac", Address: "mac.example.test"}).(remote.SSH); !ok || c.Address != "mac.example.test" {
 		t.Fatal("another host is not reached over SSH")
 	}
-	obs := newObserver(svc.Store, e)
+	service, c, obs := wire(svc.Store, "http://control.test", e)
+	if c.Observer != obs || c.Service.Observe == nil || service.Observe == nil || service.Reconcile == nil {
+		t.Fatal("the session view is not wired to the observer")
+	}
 	if _, err := obs.Config(); err == nil {
 		t.Fatal("a missing hosts.toml was accepted")
 	}

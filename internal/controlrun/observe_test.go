@@ -15,6 +15,7 @@ import (
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/remote"
+	"github.com/dinoderek/engine/internal/run"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -305,4 +306,34 @@ func TestObserverRunRefreshesUntilShutdown(t *testing.T) {
 		t.Fatal("configuration failure ignored")
 	}
 	broken.Run(ctx)
+}
+
+func TestSlowHostReadKeepsObservationsRecordedMeanwhile(t *testing.T) {
+	f := newObserverFixture(t, "devbox", "mac")
+	held, _ := f.running(t, "devbox", "@1")
+	pending := execute(t, f.svc, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Task", Repo: f.repo.ID, Plan: f.plan.ID, Body: "## Outcome\nWorks"}})
+	out, err := f.svc.Execute(control.Actor{Name: "operator", Role: "operator"}, control.Request{Op: "claim", Key: control.Secret(), ID: pending.ID, Body: "devbox", State: "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	devbox := f.hosts["devbox"]
+	devbox.set(hostops.Status{Windows: []hostops.Window{window(held, "@1", true, session.StateWorking), window(pending, "@2", true, session.StateWorking)}}, nil)
+	gate := make(chan struct{})
+	devbox.gate = gate
+	if err = f.obs.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	// While devbox is slow, its dispatch completes and a session starts on mac.
+	if err = f.svc.SetAttempt(out.Attempt.ID, "running", "@2"); err != nil {
+		t.Fatal(err)
+	}
+	later, onMac := f.running(t, "mac", "@1")
+	st, _ := f.svc.Store.Snapshot()
+	mac := run.HostLoad{Name: "mac", Status: hostops.Status{Windows: []hostops.Window{window(later, "@1", true, session.StateWaiting)}}}
+	f.obs.Record(st, run.Fleet{Hosts: []run.HostLoad{mac, {Name: "devbox", Unreachable: "busy"}}})
+	t0 := f.clock.now()
+	close(gate)
+	f.obs.Settle()
+	expectObservation(t, f.obs, onMac, session.StateWaiting, t0)
+	expectObservation(t, f.obs, *out.Attempt, session.StateWorking, t0)
 }

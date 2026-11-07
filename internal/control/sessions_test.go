@@ -105,6 +105,10 @@ func TestSessionViewFeedbackAndLatestItemMessage(t *testing.T) {
 	if row.Feedback != nil || row.Latest.Update != resolution.ID || row.Latest.Kind != "resolved" {
 		t.Fatalf("recorded resolution: %+v", row)
 	}
+	call(t, s, Actor{Name: "coordinator", Role: "coordinator"}, Request{Op: "say", ID: task.ID, Body: "Session waited ten minutes", Recipient: "operator"})
+	if l := sessionRows(t, s)[task.ID].Latest; l.Update != resolution.ID {
+		t.Fatalf("an automatic notice became the preview: %+v", l)
+	}
 
 	parent := call(t, s, planner, Request{Op: "ask", ID: plan.ID, Body: "May the plan change scope?"}).Updates[0]
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "Plan-level note", Recipient: "task"})

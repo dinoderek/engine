@@ -48,8 +48,9 @@ type UpdateRef struct {
 // SummaryRunes bounds an update summary in the session view.
 const SummaryRunes = 240
 
-// humanKinds are the updates a person reads as a message; acknowledgements
-// and lifecycle records are left out of the session preview.
+// humanKinds are the updates a person reads as a message; acknowledgements,
+// lifecycle records and the coordinator's automatic notices are left out of
+// the session preview.
 var humanKinds = []string{"say", "ask", "reply", "resolved"}
 
 // sessionView projects every current, unended attempt from one snapshot.
@@ -89,7 +90,7 @@ func (s Service) sessionRow(st *State, item Item, at Attempt) SessionRow {
 	}
 	for i := len(st.Updates) - 1; i >= 0; i-- {
 		u := st.Updates[i]
-		if u.Item == item.ID && slices.Contains(humanKinds, u.Kind) && strings.TrimSpace(u.Body) != "" {
+		if u.Item == item.ID && u.Author != "coordinator" && slices.Contains(humanKinds, u.Kind) && strings.TrimSpace(u.Body) != "" {
 			row.Latest = updateRef(u)
 			break
 		}
