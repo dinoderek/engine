@@ -30,6 +30,8 @@ const Usage = "engine serve --db <path> --token-file <path> [--listen 127.0.0.1:
 	"engine repo add --title <name> --slug <owner/name> --remote <git-url>\n" +
 	"engine plan|task create --repo <id> --title <text> --body-file <path|-> [--plan <id>]\n" +
 	"engine plan|task show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
+	"engine lint <plan-id>\n" +
+	"engine task complete-external <task-id> --version <n> --pr <url>\n" +
 	"engine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
@@ -49,6 +51,9 @@ func Main(args []string, e Env) int {
 	}
 	if args[0] == "serve" {
 		return serveMain(args[1:], e)
+	}
+	if args[0] == "lint" {
+		return lintMain(args[1:], e)
 	}
 	if args[0] == "attach" {
 		return attachMain(args[1:], e)
@@ -234,6 +239,11 @@ func operation(args []string) (control.Request, []string, error) {
 		case "list":
 			r.Op = "list"
 			r.State = head
+		case "complete-external":
+			if head != "task" {
+				return r, nil, fmt.Errorf("complete-external requires a task")
+			}
+			r.Op = op
 		case "edit", "approve", "state", "stop":
 			r.Op = op
 		default:

@@ -44,7 +44,7 @@ commands:
                             a lone - reads the text from stdin
   run <owner/repo#n>        coordinate a feature, or one task, on this host until
                             it is done
-  lint <owner/repo#n>       check a feature's plan: card sections, keys, cycles,
+  lint <owner/repo#n|pN>    check a feature's plan: card sections, keys, cycles,
                             the acceptance task and shared open questions
   start <owner/repo#n> [--harness <name>] [--tier deep|standard|light]
         [--mode hands-off|gated] [--host <name>]
@@ -207,7 +207,7 @@ func runTell(args []string, env Env) int {
 // runLint lints a feature's plan and exits 1 when it breaks a rule.
 func runLint(args []string, env Env) int {
 	if len(args) != 1 {
-		fmt.Fprint(env.Err, "usage: engine lint <owner/repo#n>\n")
+		fmt.Fprint(env.Err, "usage: engine lint <owner/repo#n|pN>\n")
 		return 2
 	}
 	ref, err := tracker.ParseRef(args[0])

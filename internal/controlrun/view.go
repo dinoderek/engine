@@ -71,17 +71,8 @@ func (c *Coordinator) view(st control.State, id string, fleet run.Fleet) (run.Vi
 	}
 	v := run.View{TaskOnly: item.Kind == "task", Now: now, Fleet: fleet, Rows: map[tracker.Ref]ps.Row{}, Sessions: map[tracker.Ref]run.Session{},
 		StartFailed: map[tracker.Ref]time.Time{}, PlaceNoted: map[tracker.Ref]bool{}}
-	v.Feature = tracker.Feature{Ref: reference(st, item), Title: item.Title, Open: item.State != "done", Labels: labels(item)}
-	var items []control.Item
-	for _, t := range st.Items {
-		if t.Plan == id || t.ID == id && v.TaskOnly {
-			items = append(items, t)
-		}
-	}
-	slices.SortFunc(items, func(a, b control.Item) int { return control.Number(a.ID) - control.Number(b.ID) })
-	for _, t := range items {
-		v.Feature.Tasks = append(v.Feature.Tasks, card(st, t))
-	}
+	v.Feature = Feature(st, id)
+	items := featureItems(st, id)
 	c.addSessions(st, &v, append(items, item))
 	if item.Kind == "plan" && len(v.Feature.Tasks) > 0 {
 		for _, p := range lint.Lint(v.Feature) {
@@ -89,6 +80,28 @@ func (c *Coordinator) view(st control.State, id string, fleet run.Fleet) (run.Vi
 		}
 	}
 	return v, c.keepObservations(st, v)
+}
+
+// Feature builds the same plan projection for linting and coordination.
+// It only reads the snapshot; it never observes hosts or persists state.
+func Feature(st control.State, id string) tracker.Feature {
+	item := st.Items[id]
+	f := tracker.Feature{Ref: reference(st, item), Title: item.Title, Open: item.State != "done", Labels: labels(item)}
+	for _, t := range featureItems(st, id) {
+		f.Tasks = append(f.Tasks, card(st, t))
+	}
+	return f
+}
+
+func featureItems(st control.State, id string) []control.Item {
+	var items []control.Item
+	for _, t := range st.Items {
+		if t.Plan == id || t.ID == id && t.Kind == "task" {
+			items = append(items, t)
+		}
+	}
+	slices.SortFunc(items, func(a, b control.Item) int { return control.Number(a.ID) - control.Number(b.ID) })
+	return items
 }
 
 func (c *Coordinator) addSessions(st control.State, v *run.View, items []control.Item) {

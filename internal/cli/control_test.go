@@ -68,7 +68,7 @@ func TestServerHookFindsJoinedSessionAndFailsClosedWithoutLock(t *testing.T) {
 }
 
 func TestServerCommandsRouteWithoutLegacyGitHubAccess(t *testing.T) {
-	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"start", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps", "--server"}} {
+	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"start", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps", "--server"}, {"lint", "p2"}, {"task", "complete-external", "t3", "--version", "1", "--pr", "url"}} {
 		if !serverCommand(args, Env{}) {
 			t.Fatal(args)
 		}

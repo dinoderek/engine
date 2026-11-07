@@ -35,7 +35,7 @@ func serverCommand(args []string, e Env) bool {
 	if args[0] == "ps" && (slices.Contains(args, "--server") || e.Getenv != nil && e.Getenv("ENGINE_SERVER_URL") != "") {
 		return true
 	}
-	return len(args) > 1 && slices.Contains([]string{"run", "tell", "start", "attach"}, args[0]) && control.Number(args[1]) > 0 && (args[1][0] == 'p' || args[1][0] == 't')
+	return len(args) > 1 && slices.Contains([]string{"run", "tell", "start", "attach", "lint"}, args[0]) && control.Number(args[1]) > 0 && (args[1][0] == 'p' || args[1][0] == 't')
 }
 
 func preToolUse(e Env) int {
