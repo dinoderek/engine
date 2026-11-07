@@ -14,6 +14,8 @@ type Service struct {
 	Now   func() time.Time
 	// Reconcile verifies the host before an operator ends an execution.
 	Reconcile func(string) error
+	// Observe reads an attempt's cached host observation; nil reports unknown.
+	Observe func(attempt string) Observation
 }
 
 func (s Service) now() time.Time {
@@ -41,7 +43,7 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 		if err := authorizeExecution(st, a); err != nil {
 			return err
 		}
-		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "lock-check", "lock-show"}, r.Op)
+		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "lock-check", "lock-show", "session-view"}, r.Op)
 		if write && (r.Key == "" || len(r.Key) > 200) {
 			return problem(400, "a request key of 1–200 characters is required")
 		}
@@ -82,6 +84,8 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 	switch r.Op {
 	case "plan-view":
 		return planView(st, a, r.ID)
+	case "session-view":
+		return s.sessionView(st, a)
 	case "get", "list", "attempts":
 		return read(st, a, r)
 	case "create":

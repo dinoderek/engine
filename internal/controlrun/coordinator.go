@@ -25,6 +25,8 @@ type Coordinator struct {
 	Host   hosts.Host
 	Resume func(run.Session) error
 	Wake   func(run.Session, string) error
+	// Observer, when set, keeps each pass's host reads for the session view.
+	Observer *Observer
 }
 
 // Run reconciles immediately and then periodically until shutdown.
@@ -95,6 +97,7 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	if err != nil {
 		return err
 	}
+	c.Observer.Record(st, fleet)
 	if !st.Items[id].Coordinating {
 		return nil
 	}

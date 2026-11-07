@@ -9,7 +9,7 @@ Two programs share one Go module:
 - **`engine`**, the product: `cmd/engine` → `internal/cli` → one package per
   command. `internal/cli` parses arguments and dispatches. `internal/control`
   owns server records, transactions and HTTP; `internal/controlrun` adapts
-  reconcile decisions to server state; `internal/controlcmd` supplies the CLI
+  reconcile decisions to server state and caches host observations; `internal/controlcmd` supplies the CLI
   and daemon lifecycle. The CLI and coordinator share the read-only plan
   projection in `internal/controlrun` and validate it with `internal/lint`.
   Other packages:

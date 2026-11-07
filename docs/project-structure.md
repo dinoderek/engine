@@ -9,7 +9,7 @@
 | `cmd/engine/` | engine entrypoint |
 | `internal/` | product packages; `internal/cli` dispatches commands |
 | `internal/control/` | server records, transactions and API |
-| `internal/controlrun/` | server coordination |
+| `internal/controlrun/` | server coordination and host observations |
 | `internal/controlcmd/` | server CLI and lifecycle |
 | `internal/attach/` | `engine attach` |
 | `internal/hosts/` | host config: parsing, validation, slots and launch lines |

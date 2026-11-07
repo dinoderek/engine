@@ -137,8 +137,7 @@ func (c *Coordinator) addSessions(st control.State, v *run.View, items []control
 }
 
 func observe(at control.Attempt, fleet run.Fleet, slug string, number int) run.Session {
-	repo, _ := session.ParseRepo(slug)
-	s := run.Session{Name: session.TaskName(repo, number), Host: at.Host, WindowID: at.Window, Spawned: at.Started, Mode: "hands-off"}
+	s := run.Session{Name: sessionName(slug, number), Host: at.Host, WindowID: at.Window, Spawned: at.Started, Mode: "hands-off"}
 	for _, h := range fleet.Hosts {
 		if h.Name != at.Host {
 			continue
@@ -147,16 +146,14 @@ func observe(at control.Attempt, fleet run.Fleet, slug string, number int) run.S
 			s.Unknown = true
 			return s
 		}
-		for _, w := range h.Status.Windows {
-			if w.ID == at.Window && w.Name == s.Name {
-				s.Live = w.Alive
-				s.DeadWindow = !w.Alive
-				s.Waiting = w.Alive && w.State == session.StateWaiting
-				s.Limited = w.Alive && w.State == session.StateLimited
-				s.ResetsAt = w.ResetsAt
-				s.Screen = w.Screen
-				return s
-			}
+		if w, ok := matchWindow(at, h.Status, s.Name); ok {
+			s.Live = w.Alive
+			s.DeadWindow = !w.Alive
+			s.Waiting = w.Alive && w.State == session.StateWaiting
+			s.Limited = w.Alive && w.State == session.StateLimited
+			s.ResetsAt = w.ResetsAt
+			s.Screen = w.Screen
+			return s
 		}
 		s.Unknown = at.State == "dispatching"
 		return s
