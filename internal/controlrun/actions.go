@@ -95,6 +95,9 @@ func (c *Coordinator) resume(item control.Item, a run.Action) error {
 	eligible := false
 	err := c.Service.Store.Transaction(func(st *control.State) error {
 		current := st.Items[item.ID]
+		if control.PendingQuestion(st, current.ID) > 0 {
+			return nil
+		}
 		at := st.Attempts[current.Attempt]
 		if current.State == "needs-human" || at.ID != item.Attempt || at.State == "ended" || at.ResumedFor == a.Session.ResetsAt {
 			return nil

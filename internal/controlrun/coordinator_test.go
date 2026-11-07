@@ -169,7 +169,7 @@ func TestUncertainDispatchIsAdoptedWithoutDuplicatingIt(t *testing.T) {
 func TestInterruptedBeforeDispatchReusesPersistedIdentity(t *testing.T) {
 	c, h, _, _, task := setup(t)
 	pass(t, c)
-	out, err := c.Service.Dispatch(task.ID, "devbox", "claude", "interrupted")
+	out, err := c.Service.Dispatch(task, "devbox", "claude", "interrupted")
 	if err != nil {
 		t.Fatal(err)
 	}

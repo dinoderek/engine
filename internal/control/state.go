@@ -85,12 +85,8 @@ func stateChange(st *State, a Actor, item Item, want string) error {
 	if item.State == "needs-human" && a.Role != "operator" && a.Role != "coordinator" {
 		return problem(403, "operator must resolve the hard stop")
 	}
-	if want == "done" || item.State == "needs-human" && want != "failed" {
-		for _, u := range st.Updates {
-			if u.Item == item.ID && u.RequiresReply && !resolved(st, u.ID) {
-				return problem(409, "operator question %d is unresolved", u.ID)
-			}
-		}
+	if want != "failed" && PendingQuestion(st, item.ID) > 0 {
+		return problem(409, "operator question is unresolved")
 	}
 	if want == "done" && item.Kind == "plan" {
 		for _, t := range st.Items {
@@ -109,6 +105,12 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	item, ok := st.Items[r.ID]
 	if !ok || item.Kind == "repo" {
 		return Response{}, problem(404, "unknown task or plan")
+	}
+	if a.Role == "coordinator" && r.Version != item.Version {
+		return Response{}, problem(409, "card changed since placement; version is %d", item.Version)
+	}
+	if PendingQuestion(st, item.ID) > 0 {
+		return Response{}, problem(409, "operator question is unresolved")
 	}
 	if !approved(st, item) {
 		return Response{}, problem(409, "item is not approved")
@@ -199,6 +201,9 @@ func (s Service) CheckDispatch(id, attempt string) error {
 		if !dispatchIntent(st, item) {
 			return problem(409, "coordination was stopped")
 		}
+		if PendingQuestion(st, item.ID) > 0 {
+			return problem(409, "operator question is unresolved")
+		}
 		return nil
 	})
 }
@@ -234,13 +239,11 @@ func (s Service) mergeLock(st *State, a Actor, r Request) (Response, error) {
 		return Response{}, problem(409, "merge lock ownership does not match")
 	}
 	if r.Op == "lock-check" {
+		if PendingQuestion(st, item.ID) > 0 {
+			return Response{}, problem(409, "operator question is unresolved")
+		}
 		if at.State == "ended" || !slices.Contains([]string{"running", "in-review"}, item.State) {
 			return Response{}, problem(409, "execution is not permitted to merge")
-		}
-		for _, u := range st.Updates {
-			if u.Item == item.ID && u.RequiresReply && !resolved(st, u.ID) {
-				return Response{}, problem(409, "operator response required")
-			}
 		}
 		return Response{Lock: &lock}, nil
 	}
@@ -250,6 +253,9 @@ func (s Service) mergeLock(st *State, a Actor, r Request) (Response, error) {
 }
 
 func (s Service) acquireLock(st *State, a Actor, item Item, at Attempt) (Response, error) {
+	if PendingQuestion(st, item.ID) > 0 {
+		return Response{}, problem(409, "operator question is unresolved")
+	}
 	if item.Kind != "task" || at.State == "ended" || !slices.Contains([]string{"running", "in-review"}, item.State) {
 		return Response{}, problem(409, "only an active task can take a merge lock")
 	}

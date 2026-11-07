@@ -181,7 +181,7 @@ func TestRequestDeduplicationAndConcurrentClaims(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 6 {
 		wg.Go(func() {
-			_, err := s.Dispatch(task.ID, "devbox", "claude", Secret())
+			_, err := s.Dispatch(task, "devbox", "claude", Secret())
 			if err == nil {
 				mu.Lock()
 				successes++

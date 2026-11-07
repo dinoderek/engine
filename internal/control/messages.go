@@ -158,8 +158,19 @@ func (s Service) Authenticate(token, operatorToken string) (Actor, error) {
 }
 
 // Dispatch recovers the same attempt and credential for a retried dispatch request.
-func (s Service) Dispatch(item, host, harness, key string) (Response, error) {
-	return s.Execute(Actor{Name: "coordinator", Role: "coordinator"}, Request{Op: "claim", ID: item, Body: host, State: harness, Key: key})
+func (s Service) Dispatch(item Item, host, harness, key string) (Response, error) {
+	return s.Execute(Actor{Name: "coordinator", Role: "coordinator"}, Request{Op: "claim", ID: item.ID, Version: item.Version, Body: host, State: harness, Key: key})
+}
+
+// PendingQuestion includes a task's own questions and its parent plan's questions.
+func PendingQuestion(st *State, id string) int {
+	parent := st.Items[id].Plan
+	for _, u := range st.Updates {
+		if u.RequiresReply && (u.Item == id || parent != "" && u.Item == parent) && !resolved(st, u.ID) {
+			return u.ID
+		}
+	}
+	return 0
 }
 
 // Recovery marks an execution ended only after the caller has checked its host.

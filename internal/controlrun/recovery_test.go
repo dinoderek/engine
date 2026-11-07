@@ -27,7 +27,7 @@ func TestDeathDuringUnresolvedQuestionFailsIdempotently(t *testing.T) {
 func TestPlaceholderRunCannotEndOrCompleteDispatch(t *testing.T) {
 	c, h, _, _, task := setup(t)
 	pass(t, c)
-	out, err := c.Service.Dispatch(task.ID, "devbox", "claude", "reserved")
+	out, err := c.Service.Dispatch(task, "devbox", "claude", "reserved")
 	if err != nil {
 		t.Fatal(err)
 	}

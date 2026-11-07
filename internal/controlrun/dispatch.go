@@ -13,11 +13,11 @@ import (
 
 func (c *Coordinator) dispatch(st control.State, item control.Item, host, harness string, cfg *hosts.Config) error {
 	key := fmt.Sprintf("dispatch/%s/%d", item.ID, item.Version)
-	out, err := c.Service.Dispatch(item.ID, host, harness, key)
+	out, err := c.Service.Dispatch(item, host, harness, key)
 	if err != nil {
 		return err
 	}
-	return c.launch(st, item, *out.Attempt, out.Credential, cfg)
+	return c.launch(st, *out.Item, *out.Attempt, out.Credential, cfg)
 }
 
 func (c *Coordinator) launch(st control.State, item control.Item, at control.Attempt, credential string, cfg *hosts.Config) error {

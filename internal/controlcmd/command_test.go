@@ -86,8 +86,8 @@ func TestCLIWorkerLockAndGuard(t *testing.T) {
 	repo := command(t, e, "repo", "add", "--title", "Demo", "--slug", "x/y", "--remote", "remote").Item
 	task := command(t, e, "task", "create", "--repo", repo.ID, "--title", "Standalone").Item
 	task = command(t, e, "task", "approve", task.ID, "--version", "1").Item
-	command(t, e, "run", task.ID)
-	at, err := svc.Dispatch(task.ID, "devbox", "claude", "dispatch")
+	task = command(t, e, "run", task.ID).Item
+	at, err := svc.Dispatch(*task, "devbox", "claude", "dispatch")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -81,6 +81,8 @@ Every write has a request key. Retries use exactly the same command and key.
 A reused key with different contents fails. The CLI retries uncertain
 delivery once with the original key; callers can retain one with
 `--request-key`. Version conflicts require reading the current record.
+Dispatch reservations validate the card version used for placement; an edit
+invalidates the decision before any execution is reserved or launched.
 
 SQLite runs locally through its CLI, with SQL on stdin. A process lock
 allows one engine server per database; a mutex serializes commands.
@@ -115,6 +117,8 @@ puts it in needs-human. Acknowledgement and ordinary replies leave the
 question unresolved. Resolution records the operator decision; an explicit
 state change resumes the task. Unresolved questions block completion and
 merge checks.
+An unresolved plan question also blocks planner handoff, child dispatch,
+child merges and automatic quota resume until the operator resolves it.
 
 Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave

@@ -17,6 +17,9 @@ func (c *Coordinator) wakeMessages(st control.State, v run.View) error {
 		if !ok || !sess.Live || !sess.Waiting || sess.Limited || sess.Unknown || item.State == "needs-human" {
 			continue
 		}
+		if control.PendingQuestion(&st, item.ID) > 0 {
+			continue
+		}
 		at := st.Attempts[item.Attempt]
 		last := pendingMessage(st, item.ID, at)
 		if last == 0 {
