@@ -14,6 +14,7 @@
   const view = { repo: "", state: "", q: "", plan: "", task: "" };
   const fetched = { plans: null, plan: null };
   let pending = 0;
+  let planPending = 0;
 
   const $ = (id) => document.getElementById(id);
 
@@ -177,31 +178,36 @@
     return Object.assign({}, env, { error: err.message, failed: true, stale: !!(env && env.data) });
   }
 
-  async function refreshPlans() {
+  // refreshPlans reloads the list; cached reuses the dashboard's last read.
+  async function refreshPlans(cached) {
     const n = ++pending;
+    const q = query();
+    let env;
     try {
-      const env = await load("/api/plans" + query());
-      if (n === pending) fetched.plans = env;
+      env = await load("/api/plans" + q + (cached ? (q ? "&" : "?") + "cached=1" : ""));
     } catch (err) {
-      fetched.plans = failed(fetched.plans, err);
+      env = failed(fetched.plans, err);
     }
+    if (n !== pending) return;
+    fetched.plans = env;
     renderPlans();
     status();
   }
 
   async function refreshPlan(scroll) {
     const id = view.plan;
+    const n = ++planPending;
     if (!id) {
       fetched.plan = null;
     } else {
+      let env;
       try {
-        const env = await load("/api/plans/" + id);
-        if (id !== view.plan) return;
-        fetched.plan = env;
+        env = await load("/api/plans/" + id);
       } catch (err) {
-        if (id !== view.plan) return;
-        fetched.plan = failed(fetched.plan && fetched.plan.data && fetched.plan.data.plan.id === id ? fetched.plan : null, err);
+        env = failed(fetched.plan && fetched.plan.data && fetched.plan.data.plan.id === id ? fetched.plan : null, err);
       }
+      if (n !== planPending) return;
+      fetched.plan = env;
     }
     renderPane();
     status();
@@ -225,7 +231,7 @@
     view.state = $("state").value;
     writeHash();
     clearTimeout(typing);
-    typing = setTimeout(refreshPlans, 200);
+    typing = setTimeout(() => refreshPlans(true), 200);
   }
 
   function navigate() {

@@ -26,8 +26,9 @@ type upstream struct {
 	now     func() time.Time
 	logf    func(string, ...any)
 
-	mu   sync.Mutex
-	last map[string]snapshot
+	mu     sync.Mutex
+	last   map[string]snapshot
+	failed map[string]string // the latest failure of a view that has a snapshot
 }
 
 // snapshot is the last successful result of one view.
@@ -46,7 +47,7 @@ type Envelope struct {
 }
 
 func newUpstream(client Caller, now func() time.Time, logf func(string, ...any)) *upstream {
-	return &upstream{client: client, timeout: 10 * time.Second, now: now, logf: logf, last: map[string]snapshot{}}
+	return &upstream{client: client, timeout: 10 * time.Second, now: now, logf: logf, last: map[string]snapshot{}, failed: map[string]string{}}
 }
 
 func (u *upstream) call(ctx context.Context, r control.Request) (control.Response, error) {
@@ -67,18 +68,31 @@ func (u *upstream) view(ctx context.Context, key string, load func(context.Conte
 	if err == nil {
 		s := snapshot{value: value, fetched: u.now().UTC()}
 		u.last[key] = s
+		delete(u.failed, key)
 		return Envelope{Data: s.value, Fetched: s.fetched}, 200
 	}
 	status, message := u.failure(err)
 	if status == 404 {
 		delete(u.last, key)
+		delete(u.failed, key)
 		return Envelope{Error: message}, status
 	}
 	s, ok := u.last[key]
 	if !ok {
 		return Envelope{Error: message}, status
 	}
+	u.failed[key] = message
 	return Envelope{Data: s.value, Fetched: s.fetched, Stale: true, Error: message}, 200
+}
+
+// cached returns the last view without calling the control server, and
+// whether there was one. It stays stale while the latest load failed.
+func (u *upstream) cached(key string) (Envelope, bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	s, ok := u.last[key]
+	failure := u.failed[key]
+	return Envelope{Data: s.value, Fetched: s.fetched, Stale: failure != "", Error: failure}, ok
 }
 
 // failure turns an upstream error into a status and a message safe to show.
@@ -97,8 +111,22 @@ func (u *upstream) failure(err error) (int, string) {
 	return 502, "control server unreachable"
 }
 
-func (u *upstream) plans(ctx context.Context, f Filter) (Envelope, int) {
-	env, status := u.view(ctx, "plans", func(ctx context.Context) (any, error) {
+// plans filters the plan list. A cached request, made when only the filter
+// changed, reuses the last list when there is one.
+func (u *upstream) plans(ctx context.Context, f Filter, cached bool) (Envelope, int) {
+	env, ok := u.cached("plans")
+	status := 200
+	if !cached || !ok {
+		env, status = u.load(ctx)
+	}
+	if loaded, ok := env.Data.([2][]control.Item); ok {
+		env.Data = planList(loaded[0], loaded[1], f)
+	}
+	return env, status
+}
+
+func (u *upstream) load(ctx context.Context) (Envelope, int) {
+	return u.view(ctx, "plans", func(ctx context.Context) (any, error) {
 		repos, err := u.call(ctx, control.Request{Op: "list", State: "repo"})
 		if err != nil {
 			return nil, err
@@ -109,10 +137,6 @@ func (u *upstream) plans(ctx context.Context, f Filter) (Envelope, int) {
 		}
 		return [2][]control.Item{repos.Items, plans.Items}, nil
 	})
-	if loaded, ok := env.Data.([2][]control.Item); ok {
-		env.Data = planList(loaded[0], loaded[1], f)
-	}
-	return env, status
 }
 
 func (u *upstream) plan(ctx context.Context, id string) (Envelope, int) {

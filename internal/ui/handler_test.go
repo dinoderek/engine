@@ -41,9 +41,9 @@ func (f *fakeControl) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.Lock()
 	f.ops = append(f.ops, req.Op)
-	fail := f.fail
+	fail, token := f.fail, f.token
 	f.mu.Unlock()
-	if r.Header.Get("Authorization") != "Bearer "+f.token {
+	if r.Header.Get("Authorization") != "Bearer "+token {
 		w.WriteHeader(401)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "credential required"})
 		return
@@ -75,6 +75,12 @@ func (f *fakeControl) failWith(status int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.fail = status
+}
+
+func (f *fakeControl) rotate() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.token = control.Secret()
 }
 
 func (f *fakeControl) calls() []string {
@@ -168,7 +174,7 @@ func TestRoutesRejectHostsMethodsAndUnknownPaths(t *testing.T) {
 		{"DELETE", "127.0.0.1:7332", "/api/plans/p24", http.StatusMethodNotAllowed},
 		{"GET", "127.0.0.1:7332", "/v1/command", 404},
 		{"GET", "127.0.0.1:7332", "/api/tasks", 404},
-		{"GET", "127.0.0.1:7332", "/api/plans/t17", 404},
+		{"GET", "127.0.0.1:7332", "/api/plans/t5", 404},
 		{"GET", "127.0.0.1:7332", "/api/plans/p", 404},
 		{"GET", "127.0.0.1:7332", "/static/app.js", 404},
 	} {
@@ -267,5 +273,39 @@ func TestUpstreamForwardsOnlyReads(t *testing.T) {
 	}
 	if strings.Join(rc.ops, ",") != strings.Join(readOps, ",") {
 		t.Fatalf("forwarded %v, want only %v", rc.ops, readOps)
+	}
+}
+
+func TestCachedFilterReusesTheLastList(t *testing.T) {
+	fc := newFakeControl(t)
+	d := newDashboard(fc.client())
+	if res, _ := d.get(t, "GET", "127.0.0.1", "/api/plans?cached=1"); res.StatusCode != 200 || len(fc.calls()) != 2 {
+		t.Fatalf("cached read without a list = %d after %v, want a load", res.StatusCode, fc.calls())
+	}
+	_, body := d.get(t, "GET", "127.0.0.1", "/api/plans?state=done&cached=1")
+	if env := decode(t, body); env.Stale || !strings.Contains(body, `"plans":[{"id":"p10"`) || len(fc.calls()) != 2 {
+		t.Fatalf("cached filter = %s after %v, want the last list filtered with no call", body, fc.calls())
+	}
+	fc.failWith(500)
+	d.get(t, "GET", "127.0.0.1", "/api/plans")
+	_, body = d.get(t, "GET", "127.0.0.1", "/api/plans?q=rollout&cached=1")
+	if env := decode(t, body); !env.Stale || env.Error == "" || !strings.Contains(body, `"id":"p24"`) {
+		t.Fatalf("cached filter after a failure = %s, want it still marked stale", body)
+	}
+	fc.failWith(0)
+	_, body = d.get(t, "GET", "127.0.0.1", "/api/plans")
+	if env := decode(t, body); env.Stale || env.Error != "" {
+		t.Fatalf("recovered list = %s, want fresh", body)
+	}
+}
+
+func TestRejectedCredentialKeepsTheLastViewStale(t *testing.T) {
+	fc := newFakeControl(t)
+	d := newDashboard(fc.client())
+	d.get(t, "GET", "127.0.0.1", "/api/plans/p24")
+	fc.rotate() // the operator rotated the server's credential
+	res, body := d.get(t, "GET", "127.0.0.1", "/api/plans/p24")
+	if env := decode(t, body); res.StatusCode != 200 || !env.Stale || env.Error != "credential required" {
+		t.Fatalf("after a 401 = %d %s, want the last view marked stale", res.StatusCode, body)
 	}
 }

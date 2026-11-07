@@ -36,7 +36,7 @@ func handler(up *upstream) http.Handler {
 	}
 	mux.HandleFunc("GET /api/plans", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		env, status := up.plans(r.Context(), Filter{Repo: q.Get("repo"), State: q.Get("state"), Query: q.Get("q")})
+		env, status := up.plans(r.Context(), Filter{Repo: q.Get("repo"), State: q.Get("state"), Query: q.Get("q")}, q.Get("cached") == "1")
 		reply(w, status, env)
 	})
 	mux.HandleFunc("GET /api/plans/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func reply(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// itemID accepts an engine ID with the given prefix, such as p16.
+// itemID accepts an engine ID with the given prefix, such as p7.
 func itemID(id string, prefix byte) bool {
 	return len(id) > 1 && id[0] == prefix && control.Number(id) > 0
 }

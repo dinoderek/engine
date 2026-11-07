@@ -156,11 +156,13 @@ implementation.
 
 `engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen`
 chooses another loopback address. It uses the CLI's server configuration and
-operator credential, and the credential never reaches the browser. The page
-calls fixed same-origin routes:
+operator credential, and the credential never reaches the browser. Any local
+process or user that can reach the port reads with operator rights, so run it
+only on a single-user machine. The page calls fixed same-origin routes:
 
 - `/api/plans`: repositories and plans, filtered by `repo`, `state` and a
-  case-insensitive `q` over plan ID, repository and title.
+  case-insensitive `q` over plan ID, repository and title. With `cached=1`
+  it filters the last list it read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts and unfinished prerequisites, including other plans' tasks.
 
