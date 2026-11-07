@@ -79,7 +79,7 @@ func CurrentUser(run Runner) (string, error) {
 		return "", fmt.Errorf("GitHub account: %w", err)
 	}
 	login := strings.TrimSpace(out)
-	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]*$`).MatchString(login) {
+	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`).MatchString(login) {
 		return "", fmt.Errorf("GitHub account: unexpected login %q", login)
 	}
 	return login, nil

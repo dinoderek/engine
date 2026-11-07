@@ -86,7 +86,7 @@ func (c codex) unjoinable(run session.Runner, bin, line string) string {
 	if !remoteControlOn(args, home) {
 		return "engine's Codex daemon runs with remote control off; " + startDaemon
 	}
-	return ""
+	return c.daemonEnvironment(run)
 }
 
 // daemonState is the status `codex app-server daemon version` printed:

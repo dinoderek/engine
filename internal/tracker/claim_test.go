@@ -153,7 +153,7 @@ func TestLatestClaimIgnoresStrangers(t *testing.T) {
 func TestLatestClaimAcceptsTheOperator(t *testing.T) {
 	byHand := strings.Replace(fullClaim, "Host: mac", "Host: laptop", 1)
 	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{operator, fullClaim}, cm{other, byHand})}}
-	c, err := LatestClaim(gh.run, other, Ref{"o/r", 21})
+	c, err := LatestClaim(gh.run, strings.ToUpper(other), Ref{"o/r", 21})
 	if err != nil || c == nil || c.Host != "laptop" || c.Author != other {
 		t.Errorf("got %+v, %v", c, err)
 	}

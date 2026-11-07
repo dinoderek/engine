@@ -189,7 +189,8 @@ unclaimed engine windows and the feature’s planner.
 ## GitHub access and notifications
 
 The coordinator and sessions use each host's working `gh` installation and
-normal Git configuration. For host setup, load `operator-setup.md`.
+normal Git configuration. Hosts participating in one GitHub plan must use
+the same GitHub account. For host setup, load `operator-setup.md`.
 Engine reads the authenticated account with `gh api user` and accepts claim
 comments only from that account, compared without case sensitivity. The
 newest matching claim wins; other authors are ignored.

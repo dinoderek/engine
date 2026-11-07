@@ -103,6 +103,7 @@ func eventually(t *testing.T, what string, ok func() bool) {
 }
 
 func TestRealStart(t *testing.T) {
+	t.Setenv("GH_TOKEN", "ordinary-gh-test")
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
 	}
@@ -136,7 +137,7 @@ func TestRealStart(t *testing.T) {
 	for _, want := range []string{
 		"arg:--model\narg:haiku-x\narg:--effort\narg:medium\narg:-n\narg:r-7\narg:--remote-control\narg:r-7\n" +
 			"arg:--add-dir\narg:" + filepath.Join(h.dir, ".claude/plugins/cache/engine") + "\narg:--allowedTools\narg:Read(//tmp/**)\narg:Read(//private/tmp/**)\narg:--settings\narg:{\"statusLine\":{\"type\":\"command\",\"command\":\"engine hook statusline\"}}\narg:--\n" + kickoff,
-		"token:\n", "/task-r-7\n",
+		"token:ordinary-gh-test\n", "/task-r-7\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the fake claude got\n%s\nwant it to contain\n%s", got, want)

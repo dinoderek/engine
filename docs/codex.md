@@ -181,6 +181,10 @@ still launches embedded, with the host's `CODEX_HOME` ("Starting", "Apps"):
   for their own when setup runs inside a session. The start exits 1 when
   the connection to the apps is errored, though the daemon runs with remote
   control on, so setup judges it by the daemon afterwards ("Apps").
+  Setup records each started daemon's PID and start time in
+  `daemon-environment`. A running daemon without a matching receipt leaves
+  setup open: finish its sessions, run the printed stop command, and rerun
+  setup so the replacement inherits the host environment.
 
 ## Apps
 
@@ -188,7 +192,9 @@ The apps list sessions on a host's remote-control daemon (`codex remote-control
 start`). With `Deps.JoinRemote` set, as the `engine` commands set it, `spawn`
 joins engine's own daemon when it runs in engine's Codex home with remote
 control on: `codex app-server daemon version` there, which starts nothing,
-reports it running, and its process carries `--remote-control`. Otherwise
+reports it running, its process carries `--remote-control`, and its
+PID/start-time receipt matches. An unrecorded environment falls back to
+embedded execution until setup refreshes the daemon. Otherwise
 (no daemon, remote control off, a reply that cannot be read, or a launch line
 with a writable root or `--add-dir`) the session starts embedded, and
 `spawn`'s reply warns, saying why and that `engine setup` starts the daemon; a

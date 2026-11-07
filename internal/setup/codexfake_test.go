@@ -39,13 +39,16 @@ type codexState struct {
 	leavesNothing bool
 	writeFail     bool
 	// loginBroken makes engine's home reject the login it links.
-	loginBroken bool
-	daemonUp    bool
-	rcOn        bool // the daemon runs with remote control on
-	startFail   bool
-	startNoRC   bool // a start leaves remote control off
-	startExit1  bool // a start exits 1 though the daemon runs, as on an errored connection
-	started     int
+	loginBroken          bool
+	daemonUp             bool
+	rcOn                 bool // the daemon runs with remote control on
+	startFail            bool
+	startNoRC            bool // a start leaves remote control off
+	startExit1           bool // a start exits 1 though the daemon runs, as on an errored connection
+	started              int
+	instance             string
+	environment          string
+	environmentWriteFail bool
 }
 
 func (c *codexState) engineHome() string { return c.home + "/.local/share/engine/codex" }
@@ -54,6 +57,8 @@ func (c *codexState) engineHome() string { return c.home + "/.local/share/engine
 func settledCodex(home string) *codexState {
 	c := &codexState{home: home, userHome: home + "/.codex", bin: home + "/.local/bin/codex", signedIn: true, userAuth: true,
 		operatorRC: result{out: `{"status":"connected"}`}, plugin: callerPlugin, userPlugin: callerPlugin, operatorDaemon: true, daemonUp: true, rcOn: true}
+	c.instance = "123 Mon Nov 2 12:00:00 2026"
+	c.environment = c.instance
 	cfg := withEngineBlock("[marketplaces.engine]\nsource_type = \"git\"\n", engineBlock(home))
 	c.config, c.authLink = &cfg, c.userHome+"/auth.json"
 	return c
@@ -64,6 +69,7 @@ func settledCodex(home string) *codexState {
 func freshCodex(home string) *codexState {
 	c := settledCodex(home)
 	c.config, c.authLink, c.plugin, c.daemonUp, c.rcOn = nil, "", "", false, false
+	c.environment = ""
 	return c
 }
 
@@ -101,6 +107,23 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 	case strings.HasPrefix(cmd, "umask 077 && mkdir -p "+eh+" && ln -sfn "):
 		b.mutate(cmd)
 		c.authLink = c.userHome + "/auth.json"
+		return 0, true
+	case cmd == daemonInstanceCommand(eh):
+		if c.daemonUp {
+			return say("%s\n", c.instance)
+		}
+		return say("")
+	case cmd == "cat "+eh+"/daemon-environment":
+		if c.environment == "" {
+			return fail(1, "missing receipt")
+		}
+		return say("%s\n", c.environment)
+	case strings.HasPrefix(cmd, "umask 077 && printf "):
+		b.mutate(cmd)
+		if c.environmentWriteFail {
+			return fail(1, "read-only file system")
+		}
+		c.environment = c.instance
 		return 0, true
 	case cmd == remoteOnCommand(eh):
 		if c.rcOn && c.daemonUp {

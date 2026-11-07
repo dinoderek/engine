@@ -72,7 +72,7 @@ func TestCurrentUser(t *testing.T) {
 		reply string
 		fail  bool
 	}{
-		{"some-developer\n", false}, {"DifferentAccount", false}, {"", true},
+		{"some-developer\n", false}, {"DifferentAccount", false}, {"managed_account", false}, {"", true},
 		{"null", false}, {"two users", true}, {"-bad", true}, {"user\nother", true},
 	} {
 		t.Run(tc.reply, func(t *testing.T) {
