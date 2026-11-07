@@ -179,15 +179,13 @@ func (c codex) Args(l launch) string {
 // sessionVars is the shell for the -c value that gives a joined session's
 // commands what the window exports: the agent runs in the daemon, whose
 // environment has none of it. TMUX and TMUX_PANE, which the session closes
-// its own window with, come from the window's shell as it starts. The token
-// is not one: it is in the daemon's environment already.
+// its own window with, come from the window's shell as it starts.
 func sessionVars(l launch) string {
 	vars := []string{session.RunDirVar + "=" + session.TOMLString(l.runDir), session.HarnessVar + "=" + session.TOMLString(Codex)}
 	if l.control != nil {
 		vars = append(vars, "ENGINE_SERVER_URL="+session.TOMLString(l.control.URL),
 			"ENGINE_SERVER_TOKEN_FILE="+session.TOMLString(filepath.Join(l.runDir, "server-token")),
-			"ENGINE_ATTEMPT_ID="+session.TOMLString(l.control.Attempt),
-			"GH_TOKEN="+session.TOMLString(""), "GITHUB_TOKEN="+session.TOMLString(""))
+			"ENGINE_ATTEMPT_ID="+session.TOMLString(l.control.Attempt))
 	}
 	if l.mode == HandsOff {
 		vars = append(vars, session.UnattendedVar+`="1"`)

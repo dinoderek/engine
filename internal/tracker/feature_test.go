@@ -38,7 +38,7 @@ func TestReadFeature(t *testing.T) {
 	f, err := ReadFeature(func(env []string, name string, args ...string) (string, error) {
 		out, err := run(env, name, args...)
 		return strings.ReplaceAll(out, `"state":"%s"`, `"state":"open"`), err
-	}, "tok", Ref{"o/r", 1})
+	}, Ref{"o/r", 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestReadFeature(t *testing.T) {
 
 func TestReadFeatureFailures(t *testing.T) {
 	for _, fail := range []string{issues + "1", issues + "1/sub_issues", issues + "3/dependencies/blocked_by"} {
-		if _, err := ReadFeature(featureRunner(fail), "tok", Ref{"o/r", 1}); err == nil {
+		if _, err := ReadFeature(featureRunner(fail), Ref{"o/r", 1}); err == nil {
 			t.Errorf("%s failing: no error", fail)
 		}
 	}

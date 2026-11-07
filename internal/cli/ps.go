@@ -45,11 +45,7 @@ func listClaimed(env Env) (ps.Listing, error) {
 	if err != nil {
 		return ps.Listing{}, err
 	}
-	token, err := tracker.Token(env.Getenv, env.Home)
-	if err != nil {
-		return ps.Listing{}, err
-	}
-	src := psSource(env, host, token)
+	src := psSource(env, host)
 	src.Hosts = cfg.HostNames()
 	src.Status = hostStatus(env, cfg, host.Name)
 	return ps.List(src)
@@ -76,9 +72,9 @@ func hostStatus(env Env, cfg *hosts.Config, local string) func(string) (hostops.
 
 // psSource is where engine ps, and engine run's view of claims, read from.
 // Engine run reads each host's status from its own replies.
-func psSource(env Env, host hosts.Host, token string) ps.Source {
+func psSource(env Env, host hosts.Host) ps.Source {
 	return ps.Source{
-		Claimed:  func() ([]tracker.ClaimedTask, error) { return tracker.Claimed(env.Exec, token) },
+		Claimed:  func() ([]tracker.ClaimedTask, error) { return tracker.Claimed(env.Exec) },
 		Local:    host.Name,
 		Checkout: func(dir string) (session.Checkout, error) { return session.ProbeCheckout(env.Local, dir) },
 		Now:      env.Now,

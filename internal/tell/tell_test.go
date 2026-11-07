@@ -75,12 +75,14 @@ type gh struct {
 }
 
 func (g *gh) run(env []string, name string, args ...string) (string, error) {
-	if name != "gh" || !slices.Contains(env, "GH_TOKEN=tok") || len(args) < 2 || args[0] != "api" {
+	if name != "gh" || len(env) != 0 || len(args) < 2 || args[0] != "api" {
 		g.t.Errorf("unexpected command %s %v", name, args)
 		return "", errors.New("unexpected")
 	}
 	claim := fmt.Sprintf("Claim: r-7\nRun: r-7-20261024T000000Z\nHost: %s\nHarness: "+cmp.Or(g.harness, "claude-code 2.1 (sonnet)")+"\nMode: hands-off\nStarted by: engine start\nTmux: engine:r-7\nRemote Control: r-7\nBranch: task/r-7", g.host)
 	switch {
+	case args[1] == "user":
+		return "developer", nil
 	case args[1] == "search/issues":
 		return jsonOf(g.t, map[string]any{"incomplete_results": false, "items": []map[string]any{{
 			"number": 7, "title": "task", "state": "open", "repository_url": "https://api.github.com/repos/o/r",
@@ -88,7 +90,7 @@ func (g *gh) run(env []string, name string, args ...string) (string, error) {
 		}}}), nil
 	case args[1] == comments && len(args) == 2 || slices.Contains(args, "--paginate"):
 		return jsonOf(g.t, []map[string]any{{"body": claim, "html_url": commentURL,
-			"created_at": time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC).Format(time.RFC3339), "user": map[string]string{"login": "dinoderek-agents"}}}), nil
+			"created_at": time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC).Format(time.RFC3339), "user": map[string]string{"login": "developer"}}}), nil
 	case args[1] == comments && len(args) == 4 && args[2] == "-f":
 		if g.commentErr != nil {
 			return "HTTP 403", g.commentErr
@@ -160,7 +162,7 @@ func rig(t *testing.T, self, claimHost string, tm *tmux) (Deps, *gh, *[]time.Dur
 		Gh:     g.run,
 		Run:    (&ssh{tm: tm}).run,
 		Tmux:   &session.Tmux{Run: tm.run, Bin: "tmux", Sleep: func(d time.Duration) { slept = append(slept, d) }},
-		Getenv: func(k string) string { return map[string]string{"GH_TOKEN": "tok"}[k] },
+		Getenv: func(string) string { return "" },
 		Home:   home(t, self),
 	}
 	return d, g, &slept
@@ -281,13 +283,6 @@ func TestTellUnreachableHost(t *testing.T) {
 	}
 	if g.posted != "hi" || told.URL != commentURL || len(tm.keys) != 0 {
 		t.Errorf("posted %q, told %+v, keys %v", g.posted, told, tm.keys)
-	}
-}
-
-func TestTellNeedsToken(t *testing.T) {
-	d := Deps{Getenv: func(string) string { return "" }}
-	if _, err := Tell("r-7", "hi", d); err == nil || !strings.Contains(err.Error(), "GH_TOKEN") {
-		t.Errorf("got %v", err)
 	}
 }
 

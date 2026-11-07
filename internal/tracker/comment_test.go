@@ -18,11 +18,11 @@ func TestComment(t *testing.T) {
 		got = append(append(got, env...), args...)
 		return `{"html_url":"` + web + `"}`, nil
 	}
-	url, err := Comment(run, "tok", Ref{"o/r", 7}, "hello")
+	url, err := Comment(run, Ref{"o/r", 7}, "hello")
 	if err != nil || url != web {
 		t.Fatalf("url %q, err %v", url, err)
 	}
-	if strings.Join(got, " ") != "GH_TOKEN=tok api "+comments+" -f body=hello" {
+	if strings.Join(got, " ") != "api "+comments+" -f body=hello" {
 		t.Errorf("ran %q", got)
 	}
 }
@@ -32,7 +32,7 @@ func TestCommentFailures(t *testing.T) {
 		"gh fails":   func([]string, string, ...string) (string, error) { return "HTTP 404", errors.New("exit 1") },
 		"unreadable": func([]string, string, ...string) (string, error) { return "nope", nil },
 	} {
-		if _, err := Comment(run, "tok", Ref{"o/r", 7}, "x"); err == nil || !strings.Contains(err.Error(), "on o/r") {
+		if _, err := Comment(run, Ref{"o/r", 7}, "x"); err == nil || !strings.Contains(err.Error(), "on o/r") {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -52,13 +52,13 @@ func (r *recorder) run(_ []string, _ string, args ...string) (string, error) {
 
 func TestLabelWrites(t *testing.T) {
 	r := &recorder{out: "[]"}
-	if err := AddLabels(r.run, "tok", Ref{"o/r", 7}, "engine:failed", "engine:x"); err != nil {
+	if err := AddLabels(r.run, Ref{"o/r", 7}, "engine:failed", "engine:x"); err != nil {
 		t.Fatal(err)
 	}
-	if err := RemoveLabel(r.run, "tok", Ref{"o/r", 7}, "engine:needs-human"); err != nil {
+	if err := RemoveLabel(r.run, Ref{"o/r", 7}, "engine:needs-human"); err != nil {
 		t.Fatal(err)
 	}
-	if err := CloseCompleted(r.run, "tok", Ref{"o/r", 7}); err != nil {
+	if err := CloseCompleted(r.run, Ref{"o/r", 7}); err != nil {
 		t.Fatal(err)
 	}
 	got := []string{strings.Join(r.args[0], " "), strings.Join(r.args[1], " "), strings.Join(r.args[2], " ")}
@@ -77,14 +77,14 @@ func TestLabelWrites(t *testing.T) {
 
 func TestLabelWriteFailures(t *testing.T) {
 	gone := &recorder{out: `{"message":"Label does not exist"}`, err: errors.New("exit 1")}
-	if err := RemoveLabel(gone.run, "tok", Ref{"o/r", 7}, "x"); err != nil {
+	if err := RemoveLabel(gone.run, Ref{"o/r", 7}, "x"); err != nil {
 		t.Errorf("a missing label: %v", err)
 	}
 	broken := &recorder{out: "HTTP 500", err: errors.New("exit 1")}
 	for name, err := range map[string]error{
-		"add":    AddLabels(broken.run, "tok", Ref{"o/r", 7}, "x"),
-		"remove": RemoveLabel(broken.run, "tok", Ref{"o/r", 7}, "x"),
-		"close":  CloseCompleted(broken.run, "tok", Ref{"o/r", 7}),
+		"add":    AddLabels(broken.run, Ref{"o/r", 7}, "x"),
+		"remove": RemoveLabel(broken.run, Ref{"o/r", 7}, "x"),
+		"close":  CloseCompleted(broken.run, Ref{"o/r", 7}),
 	} {
 		if err == nil {
 			t.Errorf("%s: no error", name)
@@ -98,12 +98,12 @@ func TestOperator(t *testing.T) {
 		`{"user":{"login":"author"},"assignees":[]}`:                 "author",
 	} {
 		r := &recorder{out: out}
-		if got, err := Operator(r.run, "tok", Ref{"o/r", 7}); err != nil || got != want {
+		if got, err := Operator(r.run, Ref{"o/r", 7}); err != nil || got != want {
 			t.Errorf("%s: %q %v", out, got, err)
 		}
 	}
 	for _, r := range []*recorder{{out: "x", err: errors.New("exit 1")}, {out: "nope"}} {
-		if _, err := Operator(r.run, "tok", Ref{"o/r", 7}); err == nil {
+		if _, err := Operator(r.run, Ref{"o/r", 7}); err == nil {
 			t.Errorf("%q: no error", r.out)
 		}
 	}
@@ -113,7 +113,7 @@ func TestPullRequests(t *testing.T) {
 	merged, open := "https://github.com/o/r/"+"pull/9", "https://github.com/o/r/"+"pull/8"
 	r := &recorder{out: `{"data":{"repository":{"issue":{"closedByPullRequestsReferences":{"nodes":[` +
 		`{"url":"` + merged + `","merged":true},{"url":"` + open + `","merged":false}]}}}}}`}
-	urls, err := PullRequests(r.run, "tok", Ref{"o/r", 7})
+	urls, err := PullRequests(r.run, Ref{"o/r", 7})
 	if err != nil || len(urls) != 1 || urls[0] != merged {
 		t.Errorf("urls %v, %v", urls, err)
 	}
@@ -121,7 +121,7 @@ func TestPullRequests(t *testing.T) {
 		t.Errorf("args %s", a)
 	}
 	for _, bad := range []*recorder{{out: "x", err: errors.New("exit 1")}, {out: "nope"}} {
-		if _, err := PullRequests(bad.run, "tok", Ref{"o/r", 7}); err == nil {
+		if _, err := PullRequests(bad.run, Ref{"o/r", 7}); err == nil {
 			t.Errorf("%q: no error", bad.out)
 		}
 	}

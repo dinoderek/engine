@@ -19,7 +19,7 @@ import (
 // Deps are the programs and the environment attach reaches. System gives the
 // ones a running engine uses; tests replace them.
 type Deps struct {
-	// Gh runs gh as the machine user, for the claim comments.
+	// Gh runs the host's gh, for the claim comments.
 	Gh tracker.Runner
 	// Run runs tmux and ssh and returns their standard output.
 	Run session.Runner
@@ -50,11 +50,7 @@ func System(gh tracker.Runner, getenv func(string) string, home string) Deps {
 // <repo>-<task>. On success it replaces the process, so it returns only an
 // error.
 func Attach(name string, d Deps) error {
-	token, err := tracker.Token(d.Getenv, d.Home)
-	if err != nil {
-		return err
-	}
-	tasks, err := tracker.Claimed(d.Gh, token)
+	tasks, err := tracker.Claimed(d.Gh)
 	if err != nil {
 		return err
 	}

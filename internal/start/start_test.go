@@ -37,11 +37,6 @@ func TestRefusalsChangeNothing(t *testing.T) {
 	cases := []refusal{
 		{name: "unknown mode", opts: Options{Mode: "yolo"}, want: `unknown mode "yolo"`},
 		{name: "unknown tier", opts: Options{Tier: "deeep"}, want: `unknown tier "deeep"`},
-		{name: "no token", setup: removeFile(".config/engine/github-token"), want: "the session reads the machine user's token"},
-		{name: "GH_TOKEN but no token file", env: map[string]string{"GH_TOKEN": "tok"},
-			setup: removeFile(".config/engine/github-token"), want: "the session reads the machine user's token"},
-		{name: "empty token file, GH_TOKEN set", env: map[string]string{"GH_TOKEN": "tok"},
-			setup: emptyFile(".config/engine/github-token"), want: "is empty"},
 		{name: "no host file", setup: removeFile(".config/engine/host"), want: "read host file"},
 		{name: "no hosts.toml", setup: removeFile(".config/engine/hosts.toml"), want: "read host config"},
 		{name: "host not in hosts.toml", host: "laptop", want: `host "laptop" is not in hosts.toml`},
@@ -120,13 +115,6 @@ func checkRefusal(t *testing.T, c refusal) {
 	}
 	gh.readOnly(t)
 	tm.readOnly(t)
-}
-
-func emptyFile(rel string) func(*testing.T, home) {
-	return func(t *testing.T, h home) {
-		t.Helper()
-		write(t, filepath.Join(h.dir, rel), " \n", 0o600)
-	}
 }
 
 func removeFile(rel string) func(*testing.T, home) {

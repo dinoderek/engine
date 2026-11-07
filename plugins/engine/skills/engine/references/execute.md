@@ -18,13 +18,9 @@ The kickoff names the mode. If it names none, run **gated**.
 Never enable auto-merge or merge with `--admin`. In Claude Code and Codex the
 plugin's merge guard blocks both, and any merge without `--match-head-commit`.
 
-## GitHub identity
+## GitHub access
 
-For a GitHub plan, every `gh` call acts as engine's machine user, so your
-@mentions notify the operator. If `GH_TOKEN` is unset, run each one as
-`engine gh <args…>`, which takes the token from the token file without it
-appearing on the command line. With no token and no file,
-stop (**Environment**). `git push` uses the checkout's own credentials.
+Use the host's working `gh` installation and normal Git configuration.
 
 **The operator** is the feature issue's assignee, else its author.
 
@@ -36,7 +32,7 @@ stop (**Environment**). `git push` uses the checkout's own credentials.
      `engine:approved`, not `engine:prepare`;
    - every blocker is closed
      (`gh api repos/<o>/<r>/issues/<n>/dependencies/blocked_by`);
-   - the token exists, and the host file unless the kickoff names `host=`;
+   - `gh` works, and the host file exists unless the kickoff names `host=`;
    - the repo has the `engine:` labels (`engine labels sync`).
 
    If a check fails, say so in the session only. Otherwise add

@@ -120,14 +120,14 @@ func quote(s string) string {
 
 func TestLatestClaimTakesTheNewest(t *testing.T) {
 	older := strings.Replace(fullClaim, "Host: mac", "Host: devbox", 1)
-	page1 := thread(0, cm{machine, "hello"}, cm{machine, older}, cm{machine, "Ruling (risk: med): x"})
-	page2 := thread(3, cm{machine, fullClaim}, cm{machine, "done"})
+	page1 := thread(0, cm{operator, "hello"}, cm{operator, older}, cm{operator, "Ruling (risk: med): x"})
+	page2 := thread(3, cm{operator, fullClaim}, cm{operator, "done"})
 	gh := &fakeGH{replies: map[string]string{commentsPath(21): page1 + "\n" + page2}}
-	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21})
+	c, err := LatestClaim(gh.run, operator, Ref{"o/r", 21})
 	if err != nil || c == nil {
 		t.Fatalf("got %v, %v", c, err)
 	}
-	if c.Host != "mac" || c.Author != machine || !strings.HasSuffix(c.URL, "/c3") ||
+	if c.Host != "mac" || c.Author != operator || !strings.HasSuffix(c.URL, "/c3") ||
 		!c.PostedAt.Equal(time.Date(2026, 10, 21, 20, 3, 0, 0, time.UTC)) {
 		t.Errorf("got %+v", c)
 	}
@@ -139,40 +139,40 @@ func TestLatestClaimTakesTheNewest(t *testing.T) {
 func TestLatestClaimIgnoresStrangers(t *testing.T) {
 	stranger := strings.Replace(fullClaim, "Host: mac", "Host: evil", 1)
 	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0,
-		cm{machine, fullClaim}, cm{"stranger", stranger}, cm{machine + "-2", stranger}, cm{"", stranger})}}
-	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21})
-	if err != nil || c == nil || c.Host != "mac" || c.Author != machine {
+		cm{operator, fullClaim}, cm{"stranger", stranger}, cm{operator + "-2", stranger}, cm{"", stranger})}}
+	c, err := LatestClaim(gh.run, operator, Ref{"o/r", 21})
+	if err != nil || c == nil || c.Host != "mac" || c.Author != operator {
 		t.Errorf("a later stranger replaced the claim: %+v, %v", c, err)
 	}
 	gh = &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{"stranger", stranger})}}
-	if c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); c != nil || err != nil {
+	if c, err := LatestClaim(gh.run, operator, Ref{"o/r", 21}); c != nil || err != nil {
 		t.Errorf("a stranger's claim counted: %+v, %v", c, err)
 	}
 }
 
 func TestLatestClaimAcceptsTheOperator(t *testing.T) {
 	byHand := strings.Replace(fullClaim, "Host: mac", "Host: laptop", 1)
-	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{machine, fullClaim}, cm{operator, byHand})}}
-	c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21})
-	if err != nil || c == nil || c.Host != "laptop" || c.Author != operator {
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{operator, fullClaim}, cm{other, byHand})}}
+	c, err := LatestClaim(gh.run, other, Ref{"o/r", 21})
+	if err != nil || c == nil || c.Host != "laptop" || c.Author != other {
 		t.Errorf("got %+v, %v", c, err)
 	}
 }
 
 func TestLatestClaimNone(t *testing.T) {
-	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{machine, "hello"}) + "[]"}}
-	if c, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); c != nil || err != nil {
+	gh := &fakeGH{replies: map[string]string{commentsPath(21): thread(0, cm{operator, "hello"}) + "[]"}}
+	if c, err := LatestClaim(gh.run, operator, Ref{"o/r", 21}); c != nil || err != nil {
 		t.Errorf("got %v, %v", c, err)
 	}
 }
 
 func TestLatestClaimFailures(t *testing.T) {
 	gh := &fakeGH{replies: map[string]string{commentsPath(21): "<html>"}}
-	if _, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 21)+": unreadable") {
+	if _, err := LatestClaim(gh.run, operator, Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 21)+": unreadable") {
 		t.Errorf("bad JSON: %v", err)
 	}
 	gh = &fakeGH{}
-	if _, err := LatestClaim(gh.run, "tok", Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 21)) {
+	if _, err := LatestClaim(gh.run, operator, Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), "comments on "+short("o/r", 21)) {
 		t.Errorf("gh failure: %v", err)
 	}
 }

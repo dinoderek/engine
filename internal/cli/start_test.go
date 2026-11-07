@@ -76,18 +76,18 @@ func TestStartCommandLine(t *testing.T) {
 	}{
 		{"usage", []string{"start"}, 2, "usage: engine start <owner/repo#n>"},
 		{"refusal", []string{"start", task, "--mode", "yolo"}, 1, `engine start: unknown mode "yolo": want hands-off or gated; nothing was changed`},
-		{"no token", []string{"start", task}, 1, "engine start: the session reads the machine user's token from"},
+		{"no host config", []string{"start", task}, 1, "engine start: read host config"},
 		{"usage names --check", []string{"start"}, 2, "engine start --check [--harness <name>] [--host <name>]"},
 		{"usage names --harness", []string{"start", task, "--bogus"}, 2, "[--harness <name>]"},
-		{"--harness parses, then the token is checked", []string{"start", task, "--harness", "codex"}, 1, "engine start: the session reads the machine user's token from"},
+		{"--harness parses, then the host config is checked", []string{"start", task, "--harness", "codex"}, 1, "engine start: read host config"},
 		{"--harness needs a value", []string{"start", task, "--harness"}, 2, "--harness needs a value"},
-		{"check --harness parses, then the token is checked", []string{"start", "--check", "--harness", "codex", "--host", "devbox"}, 1, "engine start --check: read host config"},
-		{"check --harness codex, no token", []string{"start", "--check", "--harness=codex"}, 1, "engine start --check: the session reads the machine user's token from"},
+		{"check --harness parses, then the host config is checked", []string{"start", "--check", "--harness", "codex", "--host", "devbox"}, 1, "engine start --check: read host config"},
+		{"check --harness codex, no host config", []string{"start", "--check", "--harness=codex"}, 1, "engine start --check: read host config"},
 		{"usage names --host", []string{"start", task, "--bogus"}, 2, "[--host <name>]"},
-		{"--host parses, then the token is checked", []string{"start", task, "--host", "nowhere"}, 1, "engine start: the session reads the machine user's token from"},
+		{"--host parses, then the host config is checked", []string{"start", task, "--host", "nowhere"}, 1, "engine start: read host config"},
 		{"check with a task", []string{"start", "--check", task}, 2, "--check takes no task"},
 		{"check on a host, no host config", []string{"start", "--check", "--host", "devbox"}, 1, "engine start --check: read host config"},
-		{"check, no token", []string{"start", "--check"}, 1, "engine start --check: the session reads the machine user's token from"},
+		{"check, no host config", []string{"start", "--check"}, 1, "engine start --check: read host config"},
 	}
 	for _, c := range cases {
 		var out, errOut bytes.Buffer

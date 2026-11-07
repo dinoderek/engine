@@ -1,34 +1,13 @@
 # Operator setup
 
-> **Owns:** the one-time setup an operator does by hand: engine's GitHub identity, its token, notifications, harnesses and remote access. **Not here:** why engine has its own identity (`coordinator.md`), host config (`hosts-and-sessions.md`).
+> **Owns:** the one-time setup an operator does by hand: GitHub access, notifications, harnesses and remote access. **Not here:** GitHub coordination (`coordinator.md`), host config (`hosts-and-sessions.md`).
 
-## Machine user
+## GitHub access
 
-1. **Account.** A separate GitHub account (here `dinoderek-agents`), with a
-   verified email and 2FA. GitHub allows one free machine account per person.
-2. **Access.** Add it to each target repo as an outside collaborator with
-   **Write**. Never give it Admin and never make it an org member. Its
-   collaborator list is the real boundary on what engine can touch.
-3. **Token.** Use a **classic** token on the machine account, with scopes
-   `repo`, `workflow` and `read:org`, and an expiry you rotate.
-   - Fine-grained tokens don't work here. They cannot reach repos where the
-     account is an outside collaborator, or repos owned by another personal
-     account.
-   - A classic token reaches only what the account can, so the token is
-     limited by step 2.
-   - Each org must allow classic tokens: org Settings → Personal access
-     tokens.
-4. **Store it** on each host at `~/.config/engine/github-token`, with mode
-   `600`, and never in shell history.
-5. **Pass it, don't log in with it.** Engine passes the token as `GH_TOKEN`
-   to its own `git` and `gh` calls and to every session. Your own `gh` login
-   stays yours.
-6. **Push from engine's clones only.** Engine clones over HTTPS and refuses
-   to clone or sync when a `url.<base>.insteadOf` or `pushInsteadOf` rule in
-   your git config would send an engine clone over SSH, so limit such a rule
-   to your own checkouts (an `includeIf "gitdir:"`).
-7. **Who opens PRs.** The machine user, which also means you can
-   approve them.
+Each host needs a working `gh` installation with access to engine and its
+target repositories, plus normal Git authentication and commit identity.
+Engine uses that configuration for GitHub calls, clones, pushes and PRs.
+Check access with `gh api user` and `gh repo view <owner/repo>`.
 
 ## Notifications
 
@@ -36,7 +15,8 @@
    "Participating" and "@mentions".
 2. **Repos:** watch each target repo, using Custom → Issues and Pull requests.
 3. **Engine's side:** engine assigns you to every feature issue it drives, so
-   you count as participating. Hard stops @mention you.
+   you count as participating. Hard stops @mention you; GitHub does not
+   notify you about activity from your own account. Read the task thread or attach to the session for it.
 
 ## Each host
 
@@ -74,11 +54,9 @@ With no `--host` it checks this host, apart from the Codex steps, which act.
 Codex home (`codex.md`, "Setup"), and never edits `~/.codex`. Starting engine's
 daemon turns on remote control, which opens a connection to OpenAI's service for
 the ChatGPT and Codex apps. Signing in is yours: setup prints `codex login`, or,
-on another host, `ssh -t <address> codex login --device-auth`. The daemon keeps
-the token it started with: after rotating it, stop the daemon with
-`CODEX_HOME=~/.local/share/engine/codex codex app-server daemon stop` and
-rerun setup; the same after a reboot, which stops the daemon. Setup reports the operator's own remote-control errors and ignored
-config keys, and fixes none.
+on another host, `ssh -t <address> codex login --device-auth`. After a reboot, rerun setup
+to start engine's daemon. Setup reports the operator's own remote-control
+errors and ignored config keys, and fixes none.
 
 **Claude's one-time prompts.** Nobody is there to answer them in an engine
 window. When the preflight finds one, run `claude --permission-mode auto
@@ -131,7 +109,7 @@ then run `engine setup --host devbox`.
 
 ## Each target repo
 
-- Add the machine user (above).
+- Confirm the host's `gh` and Git access to the repo.
 - Run `engine labels sync <owner/repo>` once, and again whenever the label set
   in `internal/tracker` changes. It never deletes a label.
 - Enable the `engine` plugin in its `.claude/settings.json`.

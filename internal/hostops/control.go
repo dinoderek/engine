@@ -56,7 +56,7 @@ func ControlSpawn(d Deps, r ControlRequest) (Spawned, error) {
 	if err != nil {
 		return Spawned{}, refuse("%v", err)
 	}
-	repos := session.Repos{Run: d.Run, Probe: d.Probe, Home: d.Home, Operator: true, RemoteURL: r.Remote}
+	repos := session.Repos{Run: d.Run, Probe: d.Probe, Home: d.Home, Control: true, RemoteURL: r.Remote}
 	if _, err = repos.Sync(repo); err != nil {
 		return Spawned{}, err
 	}

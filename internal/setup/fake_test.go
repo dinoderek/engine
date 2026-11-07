@@ -53,7 +53,7 @@ func callerHome(t *testing.T) string { return callerHomeWith(t, hostsTOML) }
 func callerHomeWith(t *testing.T, toml string) string {
 	t.Helper()
 	dir := t.TempDir()
-	for name, content := range map[string]string{"hosts.toml": toml, "host": "mac\n", "github-token": secret + "\n"} {
+	for name, content := range map[string]string{"hosts.toml": toml, "host": "mac\n"} {
 		path := filepath.Join(dir, ".config", "engine", name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -105,7 +105,7 @@ func staleBox() *box {
 func settledBox(home string) *box {
 	b := staleBox()
 	b.rev, b.goVer, b.plugin = callerRev[:7], callerGo, callerPlugin
-	for _, name := range []string{"hosts.toml", "github-token"} {
+	for _, name := range []string{"hosts.toml"} {
 		data, _ := os.ReadFile(filepath.Join(home, ".config", "engine", name))
 		b.files[name] = string(data)
 	}
@@ -235,7 +235,7 @@ func (b *box) pluginCommand(cmd string, errOut io.Writer) int {
 
 // fileOf is the name of the config file a command names.
 func fileOf(cmd string) string {
-	for _, name := range []string{"hosts.toml", "github-token", "host"} {
+	for _, name := range []string{"hosts.toml", "host"} {
 		if strings.Contains(cmd, `/`+name) {
 			return name
 		}
@@ -296,7 +296,7 @@ func newRig(t *testing.T) *rig {
 	r.check = func() (bool, error) { return true, nil }
 	r.checkCodex = r.check
 	r.gh = func(env []string, name string, args ...string) (string, error) {
-		if len(env) != 1 || env[0] != "GH_TOKEN="+secret {
+		if len(env) != 0 {
 			return "", fmt.Errorf("gh got env %v", env)
 		}
 		if strings.Contains(strings.Join(args, " "), "contents/go.mod?ref="+callerRev) {

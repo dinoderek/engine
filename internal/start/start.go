@@ -119,10 +119,9 @@ func refuse(format string, args ...any) error {
 
 // plan is a start that has passed every check.
 type plan struct {
-	opts  Options
-	token string
-	cfg   *hosts.Config
-	host  hosts.Host
+	opts Options
+	cfg  *hosts.Config
+	host hosts.Host
 	// remote is true when host is another machine, reached over SSH.
 	remote   bool
 	task     tracker.Task
@@ -194,7 +193,7 @@ func check(o Options, d Deps) (plan, error) {
 	if err := p.loadHost(d); err != nil {
 		return plan{}, err
 	}
-	task, err := tracker.ReadTask(d.GH, p.token, o.Ref)
+	task, err := tracker.ReadTask(d.GH, o.Ref)
 	if err != nil {
 		return plan{}, err
 	}
@@ -231,24 +230,15 @@ func (p *plan) checkOptions() error {
 	return nil
 }
 
-// loadHost reads the token and the host config. The token comes from the
-// token file only, never GH_TOKEN, because the session reads that file
-// itself: engine's clone and the session then act as one machine user.
 func (p *plan) loadHost(d Deps) error {
-	token, err := tracker.Token(func(string) string { return "" }, d.Home)
-	if err != nil {
-		return refuse("the session reads the machine user's token from %s: %v", tokenFile(d.Home), err)
-	}
 	cfg, host, err := hosts.Open(hosts.ConfigDir(d.Home))
 	if err != nil {
 		return refuse("%v", err)
 	}
-	p.token, p.cfg = token, cfg
+	p.cfg = cfg
 	p.host, p.remote, err = pickHost(cfg, host, p.opts.Host)
 	return err
 }
-
-func tokenFile(home string) string { return filepath.Join(home, filepath.FromSlash(tracker.TokenFile)) }
 
 // checkTask refuses a task that is closed, taken, failed, blocked, or a
 // standalone task the operator has not approved.

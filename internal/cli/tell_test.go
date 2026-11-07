@@ -57,6 +57,8 @@ func tellGh(t *testing.T, posted *string) func([]string, string, ...string) (str
 	claim := "Claim: r-7\nRun: r-7-20261024T000000Z\nHost: devbox\nHarness: claude-code 2.1 (sonnet)\nMode: hands-off\nStarted by: engine start\nTmux: engine:r-7\nRemote Control: r-7\nBranch: task/r-7"
 	return func(_ []string, name string, args ...string) (string, error) {
 		switch {
+		case args[1] == "user":
+			return "developer", nil
 		case args[1] == "search/issues":
 			return jsonOf(map[string]any{"incomplete_results": false, "items": []map[string]any{{
 				"number": 7, "title": "task", "state": "open", "repository_url": "https://api.github.com/repos/o/r",
@@ -67,7 +69,7 @@ func tellGh(t *testing.T, posted *string) func([]string, string, ...string) (str
 			return jsonOf(map[string]string{"html_url": "https://example.test/c/1"}), nil
 		case args[1] == tellComments || slices.Contains(args, "--paginate"):
 			return jsonOf([]map[string]any{{"body": claim, "html_url": "https://example.test/c/0",
-				"created_at": "2026-10-24T00:00:00Z", "user": map[string]string{"login": "dinoderek-agents"}}}), nil
+				"created_at": "2026-10-24T00:00:00Z", "user": map[string]string{"login": "developer"}}}), nil
 		}
 		t.Errorf("unexpected %s %v", name, args)
 		return "", errors.New("unexpected")
@@ -100,7 +102,7 @@ func TestTellText(t *testing.T) {
 			var out, errOut bytes.Buffer
 			env := Env{
 				In: strings.NewReader(tt.stdin), Out: &out, Err: &errOut, Exec: tellGh(t, &posted), Stream: noStream(t),
-				Getenv: func(k string) string { return map[string]string{"GH_TOKEN": "tok"}[k] }, Home: home,
+				Getenv: func(string) string { return "" }, Home: home,
 				Local: func(name string, _ ...string) (string, error) {
 					return "", &session.ExitError{Command: name, Code: 255, Stderr: "no route to host"}
 				},

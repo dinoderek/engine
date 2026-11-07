@@ -58,7 +58,7 @@ bin = { claude = "~/bin/claude" }
 func setupEnv(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	home := t.TempDir()
-	for name, content := range map[string]string{"hosts.toml": setupHosts, "host": "mac\n", "github-token": "tok\n"} {
+	for name, content := range map[string]string{"hosts.toml": setupHosts, "host": "mac\n"} {
 		path := filepath.Join(home, ".config", "engine", name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)

@@ -24,11 +24,10 @@ var isolatedGit = []string{
 	"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com",
 }
 
-// realGit runs git isolated from the host's config, and answers gh's
-// question about the machine user.
+// realGit runs git isolated from the host's config.
 func realGit(dir string, env []string, name string, args ...string) (string, error) {
 	if name == "gh" {
-		return "testbot 42\n", nil
+		return "", fmt.Errorf("unexpected gh call")
 	}
 	return session.RunCommand(dir, append(append([]string{}, env...), isolatedGit...), name, args...)
 }
@@ -137,7 +136,7 @@ func TestRealStart(t *testing.T) {
 	for _, want := range []string{
 		"arg:--model\narg:haiku-x\narg:--effort\narg:medium\narg:-n\narg:r-7\narg:--remote-control\narg:r-7\n" +
 			"arg:--add-dir\narg:" + filepath.Join(h.dir, ".claude/plugins/cache/engine") + "\narg:--allowedTools\narg:Read(//tmp/**)\narg:Read(//private/tmp/**)\narg:--settings\narg:{\"statusLine\":{\"type\":\"command\",\"command\":\"engine hook statusline\"}}\narg:--\n" + kickoff,
-		"token:tok\n", "/task-r-7\n",
+		"token:\n", "/task-r-7\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the fake claude got\n%s\nwant it to contain\n%s", got, want)

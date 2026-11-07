@@ -29,7 +29,7 @@ func TestSetupBringsAStaleHostToTheCallersBuild(t *testing.T) {
 	out := r.out.String()
 	for _, want := range []string{
 		"1. tools: ok", "2. engine: changed (2a08a0c go1.27.3, was d8c1744 go1.27.2)", "3. plugin: changed (0.7.1, was 0.2.0)",
-		"4. config: changed (wrote host, hosts.toml, github-token)", "5. sign-in: ok (claude.ai)",
+		"4. config: changed (wrote host, hosts.toml)", "5. sign-in: ok (claude.ai)",
 		"6. no suspend: ok (masked)", "7. preflight: ok", "the check report", "box is set up",
 	} {
 		if !strings.Contains(out, want) {
@@ -37,7 +37,7 @@ func TestSetupBringsAStaleHostToTheCallersBuild(t *testing.T) {
 		}
 	}
 	b := r.box
-	if b.files["host"] != "box\n" || b.files["github-token"] != secret+"\n" || b.files["hosts.toml"] != hostsTOML {
+	if b.files["host"] != "box\n" || b.files["hosts.toml"] != hostsTOML {
 		t.Errorf("files on the host: %q", b.files)
 	}
 	wantInstall := `GOBIN="$HOME/.local/bin" GOTOOLCHAIN=go1.27.3 go install github.com/dinoderek/engine/cmd/engine@` + callerRev
@@ -186,9 +186,8 @@ func TestPluginWithMarketplaceIsRefreshedThenUpdated(t *testing.T) {
 func TestConfigFixesAWrongModeAndOverwritesADifferentFile(t *testing.T) {
 	r := newRig(t)
 	r.box = settledBox(r.home)
-	r.box.badMode["github-token"] = true
+	r.box.badMode["host"] = true
 	r.box.files["hosts.toml"] = "old\n"
-	r.box.files["host"] = "mac\n"
 	if !mustRun(t, r, "box") {
 		t.Fatalf("open:\n%s", r.out.String())
 	}
@@ -204,7 +203,7 @@ func TestConfigFixesAWrongModeAndOverwritesADifferentFile(t *testing.T) {
 			writes++
 		}
 	}
-	if chmods != 1 || writes != 2 {
+	if chmods != 1 || writes != 1 {
 		t.Errorf("%d chmods and %d writes: %q", chmods, writes, r.box.mutations)
 	}
 	for _, m := range r.box.mutations {
@@ -235,9 +234,6 @@ func TestRefusalsChangeNothing(t *testing.T) {
 			r.gh = func([]string, string, ...string) (string, error) { return "deadbeef", nil }
 		}, "is not on GitHub (dinoderek/engine); push it"},
 		{"no plugin here", "box", func(r *rig) { r.local.plugin = "" }, "plugin is not installed for the user on this host"},
-		{"no token file", "box", func(r *rig) {
-			_ = os.Remove(filepath.Join(r.home, ".config", "engine", "github-token"))
-		}, "no GH_TOKEN and no token file"},
 		{"no host config", "box", func(r *rig) {
 			_ = os.Remove(filepath.Join(r.home, ".config", "engine", "hosts.toml"))
 		}, "read host config"},

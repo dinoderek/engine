@@ -17,9 +17,6 @@ func TestControlSpawnUsesOrdinaryCredentialsAndReplays(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(clone, ".git"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(h.dir, ".config/engine/github-token")); err != nil {
-		t.Fatal(err)
-	}
 	git := &gitFake{}
 	tm := &tmuxFake{}
 	d := spawnDeps(t, h, git.run, tm, nil)
@@ -36,8 +33,8 @@ func TestControlSpawnUsesOrdinaryCredentialsAndReplays(t *testing.T) {
 	if first.Window != second.Window || first.Worktree != second.Worktree {
 		t.Fatal("replay lost result")
 	}
-	if strings.Contains(tm.command, r.Credential) || !strings.Contains(tm.command, "unset GH_TOKEN GITHUB_TOKEN") {
-		t.Fatal("launch leaked a token or required the machine user")
+	if strings.Contains(tm.command, r.Credential) || strings.Contains(tm.command, "GH_TOKEN") {
+		t.Fatal("launch exposed or overrode credentials")
 	}
 	for _, want := range []string{"ENGINE_SERVER_URL", "ENGINE_SERVER_TOKEN_FILE", "ENGINE_ATTEMPT_ID"} {
 		if !strings.Contains(tm.command, want) {
@@ -46,7 +43,7 @@ func TestControlSpawnUsesOrdinaryCredentialsAndReplays(t *testing.T) {
 	}
 	for _, line := range git.calls {
 		if strings.HasPrefix(line, "gh ") || strings.Contains(line, "credential.helper") || strings.Contains(line, "user.name") {
-			t.Fatal("configured machine identity:", line)
+			t.Fatal("configured Git identity:", line)
 		}
 	}
 	info, err := os.Stat(filepath.Join(first.RunDir, "server-token"))
@@ -82,8 +79,8 @@ func TestControlDispatchJSONAndJoinedEnvironment(t *testing.T) {
 	if !strings.Contains(vars, "ENGINE_SERVER_TOKEN_FILE") || !strings.Contains(vars, "ENGINE_ATTEMPT_ID") {
 		t.Fatal(vars)
 	}
-	if !strings.Contains(vars, `GH_TOKEN=""`) || !strings.Contains(vars, `GITHUB_TOKEN=""`) {
-		t.Fatal("joined session inherited daemon's machine credentials", vars)
+	if strings.Contains(vars, "GH_TOKEN") || strings.Contains(vars, "GITHUB_TOKEN") {
+		t.Fatal("joined session overrides GitHub authentication", vars)
 	}
 	r := ControlRequest{URL: "http://server", Attempt: "a1", Credential: "secret"}
 	b, err := json.Marshal(r)

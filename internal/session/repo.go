@@ -16,15 +16,11 @@ import (
 // directory: one clone per repo, at <owner>/<repo> below it.
 const ReposDir = ".local/share/engine/repos"
 
-// ControlReposDir isolates ordinary-credential clones from machine-user configuration.
+// ControlReposDir keeps server-dispatched clones separate from GitHub-plan clones.
 const ControlReposDir = ".local/share/engine/control-repos"
 
 // GitHubURL is where engine clones from, over HTTPS.
 const GitHubURL = "https://github.com"
-
-// credentialHelper makes git ask gh, which answers from GH_TOKEN, so the
-// clone acts as the machine user whatever else the host has configured.
-const credentialHelper = "!gh auth git-credential"
 
 var namePart = regexp.MustCompile(`^[\w.-]+$`)
 
@@ -62,13 +58,10 @@ type Repos struct {
 	Run RunFunc
 	// Home holds the clones: <Home>/.local/share/engine/repos/<owner>/<repo>.
 	Home string
-	// Token is the machine user's token. It is passed to git and gh as
-	// GH_TOKEN and never written to disk.
-	Token string
 	// BaseURL is the host that serves "<owner>/<repo>.git"; GitHubURL when empty.
 	BaseURL string
-	// Operator uses the host's ordinary Git credentials and identity.
-	Operator bool
+	// Control selects the server-dispatched clone store.
+	Control bool
 	// RemoteURL is an explicitly registered remote for an operator-owned clone.
 	RemoteURL string
 	// Probe runs a repo's own `dev` with no verb, to read its usage. It should
@@ -83,14 +76,14 @@ func (r Repos) Path(repo Repo) (string, error) {
 		return "", errors.New("no home directory to keep engine's clones in")
 	}
 	dir := ReposDir
-	if r.Operator {
+	if r.Control {
 		dir = ControlReposDir
 	}
 	return filepath.Join(r.Home, filepath.FromSlash(dir), repo.Owner, repo.Name), nil
 }
 
 func (r Repos) url(repo Repo) string {
-	if r.Operator && r.RemoteURL != "" {
+	if r.RemoteURL != "" {
 		return r.RemoteURL
 	}
 	base := r.BaseURL
@@ -100,41 +93,16 @@ func (r Repos) url(repo Repo) string {
 	return strings.TrimRight(base, "/") + "/" + repo.String() + ".git"
 }
 
-// checkToken refuses an empty token: gh would then fall back to the host's own
-// login, and the clone would act as the operator instead of the machine user.
-func (r Repos) checkToken() error {
-	if r.Operator {
-		return nil
-	}
-	if strings.TrimSpace(r.Token) == "" {
-		return errors.New("no machine-user token: engine would act as whoever gh is signed in as")
-	}
-	return nil
-}
-
-// env is added to every git and gh call: the token, and no prompting for
-// credentials, so a missing one fails instead of hanging.
-func (r Repos) env() []string {
-	if r.Operator {
-		return []string{"GIT_TERMINAL_PROMPT=0", "GH_TOKEN=", "GITHUB_TOKEN="}
-	}
-	return []string{"GH_TOKEN=" + r.Token, "GIT_TERMINAL_PROMPT=0"}
-}
-
 func (r Repos) git(dir string, args ...string) (string, error) {
-	out, err := r.Run(dir, r.env(), "git", args...)
+	out, err := r.Run(dir, []string{"GIT_TERMINAL_PROMPT=0"}, "git", args...)
 	return strings.TrimSpace(out), err
 }
 
 // Sync makes sure engine's clone of repo exists, fetches it, and leaves it
 // checked out at the remote's default branch. A first sync clones over HTTPS.
-// Every sync sets the clone's local config: gh as the only credential helper,
-// and the machine user's name and noreply email. Syncs and worktree creation
+// Clones inherit the host's Git configuration. Syncs and worktree creation
 // in one repo take turns, through a lock file beside the clone.
 func (r Repos) Sync(repo Repo) (Clone, error) {
-	if err := r.checkToken(); err != nil {
-		return Clone{}, err
-	}
 	path, err := r.Path(repo)
 	if err != nil {
 		return Clone{}, err
@@ -147,7 +115,7 @@ func (r Repos) Sync(repo Repo) (Clone, error) {
 	if err := r.ensureClone(repo, path); err != nil {
 		return Clone{}, err
 	}
-	if err := r.configure(path); err != nil {
+	if err := r.inheritGitConfig(path); err != nil {
 		return Clone{}, err
 	}
 	if _, err := r.git(path, "fetch", "--quiet", "--prune", "origin"); err != nil {
@@ -215,18 +183,7 @@ func (r Repos) cloneIfMissing(repo Repo, path, want string) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
 	}
-	// A url.<base>.insteadOf rule would send the clone elsewhere, such as over
-	// SSH with the operator's key. ls-remote --get-url applies it, so refuse first.
-	if got, err := r.git("", "ls-remote", "--get-url", want); !r.Operator && (err != nil || got != want) {
-		return false, rewriteError(want, got, err)
-	}
-	// The helper is passed here too, because the clone itself needs the token.
-	if r.Operator {
-		_, err = r.git("", "clone", "--quiet", "--", want, path)
-	} else {
-		_, err = r.git("", "-c", "credential.helper=", "-c", "credential.helper="+credentialHelper,
-			"clone", "--quiet", want, path)
-	}
+	_, err = r.git("", "clone", "--quiet", "--", want, path)
 	if err != nil {
 		_ = os.RemoveAll(path) // a failed clone can leave a partial directory
 		return false, fmt.Errorf("clone %s: %w", repo, err)
@@ -234,71 +191,12 @@ func (r Repos) cloneIfMissing(repo Repo, path, want string) (bool, error) {
 	return true, nil
 }
 
-// checkRemote refuses a clone whose origin is not want, or that git would
-// fetch from or push to anywhere else. A host's url.<base>.insteadOf or
-// pushInsteadOf rule can do that quietly, and then engine's pushes would go
-// out under the operator's own credentials instead of the machine user's.
 func (r Repos) checkRemote(path, want string) error {
 	raw, err := r.git(path, "config", "--get", "remote.origin.url")
 	if err != nil || raw != want {
 		return fmt.Errorf("%s is not a clone of %s (origin is %q)", path, want, raw)
 	}
-	if r.Operator {
-		return nil
-	}
-	for _, args := range [][]string{{"remote", "get-url", "origin"}, {"remote", "get-url", "--push", "origin"}} {
-		if got, err := r.git(path, args...); err != nil || got != want {
-			return rewriteError(want, got, err)
-		}
-	}
 	return nil
-}
-
-func rewriteError(want, got string, err error) error {
-	if err != nil {
-		return fmt.Errorf("cannot resolve %s: %w", want, err)
-	}
-	return fmt.Errorf("git rewrites %s to %s (a url.<base>.insteadOf or pushInsteadOf rule); "+
-		"remove the rule on this host, so engine's clones fetch and push over HTTPS as the machine user", want, got)
-}
-
-// configure sets the clone's local credential helper and commit identity.
-// The empty helper first drops any helper the host configures globally, such
-// as the operator's keychain, so pushes can only be the machine user's.
-func (r Repos) configure(path string) error {
-	if r.Operator {
-		return nil
-	}
-	login, email, err := r.machineUser()
-	if err != nil {
-		return err
-	}
-	steps := [][]string{
-		{"config", "--local", "--replace-all", "credential.helper", ""},
-		{"config", "--local", "--add", "credential.helper", credentialHelper},
-		{"config", "--local", "user.name", login},
-		{"config", "--local", "user.email", email},
-	}
-	for _, args := range steps {
-		if _, err := r.git(path, args...); err != nil {
-			return fmt.Errorf("configure %s: %w", path, err)
-		}
-	}
-	return nil
-}
-
-// machineUser asks GitHub who the token belongs to, and returns the login
-// and the user's noreply email, which GitHub links to the account.
-func (r Repos) machineUser() (login, email string, err error) {
-	out, err := r.Run("", r.env(), "gh", "api", "user", "--jq", `.login + " " + (.id | tostring)`)
-	if err != nil {
-		return "", "", fmt.Errorf("could not read the machine user from GitHub: %w", err)
-	}
-	fields := strings.Fields(out)
-	if len(fields) != 2 {
-		return "", "", fmt.Errorf("could not read the machine user from GitHub: unexpected %q", strings.TrimSpace(out))
-	}
-	return fields[0], fmt.Sprintf("%s+%s@users.noreply.github.com", fields[1], fields[0]), nil
 }
 
 // defaultBranch asks the remote, so a default branch renamed since the clone

@@ -18,9 +18,8 @@ import (
 
 // System is the World of a running engine on this host.
 type System struct {
-	Gh    tracker.Runner
-	Token string
-	Home  string
+	Gh   tracker.Runner
+	Home string
 	// Config is hosts.toml, and Host this host in it.
 	Config *hosts.Config
 	Host   hosts.Host
@@ -38,12 +37,12 @@ type System struct {
 var _ World = System{}
 
 func (s System) Feature(ref tracker.Ref) (tracker.Feature, error) {
-	return tracker.ReadFeature(s.Gh, s.Token, ref)
+	return tracker.ReadFeature(s.Gh, ref)
 }
 
 // Task reads one task as a Card. Only its open blockers are known.
 func (s System) Task(ref tracker.Ref) (tracker.Card, tracker.Ref, error) {
-	t, err := tracker.ReadTask(s.Gh, s.Token, ref)
+	t, err := tracker.ReadTask(s.Gh, ref)
 	if err != nil {
 		return tracker.Card{}, tracker.Ref{}, err
 	}
@@ -139,26 +138,26 @@ func (s System) StartPlanner(feature tracker.Ref) error {
 }
 
 func (s System) AddLabels(ref tracker.Ref, labels ...string) error {
-	return tracker.AddLabels(s.Gh, s.Token, ref, labels...)
+	return tracker.AddLabels(s.Gh, ref, labels...)
 }
 
 func (s System) RemoveLabel(ref tracker.Ref, label string) error {
-	return tracker.RemoveLabel(s.Gh, s.Token, ref, label)
+	return tracker.RemoveLabel(s.Gh, ref, label)
 }
 
 func (s System) Comment(ref tracker.Ref, body string) error {
-	_, err := tracker.Comment(s.Gh, s.Token, ref, body)
+	_, err := tracker.Comment(s.Gh, ref, body)
 	return err
 }
 
-func (s System) Close(ref tracker.Ref) error { return tracker.CloseCompleted(s.Gh, s.Token, ref) }
+func (s System) Close(ref tracker.Ref) error { return tracker.CloseCompleted(s.Gh, ref) }
 
 func (s System) Operator(ref tracker.Ref) (string, error) {
-	return tracker.Operator(s.Gh, s.Token, ref)
+	return tracker.Operator(s.Gh, ref)
 }
 
 func (s System) PullRequests(ref tracker.Ref) ([]string, error) {
-	return tracker.PullRequests(s.Gh, s.Token, ref)
+	return tracker.PullRequests(s.Gh, ref)
 }
 
 // Logf prints one timestamped line.

@@ -79,7 +79,7 @@ type task struct {
 }
 
 // fakeGh answers the claim searches and comments of the given tasks. It
-// refuses any call that is not a gh api call as the machine user.
+// refuses any call that is not a gh api call as the authenticated user.
 func fakeGh(t *testing.T, tasks ...task) tracker.Runner {
 	t.Helper()
 	var items []map[string]any
@@ -93,15 +93,17 @@ func fakeGh(t *testing.T, tasks ...task) tracker.Runner {
 		path := fmt.Sprintf("repos/%s/issues/%d/comments", k.repo, k.number)
 		comments[path] = append(comments[path], map[string]any{
 			"body": k.body, "html_url": "https://github.com/" + k.repo, "created_at": k.posted.Format(time.RFC3339),
-			"user": map[string]string{"login": "dinoderek-agents"},
+			"user": map[string]string{"login": "developer"},
 		})
 	}
 	return func(env []string, name string, args ...string) (string, error) {
-		if name != "gh" || !slices.Contains(env, "GH_TOKEN=tok") || len(args) < 2 || args[0] != "api" {
+		if name != "gh" || len(env) != 0 || len(args) < 2 || args[0] != "api" {
 			t.Errorf("unexpected command %s %v (env %v)", name, args, env)
 			return "", errors.New("unexpected command")
 		}
 		switch path := args[1]; {
+		case path == "user":
+			return "developer", nil
 		case path == "search/issues":
 			return jsonOf(t, map[string]any{"incomplete_results": false, "items": items}), nil
 		case comments[path] != nil:
@@ -167,7 +169,7 @@ func (r *replaced) replace(path string, argv []string) error {
 	return r.err
 }
 
-// rig wires Deps to the fakes. Its environment holds the token, and TMUX when
+// rig wires Deps to the fakes. Its environment holds TMUX when
 // inside tmux.
 type rig struct {
 	gh      tracker.Runner
@@ -200,7 +202,7 @@ func newRig(t *testing.T, self string, tmux *fakeTmux, tasks ...task) rig {
 	t.Helper()
 	return rig{
 		gh: fakeGh(t, tasks...), tmux: tmux, exec: &replaced{},
-		env: map[string]string{"GH_TOKEN": "tok"}, home: home(t, self),
+		env: map[string]string{}, home: home(t, self),
 	}
 }
 
@@ -346,16 +348,6 @@ func TestAttachHostNotInConfig(t *testing.T) {
 	r := newRig(t, "mac", &fakeTmux{}, webTask("ghost", t0))
 	err := Attach("web.app-412", r.deps())
 	if err == nil || !strings.Contains(err.Error(), `host "ghost" of web.app-412 is not in hosts.toml`) {
-		t.Errorf("error %v", err)
-	}
-}
-
-func TestAttachNeedsAToken(t *testing.T) {
-	r := newRig(t, "mac", &fakeTmux{}, webTask("mac", t0))
-	delete(r.env, "GH_TOKEN")
-	r.home = t.TempDir()
-	err := Attach("web.app-412", r.deps())
-	if err == nil || !strings.Contains(err.Error(), "no GH_TOKEN and no token file") {
 		t.Errorf("error %v", err)
 	}
 }

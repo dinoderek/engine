@@ -36,10 +36,6 @@ func runRun(args []string, env Env, sleep func(time.Duration)) int {
 // runSystem builds the World for ref, and says whether ref is one task. A
 // task with an open blocker is refused.
 func runSystem(ref tracker.Ref, env Env, ratio map[string]int) (run.System, bool, error) {
-	token, err := tracker.Token(env.Getenv, env.Home)
-	if err != nil {
-		return run.System{}, false, err
-	}
 	cfg, host, err := hosts.Open(hosts.ConfigDir(env.Home))
 	if err != nil {
 		return run.System{}, false, err
@@ -50,7 +46,7 @@ func runSystem(ref tracker.Ref, env Env, ratio map[string]int) (run.System, bool
 	if err := cfg.ValidateRatio(cfg.HarnessRatio); err != nil {
 		return run.System{}, false, err
 	}
-	issue, err := tracker.ReadTask(env.Exec, token, ref)
+	issue, err := tracker.ReadTask(env.Exec, ref)
 	if err != nil {
 		return run.System{}, false, err
 	}
@@ -60,9 +56,9 @@ func runSystem(ref tracker.Ref, env Env, ratio map[string]int) (run.System, bool
 	}
 	starts := startDeps(env)
 	return run.System{
-		Gh: env.Exec, Token: token, Home: env.Home, Config: cfg, Host: host,
+		Gh: env.Exec, Home: env.Home, Config: cfg, Host: host,
 		Client: func(h hosts.Host) remote.Client { return starts.HostClient(h, h.Name != host.Name) },
-		Claims: psSource(env, host, token),
+		Claims: psSource(env, host),
 		Starts: starts,
 		Out:    env.Out, Clock: env.Now,
 	}, taskOnly, nil

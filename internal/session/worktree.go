@@ -41,9 +41,6 @@ func (r Repos) CreateWorktree(clone Clone, task int) (Worktree, error) {
 	if task < 1 {
 		return Worktree{}, fmt.Errorf("task number must be positive, got %d", task)
 	}
-	if err := r.checkToken(); err != nil {
-		return Worktree{}, err
-	}
 	branch := Branch(clone.Repo, task)
 	unlock, err := lock(clone.Path + ".lock")
 	if err != nil {
@@ -54,7 +51,7 @@ func (r Repos) CreateWorktree(clone Clone, task int) (Worktree, error) {
 		return Worktree{}, err
 	}
 	if script := filepath.Join(clone.Path, worktreeCommand); r.createsWorktrees(clone, script) {
-		_, err = r.Run(clone.Path, r.env(), script, "worktree", "create", branch)
+		_, err = r.Run(clone.Path, []string{"GIT_TERMINAL_PROMPT=0"}, script, "worktree", "create", branch)
 	} else {
 		dir := clone.Path + "-worktrees/" + strings.ReplaceAll(branch, "/", "-")
 		_, err = r.git(clone.Path, "worktree", "add", "--quiet", "--no-track", "-b", branch, dir, "origin/"+clone.Default)
@@ -146,7 +143,7 @@ func (r Repos) createsWorktrees(clone Clone, script string) bool {
 	if probe == nil {
 		probe = r.Run
 	}
-	usage, _ := probe(clone.Path, r.env(), script)
+	usage, _ := probe(clone.Path, []string{"GIT_TERMINAL_PROMPT=0"}, script)
 	return strings.Contains(usage, "worktree create")
 }
 

@@ -111,7 +111,7 @@ func TestSpawnCodexJoins(t *testing.T) {
 		t.Errorf("argv\n got %q\nwant %q", args, want)
 	}
 	environ := lines(t, env)
-	for _, v := range []string{"GH_TOKEN=tok", "ENGINE_RUN_DIR=" + got.RunDir, "ENGINE_HARNESS=codex", "ENGINE_UNATTENDED=1", "CODEX_HOME=" + engineHome} {
+	for _, v := range []string{"ENGINE_RUN_DIR=" + got.RunDir, "ENGINE_HARNESS=codex", "ENGINE_UNATTENDED=1", "CODEX_HOME=" + engineHome} {
 		if !slices.Contains(environ, v) {
 			t.Errorf("environment lacks %s:\n%s", v, strings.Join(environ, "\n"))
 		}

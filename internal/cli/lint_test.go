@@ -34,7 +34,7 @@ func TestLint(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var out, errOut bytes.Buffer
-			env := Env{Out: &out, Err: &errOut, Exec: lintGh(tt.body), Getenv: func(k string) string { return map[string]string{"GH_TOKEN": "tok"}[k] }}
+			env := Env{Out: &out, Err: &errOut, Exec: lintGh(tt.body), Getenv: func(string) string { return "" }}
 			if code := Run([]string{"lint", feature}, env); code != tt.code || !strings.Contains(out.String(), tt.stdout) {
 				t.Errorf("exit %d, stdout %q, stderr %q", code, out.String(), errOut.String())
 			}

@@ -38,8 +38,7 @@ the kickoff, follow the launch line.
   shell_environment_policy.set={…}`,
   which gives the agent's commands `ENGINE_RUN_DIR`, `ENGINE_HARNESS`, in
   hands-off mode `ENGINE_UNATTENDED`, and the window's `TMUX` and
-  `TMUX_PANE`, then `--remote unix://`. The token is not passed: it is in
-  the daemon's environment.
+  `TMUX_PANE`, then `--remote unix://`.
 - **Embedded.** The window keeps the host's own `CODEX_HOME`. `spawn` writes
   engine's profile for the session,
   `$CODEX_HOME/engine-<repo>-<task>.config.toml` (`~/.codex` without
@@ -177,8 +176,7 @@ still launches embedded, with the host's `CODEX_HOME` ("Starting", "Apps"):
   engine's own login and stays.
 - **The plugin** installs from this repo's marketplace into that home, not the
   operator's.
-- **The daemon** is `codex remote-control start` in that home, with the machine
-  user's token in its environment, read from its file, and without a session's
+- **The daemon** is `codex remote-control start` in that home, without a session's
   `ENGINE_*`, `TMUX` and `TMUX_PANE`, which joined hooks would otherwise take
   for their own when setup runs inside a session. The start exits 1 when
   the connection to the apps is errored, though the daemon runs with remote
@@ -206,7 +204,7 @@ A joined session differs from an embedded one (Codex 0.164.0), which is why
 "Starting" launches it differently:
 
 - The agent and its hooks run inside the daemon. They see the daemon's
-  environment, not the window's: `GH_TOKEN` and `ENGINE_*` exported by the
+  environment, not the window's: `ENGINE_*` exported by the
   window are lost. `-c shell_environment_policy.set={…}` reaches the agent's
   commands, not the hooks, which get only the event, including its `cwd`
   ("Session signals").

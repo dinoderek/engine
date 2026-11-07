@@ -66,6 +66,8 @@ The executor's steps are the same in every run mode.
 5. **Durable decisions graduate.** Anything that must stay true after the
    work ships goes into the repo's owning doc, in the PR that ships it.
 6. **One task = one session = one worktree = one PR.**
+7. **GitHub uses the host's working `gh` installation.** Use its configured
+   authentication and the host's normal Git configuration in every mode.
 
 ## Tiers
 

@@ -80,7 +80,7 @@ A host does its own work through `engine host <op> --json`: one job, one
 JSON object on stdout, and exit 0, or 1 for a failure. The caller makes
 every decision that reads the tracker, and picks the model, the effort and
 the kickoff, and passes them in. The host does what touches its own disk,
-tmux and token, and reads `hosts.toml` only for its own launch line,
+and tmux, and reads `hosts.toml` only for its own launch line,
 harness binary and slots. `engine start` calls its own host's
 ops in-process, and another machine's as `ssh -o BatchMode=yes -o
 ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`,
@@ -186,24 +186,14 @@ typing while it remains that far away. Both alerts are once per reset and
 session. Recovery covers
 unclaimed engine windows and the feature’s planner.
 
-## Identity and notifications
+## GitHub access and notifications
 
-GitHub never notifies you about your own activity. If engine used your token,
-its comments and @mentions would never reach your phone. So engine acts as its
-own identity:
+The coordinator and sessions use each host's working `gh` installation and
+normal Git configuration. For host setup, load `operator-setup.md`.
+Engine reads the authenticated account with `gh api user` and accepts claim
+comments only from that account, compared without case sensitivity. The
+newest matching claim wins; other authors are ignored.
 
-- **V1:** a machine user, added as a collaborator. GitHub allows one free
-  machine account per person. The coordinator and every session it starts
-  get its token as `GH_TOKEN`. A session started by hand runs `gh` as
-  `engine gh …`, which reads the token file, so no harness needs configuring
-  and the token never appears on a command line. If you are setting it up, load
-  `operator-setup.md`.
-- **Later:** a GitHub App.
-
-You subscribe to (or are assigned) each feature issue. Hard stops @mention
-you. GitHub mobile pushes both.
-
-**Who engine trusts.** Repos can be public, so anyone can comment on a task.
-Engine acts on a claim comment only when its author is the operator or the
-machine user. The newest trusted claim wins, and a claim by anyone else is
-ignored, so a stranger cannot add a task.
+Hard stops @mention the operator. GitHub does not notify an account about its
+own activity, so check the task thread or attach to the session for those
+updates. Server plans use the operator inbox (`control-server.md`).

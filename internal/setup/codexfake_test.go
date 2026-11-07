@@ -107,7 +107,7 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 			return say("on\n")
 		}
 		return say("off\n")
-	case strings.HasPrefix(cmd, `t="$(cat `):
+	case strings.HasPrefix(cmd, "unset "+sessionVars+" && "):
 		return c.start(b, cmd, errOut)
 	}
 	if args, found := strings.CutPrefix(cmd, "CODEX_HOME="+eh+" "+c.bin+" "); found {
@@ -204,12 +204,11 @@ func (c *codexState) inEngine(b *box, args string, out, errOut io.Writer) (int, 
 	return 0, false
 }
 
-// start is the daemon start. It must read the token from its file and never
-// carry it on the command line.
+// start is the daemon start.
 func (c *codexState) start(b *box, cmd string, errOut io.Writer) (int, bool) {
 	b.mutate(cmd)
 	if c.startFail {
-		fmt.Fprint(errOut, "cat: github-token: No such file or directory")
+		fmt.Fprint(errOut, "remote control failed")
 		return 1, true
 	}
 	c.started++

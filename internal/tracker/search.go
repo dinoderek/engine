@@ -10,7 +10,7 @@ import (
 var ClaimLabels = []string{"engine:running", "engine:needs-human", "engine:in-review"}
 
 // ClaimedQuery is the search for the open issues with any claim label on which
-// user has commented, in every repo the token can see. GitHub reads the commas
+// user has commented, in every repo gh can access. GitHub reads the commas
 // as "or". Naming a trusted commenter keeps other people's repos out.
 func ClaimedQuery(user string) string {
 	quoted := make([]string, len(ClaimLabels))
@@ -38,40 +38,41 @@ type searchPage struct {
 }
 
 // Claimed finds every open issue with a claim label and a claim comment by a
-// trusted user. It searches once per trusted user, since GitHub cannot "or"
-// commenters, and leaves out an issue that none of them claimed. The order is
-// GitHub's, the first trusted user's results first.
-func Claimed(run Runner, token string) ([]ClaimedTask, error) {
+// trusted user. It searches for the authenticated account's comments and
+// ignores other authors. Results retain GitHub's order.
+func Claimed(run Runner) ([]ClaimedTask, error) {
+	user, err := CurrentUser(run)
+	if err != nil {
+		return nil, err
+	}
 	var tasks []ClaimedTask
 	seen := map[Ref]bool{}
-	for _, user := range TrustedUsers {
-		issues, err := searchClaimed(run, token, user)
+	issues, err := searchClaimed(run, user)
+	if err != nil {
+		return nil, err
+	}
+	for _, issue := range issues {
+		ref, err := issue.ref()
+		if err != nil {
+			return nil, fmt.Errorf("search for claimed tasks: %w", err)
+		}
+		if seen[ref] {
+			continue
+		}
+		seen[ref] = true
+		claim, err := LatestClaim(run, user, ref)
 		if err != nil {
 			return nil, err
 		}
-		for _, issue := range issues {
-			ref, err := issue.ref()
-			if err != nil {
-				return nil, fmt.Errorf("search for claimed tasks: %w", err)
-			}
-			if seen[ref] {
-				continue
-			}
-			seen[ref] = true
-			claim, err := LatestClaim(run, token, ref)
-			if err != nil {
-				return nil, err
-			}
-			if claim != nil {
-				tasks = append(tasks, ClaimedTask{Ref: ref, Title: issue.Title, Labels: issue.labelNames(), Claim: *claim})
-			}
+		if claim != nil {
+			tasks = append(tasks, ClaimedTask{Ref: ref, Title: issue.Title, Labels: issue.labelNames(), Claim: *claim})
 		}
 	}
 	return tasks, nil
 }
 
-func searchClaimed(run Runner, token, user string) ([]apiIssue, error) {
-	out, err := api(run, token, "search/issues", "--method", "GET",
+func searchClaimed(run Runner, user string) ([]apiIssue, error) {
+	out, err := api(run, "search/issues", "--method", "GET",
 		"-f", "q="+ClaimedQuery(user), "-f", "per_page=100", "--paginate")
 	if err != nil {
 		return nil, fmt.Errorf("search for claimed tasks: %w", err)

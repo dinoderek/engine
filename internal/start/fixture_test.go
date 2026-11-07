@@ -70,7 +70,7 @@ func newHome(t *testing.T, host string) home {
 	cfg := strings.ReplaceAll(hostsTOML, "@BIN@", "~/bin/claude")
 	write(t, filepath.Join(h.dir, ".config", "engine", "hosts.toml"), cfg, 0o600)
 	write(t, filepath.Join(h.dir, ".config", "engine", "host"), host+"\n", 0o600)
-	write(t, filepath.Join(h.dir, ".config", "engine", "github-token"), "tok\n", 0o600)
+
 	return h
 }
 

@@ -82,7 +82,7 @@ func TestLaunchCommand(t *testing.T) {
 		if _, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, tm, map[string]string{"CLAUDE_CONFIG_DIR": c.configDir}), r); err != nil {
 			t.Fatal(err)
 		}
-		script := `GH_TOKEN="$(cat ` + filepath.Join(h.dir, ".config/engine/github-token") + `)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `
+		script := ""
 		script += `export ENGINE_RUN_DIR=` + filepath.Join(h.dir, ".local/share/engine/runs/r-7-20260102T030405Z") + ` && `
 		script += `export ENGINE_HARNESS=claude && `
 		if c.mode == HandsOff {
@@ -121,7 +121,6 @@ func TestSpawnRefusalsChangeNothing(t *testing.T) {
 		{name: "a run id in use", setup: func(t *testing.T, h home) {
 			write(t, filepath.Join(h.dir, session.RunsDir, "r-7-20260102T030405Z", session.PaneLog), "x\n", 0o644)
 		}, want: "run r-7-20260102T030405Z already has a directory"},
-		{name: "no token", setup: remove(".config/engine/github-token"), want: "the session reads the machine user's token"},
 		{name: "no hosts.toml", setup: remove(".config/engine/hosts.toml"), want: "read host config"},
 		{name: "host does not run claude", host: "box", want: "host box does not run claude"},
 		{name: "no harness binary", setup: remove("bin/claude"), want: "is not an executable claude binary"},
