@@ -230,6 +230,9 @@
     view.repo = $("repo").value;
     view.state = $("state").value;
     writeHash();
+    // Links carry the filters, so redraw them before the filtered list arrives.
+    renderPlans();
+    renderPane();
     clearTimeout(typing);
     typing = setTimeout(() => refreshPlans(true), 200);
   }

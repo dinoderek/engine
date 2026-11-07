@@ -176,6 +176,7 @@ Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
 unfinished prerequisite blocks it, todo or approved under an approved plan
 is ready to run, and anything else waits for the operator, so is blocked.
+Whether the plan is being coordinated does not change the summary.
 
 ## Dispatch and recovery
 
