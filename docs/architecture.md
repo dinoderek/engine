@@ -20,7 +20,7 @@ Two programs share one Go module:
   `internal/hook`
   (harness hooks: `engine hook pre-tool-use`, `permission` and `state`), `internal/attach`
   (`engine attach`: a task's claim, then its tmux window), `internal/ps`
-  (`engine ps`: the state of each claimed task), `internal/start`
+  (`engine ps --github`: the state of each claimed task), `internal/start`
   (`engine start`: checks a task, then has its host launch the session),
   `internal/hostops` (`engine host <op> --json`: the ops a host runs on
   itself for a caller), `internal/remote` (the client that reaches a host's

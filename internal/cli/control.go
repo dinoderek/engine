@@ -28,12 +28,12 @@ func controlEnv(e Env) controlcmd.Env {
 	}}
 }
 
-func serverCommand(args []string, e Env) bool {
+func serverCommand(args []string) bool {
 	if slices.Contains([]string{"serve", "repo", "plan", "task", "updates", "inbox", "ask", "reply", "ack", "resolve", "lock", "attempt"}, args[0]) {
 		return true
 	}
-	if args[0] == "ps" && (slices.Contains(args, "--server") || e.Getenv != nil && e.Getenv("ENGINE_SERVER_URL") != "") {
-		return true
+	if args[0] == "ps" {
+		return !slices.Contains(args[1:], "--github")
 	}
 	return len(args) > 1 && slices.Contains([]string{"run", "tell", "start", "attach", "lint"}, args[0]) && control.Number(args[1]) > 0 && (args[1][0] == 'p' || args[1][0] == 't')
 }

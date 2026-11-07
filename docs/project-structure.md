@@ -19,7 +19,7 @@
 | `internal/setup/` | `engine setup`: the steps that bring a host to the caller's engine commit, plugin and config |
 | `internal/lint/` | `engine lint`: the plan rules |
 | `internal/run/` | `engine run`: the coordinator loop (`coordinator.md`) |
-| `internal/ps/` | `engine ps` |
+| `internal/ps/` | `engine ps --github` |
 | `internal/start/` | `engine start` |
 | `internal/tell/` | `engine tell` |
 | `devtools/cmd/dev/` | the `dev` main package |

@@ -84,7 +84,7 @@ and tmux, and reads `hosts.toml` only for its own launch line,
 harness binary and slots. `engine start` calls its own host's
 ops in-process, and another machine's as `ssh -o BatchMode=yes -o
 ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`,
-and `status` for `engine ps`). `engine tell` has no op: it types the pointer
+and `status` for `engine ps --github`). `engine tell` has no op: it types the pointer
 with `tmux send-keys` over the same ssh options, and exits 1, keeping its
 comment, when the window is missing or the host is unreachable. `engine run`
 reads every host's `status` for placement, and starts a session elsewhere as
@@ -147,7 +147,7 @@ is waiting for input. Three sources:
 3. **tmux.** If the window exists and its command has not exited, the
    session is alive. A dead window is dead whatever its harness says.
 
-`engine ps` and `engine run`'s session check read only `state`, from the
+`engine ps --github` and `engine run`'s session check read only `state`, from the
 `status` of the host a claim names, this host's too. A claim in engine's tmux
 session is alive while its window's command runs, and dead once the window
 is gone or its command exited. A session started by hand is alive only when

@@ -187,7 +187,7 @@ func (e *psEnv) run(args ...string) int {
 		Getenv: func(string) string { return "" },
 		Now:    func() time.Time { return time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC) },
 	}
-	return Run(append([]string{"ps"}, args...), env)
+	return Run(append([]string{"ps", "--github"}, args...), env)
 }
 
 func TestPsTable(t *testing.T) {
@@ -311,8 +311,8 @@ func TestPsFailures(t *testing.T) {
 		code   int
 		stderr string
 	}{
-		{"unknown flag", func(*psEnv) {}, []string{"--yaml"}, 2, "usage: engine ps [--json]"},
-		{"extra argument", func(*psEnv) {}, []string{"--json", "x"}, 2, "usage: engine ps [--json]"},
+		{"unknown flag", func(*psEnv) {}, []string{"--yaml"}, 2, "usage: engine ps --github [--json]"},
+		{"extra argument", func(*psEnv) {}, []string{"--json", "x"}, 2, "usage: engine ps --github [--json]"},
 		{"gh fails", func(e *psEnv) { e.ghErr = errors.New("exit 1") }, nil, 1, "engine ps: GitHub account"},
 		{"no host file", func(e *psEnv) { e.drop("host") }, nil, 1, "read host file"},
 		{"bad host config", func(e *psEnv) { e.write("hosts.toml", "nope") }, nil, 1, "hosts.toml"},
@@ -360,7 +360,7 @@ func TestPsReadsALocalCodexWindowsState(t *testing.T) {
 func TestPsUsageListsIt(t *testing.T) {
 	var out bytes.Buffer
 	Run([]string{"help"}, Env{Out: &out})
-	if !strings.Contains(out.String(), "ps [--json]") {
+	if !strings.Contains(out.String(), "ps [--github] [--json]") {
 		t.Errorf("usage: %s", out.String())
 	}
 }

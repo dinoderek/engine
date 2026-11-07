@@ -11,25 +11,33 @@ There is no automatic tracker migration or summary synchronisation.
 
 ## Start
 
-The server requires `sqlite3`; `./dev doctor` checks it. Run one server on
-the devbox. Keep its HTTP endpoint on a trusted private network or behind an
-SSH tunnel or TLS reverse proxy. Its bearer credentials require confidential
-transport. The default listener is loopback. Execution hosts must reach the
-advertised origin.
+The server requires `sqlite3`. Run one server on `devbox` and give every
+CLI and execution host access to its origin. Bind port 7331 to the devbox's
+Tailscale address and advertise its MagicDNS origin. The tailnet provides
+confidential transport for bearer credentials. For other networks, use an
+SSH tunnel or a TLS reverse proxy.
 
 ```sh
 mkdir -p ~/.config/engine ~/.local/share/engine/server
 (umask 077; openssl rand -hex 32 > ~/.config/engine/server-token)
 engine serve --db ~/.local/share/engine/server/control.db \
   --token-file ~/.config/engine/server-token \
-  --listen 127.0.0.1:7331 --advertise http://127.0.0.1:7331
+  --listen "$(tailscale ip -4):7331" --advertise http://devbox:7331
 ```
 
-Set `ENGINE_SERVER_URL` and `ENGINE_SERVER_TOKEN_FILE` for a CLI elsewhere.
-The defaults are the loopback origin above and the operator credential above.
-With loopback binding, arrange tunnels at every client and execution host;
-otherwise bind a private address and advertise its reachable origin.
-Host definitions remain in the existing host config.
+Each operator CLI reads `~/.config/engine/config.toml`:
+
+```toml
+[server]
+url = "http://devbox:7331"
+```
+
+Without that file, the CLI uses the origin shown above. An explicit
+`ENGINE_SERVER_URL` overrides it. Provision the operator credential in
+`~/.config/engine/server-token` on each operator machine, or set
+`ENGINE_SERVER_TOKEN_FILE` to its path. Workers receive their scoped
+credential and the advertised URL at dispatch. Host definitions remain
+in the existing host config.
 
 For backup, stop the server, run the same invocation with
 `--backup <new-path>`, and restart it. Copy the backup off-machine. Restore
@@ -43,7 +51,8 @@ replacing the active database.
 IDs belong to engine: repositories, plans, tasks and attempts have separate
 prefixes and globally unique numeric parts. A plan is a feature-level
 requirements/design document. Standalone tasks have no parent plan.
-Commands return JSON. `engine help` lists server command groups; the source
+Commands return JSON. `engine ps` lists server tasks. Use `engine ps --github`
+for GitHub claims. `engine help` lists server command groups; the source
 of the flags is `internal/controlcmd/command.go`.
 
 ```sh

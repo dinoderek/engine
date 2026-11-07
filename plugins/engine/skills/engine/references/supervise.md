@@ -9,7 +9,7 @@ cannot. Kickoff: `Supervise <feature>`. Every gap you fill is a defect in
 Run `engine run <feature>` in its own tmux window, `run-<repo>-<n>` in the
 session `engine`, with its output appended to a log file you name in your
 first comment on the feature. Then check every 10 minutes: its log,
-`engine ps --json`, and the feature's comments.
+`engine ps --github --json`, and the feature's comments.
 
 ## You may
 

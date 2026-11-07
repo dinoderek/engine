@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
@@ -11,12 +12,16 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-const psUsage = "usage: engine ps [--json]\n"
+const psUsage = "usage: engine ps --github [--json]\n"
 
 // runPs lists every claimed task, asking each other host that holds a claim
 // for its status. Warnings about probes that failed go to
 // stderr and leave the exit code 0: the listing is still the best answer.
 func runPs(args []string, env Env) int {
+	github := slices.Index(args, "--github")
+	if github >= 0 {
+		args = slices.Delete(slices.Clone(args), github, github+1)
+	}
 	if len(args) > 1 || len(args) == 1 && args[0] != "--json" {
 		fmt.Fprint(env.Err, psUsage)
 		return 2
