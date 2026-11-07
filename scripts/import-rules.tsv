@@ -26,7 +26,7 @@ internal/setup	only	internal/hosts,internal/remote,internal/tracker,internal/ver
 internal/run	only	internal/hostops,internal/hosts,internal/lint,internal/ps,internal/remote,internal/session,internal/start,internal/tracker
 internal/control	only	-
 internal/controlrun	only	internal/control,internal/hostops,internal/hosts,internal/lint,internal/ps,internal/remote,internal/run,internal/session,internal/tracker
-internal/controlcmd	only	internal/control,internal/controlrun,internal/hostops,internal/hosts,internal/remote,internal/run,internal/session
+internal/controlcmd	only	internal/control,internal/controlrun,internal/lint,internal/hostops,internal/hosts,internal/remote,internal/run,internal/session
 internal/cli	only	internal/version,internal/tracker,internal/hook,internal/hostops,internal/remote,internal/attach,internal/hosts,internal/session,internal/ps,internal/start,internal/tell,internal/lint,internal/run,internal/setup,internal/control,internal/controlcmd
 cmd/engine	only	internal/cli
 devtools/...	forbid	internal/...,cmd/...

@@ -51,6 +51,7 @@ engine repo add --title Demo --slug owner/demo --remote git@github.com:owner/dem
 engine plan create --repo r1 --title Feature --body-file requirements.md
 engine task create --repo r1 --plan p2 --title Implementation --body-file card.md
 engine plan show p2
+engine lint p2
 engine plan approve p2 --version 1
 engine run p2
 engine task list p2
@@ -69,6 +70,21 @@ Active executions, including a plan's children, prevent card edits.
 Approval and workflow changes require a version. Run/stop commands persist
 coordination intent; stopping coordination leaves existing sessions running.
 Retrying a failed task is an explicit operator state change.
+
+`engine lint <plan-id>` checks the current server plan before approval using
+the coordinator's plan projection and the same rules as GitHub lint. It
+reads one credential-scoped snapshot, including dependencies outside the
+plan, without changing approval, workflow, history or host observations.
+
+`engine task complete-external <task-id> --version <n> --pr <url>` records
+work finished outside engine. Only the operator can use it, for an inactive
+task in todo, prepare, approved or failed, with no unresolved task or plan
+question. The URL must identify a PR in the task's GitHub repository; engine
+records the operator's evidence without fetching or verifying its merge.
+The command stores done and the PR in versioned history, stops coordination
+for that task and preserves dependency edges and prior attempts. It creates
+no attempt and requires no approval. Ordinary state transitions still require
+an execution for running and in-review.
 
 ## API and storage
 

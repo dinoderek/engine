@@ -41,7 +41,7 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 		if err := authorizeExecution(st, a); err != nil {
 			return err
 		}
-		write := !slices.Contains([]string{"get", "list", "updates", "inbox", "attempts", "lock-check", "lock-show"}, r.Op)
+		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "lock-check", "lock-show"}, r.Op)
 		if write && (r.Key == "" || len(r.Key) > 200) {
 			return problem(400, "a request key of 1–200 characters is required")
 		}
@@ -80,12 +80,16 @@ func authorizeExecution(st *State, a Actor) error {
 
 func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 	switch r.Op {
+	case "plan-view":
+		return planView(st, a, r.ID)
 	case "get", "list", "attempts":
 		return read(st, a, r)
 	case "create":
 		return s.create(st, a, r)
 	case "edit":
 		return s.edit(st, a, r)
+	case "complete-external":
+		return s.completeExternal(st, a, r)
 	case "approve", "run", "stop", "state":
 		return s.transition(st, a, r)
 	case "updates", "inbox", "say", "ask", "reply", "ack", "resolve":

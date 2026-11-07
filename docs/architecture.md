@@ -10,7 +10,9 @@ Two programs share one Go module:
   command. `internal/cli` parses arguments and dispatches. `internal/control`
   owns server records, transactions and HTTP; `internal/controlrun` adapts
   reconcile decisions to server state; `internal/controlcmd` supplies the CLI
-  and daemon lifecycle. Other packages:
+  and daemon lifecycle. The CLI and coordinator share the read-only plan
+  projection in `internal/controlrun` and validate it with `internal/lint`.
+  Other packages:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
   tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
   of a task issue and of the claim comments on every claimed task, and
