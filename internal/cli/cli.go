@@ -38,7 +38,6 @@ commands:
   hook statusline           record Claude quota and print its status line
   hook limit                record or clear a Claude usage limit
   hook state                record a Codex session's state from its hook event
-  gh <args...>              run gh as engine's machine user
   ps [--json]               list the claimed tasks and the state of their sessions
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
   tell <repo>-<task> <text> comment on a task's issue and point its session at it;
@@ -86,7 +85,7 @@ type Env struct {
 
 // System is the Env of the running process.
 func System() Env {
-	home, _ := os.UserHomeDir() // "" makes tracker.Token refuse the token file
+	home, _ := os.UserHomeDir()
 	return Env{
 		In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec,
 		Local: session.Exec, Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now, Build: version.Current(),
@@ -114,8 +113,6 @@ func Run(args []string, env Env) int {
 		return syncLabels(args[2], env)
 	case "hook":
 		return runHook(args[1:], env)
-	case "gh":
-		return runGh(args[1:], env)
 	case "ps":
 		return runPs(args[1:], env)
 	case "attach":
@@ -172,23 +169,6 @@ func runHook(args []string, env Env) int {
 	return 1
 }
 
-// runGh runs gh as engine's machine user, with its streams and exit code, so
-// a session's comments and @mentions reach the operator without the token
-// appearing on a command line.
-func runGh(args []string, env Env) int {
-	token, err := tracker.Token(env.Getenv, env.Home)
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine gh:", err)
-		return 1
-	}
-	streams := tracker.Streams{In: env.In, Out: env.Out, Err: env.Err}
-	code, err := env.Stream([]string{"GH_TOKEN=" + token}, streams, "gh", args...)
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine gh:", err)
-	}
-	return code
-}
-
 // runAttach connects this terminal to a task's tmux window. On success it
 // replaces this process, so it returns only on failure.
 func runAttach(args []string, env Env) int {
@@ -235,12 +215,7 @@ func runLint(args []string, env Env) int {
 		fmt.Fprintln(env.Err, "engine lint:", err)
 		return 2
 	}
-	token, err := tracker.Token(env.Getenv, env.Home)
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine lint:", err)
-		return 1
-	}
-	f, err := tracker.ReadFeature(env.Exec, token, ref)
+	f, err := tracker.ReadFeature(env.Exec, ref)
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine lint:", err)
 		return 1
@@ -258,10 +233,7 @@ func runLint(args []string, env Env) int {
 }
 
 func syncLabels(repo string, env Env) int {
-	token, err := tracker.Token(env.Getenv, env.Home)
-	if err == nil {
-		err = tracker.SyncLabels(env.Exec, token, repo, env.Out)
-	}
+	err := tracker.SyncLabels(env.Exec, repo, env.Out)
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine labels sync:", err)
 		return 1

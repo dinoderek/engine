@@ -69,7 +69,7 @@ func newHome(t *testing.T, host string) home {
 	cfg := strings.ReplaceAll(hostsTOML, "@BIN@", "~/bin/claude")
 	write(t, filepath.Join(h.dir, ".config", "engine", "hosts.toml"), cfg, 0o600)
 	write(t, filepath.Join(h.dir, ".config", "engine", "host"), host+"\n", 0o600)
-	write(t, filepath.Join(h.dir, ".config", "engine", "github-token"), "tok\n", 0o600)
+
 	return h
 }
 
@@ -207,7 +207,7 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 	}
 	switch {
 	case name == "gh":
-		return "testbot 42\n", nil
+		return "", errors.New("unexpected gh call")
 	case strings.Contains(line, "get-url") || strings.Contains(line, "config --get remote.origin.url"):
 		return "https://github.com/o/r.git\n", nil
 	case strings.Contains(line, "symbolic-ref"):

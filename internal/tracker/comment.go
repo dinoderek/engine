@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// Comment posts body on the issue ref as the machine user and returns the
+// Comment posts body on the issue ref with the host's configured authentication and returns the
 // comment's web URL.
-func Comment(run Runner, token string, ref Ref, body string) (string, error) {
-	out, err := api(run, token, restPath(ref)+"/comments", "-f", "body="+body)
+func Comment(run Runner, ref Ref, body string) (string, error) {
+	out, err := api(run, restPath(ref)+"/comments", "-f", "body="+body)
 	if err != nil {
 		return "", fmt.Errorf("comment on %s: %w", ref, err)
 	}
@@ -29,12 +29,12 @@ func restPath(ref Ref) string {
 }
 
 // AddLabels adds labels to the issue ref.
-func AddLabels(run Runner, token string, ref Ref, labels ...string) error {
+func AddLabels(run Runner, ref Ref, labels ...string) error {
 	args := []string{restPath(ref) + "/labels", "-X", "POST"}
 	for _, l := range labels {
 		args = append(args, "-f", "labels[]="+l)
 	}
-	if _, err := api(run, token, args...); err != nil {
+	if _, err := api(run, args...); err != nil {
 		return fmt.Errorf("label %s: %w", ref, err)
 	}
 	return nil
@@ -42,8 +42,8 @@ func AddLabels(run Runner, token string, ref Ref, labels ...string) error {
 
 // RemoveLabel removes label from the issue ref. A label the issue does not
 // carry is not an error.
-func RemoveLabel(run Runner, token string, ref Ref, label string) error {
-	out, err := api(run, token, restPath(ref)+"/labels/"+url.PathEscape(label), "-X", "DELETE")
+func RemoveLabel(run Runner, ref Ref, label string) error {
+	out, err := api(run, restPath(ref)+"/labels/"+url.PathEscape(label), "-X", "DELETE")
 	if err != nil && !strings.Contains(out+err.Error(), "Label does not exist") {
 		return fmt.Errorf("unlabel %s: %w", ref, err)
 	}
@@ -51,8 +51,8 @@ func RemoveLabel(run Runner, token string, ref Ref, label string) error {
 }
 
 // CloseCompleted closes the issue ref as completed.
-func CloseCompleted(run Runner, token string, ref Ref) error {
-	if _, err := api(run, token, restPath(ref), "-X", "PATCH", "-f", "state=closed", "-f", "state_reason=completed"); err != nil {
+func CloseCompleted(run Runner, ref Ref) error {
+	if _, err := api(run, restPath(ref), "-X", "PATCH", "-f", "state=closed", "-f", "state_reason=completed"); err != nil {
 		return fmt.Errorf("close %s: %w", ref, err)
 	}
 	return nil
@@ -60,8 +60,8 @@ func CloseCompleted(run Runner, token string, ref Ref) error {
 
 // Operator is the login engine @mentions about the issue ref: its first
 // assignee, else its author.
-func Operator(run Runner, token string, ref Ref) (string, error) {
-	out, err := api(run, token, restPath(ref))
+func Operator(run Runner, ref Ref) (string, error) {
+	out, err := api(run, restPath(ref))
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", ref, err)
 	}
@@ -83,11 +83,11 @@ func Operator(run Runner, token string, ref Ref) (string, error) {
 
 // PullRequests returns the web URLs of the merged pull requests that closed
 // the issue ref.
-func PullRequests(run Runner, token string, ref Ref) ([]string, error) {
+func PullRequests(run Runner, ref Ref) ([]string, error) {
 	owner, name, _ := strings.Cut(ref.Repo, "/")
 	query := `query($o:String!,$n:String!,$i:Int!){repository(owner:$o,name:$n){issue(number:$i){` +
 		`closedByPullRequestsReferences(first:10,includeClosedPrs:true){nodes{url merged}}}}}`
-	out, err := api(run, token, "graphql", "-f", "query="+query, "-f", "o="+owner, "-f", "n="+name, "-F", "i="+strconv.Itoa(ref.Number))
+	out, err := api(run, "graphql", "-f", "query="+query, "-f", "o="+owner, "-f", "n="+name, "-F", "i="+strconv.Itoa(ref.Number))
 	if err != nil {
 		return nil, fmt.Errorf("pull requests of %s: %w", ref, err)
 	}

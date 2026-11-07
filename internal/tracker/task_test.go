@@ -22,6 +22,18 @@ func (f *fakeGH) run(env []string, name string, args ...string) (string, error) 
 		return "", errors.New("unexpected command " + name)
 	}
 	key := args[1]
+	if len(env) != 0 {
+		return "", errors.New("authentication environment overridden")
+	}
+	if key == "user" {
+		if err, ok := f.errs[key]; ok {
+			return "", err
+		}
+		if out, ok := f.replies[key]; ok {
+			return out, nil
+		}
+		return "developer", nil
+	}
 	for _, a := range args {
 		if q, ok := strings.CutPrefix(a, "q="); ok {
 			key += "?" + q
@@ -83,7 +95,7 @@ func TestReadTask(t *testing.T) {
 			{"number":22,"state":"open","repository_url":"https://api.github.com/repos/o/r"}]
 			[{"number":4,"state":"open","repository_url":"https://api.github.com/repos/p/q"}]`,
 	}}
-	task, err := ReadTask(gh.run, "tok", Ref{"o/r", 21})
+	task, err := ReadTask(gh.run, Ref{"o/r", 21})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +112,7 @@ func TestReadTask(t *testing.T) {
 	if !task.Has("engine:running") || task.Has("engine:failed") {
 		t.Error("Has is wrong")
 	}
-	if len(gh.calls) != 2 || !strings.HasPrefix(gh.calls[0], "GH_TOKEN=tok gh api "+taskPath) ||
+	if len(gh.calls) != 2 || !strings.HasPrefix(gh.calls[0], " gh api "+taskPath) ||
 		!strings.Contains(gh.calls[1], "dependencies/blocked_by --paginate") {
 		t.Errorf("calls: %q", gh.calls)
 	}
@@ -111,7 +123,7 @@ func TestReadTaskStandalone(t *testing.T) {
 		issuePath(7): `{"number":7,"state":"closed","parent_issue_url":null,"labels":[],"body":"no sections"}`,
 		issuePath(7, "dependencies", "blocked_by"): `[]`,
 	}}
-	task, err := ReadTask(gh.run, "tok", Ref{"o/r", 7})
+	task, err := ReadTask(gh.run, Ref{"o/r", 7})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +165,7 @@ func TestReadTaskFailures(t *testing.T) {
 				gh.replies[k] = v
 			}
 			tc.mutate(gh)
-			if _, err := ReadTask(gh.run, "tok", Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), tc.want) {
+			if _, err := ReadTask(gh.run, Ref{"o/r", 21}); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("got %v, want %q", err, tc.want)
 			}
 		})
@@ -255,7 +267,7 @@ func TestReadTaskReadsRequires(t *testing.T) {
 		taskPath:    `{"number":21,"state":"open","body":"## Requires\nios, docker\n"}`,
 		blockerPath: `[]`,
 	}}
-	task, err := ReadTask(gh.run, "tok", Ref{"o/r", 21})
+	task, err := ReadTask(gh.run, Ref{"o/r", 21})
 	if err != nil || !reflect.DeepEqual(task.Requires, []string{"ios", "docker"}) {
 		t.Errorf("got %+v, %v", task.Requires, err)
 	}

@@ -10,13 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // Protocol is the version of the ops' wire format. A caller refuses a reply
@@ -72,19 +70,6 @@ func refuse(format string, args ...any) error {
 // nameRe is a session name, as tmux takes it for a window.
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9_.][A-Za-z0-9_.-]*$`)
 
-// readToken reads the machine user's token from its file only, never
-// GH_TOKEN: the session reads that file itself, so engine's clone and the
-// session act as one machine user.
-func readToken(home string) (string, error) {
-	token, err := tracker.Token(func(string) string { return "" }, home)
-	if err != nil {
-		return "", refuse("the session reads the machine user's token from %s: %v", tokenFile(home), err)
-	}
-	return token, nil
-}
-
-func tokenFile(home string) string { return filepath.Join(home, filepath.FromSlash(tracker.TokenFile)) }
-
 // openHost reads hosts.toml and the host file, and returns this host.
 func openHost(home string) (*hosts.Config, hosts.Host, error) {
 	cfg, host, err := hosts.Open(hosts.ConfigDir(home))
@@ -123,11 +108,7 @@ func SyncRepo(d Deps, repo string) (Synced, error) {
 	if err != nil {
 		return Synced{}, refuse("%v", err)
 	}
-	token, err := readToken(d.Home)
-	if err != nil {
-		return Synced{}, err
-	}
-	clone, err := session.Repos{Run: d.Run, Home: d.Home, Token: token, BaseURL: d.BaseURL}.Sync(r)
+	clone, err := session.Repos{Run: d.Run, Home: d.Home, BaseURL: d.BaseURL}.Sync(r)
 	if err != nil {
 		return Synced{}, err
 	}

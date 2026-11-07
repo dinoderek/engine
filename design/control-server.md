@@ -9,7 +9,7 @@ review and evidence stay local; no issue or PR is required for this build.
 One engine serve process owns plans, tasks, attempts, durable updates, operator
 messages and repository merge locks. The CLI uses an authenticated API. The
 server coordinates sessions through the existing host operations without a
-machine-user GitHub token. GitHub remains a code, PR and CI integration.
+separate GitHub token. GitHub remains a code, PR and CI integration.
 
 ## Implementation
 

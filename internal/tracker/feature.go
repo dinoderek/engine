@@ -44,8 +44,8 @@ type Blocker struct {
 
 // ReadFeature reads the feature issue ref, its sub-issues and each one's
 // blockers.
-func ReadFeature(run Runner, token string, ref Ref) (Feature, error) {
-	out, err := api(run, token, fmt.Sprintf("repos/%s/issues/%d", ref.Repo, ref.Number))
+func ReadFeature(run Runner, ref Ref) (Feature, error) {
+	out, err := api(run, fmt.Sprintf("repos/%s/issues/%d", ref.Repo, ref.Number))
 	if err != nil {
 		return Feature{}, fmt.Errorf("read %s: %w", ref, err)
 	}
@@ -54,7 +54,7 @@ func ReadFeature(run Runner, token string, ref Ref) (Feature, error) {
 		return Feature{}, fmt.Errorf("read %s: %w", ref, err)
 	}
 	f := Feature{Ref: ref, Title: issue.Title, Open: issue.State == "open", Labels: issue.labelNames()}
-	out, err = api(run, token, fmt.Sprintf("repos/%s/issues/%d/sub_issues", ref.Repo, ref.Number), "--paginate")
+	out, err = api(run, fmt.Sprintf("repos/%s/issues/%d/sub_issues", ref.Repo, ref.Number), "--paginate")
 	if err != nil {
 		return Feature{}, fmt.Errorf("tasks of %s: %w", ref, err)
 	}
@@ -64,7 +64,7 @@ func ReadFeature(run Runner, token string, ref Ref) (Feature, error) {
 	}
 	for _, page := range pages {
 		for _, sub := range page {
-			card, err := readCard(run, token, sub)
+			card, err := readCard(run, sub)
 			if err != nil {
 				return Feature{}, err
 			}
@@ -74,22 +74,22 @@ func ReadFeature(run Runner, token string, ref Ref) (Feature, error) {
 	return f, nil
 }
 
-func readCard(run Runner, token string, issue apiIssue) (Card, error) {
+func readCard(run Runner, issue apiIssue) (Card, error) {
 	ref, err := issue.ref()
 	if err != nil {
 		return Card{}, fmt.Errorf("a task: %w", err)
 	}
 	c := Card{Ref: ref, Title: issue.Title, Open: issue.State == "open", Labels: issue.labelNames(), Body: issue.Body, Requires: ParseRequires(issue.Body)}
-	if c.BlockedBy, err = blockedBy(run, token, ref); err != nil {
+	if c.BlockedBy, err = blockedBy(run, ref); err != nil {
 		return Card{}, err
 	}
 	return c, nil
 }
 
 // blockedBy lists every issue ref is blocked by, open or closed.
-func blockedBy(run Runner, token string, ref Ref) ([]Blocker, error) {
+func blockedBy(run Runner, ref Ref) ([]Blocker, error) {
 	path := fmt.Sprintf("repos/%s/issues/%d/dependencies/blocked_by", ref.Repo, ref.Number)
-	out, err := api(run, token, path, "--paginate")
+	out, err := api(run, path, "--paginate")
 	if err != nil {
 		return nil, fmt.Errorf("blockers of %s: %w", ref, err)
 	}

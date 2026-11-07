@@ -124,7 +124,7 @@ launches a session from any directory, and returns once it is up.
 `--host` the session runs on this machine; `--host` names another machine in
 `hosts.toml` and starts it there over SSH.
 
-It first refuses, changing nothing, when: the token file, host file,
+It first refuses, changing nothing, when: the host file,
 `hosts.toml` or this host's entry is missing; the task is closed, has a task
 state label or an open blocker, or is standalone without `engine:approved`;
 the harness (`--harness`, else the card's, else the default) is unknown (as a
@@ -132,7 +132,8 @@ misspelt tier is) or not run on the host, or its binary is not executable;
 the host lacks a capability in the card's `## Requires`, even when named; its
 window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
 
-1. syncs engine's clone (`operator-setup.md`, "Machine user"): clones it over
+1. syncs engine's clone using normal Git configuration, clearing matching
+   engine-generated local credential and identity overrides; clones it over
    HTTPS on first use, fetches, and leaves it at the remote's default branch;
 2. creates the worktree on `task/<repo>-<task>`, with the repo's own
    `worktree create` when it provides one (`project-context.md`,
@@ -148,12 +149,10 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    the kickoff, the session's first message: `Execute <owner/repo#n> with the
    engine executor, <mode> mode. Reviewer model: <deep model>. run=<run-id>
    tmux=engine:<name> rc=<name>` (`rc=none` for Codex, which has no Remote
-   Control session). `/bin/sh` first exports `GH_TOKEN` from the
-   token file, off every command line, `ENGINE_RUN_DIR` (the run directory),
+   Control session). `/bin/sh` exports `ENGINE_RUN_DIR` (the run directory),
    `ENGINE_HARNESS` (the harness), and `ENGINE_UNATTENDED=1` in hands-off
    mode. A Codex session joined to remote control gets the `ENGINE_*`
-   variables on its command line instead, and the token from the daemon
-   (`codex.md`, "Starting");
+   variables on its command line instead (`codex.md`, "Starting");
 6. writes `run.json` (`telemetry.md`; a Codex session joined to remote
    control gets it before step 4, since its hooks find their run by it) and
    prints how to attach.

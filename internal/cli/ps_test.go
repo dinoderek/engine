@@ -88,7 +88,7 @@ func newPsEnv(t *testing.T, host string) *psEnv {
 	if err := os.MkdirAll(filepath.Join(e.home, ".config", "engine"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for name, body := range map[string]string{"hosts.toml": psHosts, "host": host + "\n", "github-token": "tok\n"} {
+	for name, body := range map[string]string{"hosts.toml": psHosts, "host": host + "\n"} {
 		e.write(name, body)
 	}
 	return e
@@ -134,7 +134,9 @@ func (e *psEnv) gh(_ []string, name string, args ...string) (string, error) {
 		return "HTTP 500", e.ghErr
 	}
 	switch {
-	case args[1] == "search/issues" && strings.Contains(strings.Join(args, " "), "commenter:dinoderek-agents"):
+	case args[1] == "user":
+		return "developer", nil
+	case args[1] == "search/issues" && strings.Contains(strings.Join(args, " "), "commenter:developer"):
 		item := func(n int, label string) string {
 			return `{"number":` + string(rune('0'+n)) + `,"title":"task ` + string(rune('0'+n)) + `","repository_url":"https://api.github.com/repos/o/r","labels":[{"name":"` + label + `"}]}`
 		}
@@ -147,7 +149,7 @@ func (e *psEnv) gh(_ []string, name string, args ...string) (string, error) {
 		n, host = 2, "devbox"
 	}
 	claim := strings.ReplaceAll(strings.ReplaceAll(psClaim, "%d", string(rune('0'+n))), "%s", host)
-	return `[{"body":` + jsonString(claim) + `,"html_url":"u","created_at":"2026-10-21T10:00:00Z","user":{"login":"dinoderek-agents"}}]`, nil
+	return `[{"body":` + jsonString(claim) + `,"html_url":"u","created_at":"2026-10-21T10:00:00Z","user":{"login":"developer"}}]`, nil
 }
 
 func (e *psEnv) local(name string, args ...string) (string, error) {
@@ -311,11 +313,10 @@ func TestPsFailures(t *testing.T) {
 	}{
 		{"unknown flag", func(*psEnv) {}, []string{"--yaml"}, 2, "usage: engine ps [--json]"},
 		{"extra argument", func(*psEnv) {}, []string{"--json", "x"}, 2, "usage: engine ps [--json]"},
-		{"gh fails", func(e *psEnv) { e.ghErr = errors.New("exit 1") }, nil, 1, "engine ps: search for claimed tasks"},
+		{"gh fails", func(e *psEnv) { e.ghErr = errors.New("exit 1") }, nil, 1, "engine ps: GitHub account"},
 		{"no host file", func(e *psEnv) { e.drop("host") }, nil, 1, "read host file"},
 		{"bad host config", func(e *psEnv) { e.write("hosts.toml", "nope") }, nil, 1, "hosts.toml"},
 		{"unknown host", func(e *psEnv) { e.write("host", "elsewhere\n") }, nil, 1, `host "elsewhere" is not in hosts.toml`},
-		{"no token", func(e *psEnv) { e.drop("github-token") }, nil, 1, "no GH_TOKEN"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

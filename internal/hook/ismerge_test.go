@@ -8,7 +8,7 @@ func TestIsMergeIncludesSafePinnedAndWrappedCommands(t *testing.T) {
 		want    bool
 	}{
 		{"gh pr merge --squash --match-head-commit abc", true},
-		{"engine gh pr merge --squash --match-head-commit abc", true},
+		{"gh pr merge --squash --match-head-commit abc", true},
 		{"sh -c 'gh pr merge --match-head-commit abc'", true},
 		{"eval gh pr merge --match-head-commit abc", true},
 		{"echo $(gh pr merge --match-head-commit abc)", true},

@@ -14,7 +14,7 @@ Two programs share one Go module:
   projection in `internal/controlrun` and validate it with `internal/lint`.
   Other packages:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
-  tracker adapter, through `gh`: `engine labels sync`, `engine gh`, and reads
+  tracker adapter, through `gh`: `engine labels sync`, and reads
   of a task issue and of the claim comments on every claimed task, and
   posting a comment),
   `internal/hook`

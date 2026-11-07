@@ -362,13 +362,10 @@ func (r *runner) daemonState() (up, remoteOn bool, err error) {
 // joined session's hooks run in its environment, and would write to that run.
 const sessionVars = "ENGINE_RUN_DIR ENGINE_HARNESS ENGINE_UNATTENDED TMUX TMUX_PANE"
 
-// daemonStart is the command that starts engine's daemon with remote control
-// on, the machine user's token in its environment and no session's
-// variables. The token comes from its file, so it is on no command line.
+// daemonStart starts remote control without retaining a session's variables.
 func (r *runner) daemonStart() string {
 	c := r.codex
-	file := shellPath(hosts.ConfigDir(c.home), "github-token")
-	return fmt.Sprintf(`t="$(cat %s)" && [ -n "$t" ] && unset %s && GH_TOKEN="$t" %s`, file, sessionVars, c.inEngine("remote-control start"))
+	return fmt.Sprintf("unset %s && %s", sessionVars, c.inEngine("remote-control start"))
 }
 
 // codexDaemon makes sure engine's own app-server daemon runs from engine's
@@ -384,8 +381,18 @@ func (r *runner) codexDaemon() (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	if up && on {
-		return passed("running; remote control on"), nil
+	if up {
+		ready, err := r.daemonEnvironmentReady()
+		if err != nil {
+			return outcome{}, err
+		}
+		if !ready {
+			stop := r.t.onHost(r.codex.inEngine("app-server daemon stop"), false)
+			return open("engine's daemon must restart to inherit the host environment; finish its sessions, then stop it and rerun setup", stop+" && "+r.rerun()), nil
+		}
+		if on {
+			return passed("running; remote control on"), nil
+		}
 	}
 	// A start exits 1 when the connection to the apps is errored, though the
 	// daemon runs with remote control on: judge it by what runs afterwards.
@@ -403,5 +410,5 @@ func (r *runner) codexDaemon() (outcome, error) {
 	case !on:
 		return open("remote control is off after the start: "+res.lastLine(), r.t.onHost(start, false)), nil
 	}
-	return changed("started; remote control on"), nil
+	return r.recordDaemonEnvironment()
 }

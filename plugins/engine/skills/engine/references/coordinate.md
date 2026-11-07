@@ -85,7 +85,7 @@ With `native sessions`, each executor is a Claude Code cloud session.
   variable `ENGINE_UNATTENDED=1`, and the kickoff `Execute <ref> with the
   engine executor, hands-off mode. host=cloud run=<repo>-<task>-<UTC
   yyyymmddThhmmssZ> started=coordinator`.
-- **The environment** must give the session `GH_TOKEN` and an `engine` on
+- **The environment** must provide working `gh` access and an `engine` on
   `PATH`, for the merge guard.
 - **Slots:** 3 live sessions at once, unless the operator says otherwise. A
   session whose task has closed holds no slot.

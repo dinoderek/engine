@@ -65,7 +65,7 @@ Read these at each session start:
 | changes host config, placement or session access | `docs/hosts-and-sessions.md` |
 | changes a Claude or Codex session | `docs/claude.md`, `docs/codex.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
-| sets up engine's GitHub identity, tokens, notifications, harness sign-in or a host | `docs/operator-setup.md` |
+| sets up GitHub access, notifications, harness sign-in or a host | `docs/operator-setup.md` |
 | changes what a target repo must provide, the seed prompt, or the shape of this file or the doc rules | `docs/project-context.md` |
 | changes a Go, tool or Action version, or handles a Dependabot PR | `docs/versions.md` |
 | decides something not yet settled | the drafts in `design/`; never cite them |

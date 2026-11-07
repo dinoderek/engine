@@ -78,7 +78,7 @@ func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	if len(ran) != 1 || ran[0].line != script+" worktree create task/r-7" || ran[0].dir != clone.Path {
 		t.Errorf("the repo's command ran as %+v", ran)
 	}
-	if !reflect.DeepEqual(ran[0].env, []string{"GH_TOKEN=tok", "GIT_TERMINAL_PROMPT=0"}) {
+	if !reflect.DeepEqual(ran[0].env, []string{"GIT_TERMINAL_PROMPT=0"}) {
 		t.Errorf("env = %v", ran[0].env)
 	}
 	if f.has("worktree add") {
@@ -199,25 +199,6 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 				t.Error("created a worktree despite refusing")
 			}
 		})
-	}
-}
-
-func TestNothingRunsWithoutAToken(t *testing.T) {
-	repo := mustRepo(t, "o/r")
-	for _, token := range []string{"", " \n"} {
-		f := &gitFake{replies: syncReplies()}
-		r := newRepos(t, f)
-		r.Token = token
-		if _, err := r.Sync(repo); err == nil || !strings.Contains(err.Error(), "no machine-user token") {
-			t.Errorf("Sync with token %q: %v", token, err)
-		}
-		clone := Clone{Repo: repo, Path: filepath.Join(r.Home, "clone"), Default: "main"}
-		if _, err := r.CreateWorktree(clone, 7); err == nil || !strings.Contains(err.Error(), "no machine-user token") {
-			t.Errorf("CreateWorktree with token %q: %v", token, err)
-		}
-		if len(f.calls) != 0 {
-			t.Errorf("ran %v without a token: gh would act as the operator", f.lines())
-		}
 	}
 }
 

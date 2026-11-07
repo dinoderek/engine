@@ -18,7 +18,7 @@ import (
 
 // Deps are the programs and the environment tell reaches.
 type Deps struct {
-	// Gh runs gh as the machine user.
+	// Gh runs the host's gh.
 	Gh tracker.Runner
 	// Tmux is this host's tmux. Run runs ssh, to reach another host's.
 	Tmux   *session.Tmux
@@ -44,11 +44,7 @@ type Told struct {
 // a host that cannot be reached, keeps the comment and gets an error: it
 // reads the comment at its next inbox check.
 func Tell(name, text string, d Deps) (Told, error) {
-	token, err := tracker.Token(d.Getenv, d.Home)
-	if err != nil {
-		return Told{}, err
-	}
-	tasks, err := tracker.Claimed(d.Gh, token)
+	tasks, err := tracker.Claimed(d.Gh)
 	if err != nil {
 		return Told{}, err
 	}
@@ -64,7 +60,7 @@ func Tell(name, text string, d Deps) (Told, error) {
 		return Told{}, err
 	}
 	told := Told{Task: task.Ref, Host: task.Claim.Host}
-	if told.URL, err = tracker.Comment(d.Gh, token, task.Ref, text); err != nil {
+	if told.URL, err = tracker.Comment(d.Gh, task.Ref, text); err != nil {
 		return told, err
 	}
 	tm, err := d.tmuxOn(told.Host, cfg, local)

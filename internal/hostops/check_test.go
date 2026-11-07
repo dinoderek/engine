@@ -140,12 +140,12 @@ func TestCheckRefusals(t *testing.T) {
 			t.Errorf("got %v", err)
 		}
 	})
-	t.Run("no token", func(t *testing.T) {
+	t.Run("no host config", func(t *testing.T) {
 		d, h, _ := checkDeps(t, &checkTmux{})
-		if err := os.Remove(filepath.Join(h.dir, ".config/engine/github-token")); err != nil {
+		if err := os.Remove(filepath.Join(h.dir, ".config/engine/hosts.toml")); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Check(d, "", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "token") {
+		if _, err := Check(d, "", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "host config") {
 			t.Errorf("got %v", err)
 		}
 	})
@@ -209,7 +209,7 @@ func TestRunCheckPrintsTheReportAndItsVerdict(t *testing.T) {
 	if ok, err := RunCheck(d, "", &out); ok || err != nil || !strings.Contains(out.String(), "would stop") {
 		t.Errorf("a stalled check: %v, %v\n%s", ok, err, out.String())
 	}
-	if err := os.Remove(filepath.Join(d.Home, ".config/engine/github-token")); err != nil {
+	if err := os.Remove(filepath.Join(d.Home, ".config/engine/hosts.toml")); err != nil {
 		t.Fatal(err)
 	}
 	if ok, err := RunCheck(d, "", &bytes.Buffer{}); ok || !isRefusal(err) {

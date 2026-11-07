@@ -72,8 +72,8 @@ func TestCodexSetsUpAFreshHostAndStaysSafeToRerun(t *testing.T) {
 	}
 	start := lastWith(r.box.mutations, "remote-control start")
 	// A daemon started from inside a session must not keep its run's variables.
-	if !strings.Contains(start, `unset ENGINE_RUN_DIR ENGINE_HARNESS ENGINE_UNATTENDED TMUX TMUX_PANE && GH_TOKEN="$t" CODEX_HOME=`+boxEngineH+" "+boxCodex+" remote-control start") ||
-		!strings.Contains(start, "cat "+boxHome+"/.config/engine/github-token") {
+	if !strings.Contains(start, `unset ENGINE_RUN_DIR ENGINE_HARNESS ENGINE_UNATTENDED TMUX TMUX_PANE && CODEX_HOME=`+boxEngineH+" "+boxCodex+" remote-control start") ||
+		strings.Contains(start, "GH_TOKEN") {
 		t.Errorf("start %q", start)
 	}
 
@@ -121,8 +121,8 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.plugin, c.leavesNothing = "", true }},
 		{"the marketplace is older than the caller", "10. codex plugin: OPEN", "gives Codex plugin 0.6.0 there, older than this host's 0.7.1", "engine setup --host box",
 			func(c *codexState) { c.plugin, c.pluginLeaves = "0.2.0", "0.6.0" }},
-		{"the daemon cannot start", "11. codex daemon: OPEN", "engine's daemon is not running after the start: cat: github-token: No such file or directory",
-			"ssh dev@box 't=\"$(cat /home/dev/.config/engine/github-token)\"",
+		{"the daemon cannot start", "11. codex daemon: OPEN", "engine's daemon is not running after the start: remote control failed",
+			"ssh dev@box 'unset ENGINE_RUN_DIR",
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startFail = false, false, true }},
 		{"remote control stays off", "11. codex daemon: OPEN", "remote control is off after the start", "remote-control start",
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startNoRC = false, false, true }},

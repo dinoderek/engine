@@ -3,51 +3,10 @@ package tracker
 import (
 	"bytes"
 	"errors"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 )
-
-func noEnv(string) string { return "" }
-
-func TestTokenPrefersTheEnvironment(t *testing.T) {
-	token, err := Token(func(k string) string { return map[string]string{"GH_TOKEN": "env-token"}[k] }, t.TempDir())
-	if err != nil || token != "env-token" {
-		t.Errorf("got %q, %v", token, err)
-	}
-}
-
-func TestTokenReadsTheFile(t *testing.T) {
-	home := t.TempDir()
-	path := filepath.Join(home, TokenFile)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte("file-token\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	token, err := Token(noEnv, home)
-	if err != nil || token != "file-token" {
-		t.Errorf("got %q, %v", token, err)
-	}
-	if err := os.WriteFile(path, []byte(" \n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Token(noEnv, home); err == nil || !strings.Contains(err.Error(), "is empty") {
-		t.Errorf("empty file: %v", err)
-	}
-}
-
-func TestTokenMissing(t *testing.T) {
-	if _, err := Token(noEnv, t.TempDir()); err == nil || !strings.Contains(err.Error(), "no GH_TOKEN and no token file") {
-		t.Errorf("got %v", err)
-	}
-	if _, err := Token(noEnv, ""); err == nil || !strings.Contains(err.Error(), "no home directory") {
-		t.Errorf("no home: %v", err)
-	}
-}
 
 func TestLabelsAreWellFormed(t *testing.T) {
 	color := regexp.MustCompile(`^[0-9a-f]{6}$`)
@@ -72,13 +31,13 @@ func TestSyncLabels(t *testing.T) {
 		return "", nil
 	}
 	var out bytes.Buffer
-	if err := SyncLabels(run, "tok", "o/r", &out); err != nil {
+	if err := SyncLabels(run, "o/r", &out); err != nil {
 		t.Fatal(err)
 	}
 	if len(calls) != len(Labels) {
 		t.Fatalf("%d calls, want %d", len(calls), len(Labels))
 	}
-	want := "GH_TOKEN=tok gh label create engine:feature --repo o/r --color 1d76db --description " + Labels[0].Description + " --force"
+	want := " gh label create engine:feature --repo o/r --color 1d76db --description " + Labels[0].Description + " --force"
 	if calls[0] != want {
 		t.Errorf("first call %q, want %q", calls[0], want)
 	}
@@ -88,11 +47,11 @@ func TestSyncLabels(t *testing.T) {
 }
 
 func TestSyncLabelsFailures(t *testing.T) {
-	if err := SyncLabels(nil, "tok", "not-a-repo", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "want owner/repo") {
+	if err := SyncLabels(nil, "not-a-repo", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "want owner/repo") {
 		t.Errorf("bad repo: %v", err)
 	}
 	failing := func([]string, string, ...string) (string, error) { return "HTTP 403", errors.New("exit 1") }
-	err := SyncLabels(failing, "tok", "o/r", &bytes.Buffer{})
+	err := SyncLabels(failing, "o/r", &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "label engine:feature") || !strings.Contains(err.Error(), "HTTP 403") {
 		t.Errorf("gh failure: %v", err)
 	}
@@ -105,5 +64,31 @@ func TestExec(t *testing.T) {
 	}
 	if _, err := Exec(nil, "sh", "-c", "exit 3"); err == nil || !strings.Contains(err.Error(), "sh -c exit 3") {
 		t.Errorf("failure: %v", err)
+	}
+}
+
+func TestCurrentUser(t *testing.T) {
+	for _, tc := range []struct {
+		reply string
+		fail  bool
+	}{
+		{"some-developer\n", false}, {"DifferentAccount", false}, {"managed_account", false}, {"", true},
+		{"null", false}, {"two users", true}, {"-bad", true}, {"user\nother", true},
+	} {
+		t.Run(tc.reply, func(t *testing.T) {
+			run := func(env []string, name string, args ...string) (string, error) {
+				if len(env) != 0 || name != "gh" || strings.Join(args, " ") != "api user --jq .login" {
+					t.Fatalf("unexpected call %v %s %v", env, name, args)
+				}
+				return tc.reply, nil
+			}
+			got, err := CurrentUser(run)
+			if (err != nil) != tc.fail || (!tc.fail && got != strings.TrimSpace(tc.reply)) {
+				t.Fatalf("got %q, %v", got, err)
+			}
+		})
+	}
+	if _, err := CurrentUser(func([]string, string, ...string) (string, error) { return "", errors.New("not logged in") }); err == nil || !strings.Contains(err.Error(), "not logged in") {
+		t.Fatal(err)
 	}
 }

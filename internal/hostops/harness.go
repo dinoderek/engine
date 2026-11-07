@@ -105,16 +105,10 @@ type launch struct {
 	control                          *ControlRequest
 }
 
-// launchCommand is a window's shell command. It runs under /bin/sh, whatever
-// tmux's default shell is: export the machine user's token from its file, so
-// it never appears on a command line, the run directory, the harness and,
-// hands-off, the unattended mark, and the harness's config location, then
-// run the launch line and the harness's own arguments.
 func launchCommand(d Deps, h harness, l launch) string {
-	// An empty token would make gh fall back to the operator's own login.
-	script := fmt.Sprintf(`GH_TOKEN="$(cat %s)" && [ -n "$GH_TOKEN" ] && export GH_TOKEN && `, hosts.ShellWord(tokenFile(d.Home)))
+	script := ""
 	if l.control != nil {
-		script = "unset GH_TOKEN GITHUB_TOKEN && export ENGINE_SERVER_URL=" + hosts.ShellWord(l.control.URL) + " ENGINE_SERVER_TOKEN_FILE=" + hosts.ShellWord(filepath.Join(l.runDir, "server-token")) + " ENGINE_ATTEMPT_ID=" + hosts.ShellWord(l.control.Attempt) + " && "
+		script = "export ENGINE_SERVER_URL=" + hosts.ShellWord(l.control.URL) + " ENGINE_SERVER_TOKEN_FILE=" + hosts.ShellWord(filepath.Join(l.runDir, "server-token")) + " ENGINE_ATTEMPT_ID=" + hosts.ShellWord(l.control.Attempt) + " && "
 	}
 	// The hooks log to the run directory and, unattended, deny or log.
 	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(l.runDir) + " && "

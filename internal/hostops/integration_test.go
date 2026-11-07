@@ -22,11 +22,10 @@ var isolatedGit = []string{
 	"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com",
 }
 
-// realGit runs git isolated from the host's config, and answers gh's
-// question about the machine user.
+// realGit runs git isolated from the host's config.
 func realGit(dir string, env []string, name string, args ...string) (string, error) {
 	if name == "gh" {
-		return "testbot 42\n", nil
+		return "", fmt.Errorf("unexpected gh call")
 	}
 	return session.RunCommand(dir, append(append([]string{}, env...), isolatedGit...), name, args...)
 }

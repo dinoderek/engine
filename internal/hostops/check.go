@@ -156,13 +156,9 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	return r, nil
 }
 
-// checkHost runs the refusals that apply without a task: the token, the
-// host config, the harness and its binary, and a free window name. It
+// checkHost runs the refusals that apply without a task: the host config, the harness and its binary, and a free window name. It
 // returns the binary's path.
 func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, string, error) {
-	if _, err := readToken(d.Home); err != nil {
-		return nil, hosts.Host{}, "", err
-	}
 	cfg, host, err := openHost(d.Home)
 	if err != nil {
 		return nil, hosts.Host{}, "", err

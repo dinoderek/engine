@@ -2,7 +2,6 @@ package tracker
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 )
@@ -86,19 +85,11 @@ type apiComment struct {
 	} `json:"user"`
 }
 
-// TrustedUsers are the only GitHub users whose claim comments engine reads: the
-// operator and the machine user. A claim from anyone else is ignored.
-var TrustedUsers = []string{"dinoderek", "dinoderek-agents"}
-
-func trusted(login string) bool {
-	return slices.ContainsFunc(TrustedUsers, func(u string) bool { return strings.EqualFold(u, login) })
-}
-
-// LatestClaim returns the newest claim comment by a trusted user on the
-// issue, or nil when it has none.
-func LatestClaim(run Runner, token string, ref Ref) (*Claim, error) {
+// LatestClaim returns the newest claim comment by user on the issue, or nil
+// when it has none. The caller supplies the authenticated GitHub login.
+func LatestClaim(run Runner, user string, ref Ref) (*Claim, error) {
 	path := fmt.Sprintf("repos/%s/issues/%d/comments", ref.Repo, ref.Number)
-	out, err := api(run, token, path, "--paginate", "-f", "per_page=100", "--method", "GET")
+	out, err := api(run, path, "--paginate", "-f", "per_page=100", "--method", "GET")
 	if err != nil {
 		return nil, fmt.Errorf("comments on %s: %w", ref, err)
 	}
@@ -109,7 +100,7 @@ func LatestClaim(run Runner, token string, ref Ref) (*Claim, error) {
 	var latest *Claim
 	for _, page := range pages {
 		for _, comment := range page {
-			if c, ok := ParseClaim(comment.Body); ok && trusted(comment.User.Login) {
+			if c, ok := ParseClaim(comment.Body); ok && user != "" && strings.EqualFold(user, comment.User.Login) {
 				c.Author, c.URL, c.PostedAt = comment.User.Login, comment.HTMLURL, comment.CreatedAt
 				latest = &c
 			}

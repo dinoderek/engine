@@ -42,11 +42,7 @@ func (r *runner) resolveWanted() (wanted, error) {
 	case info.Dirty():
 		return wanted{}, refuse("this engine was built from a modified working tree; build it from a pushed commit")
 	}
-	token, err := tracker.Token(r.d.Getenv, r.d.Home)
-	if err != nil {
-		return wanted{}, refuse("%v", err)
-	}
-	out, err := r.d.GH([]string{"GH_TOKEN=" + token}, "gh", "api", "repos/"+engineRepo+"/commits/"+commit, "--jq", ".sha")
+	out, err := r.d.GH(nil, "gh", "api", "repos/"+engineRepo+"/commits/"+commit, "--jq", ".sha")
 	switch {
 	case err != nil:
 		return wanted{}, refuse("could not confirm commit %s is on GitHub (%s): %v", commit, engineRepo, err)
@@ -54,7 +50,7 @@ func (r *runner) resolveWanted() (wanted, error) {
 		return wanted{}, refuse("commit %s is not on GitHub (%s); push it, or build this engine from a pushed commit", commit, engineRepo)
 	}
 	w := wanted{commit: commit}
-	w.toolchain, w.toolchainErr = readToolchain(r.d.GH, token, strings.TrimSpace(out))
+	w.toolchain, w.toolchainErr = readToolchain(r.d.GH, strings.TrimSpace(out))
 	if w.files, err = r.configFiles(); err != nil {
 		return wanted{}, err
 	}
@@ -71,12 +67,12 @@ func (r *runner) resolveWanted() (wanted, error) {
 	return w, nil
 }
 
-// configFiles are the files a host gets: hosts.toml and the token, copied,
+// configFiles are the files a host gets: hosts.toml, copied,
 // and its own name for the host file.
 func (r *runner) configFiles() ([]configFile, error) {
 	dir := hosts.ConfigDir(r.d.Home)
 	files := []configFile{{name: "host", content: r.t.name + "\n"}}
-	for _, name := range []string{"hosts.toml", "github-token"} {
+	for _, name := range []string{"hosts.toml"} {
 		data, err := os.ReadFile(filepath.Join(dir, name))
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, refuse("%s does not exist; write it first (operator-setup.md)", filepath.Join(dir, name))
@@ -145,8 +141,8 @@ var (
 
 // readToolchain is the Go that go.mod's toolchain line names at the commit,
 // read from GitHub, which has already confirmed the commit.
-func readToolchain(gh tracker.Runner, token, commit string) (string, error) {
-	out, err := gh([]string{"GH_TOKEN=" + token}, "gh", "api", "-H", "Accept: application/vnd.github.raw",
+func readToolchain(gh tracker.Runner, commit string) (string, error) {
+	out, err := gh(nil, "gh", "api", "-H", "Accept: application/vnd.github.raw",
 		"repos/"+engineRepo+"/contents/go.mod?ref="+commit)
 	if err != nil {
 		return "", fmt.Errorf("could not read go.mod at %s (%s): %w", commit[:shortRev], engineRepo, err)

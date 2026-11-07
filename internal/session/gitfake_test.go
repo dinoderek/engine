@@ -66,17 +66,14 @@ func (f *gitFake) has(key string) bool {
 // syncReplies are the answers of a healthy remote whose default branch is main.
 func syncReplies() []reply {
 	return []reply{
-		{key: "gh api user", out: "testbot 42\n"},
 		{key: "symbolic-ref", out: "origin/main\n"},
-		{key: "ls-remote --get-url", out: "https://github.com/o/r.git\n"},
 		{key: "config --get remote.origin.url", out: "https://github.com/o/r.git\n"},
-		{key: "remote get-url", out: "https://github.com/o/r.git\n"},
 	}
 }
 
 func newRepos(t *testing.T, f *gitFake) Repos {
 	t.Helper()
-	return Repos{Run: f.run, Home: t.TempDir(), Token: "tok"}
+	return Repos{Run: f.run, Home: t.TempDir()}
 }
 
 func mustRepo(t *testing.T, s string) Repo {

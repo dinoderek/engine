@@ -15,20 +15,18 @@ func TestOperatorCloneUsesNormalGitIdentityAndSeparateStorage(t *testing.T) {
 		if name == "gh" {
 			t.Fatal("ordinary git sync called GitHub API")
 		}
-		for _, e := range env {
-			if strings.HasPrefix(e, "GH_TOKEN=") && e != "GH_TOKEN=" {
-				t.Fatal("machine token injected")
-			}
+		if strings.Join(env, " ") != "GIT_TERMINAL_PROMPT=0" {
+			t.Fatalf("environment overridden: %v", env)
 		}
 		return realGit(dir, env, name, args...)
 	}
-	repos := Repos{Run: runner, Home: t.TempDir(), Operator: true, RemoteURL: remote.bare}
+	repos := Repos{Run: runner, Home: t.TempDir(), Control: true, RemoteURL: remote.bare}
 	clone, err := repos.Sync(mustRepo(t, "o/r"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(clone.Path, ControlReposDir) {
-		t.Fatal("operator clone shares machine configuration")
+		t.Fatal("server clone shares GitHub-plan storage")
 	}
 	if helpers(t, clone.Path) != "" {
 		t.Fatal("operator credential helpers overwritten")

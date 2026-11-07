@@ -32,7 +32,7 @@ func TestSystemTaskNamesItsFeature(t *testing.T) {
 		}
 		return "", errors.New("unexpected " + args[1])
 	}
-	c, op, err := System{Gh: gh, Token: "tok"}.Task(ref(7))
+	c, op, err := System{Gh: gh}.Task(ref(7))
 	if err != nil || op != ref(3) || !c.Open || !c.Has(Running) || len(c.BlockedBy) != 1 || c.BlockedBy[0].Ref != ref(5) {
 		t.Errorf("card %+v, operator %v, %v", c, op, err)
 	}
@@ -94,7 +94,7 @@ func TestSystemStartsOnTheChosenHost(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for name, body := range map[string]string{"hosts.toml": fleetConfig, "host": "mac\n", "github-token": "tok\n"} {
+	for name, body := range map[string]string{"hosts.toml": fleetConfig, "host": "mac\n"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}

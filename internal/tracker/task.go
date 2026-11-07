@@ -42,9 +42,9 @@ func (t Task) Has(label string) bool { return slices.Contains(t.Labels, label) }
 // ReadTask reads a task issue: its labels, its open blockers, its parent
 // feature, and its Harness / tier and Requires sections. It does not check that the issue is
 // a task.
-func ReadTask(run Runner, token string, ref Ref) (Task, error) {
+func ReadTask(run Runner, ref Ref) (Task, error) {
 	path := fmt.Sprintf("repos/%s/issues/%d", ref.Repo, ref.Number)
-	out, err := api(run, token, path)
+	out, err := api(run, path)
 	if err != nil {
 		return Task{}, fmt.Errorf("read %s: %w", ref, err)
 	}
@@ -68,15 +68,15 @@ func ReadTask(run Runner, token string, ref Ref) (Task, error) {
 		}
 		task.Parent = &parent
 	}
-	if task.OpenBlockers, err = openBlockers(run, token, ref); err != nil {
+	if task.OpenBlockers, err = openBlockers(run, ref); err != nil {
 		return Task{}, err
 	}
 	return task, nil
 }
 
 // openBlockers lists the issues blocking ref that are not closed.
-func openBlockers(run Runner, token string, ref Ref) ([]Ref, error) {
-	all, err := blockedBy(run, token, ref)
+func openBlockers(run Runner, ref Ref) ([]Ref, error) {
+	all, err := blockedBy(run, ref)
 	if err != nil {
 		return nil, err
 	}

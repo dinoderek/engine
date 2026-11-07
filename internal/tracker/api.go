@@ -84,10 +84,10 @@ func (i apiIssue) ref() (Ref, error) {
 	return Ref{Repo: repo, Number: i.Number}, nil
 }
 
-// api runs gh api as the machine user and returns its output. A failure
+// api runs gh api with the host's configured authentication and returns its output. A failure
 // carries gh's own output, which says why.
-func api(run Runner, token string, args ...string) (string, error) {
-	out, err := run([]string{"GH_TOKEN=" + token}, "gh", append([]string{"api"}, args...)...)
+func api(run Runner, args ...string) (string, error) {
+	out, err := run(nil, "gh", append([]string{"api"}, args...)...)
 	if err != nil {
 		return "", fmt.Errorf("%w\n%s", err, strings.TrimSpace(out))
 	}

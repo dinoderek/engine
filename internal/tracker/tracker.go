@@ -3,19 +3,13 @@
 package tracker
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
-
-// TokenFile is where each host keeps the machine user's token, relative to
-// the home directory.
-const TokenFile = ".config/engine/github-token"
 
 // Runner runs name with args, adding env to the process environment, and
 // returns its combined output.
@@ -30,27 +24,6 @@ func Exec(env []string, name string, args ...string) (string, error) {
 		err = fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
 	}
 	return string(out), err
-}
-
-// Token returns the token engine acts with on GitHub: GH_TOKEN when set,
-// else the token file under home.
-func Token(getenv func(string) string, home string) (string, error) {
-	if token := getenv("GH_TOKEN"); token != "" {
-		return token, nil
-	}
-	if home == "" {
-		return "", errors.New("no GH_TOKEN and no home directory for the token file")
-	}
-	path := filepath.Join(home, TokenFile)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("no GH_TOKEN and no token file: %w", err)
-	}
-	token := strings.TrimSpace(string(data))
-	if token == "" {
-		return "", errors.New(path + " is empty")
-	}
-	return token, nil
 }
 
 // Label is one tracker label.
@@ -83,13 +56,12 @@ var repoName = regexp.MustCompile(`^[\w.-]+/[\w.-]+$`)
 
 // SyncLabels creates every label in Labels in repo (owner/name), or updates
 // its colour and description. It never deletes a label.
-func SyncLabels(run Runner, token, repo string, out io.Writer) error {
+func SyncLabels(run Runner, repo string, out io.Writer) error {
 	if !repoName.MatchString(repo) {
 		return fmt.Errorf("want owner/repo, got %q", repo)
 	}
-	env := []string{"GH_TOKEN=" + token}
 	for _, l := range Labels {
-		output, err := run(env, "gh", "label", "create", l.Name, "--repo", repo,
+		output, err := run(nil, "gh", "label", "create", l.Name, "--repo", repo,
 			"--color", l.Color, "--description", l.Description, "--force")
 		if err != nil {
 			return fmt.Errorf("label %s: %w\n%s", l.Name, err, strings.TrimSpace(output))
@@ -98,4 +70,17 @@ func SyncLabels(run Runner, token, repo string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "%d engine labels in %s\n", len(Labels), repo)
 	return nil
+}
+
+// CurrentUser returns the account authenticated by the host's gh installation.
+func CurrentUser(run Runner) (string, error) {
+	out, err := api(run, "user", "--jq", ".login")
+	if err != nil {
+		return "", fmt.Errorf("GitHub account: %w", err)
+	}
+	login := strings.TrimSpace(out)
+	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`).MatchString(login) {
+		return "", fmt.Errorf("GitHub account: unexpected login %q", login)
+	}
+	return login, nil
 }

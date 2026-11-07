@@ -11,8 +11,7 @@ import (
 )
 
 func TestRunCommandLine(t *testing.T) {
-	token := func(k string) string { return map[string]string{"GH_TOKEN": "tok"}[k] }
-	none := func(string) string { return "" }
+	configured := func(string) string { return "" }
 	cases := []struct {
 		name   string
 		args   []string
@@ -20,10 +19,9 @@ func TestRunCommandLine(t *testing.T) {
 		code   int
 		stderr string
 	}{
-		{"usage", []string{"run"}, token, 2, "usage: engine run"},
-		{"bad ref", []string{"run", "nope"}, token, 2, "want owner/repo#n"},
-		{"no token", []string{"run", feature}, none, 1, "engine run: no GH_TOKEN"},
-		{"no host config", []string{"run", feature}, token, 1, "engine run:"},
+		{"usage", []string{"run"}, configured, 2, "usage: engine run"},
+		{"bad ref", []string{"run", "nope"}, configured, 2, "want owner/repo#n"},
+		{"no host config", []string{"run", feature}, configured, 1, "engine run:"},
 	}
 	for _, c := range cases {
 		var out, errOut bytes.Buffer

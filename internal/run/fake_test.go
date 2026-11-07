@@ -360,7 +360,7 @@ func (w *world) Close(tracker.Ref) error {
 	return nil
 }
 
-// Operator is "op" on the feature and the planner's machine user on a task,
+// Operator is "op" on the feature and the planner's authenticated user on a task,
 // which the planner wrote.
 func (w *world) Operator(r tracker.Ref) (string, error) {
 	if r == w.feature.Ref {

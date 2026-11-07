@@ -19,21 +19,27 @@ func (h home) engineCodex(t *testing.T) (dir, config string) {
 	dir = filepath.Join(h.dir, ".local/share/engine/codex")
 	config = "# engine setup writes this block; Codex's own settings follow it.\nsandbox_mode = \"workspace-write\"\n"
 	write(t, filepath.Join(dir, "config.toml"), config, 0o600)
+	write(t, filepath.Join(dir, "daemon-environment"), "123 Mon Nov 2 12:00:00 2026\n", 0o600)
 	return dir, config
 }
 
 // daemon plays the host's Codex as the join reads it: `codex app-server
 // daemon version` in engine's Codex home, then ps. It records each call.
 type daemon struct {
-	version    string
-	versionErr error
-	ps         string
-	psErr      error
-	calls      []string
+	version     string
+	versionErr  error
+	ps          string
+	psErr       error
+	instance    string
+	instanceErr error
+	calls       []string
 }
 
 func (d *daemon) run(name string, args ...string) (string, error) {
 	d.calls = append(d.calls, name+" "+strings.Join(args, " "))
+	if name == "ps" && slices.Contains(args, "pid=,lstart=,args=") {
+		return d.instance, d.instanceErr
+	}
 	if name == "ps" {
 		return d.ps, d.psErr
 	}
@@ -50,7 +56,7 @@ func daemonProcess(home string) string {
 // remote control on), down (no daemon) and errored (one whose version reply
 // is unreadable).
 func connected(home string) *daemon {
-	return &daemon{version: `{"status":"running","socketPath":"/x.sock"}`, ps: "/bin/zsh\n" + daemonProcess(home) + "\n"}
+	return &daemon{version: `{"status":"running","socketPath":"/x.sock"}`, ps: "/bin/zsh\n" + daemonProcess(home) + "\n", instance: "123 Mon Nov 2 12:00:00 2026 " + daemonProcess(home)}
 }
 
 func down() *daemon {
@@ -92,7 +98,7 @@ func TestSpawnCodexJoins(t *testing.T) {
 		t.Fatalf("reply %+v, %v", got, err)
 	}
 	bin := filepath.Join(h.dir, "bin", "codex")
-	if want := []string{"env CODEX_HOME=" + engineHome + " " + bin + " app-server daemon version", "ps -ww -eo args="}; !slices.Equal(d.calls, want) {
+	if want := []string{"env CODEX_HOME=" + engineHome + " " + bin + " app-server daemon version", "ps -ww -eo args=", "ps -ww -eo pid=,lstart=,args="}; !slices.Equal(d.calls, want) {
 		t.Errorf("asked\n %q\nwant %q", d.calls, want)
 	}
 	config, _ := os.ReadFile(filepath.Join(engineHome, "config.toml"))
@@ -102,7 +108,7 @@ func TestSpawnCodexJoins(t *testing.T) {
 	if _, err := os.Stat(filepath.Join("/operator/codex", "engine-r-7.config.toml")); !os.IsNotExist(err) {
 		t.Errorf("a joined session got a profile: %v", err)
 	}
-	runWindow(t, tm.command, tmuxEnv...)
+	runWindow(t, tm.command, append(append([]string{}, tmuxEnv...), "GH_TOKEN=ordinary-gh-test", "GITHUB_TOKEN=ordinary-github-test")...)
 	vars := `shell_environment_policy.set={ENGINE_RUN_DIR="` + got.RunDir + `",ENGINE_HARNESS="codex",ENGINE_UNATTENDED="1",` +
 		`TMUX="/tmp/tmux-501/default,42,0",TMUX_PANE="%9"}`
 	want := []string{"-c", "sandbox_workspace_write.network_access=true", "-m", "sol", "-c", "model_reasoning_effort=high", "-c", "notice.hide_rate_limit_model_nudge=true",
@@ -111,7 +117,7 @@ func TestSpawnCodexJoins(t *testing.T) {
 		t.Errorf("argv\n got %q\nwant %q", args, want)
 	}
 	environ := lines(t, env)
-	for _, v := range []string{"GH_TOKEN=tok", "ENGINE_RUN_DIR=" + got.RunDir, "ENGINE_HARNESS=codex", "ENGINE_UNATTENDED=1", "CODEX_HOME=" + engineHome} {
+	for _, v := range []string{"GH_TOKEN=ordinary-gh-test", "GITHUB_TOKEN=ordinary-github-test", "ENGINE_RUN_DIR=" + got.RunDir, "ENGINE_HARNESS=codex", "ENGINE_UNATTENDED=1", "CODEX_HOME=" + engineHome} {
 		if !slices.Contains(environ, v) {
 			t.Errorf("environment lacks %s:\n%s", v, strings.Join(environ, "\n"))
 		}
@@ -424,5 +430,36 @@ func TestCheckCodexEmbedded(t *testing.T) {
 	ReportCheck(&report, r)
 	if !strings.Contains(report.String(), "note the Codex session runs embedded, so the ChatGPT and Codex apps do not show it: engine's Codex daemon is not running") {
 		t.Errorf("report:\n%s", report.String())
+	}
+}
+
+func TestSpawnCodexDoesNotJoinUnrecordedEnvironment(t *testing.T) {
+	for _, receipt := range []string{"", "987 Mon Nov 2 12:00:00 2026"} {
+		h := newHome(t, "mac")
+		h.clone(t)
+		h.fakeCodex(t)
+		engineHome, _ := h.engineCodex(t)
+		write(t, filepath.Join(engineHome, "daemon-environment"), receipt, 0o600)
+		tm := &tmuxFake{}
+		got, err := Spawn(codexSpawnDeps(t, h, tm, connected(h.dir), nil), codexRequest(HandsOff))
+		if err != nil || !strings.Contains(got.Warning, "host environment refresh") || strings.Contains(tm.command, "--remote unix://") {
+			t.Fatalf("%+v, %v, %s", got, err, tm.command)
+		}
+	}
+}
+
+func TestDaemonEnvironmentRejectsUnreadableOrAmbiguousProcess(t *testing.T) {
+	h := newHome(t, "mac")
+	h.engineCodex(t)
+	c := codex{d: Deps{Home: h.dir}}
+	d := connected(h.dir)
+	d.instanceErr = errors.New("ps failed")
+	if got := c.daemonEnvironment(d.run); !strings.Contains(got, "cannot identify") {
+		t.Fatal(got)
+	}
+	d.instanceErr = nil
+	d.instance += "\n" + d.instance
+	if got := c.daemonEnvironment(d.run); !strings.Contains(got, "ambiguous") {
+		t.Fatal(got)
 	}
 }

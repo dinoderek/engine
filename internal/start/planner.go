@@ -39,7 +39,7 @@ func checkPlanner(feature tracker.Ref, d Deps) (plan, error) {
 	if err := p.loadHost(d); err != nil {
 		return plan{}, err
 	}
-	issue, err := tracker.ReadTask(d.GH, p.token, feature)
+	issue, err := tracker.ReadTask(d.GH, feature)
 	if err != nil {
 		return plan{}, err
 	}

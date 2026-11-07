@@ -82,7 +82,7 @@ func removeWorktree(d Deps, rec session.Record) error {
 	if err != nil {
 		return err
 	}
-	clone, err := session.Repos{Home: d.Home, Operator: rec.Control}.Path(repo)
+	clone, err := session.Repos{Home: d.Home, Control: rec.Control}.Path(repo)
 	if err != nil {
 		return err
 	}
