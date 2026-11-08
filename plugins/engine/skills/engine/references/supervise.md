@@ -6,10 +6,11 @@ cannot. Kickoff: `Supervise <feature>`. Every gap you fill is a defect in
 
 ## Start
 
-- **Server plan** (`p<n>`): `engine run <plan>` records the coordination
-  intent and returns; the server's coordinator does the work. Then check
-  every 10 minutes: `engine ps`, `engine inbox --operator`, and
-  `engine updates <id>` for the plan and each of its tasks, or `engine ui`.
+- **Server plan** (`p<n>`, approved): `engine run <plan>` records the intent
+  and returns; the server coordinates. Check every 10 minutes: `engine ps`,
+  `engine inbox --operator`, and `engine updates <id>` for the plan and each
+  task (`engine ui` is the operator's view). Below, a comment on the feature
+  is `engine tell <plan> <text>`, and done means the plan is `done`.
 - **GitHub feature** (`owner/repo#<n>`): run `engine run <feature>` in its
   own tmux window, `run-<repo>-<n>` in the session `engine`, with its output
   appended to a log file you name in your first comment on the feature. Then
@@ -20,6 +21,9 @@ cannot. Kickoff: `Supervise <feature>`. Every gap you fill is a defect in
 
 - **Relay an answer** the operator gave you, with `engine tell <task> <text>`:
   `<task>` is the server task ID (`t<n>`), or `<repo>-<task>` in GitHub mode.
+  Answer a server inbox question with `engine reply <seq> <text>`;
+  `engine resolve` and the state change record the operator's decision, so
+  leave them to the operator unless they gave you the decision.
 - **Answer a stall** `engine run` raised, with `engine tell`, when the answer
   is not a hard stop: for example "your claim landed, carry on".
 - **Restart `engine run`** (GitHub mode) when it has died, or after an
