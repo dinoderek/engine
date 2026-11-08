@@ -91,6 +91,9 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	if err := c.reconcileDispatches(id, fleet, cfg); err != nil {
 		return err
 	}
+	if err := c.merges(id, cfg); err != nil {
+		return err
+	}
 	// Recovery may have launched or adopted a session after the first observation.
 	fleet = (run.System{Config: cfg, Host: local, Client: c.Client}).Fleet()
 	st, err := c.Service.Store.Snapshot()

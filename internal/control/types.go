@@ -71,6 +71,8 @@ type Update struct {
 	ReplyTo       int       `json:"reply_to,omitempty"`
 	RequiresReply bool      `json:"requires_reply,omitempty"`
 	Snapshot      *Item     `json:"snapshot,omitempty"`
+	// Merge is a merge request's details; only merge-request updates carry it.
+	Merge *MergeRequest `json:"merge,omitempty"`
 }
 
 // Lock has no expiry. Only its owner can release it without recovery.
@@ -103,6 +105,8 @@ type Request struct {
 	Attempt       string `json:"attempt,omitempty"`
 	Token         string `json:"token,omitempty"`
 	State         string `json:"state,omitempty"`
+	// Merge is a merge-request's PR, head, method and verdict.
+	Merge *MergeRequest `json:"merge,omitempty"`
 }
 
 // Response contains one operation's result. Credentials are only returned at dispatch.

@@ -82,13 +82,14 @@ Use the host's working `gh` installation and normal Git configuration.
 
    Push and open the PR. Swap `engine:running` for `engine:in-review`.
    Release any local resources the repo says to stop when a PR opens.
-10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
+10. **Merge on green.** Server plans: `server.md` replaces this step.
+    Watch the PR's checks with `gh pr checks --watch`.
     - Take the merge lock (below) first. A standalone task, or one with no
       other open task in its feature, needs none.
     - On a failure, read the logs, fix, and go back to step 5.
     - If the default branch moved, merge it in and go back to step 5. Keep
       the lock if it merged cleanly; a conflict you resolved is a fix.
-    - Before merging, read the task's comments once more.
+    - Read the task's comments once more.
     - When every check is green, merge with a command of its own,
       `gh pr merge <n> -R <repo> --<method> --match-head-commit <sha>`, where
       `<sha>` is the commit you reviewed and gated. Run base or head checks

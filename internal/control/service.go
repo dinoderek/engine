@@ -104,6 +104,10 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return s.endAttempt(st, a, r)
 	case "lock-acquire", "lock-release", "lock-check", "lock-recover", "lock-show":
 		return s.mergeLock(st, a, r)
+	case "merge-request":
+		return s.mergeRequest(st, a, r)
+	case "merge-outcome":
+		return s.mergeOutcome(st, a, r)
 	default:
 		return Response{}, problem(400, "unknown operation %q", r.Op)
 	}

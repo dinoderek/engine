@@ -65,7 +65,7 @@ func pendingMessage(st control.State, item control.Item, at control.Attempt) int
 	return last
 }
 
-var itemWakeKinds = []string{"say", "reply", "resolved"}
+var itemWakeKinds = []string{"say", "reply", "resolved", control.MergeMerged, control.MergeRefused}
 var planWakeKinds = []string{"say", "resolved", "ruling"}
 
 func planWake(item control.Item, u control.Update) bool {
@@ -84,7 +84,7 @@ func (c *Coordinator) cleanup(st control.State, root string, v run.View, cfg *ho
 		if at.State == "ended" {
 			continue
 		}
-		if sess.Unknown || sess.Live && !sess.Waiting {
+		if sess.Unknown || sess.Live && !sess.Waiting || c.justMerged(st, item.ID) {
 			pending = true
 			continue
 		}

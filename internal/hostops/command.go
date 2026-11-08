@@ -30,6 +30,9 @@ ops, each printing one JSON object:
                                      close a session's window, remove its
                                      worktree, kept when --failed, and delete
                                      its Codex profile
+  merge --repo <owner/repo> --pr <n> --head <sha> --method squash|merge|rebase
+                                     merge a green PR pinned to its reviewed
+                                     head, with this host's gh
 `
 
 // Envelope is what every reply carries.
@@ -84,6 +87,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	var req SpawnRequest
 	var name string
 	var failed bool
+	var merge MergeRequest
 	run := map[string]func() (any, error){
 		"control-spawn": func() (any, error) {
 			r, err := readControl(in)
@@ -104,6 +108,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		"status":  func() (any, error) { return ReadStatus(d) },
 		"collect": func() (any, error) { return Collect(d, req.RunID) },
 		"release": func() (any, error) { return Release(d, name, failed) },
+		"merge":   func() (any, error) { return Merge(d, merge) },
 	}[op]
 	if run == nil {
 		return nil, refuse("unknown op %q", op)
@@ -127,6 +132,11 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	case "release":
 		fs.StringVar(&name, "name", "", "")
 		fs.BoolVar(&failed, "failed", false, "")
+	case "merge":
+		fs.StringVar(&merge.Repo, "repo", "", "")
+		fs.IntVar(&merge.PR, "pr", 0, "")
+		fs.StringVar(&merge.Head, "head", "", "")
+		fs.StringVar(&merge.Method, "method", "", "")
 	}
 	if err := fs.Parse(args); err != nil {
 		return nil, refuse("engine host %s: %v", op, err)

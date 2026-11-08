@@ -42,7 +42,8 @@ or raises a hard stop.
 
 `engine hook pre-tool-use` blocks Bash merges without
 `--match-head-commit`, with `--auto` or `--admin`, or through the REST or
-GraphQL API.
+GraphQL API. In a server session it blocks every PR merge: the
+coordinator merges after `engine task merge-ready` (`control-server.md`).
 
 `engine hook permission` runs on `PermissionRequest` and `PermissionDenied`.
 With `ENGINE_UNATTENDED=1` it denies prompts, naming the Permission hard stop;

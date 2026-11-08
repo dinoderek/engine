@@ -96,7 +96,7 @@ func TestNoReplyUsesTheEnvelopesKeys(t *testing.T) {
 		envelope[jsonName(reflect.TypeFor[Envelope]().Field(i))] = true
 	}
 	for _, typ := range []reflect.Type{reflect.TypeFor[Synced](), reflect.TypeFor[Spawned](), reflect.TypeFor[Status](),
-		reflect.TypeFor[Collected](), reflect.TypeFor[Released](), reflect.TypeFor[Failure]()} {
+		reflect.TypeFor[Collected](), reflect.TypeFor[Released](), reflect.TypeFor[Merged](), reflect.TypeFor[Failure]()} {
 		for i := range typ.NumField() {
 			if name := jsonName(typ.Field(i)); envelope[name] {
 				t.Errorf("%s.%s is %q, an envelope key", typ.Name(), typ.Field(i).Name, name)
