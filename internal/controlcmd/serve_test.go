@@ -18,7 +18,7 @@ import (
 func TestServeDefaultsToTheDocumentedPaths(t *testing.T) {
 	e, _ := environment(t)
 	tokenPath := filepath.Join(hosts.ConfigDir(e.Home), ServerTokenFile)
-	if code := Main([]string{"serve"}, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), tokenPath) {
+	if code := Main([]string{"serve", "--foreground"}, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), tokenPath) {
 		t.Fatalf("missing default credential: %d %s", code, e.Err)
 	}
 	if err := os.MkdirAll(filepath.Dir(tokenPath), 0o700); err != nil {
