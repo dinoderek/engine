@@ -162,7 +162,7 @@ single-user machine. The page calls fixed same-origin routes:
   it filters the last list read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts, unfinished prerequisites, including other plans' tasks, and
-  each task's `feedback`.
+  each active task's `feedback`.
 - `/api/sessions`: the `session-view` rows, feedback requests first.
 - `/api/items/<id>` and `/thread`: a plan or task with its description
   rendered, and its messages, 50 after `after` (through `anchor`), with a
