@@ -12,7 +12,7 @@ import (
 )
 
 // readOps is every control operation the dashboard may forward. All are reads.
-var readOps = []string{"list", "plan-view", "attempts", "get", "updates"}
+var readOps = []string{"list", "plan-view", "attempts", "get", "updates", "session-view"}
 
 // Caller is the control client boundary; control.Client satisfies it.
 type Caller interface {
@@ -152,7 +152,11 @@ func (u *upstream) plan(ctx context.Context, id string) (Envelope, int) {
 		if err != nil {
 			return nil, err
 		}
-		return planDetail(id, view.Items, attempts.Attempts), nil
+		sessions, err := u.call(ctx, control.Request{Op: "session-view"})
+		if err != nil {
+			return nil, err
+		}
+		return planDetail(id, view.Items, attempts.Attempts, sessions.Sessions), nil
 	})
 }
 

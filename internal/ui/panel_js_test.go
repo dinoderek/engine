@@ -7,20 +7,25 @@ import (
 	"time"
 )
 
-// TestPanelKeyboardAndFocus runs the dashboard's real scripts against its own
-// index.html in a small DOM shim (testdata/dom_shim.js) and checks the item
-// panel's keyboard behaviour, focus handling and rendering of server data.
-// The scenarios are in testdata/panel_test.js, one "ok"/"FAIL" line each.
-func TestPanelKeyboardAndFocus(t *testing.T) {
+// TestDashboardScripts runs the dashboard's real scripts against its own
+// index.html in a small DOM shim (testdata/dom_shim.js) and checks keyboard
+// behaviour, focus handling and rendering of server data. Each scenario file
+// prints one "ok"/"FAIL" line per scenario: panel_test.js covers the item
+// panel, sessions_test.js the Sessions tab and the feedback links.
+func TestDashboardScripts(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node is not installed")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, node, "testdata/panel_test.js").CombinedOutput()
-	if err != nil {
-		t.Fatalf("panel scenarios failed: %v\n%s", err, out)
+	for _, file := range []string{"panel_test.js", "sessions_test.js"} {
+		t.Run(file, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			out, err := exec.CommandContext(ctx, node, "testdata/"+file).CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s failed: %v\n%s", file, err, out)
+			}
+			t.Logf("%s", out)
+		})
 	}
-	t.Logf("%s", out)
 }

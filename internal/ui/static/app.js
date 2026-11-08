@@ -11,31 +11,57 @@
   const IMPLIED = { done: "done", "in-progress": "running", ready: "todo" };
   const ID = /^[prt][0-9]+$/;
 
-  const view = { repo: "", state: "", q: "", plan: "", task: "", panel: "", tab: "description", update: 0 };
-  const fetched = { plans: null, plan: null };
+  const view = { page: "plans", repo: "", state: "", q: "", plan: "", task: "", panel: "", tab: "description", update: 0 };
+  const fetched = { plans: null, plan: null, sessions: null };
   let pending = 0;
   let planPending = 0;
+  let sessionsPending = 0;
 
   const { el, label, load, keep, failed } = window.engine.dom;
   const $ = (id) => document.getElementById(id);
   const panel = window.engine.panel({
     $, view, writeHash, status: () => status(), repoName,
-    href: (id, tab, update) => link(view.plan, view.task, { id, tab, update }),
+    href: (id, tab, update) => here({ id, tab, update }),
     render: () => { renderPlans(); renderPane(); },
   });
+  const sessions = window.engine.sessions({
+    $, view,
+    panelHref: (id, tab, update) => sessionsLink({ id, tab, update }),
+    planHref: (plan, task) => link(plan, task, null),
+    noteOpener: (key) => panel.noteOpener(key),
+  });
+
+  // addOpen writes an open panel into a hash's search part.
+  function addOpen(p, open) {
+    if (!open || !open.id) return;
+    p.set("panel", open.id);
+    if (open.tab === "communications") p.set("tab", open.tab);
+    if (open.update) p.set("update", String(open.update));
+  }
+
+  const current = () => ({ id: view.panel, tab: view.tab, update: view.update });
 
   // query is the hash's search part: the plan filters, and the open panel
   // unless the caller passes another one (or null for none).
-  function query(open = { id: view.panel, tab: view.tab, update: view.update }) {
+  function query(open = current()) {
     const p = new URLSearchParams();
     for (const k of ["repo", "state", "q"]) if (view[k]) p.set(k, view[k]);
-    if (open && open.id) {
-      p.set("panel", open.id);
-      if (open.tab === "communications") p.set("tab", open.tab);
-      if (open.update) p.set("update", String(open.update));
-    }
+    addOpen(p, open);
     const s = p.toString();
     return s ? "?" + s : "";
+  }
+
+  // sessionsLink is the Sessions tab, with a panel open over it or none.
+  function sessionsLink(open = current()) {
+    const p = new URLSearchParams();
+    addOpen(p, open);
+    const s = p.toString();
+    return "#/sessions" + (s ? "?" + s : "");
+  }
+
+  // here links to the page being shown, so the panel opens over it.
+  function here(open) {
+    return view.page === "sessions" ? sessionsLink(open) : link(view.plan, view.task, open);
   }
 
   function link(plan, task, open) {
@@ -49,11 +75,15 @@
     const [path, search] = location.hash.replace(/^#/, "").split("?");
     const parts = path.split("/").filter(Boolean);
     const p = new URLSearchParams(search || "");
-    view.repo = p.get("repo") || "";
-    view.state = p.get("state") || "";
-    view.q = p.get("q") || "";
-    view.plan = ID.test(parts[1] || "") ? parts[1] : "";
-    view.task = ID.test(parts[2] || "") ? parts[2] : "";
+    view.page = parts[0] === "sessions" ? "sessions" : "plans";
+    // The Sessions tab leaves the Plans filters and selection as they were.
+    if (view.page === "plans") {
+      view.repo = p.get("repo") || "";
+      view.state = p.get("state") || "";
+      view.q = p.get("q") || "";
+      view.plan = ID.test(parts[1] || "") ? parts[1] : "";
+      view.task = ID.test(parts[2] || "") ? parts[2] : "";
+    }
     const open = p.get("panel") || "";
     view.panel = /^[pt][0-9]+$/.test(open) ? open : "";
     view.tab = p.get("tab") === "communications" ? "communications" : "description";
@@ -61,7 +91,7 @@
   }
 
   function writeHash() {
-    history.replaceState(null, "", link(view.plan, view.task));
+    history.replaceState(null, "", here());
   }
 
   // opener is a link that opens the item panel; it remembers itself so
@@ -76,12 +106,17 @@
   function repoName(id) {
     const repos = fetched.plans && fetched.plans.data ? fetched.plans.data.repos : [];
     const repo = repos.find((r) => r.id === id);
-    return repo && repo.slug ? repo.slug : id;
+    if (repo && repo.slug) return repo.slug;
+    // Opened straight on Sessions, the plan list may not be loaded yet.
+    const rows = fetched.sessions && fetched.sessions.data ? fetched.sessions.data.sessions : [];
+    const row = rows.find((r) => r.repo === id && r.repo_slug);
+    return row ? row.repo_slug : id;
   }
 
   function status() {
     const node = $("status");
-    const envs = [fetched.plans, fetched.plan, ...panel.envs()].filter(Boolean);
+    const shown = view.page === "sessions" ? [fetched.sessions] : [fetched.plans, fetched.plan];
+    const envs = [...shown, ...panel.envs()].filter(Boolean);
     const stale = envs.find((e) => e.stale || e.failed);
     const times = envs.map((e) => e.fetched).filter(Boolean).sort();
     const at = times.length ? new Date(times[0]).toLocaleTimeString() : "never";
@@ -122,10 +157,20 @@
     });
   }
 
+  // feedbackLink opens the unresolved question that applies to a task: its
+  // own, or its plan's, where the thread lives.
+  function feedbackLink(t) {
+    const fb = t.feedback;
+    const key = "fb-" + t.id;
+    const a = el("a", { href: link(view.plan, view.task, { id: fb.item, tab: "communications", update: fb.update }), "data-key": key }, window.engine.fmt.feedbackLabel(fb, t.id));
+    a.addEventListener("click", () => panel.noteOpener(key));
+    return el("div", { class: "feedback" }, a);
+  }
+
   function stateCell(t) {
     const text = GROUPS.find(([g]) => g === t.group)[1];
     const extra = IMPLIED[t.group] === t.state ? "" : " · " + t.state;
-    return el("td", { "data-label": "State" }, el("span", { class: "group-" + t.group }, text), extra);
+    return el("td", { "data-label": "State" }, el("span", { class: "group-" + t.group }, text), extra, t.feedback ? feedbackLink(t) : null);
   }
 
   function waitingCell(t) {
@@ -181,6 +226,7 @@
     if (n !== pending) return;
     fetched.plans = env;
     renderPlans();
+    panel.head();
     status();
   }
 
@@ -207,10 +253,47 @@
     }
   }
 
+  function renderSessions() {
+    sessions.render(fetched.sessions);
+  }
+
+  async function refreshSessions() {
+    const n = ++sessionsPending;
+    let env;
+    try {
+      env = await load("/api/sessions");
+    } catch (err) {
+      env = failed(fetched.sessions, err);
+    }
+    if (n !== sessionsPending) return;
+    fetched.sessions = env;
+    renderSessions();
+    panel.head();
+    status();
+  }
+
+  // chrome shows the page the hash names and points each tab at the other
+  // page's last state, so switching tabs keeps filters and selection.
+  function chrome() {
+    const onSessions = view.page === "sessions";
+    $("list").hidden = $("pane").hidden = onSessions;
+    $("sessions").hidden = !onSessions;
+    $("workspace").classList.toggle("on-sessions", onSessions);
+    $("tab-plans").setAttribute("href", link(view.plan, view.task, null));
+    $("tab-sessions").setAttribute("href", sessionsLink(null));
+    for (const [id, on] of [["tab-plans", !onSessions], ["tab-sessions", onSessions]]) {
+      if (on) $(id).setAttribute("aria-current", "page");
+      else $(id).removeAttribute("aria-current");
+    }
+  }
+
   function refresh() {
     if (document.visibilityState === "visible") {
-      refreshPlans();
-      refreshPlan(false);
+      refreshSessions();
+      if (view.page === "plans") {
+        refreshPlans();
+        refreshPlan(false);
+      }
       panel.refresh();
     }
   }
@@ -221,6 +304,7 @@
     view.repo = $("repo").value;
     view.state = $("state").value;
     writeHash();
+    chrome();
     // Links carry the filters, so redraw them before the filtered list arrives.
     renderPlans();
     renderPane();
@@ -232,12 +316,17 @@
     const before = view.plan;
     readHash();
     $("search").value = view.q;
+    chrome();
     if (before !== view.plan) fetched.plan = null;
     renderPane();
     if (!fetched.plans) renderPlans();
+    renderSessions();
     panel.sync();
-    refreshPlans();
-    refreshPlan(true);
+    refreshSessions();
+    if (view.page === "plans") {
+      refreshPlans();
+      refreshPlan(true);
+    }
   }
 
   document.addEventListener("DOMContentLoaded", () => {

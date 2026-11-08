@@ -69,6 +69,9 @@ type TaskRow struct {
 	Group   string         `json:"group"`
 	Host    string         `json:"host,omitempty"`
 	Waiting []Prerequisite `json:"waiting"`
+	// Feedback is the unresolved question that applies to the task, its own
+	// or its plan's, as the Sessions tab shows it.
+	Feedback *control.UpdateRef `json:"feedback,omitempty"`
 }
 
 // PlanDetail is the selected plan's task pane.
@@ -116,9 +119,10 @@ func matches(p PlanRow, f Filter, query string) bool {
 	return strings.Contains(strings.ToLower(strings.Join([]string{p.ID, p.Repo, p.Slug, p.Title}, "\n")), query)
 }
 
-// planDetail projects a plan view and the attempt list into the task pane.
-// The view holds the plan, its repository, its tasks and their transitive prerequisites.
-func planDetail(id string, view []control.Item, live []control.Attempt) PlanDetail {
+// planDetail projects a plan view, the attempt list and the session rows into
+// the task pane. The view holds the plan, its repository, its tasks and their
+// transitive prerequisites.
+func planDetail(id string, view []control.Item, live []control.Attempt, sessions []control.SessionRow) PlanDetail {
 	items := map[string]control.Item{}
 	for _, it := range view {
 		items[it.ID] = it
@@ -126,12 +130,13 @@ func planDetail(id string, view []control.Item, live []control.Attempt) PlanDeta
 	plan := items[id]
 	out := PlanDetail{Plan: PlanRow{ID: plan.ID, Repo: plan.Repo, Slug: items[plan.Repo].Slug, Title: plan.Title, State: plan.State}, Tasks: []TaskRow{}}
 	hosts := activeHosts(live)
+	feedback := feedbackByTask(sessions)
 	dispatchable := plan.ApprovedVersion > 0 && plan.State != "prepare"
 	for _, t := range view {
 		if t.Kind != "task" || t.Plan != id {
 			continue
 		}
-		row := TaskRow{ID: t.ID, Title: t.Title, State: t.State, Host: hosts[t.Attempt], Waiting: []Prerequisite{}}
+		row := TaskRow{ID: t.ID, Title: t.Title, State: t.State, Host: hosts[t.Attempt], Waiting: []Prerequisite{}, Feedback: feedback[t.ID]}
 		for _, dep := range t.Depends {
 			d, ok := items[dep]
 			if !ok {
