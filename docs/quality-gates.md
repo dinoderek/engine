@@ -17,8 +17,8 @@ to deploy yet.
 Every `required` lane in `scripts/lanes.tsv` must be green before a PR. CI
 (`.github/workflows/ci.yml`) runs `./dev test` on every pull request and every
 push to `main`, and uploads `.test-ai-results/` as the `test-ai-results`
-artifact. Every lane runs in CI; none is local-only. CI installs `tmux` when
-the runner lacks it, because the tmux tests skip without it.
+artifact. Every lane runs in CI; none is local-only. CI installs `tmux` and `node` when
+the runner lacks them, because their tests skip without them.
 
 ## What each lane enforces
 

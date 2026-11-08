@@ -11,14 +11,9 @@ There is no automatic tracker migration or summary synchronisation.
 
 ## Start
 
-The server needs `sqlite3` and `tmux`, and every CLI and execution host must
-reach it. Each operator's `~/.config/engine/config.toml` names its
-host from `hosts.toml`:
-
-```toml
-[server]
-host = "mac"
-```
+The server needs `sqlite3` and `tmux`. Each operator's
+`~/.config/engine/config.toml` names its host from `hosts.toml`
+(`[server] host = "devbox"`):
 
 ```sh
 mkdir -p ~/.config/engine
@@ -28,29 +23,22 @@ engine serve
 
 `engine serve` starts the server on that host (over ssh if remote) and
 returns. It runs in the private tmux server `engine-server`
-(`tmux -L engine-server attach`), apart from task windows, logging to
-`~/.local/share/engine/server/serve.log`. It listens on port 7331 of the
-Tailscale name in the host's address, the origin it advertises and the CLI
-uses; the tailnet keeps bearer credentials confidential. To restart a
-running server (as after updating engine), close its window and rerun. A server exiting at once fails it, with its last screen.
+(`tmux -L engine-server attach`), logging to
+`~/.local/share/engine/server/serve.log`, on port 7331 of the Tailscale name
+in the host's address: the origin it advertises and the CLI uses. The tailnet
+keeps credentials confidential. To restart it, close its window and rerun.
 
-`engine serve --foreground` runs it in the calling process, with `--listen`
-(default `127.0.0.1:7331`) and `--advertise`. `--db` defaults to
-`~/.local/share/engine/server/control.db`, `--token-file` to
-`~/.config/engine/server-token`.
-
+`engine serve --foreground` runs it in place.
 For other networks, use an SSH tunnel or a TLS reverse proxy, set
 `[server] url` instead of `host`, and use `--foreground`. Without
 config.toml, the CLI uses `http://devbox:7331`; `ENGINE_SERVER_URL` overrides
-both. Operator machines hold the credential at the `--token-file` default,
-or at `ENGINE_SERVER_TOKEN_FILE`. Workers receive their scoped credential
-and the advertised URL at dispatch.
+both. The CLI reads its credential from `~/.config/engine/server-token` or
+`ENGINE_SERVER_TOKEN_FILE`; workers get the advertised URL.
 
-For backup, stop the server, run `engine serve --backup <new-path>`, and
-restart it. Copy it off-machine. Restore
-with the server stopped, keeping the operator credential. A backup holds
-execution credentials and is private. Backup never overwrites a file.
-Test restores in an isolated database before replacing the active one.
+For backup, stop the server, run `engine serve --backup <new-path>`, restart
+it, and copy the backup off-machine. Restore with the server stopped,
+keeping the operator credential. Backups hold credentials, are private
+and never overwrite a file. Test restores in an isolated database first.
 
 ## Records and commands
 
@@ -73,7 +61,7 @@ engine task list p2
 engine attempt list t3
 ```
 
-Substitute returned IDs and versions. Task cards carry the skill's Outcome
+Task cards carry the skill's Outcome
 and Tests sections. Dependencies, capabilities, harness and tier are
 structured fields, supplied with `--depends`, `--requires`, `--harness`
 and `--tier`. The server adapter supplies card keys and maps these fields
@@ -163,26 +151,32 @@ implementation.
 `engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen`
 chooses another loopback address. It uses the CLI's server configuration and
 operator credential, and the credential never reaches the browser. Any local
-process or user that can reach the port reads with operator rights, so run it
-only on a single-user machine. The page calls fixed same-origin routes:
+process or user reaching the port reads with operator rights, so run it only
+on a single-user machine. The page calls fixed same-origin routes:
 
 - `/api/plans`: repositories and plans, filtered by `repo`, `state` and a
   case-insensitive `q` over plan ID, repository and title. With `cached=1`
-  it filters the last list it read without calling the control server.
+  it filters the last list read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts and unfinished prerequisites, including other plans' tasks.
+- `/api/items/<id>` and `/thread`: a plan or task with its description
+  rendered, and its messages, 50 after `after` (through `anchor`), with a
+  cursor and question statuses.
 
-The process forwards only the `list`, `plan-view` and `attempts` reads. It
-answers GET and HEAD for a loopback host name on any port, so an SSH tunnel
-works, and sends `Cache-Control: no-store`. When the control server fails,
-each route returns its last successful data marked stale. The page refreshes
-about every 30 seconds while visible.
+Descriptions support headings, flat lists, code, links. Raw HTML and
+messages are text; only absolute http, https and mailto links act.
+
+The process forwards only the `list`, `plan-view`, `attempts`, `get` and
+`updates` reads. It answers GET and HEAD for a loopback host name on any
+port, so an SSH tunnel works, and sends `Cache-Control: no-store`. When the
+control server fails, the page keeps its last data, marked stale. It
+refreshes every 30s while visible.
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
 unfinished prerequisite blocks it, todo or approved under an approved plan
 is ready to run, and anything else waits for the operator, so is blocked.
-Whether the plan is being coordinated does not change the summary.
+Coordination does not change it.
 
 ## Session view
 
@@ -230,7 +224,9 @@ placement decisions with the CLI coordinator and serializes plans against
 fresh fleet capacity. A dispatch records its attempt, host and credential
 before calling the host. Restart adopts matching sessions or retries the
 same dispatch identity on that host. An unreachable host means unknown,
-never dead.
+never dead. A dispatch for a task whose earlier attempt ran, a retry or
+resume, is marked a resume: the host opens the worktree on the task's
+branch from `origin` rather than refusing it (`hosts-and-sessions.md`).
 
 The host serializes dispatches by run ID and returns an existing run on
 replay. It uses ordinary Git credentials and identity, with isolated clones

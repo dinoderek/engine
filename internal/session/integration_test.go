@@ -179,7 +179,7 @@ func TestCreateWorktreeFallbackForReal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wt, err := r.CreateWorktree(clone, 412)
+	wt, err := r.CreateWorktree(clone, 412, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestCreateWorktreeFallbackForReal(t *testing.T) {
 	if _, err := realGit(wt.Path, nil, "git", "config", "--local", "--get", "user.email"); err == nil {
 		t.Fatal("worktree identity overridden")
 	}
-	if _, err := r.CreateWorktree(clone, 412); err == nil || !strings.Contains(err.Error(), "already has a worktree") {
+	if _, err := r.CreateWorktree(clone, 412, false); err == nil || !strings.Contains(err.Error(), "already has a worktree") {
 		t.Errorf("second create: %v", err)
 	}
 }
@@ -213,7 +213,7 @@ func TestCreateWorktreeRemakesOnlyALeftoverBranchWithNoWork(t *testing.T) {
 	mustGit(t, clone.Path, "worktree", "add", "--quiet", clone.Path+"-wt4", "task/r-4")
 	mustGit(t, clone.Path+"-wt4", "commit", "--quiet", "--allow-empty", "-m", "work")
 	mustGit(t, clone.Path, "worktree", "remove", clone.Path+"-wt4")
-	if _, err := r.CreateWorktree(clone, 4); err == nil || !strings.Contains(err.Error(), "with commits of its own") {
+	if _, err := r.CreateWorktree(clone, 4, false); err == nil || !strings.Contains(err.Error(), "with commits of its own") {
 		t.Errorf("a branch with work: err = %v", err)
 	}
 	// A branch with no commits of its own, as a session that died before
@@ -222,7 +222,7 @@ func TestCreateWorktreeRemakesOnlyALeftoverBranchWithNoWork(t *testing.T) {
 	if _, err := r.Sync(mustRepo(t, "o/r")); err != nil {
 		t.Fatal(err)
 	}
-	wt, err := r.CreateWorktree(clone, 3)
+	wt, err := r.CreateWorktree(clone, 3, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestCreateWorktreeRunsTheReposOwnCommandForReal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wt, err := r.CreateWorktree(clone, 9)
+	wt, err := r.CreateWorktree(clone, 9, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestCreateWorktreeFallsBackWhenTheReposDevNeverAnswers(t *testing.T) {
 		t.Fatal(err)
 	}
 	began := time.Now()
-	wt, err := r.CreateWorktree(clone, 4)
+	wt, err := r.CreateWorktree(clone, 4, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -59,7 +59,9 @@ and never restate the commands behind them.
 - Always work in a worktree, never in the main checkout. One task, one
   worktree, one branch, one PR.
 - `worktree create` branches from the remote's current default branch and
-  provisions anything the task needs. It puts the worktree outside the
+  provisions anything the task needs. Given a branch that already exists
+  locally, it checks that branch out as it is: engine sets it to a resumed
+  task's work first. It puts the worktree outside the
   checkout, so the checkout's tools and `git status` never walk it.
   `worktree release` tears it all down. Engine runs `worktree create` as
   `dev worktree create <branch>` when the repo has an executable `dev` at its

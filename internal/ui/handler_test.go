@@ -23,7 +23,8 @@ type fakeControl struct {
 
 	mu     sync.Mutex
 	ops    []string
-	fail   int // status to fail every call with; 0 answers
+	fail   int                                            // status to fail every call with; 0 answers
+	reads  func(control.Request) (control.Response, bool) // false answers unknown item
 	server *httptest.Server
 }
 
@@ -58,6 +59,14 @@ func (f *fakeControl) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var out control.Response
+	if f.reads != nil && (req.Op == "get" || req.Op == "updates") {
+		resp, ok := f.reads(req)
+		if !ok {
+			w.WriteHeader(404)
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+		return
+	}
 	switch {
 	case req.Op == "list" && req.State == "repo":
 		out.Items = fixtureRepos()
@@ -123,6 +132,8 @@ func TestRoutesServePageAndReads(t *testing.T) {
 		{"/", "text/html", `src="/app.js"`},
 		{"/app.js", "text/javascript", "textContent"},
 		{"/app.css", "text/css", "prefers-color-scheme"},
+		{"/dom.js", "text/javascript", "window.engine.dom"},
+		{"/panel.js", "text/javascript", "noopener"},
 		{"/api/plans?repo=r1&state=executing&q=rollout", "application/json", `"id":"p24"`},
 		{"/api/plans/p24", "application/json", `"in_progress":2`},
 	} {
@@ -267,12 +278,25 @@ func TestUpstreamForwardsOnlyReads(t *testing.T) {
 		}
 	}
 	for _, op := range readOps {
-		if _, err := up.call(context.Background(), control.Request{Op: op}); err == nil || err.Error() != "unused" {
+		if _, err := up.call(context.Background(), control.Request{Op: op, ID: "t1"}); err == nil || err.Error() != "unused" {
 			t.Errorf("op %q: err = %v, want it forwarded", op, err)
 		}
 	}
 	if strings.Join(rc.ops, ",") != strings.Join(readOps, ",") {
 		t.Fatalf("forwarded %v, want only %v", rc.ops, readOps)
+	}
+}
+
+func TestUpstreamReadsOneItemAtATime(t *testing.T) {
+	rc := &recordingCaller{}
+	up := newUpstream(rc, time.Now, nil)
+	for _, op := range []string{"get", "updates"} {
+		if _, err := up.call(context.Background(), control.Request{Op: op}); err == nil || !strings.Contains(err.Error(), "reads one item") {
+			t.Errorf("op %q without an item: err = %v, want refusal", op, err)
+		}
+	}
+	if len(rc.ops) != 0 {
+		t.Fatalf("forwarded %v, want nothing", rc.ops)
 	}
 }
 

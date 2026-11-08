@@ -96,3 +96,36 @@ func TestControlDispatchJSONAndJoinedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestControlSpawnResumesOnlyWhenTheRequestSaysSo(t *testing.T) {
+	for _, resume := range []bool{false, true} {
+		h := newHome(t, "mac")
+		if err := os.MkdirAll(filepath.Join(h.dir, session.ControlReposDir, "o", "r", ".git"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		git := &gitFake{origin: true}
+		d := spawnDeps(t, h, git.run, &tmuxFake{}, nil)
+		r := ControlRequest{Spawn: request(), URL: "http://127.0.0.1:7331", Credential: strings.Repeat("a", 64), Attempt: "a9", Remote: "https://github.com/o/r.git"}
+		r.Spawn.Resume = resume
+		b, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A first attempt's request is what a host that predates Resume reads.
+		if strings.Contains(string(b), "Resume") != resume {
+			t.Errorf("resume %v: request JSON %s", resume, b)
+		}
+		parsed, err := readControl(strings.NewReader(string(b)))
+		if err != nil || parsed.Spawn.Resume != resume {
+			t.Fatalf("resume %v: parsed %+v, %v", resume, parsed.Spawn, err)
+		}
+		_, err = ControlSpawn(d, parsed)
+		set := slices.ContainsFunc(git.calls, func(l string) bool { return strings.Contains(l, "branch --force --no-track task/r-7") })
+		if resume && (err != nil || !set) {
+			t.Errorf("a resume did not open on origin's branch: %v, %v", err, git.calls)
+		}
+		if !resume && (err == nil || !strings.Contains(err.Error(), "origin already has branch") || set) {
+			t.Errorf("a first attempt adopted origin's branch: %v", err)
+		}
+	}
+}
