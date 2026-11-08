@@ -30,13 +30,14 @@ func (c *Coordinator) apply(st control.State, root string, a run.Action, cfg *ho
 	case run.SetLabel:
 		return c.change(item.ID, strings.TrimPrefix(a.Label, "engine:"))
 	case run.Fail:
-		if err := c.Service.SetAttempt(item.Attempt, "ended", ""); err != nil {
+		at, err := c.Service.EndDead(item.Attempt, a.Text)
+		if err != nil {
 			return err
 		}
-		if err := c.change(item.ID, "failed"); err != nil {
-			return err
+		if at.Reason == control.EndVanished {
+			return c.notice(item.ID, "vanished/"+at.ID, a.Text+"; the task stays resumable and is dispatched again as a resume")
 		}
-		return c.notice(item.ID, "failed/"+item.Attempt, a.Text)
+		return c.notice(item.ID, "failed/"+at.ID, a.Text)
 	case run.ReportLint:
 		return c.notice(item.ID, "lint/"+fmt.Sprint(item.Version), "Plan lint failed; no tasks were dispatched. Fix the cards and restart coordination.")
 	case run.LimitAlert:

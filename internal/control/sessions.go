@@ -53,8 +53,9 @@ const SummaryRunes = 240
 // the session preview.
 var humanKinds = []string{"say", "ask", "reply", "resolved"}
 
-// sessionView projects every current, unended attempt from one snapshot.
-// Host observations come only from the cache, so a request never probes a host.
+// sessionView projects every current, unended attempt, and every vanished
+// one awaiting its resume, from one snapshot. Host observations come only
+// from the cache, so a request never probes a host.
 func (s Service) sessionView(st *State, a Actor) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
@@ -62,10 +63,14 @@ func (s Service) sessionView(st *State, a Actor) (Response, error) {
 	out := Response{}
 	for _, at := range st.Attempts {
 		item, ok := st.Items[at.Item]
-		if !ok || at.State == "ended" || item.Attempt != at.ID {
+		if !ok || item.Attempt != at.ID || at.State == "ended" && !Vanished(st, item) {
 			continue
 		}
-		out.Sessions = append(out.Sessions, s.sessionRow(st, item, at))
+		row := s.sessionRow(st, item, at)
+		if at.State == "ended" {
+			row.Observed = "exited"
+		}
+		out.Sessions = append(out.Sessions, row)
 	}
 	slices.SortFunc(out.Sessions, func(x, y SessionRow) int { return Number(x.Item) - Number(y.Item) })
 	return out, nil
