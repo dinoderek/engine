@@ -12,7 +12,7 @@ import (
 )
 
 // readOps is every control operation the dashboard may forward. All are reads.
-var readOps = []string{"list", "plan-view", "attempts"}
+var readOps = []string{"list", "plan-view", "attempts", "get", "updates"}
 
 // Caller is the control client boundary; control.Client satisfies it.
 type Caller interface {
@@ -53,6 +53,9 @@ func newUpstream(client Caller, now func() time.Time, logf func(string, ...any))
 func (u *upstream) call(ctx context.Context, r control.Request) (control.Response, error) {
 	if !slices.Contains(readOps, r.Op) {
 		return control.Response{}, fmt.Errorf("operation %q is not a dashboard read", r.Op)
+	}
+	if (r.Op == "get" || r.Op == "updates") && r.ID == "" {
+		return control.Response{}, fmt.Errorf("operation %q reads one item", r.Op)
 	}
 	ctx, cancel := context.WithTimeout(ctx, u.timeout)
 	defer cancel()
@@ -150,5 +153,56 @@ func (u *upstream) plan(ctx context.Context, id string) (Envelope, int) {
 			return nil, err
 		}
 		return planDetail(id, view.Items, attempts.Attempts), nil
+	})
+}
+
+// fresh loads a view the page keeps for itself: nothing is remembered here,
+// and a failure is only reported, so the page marks what it holds stale.
+func (u *upstream) fresh(ctx context.Context, load func(context.Context) (any, error)) (Envelope, int) {
+	value, err := load(ctx)
+	if err != nil {
+		status, message := u.failure(err)
+		return Envelope{Error: message}, status
+	}
+	return Envelope{Data: value, Fetched: u.now().UTC()}, 200
+}
+
+// item loads a plan or task with its description rendered.
+func (u *upstream) item(ctx context.Context, id string) (Envelope, int) {
+	return u.fresh(ctx, func(ctx context.Context) (any, error) {
+		got, err := u.call(ctx, control.Request{Op: "get", ID: id})
+		if err != nil {
+			return nil, err
+		}
+		if got.Item == nil {
+			return nil, errors.New("the control server sent no item")
+		}
+		return itemDetail(*got.Item), nil
+	})
+}
+
+// maxThreadReads bounds how many 200-update reads one thread request makes.
+const maxThreadReads = 100
+
+// thread loads a window of an item's messages. It reads the item's updates
+// from the start, because the status of a question depends on updates after it.
+func (u *upstream) thread(ctx context.Context, id string, after, anchor int) (Envelope, int) {
+	return u.fresh(ctx, func(ctx context.Context) (any, error) {
+		if _, err := u.call(ctx, control.Request{Op: "get", ID: id}); err != nil {
+			return nil, err
+		}
+		var all []control.Update
+		for cursor, reads := 0, 0; reads < maxThreadReads; reads++ {
+			page, err := u.call(ctx, control.Request{Op: "updates", ID: id, After: cursor})
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, page.Updates...)
+			if len(page.Updates) < 200 {
+				break
+			}
+			cursor = page.Updates[len(page.Updates)-1].ID
+		}
+		return threadWindow(id, all, after, anchor), nil
 	})
 }

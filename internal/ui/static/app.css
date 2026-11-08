@@ -54,3 +54,31 @@ tr.selected td { background: var(--select); }
   td { border: 0; padding: 2px 0; }
   td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); }
 }
+.plans.with-panel { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(300px, 420px); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; }
+.panel[hidden], [role="tabpanel"][hidden] { display: none; }
+.panel-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.panel h2 { font-size: 15px; margin: 8px 0 2px; }
+.panel h2:focus { outline: none; }
+.panel button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.panel button:focus-visible, .panel [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+[role="tablist"] { display: flex; gap: 4px; margin: 10px 0; border-bottom: 1px solid var(--line); }
+[role="tab"] { border-bottom: 2px solid transparent !important; border-radius: 6px 6px 0 0 !important; }
+[role="tab"][aria-selected="true"] { border-bottom-color: var(--accent) !important; color: var(--accent) !important; }
+.markdown h3, .markdown h4, .markdown h5, .markdown h6 { margin: 12px 0 4px; font-size: 14px; }
+.markdown p { margin: 6px 0; }
+.markdown pre { margin: 8px 0; padding: 8px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.markdown code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.messages { list-style: none; margin: 0; padding: 0; }
+.message { padding: 8px; border-top: 1px solid var(--line); border-radius: 6px; }
+.message.anchored { background: var(--select); }
+.message-head { font-size: 12px; }
+.message-body { white-space: pre-wrap; margin-top: 4px; }
+.question { padding: 0 6px; border-radius: 6px; font-size: 12px; }
+.question.open { color: var(--warn); background: var(--warn-bg); }
+.question.resolved { color: var(--done); border: 1px solid var(--done); }
+#more { margin-top: 8px; }
+@media (max-width: 800px) {
+  .plans.with-panel { grid-template-columns: 1fr; }
+  .panel { position: fixed; inset: 0; z-index: 10; border-radius: 0; overflow: auto; }
+}

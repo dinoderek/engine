@@ -11,40 +11,38 @@
   const IMPLIED = { done: "done", "in-progress": "running", ready: "todo" };
   const ID = /^[prt][0-9]+$/;
 
-  const view = { repo: "", state: "", q: "", plan: "", task: "" };
+  const view = { repo: "", state: "", q: "", plan: "", task: "", panel: "", tab: "description", update: 0 };
   const fetched = { plans: null, plan: null };
   let pending = 0;
   let planPending = 0;
 
+  const { el, label, load, keep, failed } = window.engine.dom;
   const $ = (id) => document.getElementById(id);
+  const panel = window.engine.panel({
+    $, view, writeHash, status: () => status(), repoName,
+    href: (id, tab, update) => link(view.plan, view.task, { id, tab, update }),
+    render: () => { renderPlans(); renderPane(); },
+  });
 
-  function el(tag, attrs, ...children) {
-    const node = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
-      if (v !== undefined && v !== null && v !== false) node.setAttribute(k, v);
-    }
-    for (const c of children) {
-      if (c !== undefined && c !== null) node.append(c);
-    }
-    return node;
-  }
-
-  function label(state) {
-    return state ? state.charAt(0).toUpperCase() + state.slice(1).replace(/-/g, " ") : "";
-  }
-
-  function query() {
+  // query is the hash's search part: the plan filters, and the open panel
+  // unless the caller passes another one (or null for none).
+  function query(open = { id: view.panel, tab: view.tab, update: view.update }) {
     const p = new URLSearchParams();
     for (const k of ["repo", "state", "q"]) if (view[k]) p.set(k, view[k]);
+    if (open && open.id) {
+      p.set("panel", open.id);
+      if (open.tab === "communications") p.set("tab", open.tab);
+      if (open.update) p.set("update", String(open.update));
+    }
     const s = p.toString();
     return s ? "?" + s : "";
   }
 
-  function link(plan, task) {
+  function link(plan, task, open) {
     let path = "#/plans";
     if (ID.test(plan || "")) path += "/" + plan;
     if (ID.test(task || "")) path += "/" + task;
-    return path + query();
+    return path + query(open);
   }
 
   function readHash() {
@@ -56,43 +54,40 @@
     view.q = p.get("q") || "";
     view.plan = ID.test(parts[1] || "") ? parts[1] : "";
     view.task = ID.test(parts[2] || "") ? parts[2] : "";
+    const open = p.get("panel") || "";
+    view.panel = /^[pt][0-9]+$/.test(open) ? open : "";
+    view.tab = p.get("tab") === "communications" ? "communications" : "description";
+    view.update = view.panel && /^[1-9][0-9]*$/.test(p.get("update") || "") ? Number(p.get("update")) : 0;
   }
 
   function writeHash() {
     history.replaceState(null, "", link(view.plan, view.task));
   }
 
-  async function load(url) {
-    const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
-    let body = {};
-    try {
-      body = await res.json();
-    } catch (_) {
-      body = { error: "unreadable response" };
-    }
-    if (!res.ok) throw Object.assign(new Error(body.error || res.statusText), { status: res.status });
-    return body;
+  // opener is a link that opens the item panel; it remembers itself so
+  // closing the panel can return focus to it.
+  function opener(id, text) {
+    const key = "open-" + id;
+    const a = el("a", { href: link(view.plan, view.task, { id, tab: "description" }), "data-key": key }, text);
+    a.addEventListener("click", () => panel.noteOpener(key));
+    return a;
+  }
+
+  function repoName(id) {
+    const repos = fetched.plans && fetched.plans.data ? fetched.plans.data.repos : [];
+    const repo = repos.find((r) => r.id === id);
+    return repo && repo.slug ? repo.slug : id;
   }
 
   function status() {
     const node = $("status");
-    const envs = [fetched.plans, fetched.plan].filter(Boolean);
+    const envs = [fetched.plans, fetched.plan, ...panel.envs()].filter(Boolean);
     const stale = envs.find((e) => e.stale || e.failed);
     const times = envs.map((e) => e.fetched).filter(Boolean).sort();
     const at = times.length ? new Date(times[0]).toLocaleTimeString() : "never";
     node.className = stale ? "status stale" : "status";
     if (!stale) node.textContent = "Last refresh " + at;
     else node.textContent = (times.length ? "Stale since " + at + " · " : "") + stale.error;
-  }
-
-  // keep remembers which element had focus so a re-render can restore it.
-  function keep(render) {
-    const key = document.activeElement && document.activeElement.dataset.key;
-    render();
-    if (key) {
-      const again = document.querySelector('[data-key="' + CSS.escape(key) + '"]');
-      if (again) again.focus();
-    }
   }
 
   function options(select, values, chosen) {
@@ -161,21 +156,16 @@
       const head = el("tr", {}, ...["Task", "State", "Host", "Waiting for"].map((h) => el("th", { scope: "col" }, h)));
       const rows = d.tasks.map((t) =>
         el("tr", { id: "task-" + t.id, class: t.id === view.task ? "selected" : null },
-          el("td", { "data-label": "Task" }, t.title, el("div", { class: "muted" }, t.id)),
+          el("td", { "data-label": "Task" }, opener(t.id, t.title), el("div", { class: "muted" }, t.id)),
           stateCell(t),
           el("td", { "data-label": "Host" }, t.host || "—"),
           waitingCell(t)));
       const body = rows.length ? el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)) : el("p", { class: "empty" }, "This plan has no tasks yet.");
       pane.replaceChildren(banner || "",
-        el("h2", {}, "Tasks · " + d.plan.id + " · " + label(d.plan.state)),
+        el("h2", {}, "Tasks · " + d.plan.id + " · " + label(d.plan.state), " ", opener(d.plan.id, "Plan details")),
         el("div", { class: "muted" }, d.plan.title + " · " + (d.plan.slug || d.plan.repo)),
         counts, body);
     });
-  }
-
-  function failed(env, err) {
-    if (err.status === 404) return { error: err.message, failed: true };
-    return Object.assign({}, env, { error: err.message, failed: true, stale: !!(env && env.data) });
   }
 
   // refreshPlans reloads the list; cached reuses the dashboard's last read.
@@ -221,6 +211,7 @@
     if (document.visibilityState === "visible") {
       refreshPlans();
       refreshPlan(false);
+      panel.refresh();
     }
   }
 
@@ -244,6 +235,7 @@
     if (before !== view.plan) fetched.plan = null;
     renderPane();
     if (!fetched.plans) renderPlans();
+    panel.sync();
     refreshPlans();
     refreshPlan(true);
   }

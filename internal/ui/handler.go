@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/control"
@@ -16,9 +17,11 @@ var static embed.FS
 
 // assets are the embedded files the page loads, by route.
 var assets = map[string]struct{ file, kind string }{
-	"/":        {"static/index.html", "text/html; charset=utf-8"},
-	"/app.css": {"static/app.css", "text/css; charset=utf-8"},
-	"/app.js":  {"static/app.js", "text/javascript; charset=utf-8"},
+	"/":         {"static/index.html", "text/html; charset=utf-8"},
+	"/app.css":  {"static/app.css", "text/css; charset=utf-8"},
+	"/app.js":   {"static/app.js", "text/javascript; charset=utf-8"},
+	"/dom.js":   {"static/dom.js", "text/javascript; charset=utf-8"},
+	"/panel.js": {"static/panel.js", "text/javascript; charset=utf-8"},
 }
 
 const policy = "default-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
@@ -46,6 +49,30 @@ func handler(up *upstream) http.Handler {
 			return
 		}
 		env, status := up.plan(r.Context(), id)
+		reply(w, status, env)
+	})
+	mux.HandleFunc("GET /api/items/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !panelItem(id) {
+			reply(w, 404, Envelope{Error: "unknown item"})
+			return
+		}
+		env, status := up.item(r.Context(), id)
+		reply(w, status, env)
+	})
+	mux.HandleFunc("GET /api/items/{id}/thread", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !panelItem(id) {
+			reply(w, 404, Envelope{Error: "unknown item"})
+			return
+		}
+		after, aok := count(r.URL.Query().Get("after"))
+		anchor, nok := count(r.URL.Query().Get("anchor"))
+		if !aok || !nok {
+			reply(w, 400, Envelope{Error: "after and anchor must be update sequences"})
+			return
+		}
+		env, status := up.thread(r.Context(), id, after, anchor)
 		reply(w, status, env)
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +115,18 @@ func reply(w http.ResponseWriter, status int, v any) {
 // itemID accepts an engine ID with the given prefix, such as p7.
 func itemID(id string, prefix byte) bool {
 	return len(id) > 1 && id[0] == prefix && control.Number(id) > 0
+}
+
+// panelItem accepts the ID of a plan or a task, the items with a thread.
+func panelItem(id string) bool { return itemID(id, 'p') || itemID(id, 't') }
+
+// count parses an optional non-negative sequence; empty is zero.
+func count(s string) (int, bool) {
+	if s == "" {
+		return 0, true
+	}
+	n, err := strconv.Atoi(s)
+	return n, err == nil && n >= 0 && n < 1<<31
 }
 
 // LoopbackHost reports whether a Host header or listen address names this
