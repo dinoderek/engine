@@ -6,24 +6,32 @@ cannot. Kickoff: `Supervise <feature>`. Every gap you fill is a defect in
 
 ## Start
 
-Run `engine run <feature>` in its own tmux window, `run-<repo>-<n>` in the
-session `engine`, with its output appended to a log file you name in your
-first comment on the feature. Then check every 10 minutes: its log,
-`engine ps --github --json`, and the feature's comments.
+- **Server plan** (`p<n>`, approved): `engine run <plan>` records the intent
+  and returns; the server coordinates. Check every 10 minutes: `engine ps`,
+  `engine inbox --operator`, and `engine updates <id>` for the plan and each
+  task (`engine ui` is the operator's view). Below, a feature comment is
+  `engine tell <plan> <text>`; done is the plan `done`.
+- **GitHub feature** (`owner/repo#<n>`): run `engine run <feature>` in its
+  own tmux window, `run-<repo>-<n>` in the session `engine`, its output
+  appended to a log you name in your first feature comment. Check every 10
+  minutes: its log, `engine ps --github --json`, and the feature's comments.
 
 ## You may
 
-- **Relay an answer** the operator gave you, with `engine tell <repo>-<task>
-  <text>`. On a server plan, relay an answer that holds for more than one
-  task once, to the plan: `engine tell <plan> <text>`, which wakes each of
-  its waiting tasks.
+- **Relay an answer** the operator gave you, with `engine tell <task> <text>`
+  (`t<n>`, or `<repo>-<task>` in GitHub mode). One for several of a plan's
+  tasks goes once to the plan, which wakes each waiting task. Answer a server
+  inbox question with `engine reply <seq> <text>`; leave `engine resolve`
+  and the state change, the operator's decision, to the operator unless they
+  gave it to you.
 - **Answer a stall** `engine run` raised, with `engine tell`, when the answer
-  is not a hard stop: for example "your claim landed, carry on". A session
-  that has not claimed its task yet is reached too, by its run record.
-- **Restart `engine run`** when it has died, or after an engine fix merges.
-  Restart between passes, once its log shows a pass has ended. To pick up a
-  fix, rebuild first: `GOBIN=~/.local/bin go install ./cmd/engine` from an
-  up-to-date checkout of engine. `engine run` is stateless, so it resumes.
+  is not a hard stop: for example "your claim landed, carry on". This
+  reaches an unclaimed session too.
+- **Restart `engine run`** (GitHub mode) when it has died, or after an
+  engine fix merges. Never restart the control server.
+  Restart once its log shows a pass has ended. To pick up a fix, rebuild
+  first: `GOBIN=~/.local/bin go install ./cmd/engine` from an
+  up-to-date engine checkout. `engine run` is stateless, so it resumes.
 
 ## You never
 
