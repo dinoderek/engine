@@ -276,3 +276,71 @@ func TestCreateWorktreeOnResumeFailsWhenTheReposCommandMovesTheBranch(t *testing
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestCreateWorktreeOnResumeAdoptsALeftWorktree(t *testing.T) {
+	repo := mustRepo(t, "o/r")
+	originTip := []reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}}
+	tests := []adoption{
+		{name: "clean and at or behind origin", resume: true, replies: originTip, ff: "refs/remotes/origin/task/r-7"},
+		{name: "clean, origin lacks the branch", resume: true, ff: "refs/remotes/origin/main"},
+		{name: "uncommitted changes", resume: true, replies: []reply{{key: "status --porcelain", out: "?? notes.txt\n"}}, wantErr: "with uncommitted changes", taken: true},
+		{name: "commits origin lacks", resume: true, replies: append([]reply{{key: "merge-base", err: errBoom}}, originTip...), wantErr: "with commits that origin lacks", taken: true},
+		{name: "status unreadable", resume: true, replies: []reply{{key: "status --porcelain", err: errBoom}}, wantErr: "read the status of the worktree at /old"},
+		{name: "fast-forward fails", resume: true, replies: []reply{{key: "merge --ff-only", err: errBoom}}, wantErr: "fast-forward the worktree at /old"},
+		{name: "no resume", replies: originTip, wantErr: "already has a worktree at /old; release it first", taken: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &gitFake{replies: append(tt.replies,
+				reply{key: "worktree list", out: porcelain("/c", "/old", "task/r-7")},
+				reply{key: "rev-parse --verify", err: errBoom})}
+			r := newRepos(t, f)
+			path, _ := r.Path(repo)
+			if err := os.MkdirAll(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			got, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7, tt.resume)
+			checkAdoption(t, f, tt, got, err)
+		})
+	}
+}
+
+// adoption is a case of a resume that finds a worktree left on the branch.
+type adoption struct {
+	name    string
+	resume  bool
+	replies []reply
+	ff      string // the tip the worktree is fast-forwarded to; "" when it is not adopted
+	wantErr string
+	taken   bool
+}
+
+// checkAdoption checks that a left worktree was adopted, fast-forwarded to
+// tt.ff, or refused with tt.wantErr, and never replaced.
+func checkAdoption(t *testing.T, f *gitFake, tt adoption, got Worktree, err error) {
+	t.Helper()
+	ff, wantErr, taken := tt.ff, tt.wantErr, tt.taken
+	if f.has("worktree add") || f.has("branch -D") || f.has("branch --force") || f.has("reset") || f.has("worktree remove") {
+		t.Errorf("a left worktree is adopted as it is or refused, never replaced: %v", f.lines())
+	}
+	if wantErr != "" {
+		var takenErr *BranchTakenError
+		if err == nil || !strings.Contains(err.Error(), wantErr) || errors.As(err, &takenErr) != taken {
+			t.Errorf("err = %v, want %q (taken %v)", err, wantErr, taken)
+		}
+		if taken && f.has("merge --ff-only") {
+			t.Error("moved a worktree it refused")
+		}
+		return
+	}
+	if err != nil || got != (Worktree{Path: "/old", Branch: "task/r-7"}) {
+		t.Fatalf("worktree = %+v, %v", got, err)
+	}
+	want := "git merge --ff-only --quiet " + ff
+	for _, c := range f.calls {
+		if c.dir == "/old" && c.line == want {
+			return
+		}
+	}
+	t.Errorf("commands %v lack %q in /old", f.lines(), want)
+}

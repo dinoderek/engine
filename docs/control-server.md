@@ -90,7 +90,6 @@ in-review.
 ## API and storage
 
 `POST /v1/command` accepts the Request in `internal/control/types.go`.
-Unknown JSON fields, missing credentials and unsupported operations fail.
 The server derives authorship from the credential. Errors include an HTTP
 status; storage details remain in server logs.
 
@@ -104,8 +103,7 @@ launched.
 SQLite runs locally through its CLI, with SQL on stdin. A process lock
 allows one engine server per database; a mutex serializes commands.
 Each transaction updates current records, immutable history and its request
-receipt together. History retains record snapshots. The database uses a
-versioned schema and rejects unknown versions. It loads its control records
+receipt together. It loads its control records
 for each operation; bulk telemetry belongs elsewhere.
 
 The operator credential is an owner-only regular file. Every dispatch creates
@@ -128,7 +126,6 @@ engine task state t3 --version 4 --state running
 ```
 
 Updates are immutable and ordered.
-Read up to 200 at a time, using the last sequence as the next cursor.
 Comments do not change workflow state. Asking a task question atomically
 puts it in needs-human. Acknowledgement and ordinary replies leave the
 question unresolved. Resolution records the operator decision; an explicit
@@ -180,7 +177,6 @@ An active attempt, running or in-review is in progress. Otherwise an
 unfinished prerequisite or the plan's open question (as sessions report
 it) blocks it, todo or approved under an approved plan is ready to run, and
 anything else is blocked.
-Coordination does not change it.
 
 ## Session view
 
@@ -231,6 +227,10 @@ same dispatch identity on that host. An unreachable host means unknown,
 never dead. A dispatch for a task whose earlier attempt ran, a retry or
 resume, is marked a resume: the host opens the worktree on the task's
 branch from `origin` rather than refusing it (`hosts-and-sessions.md`).
+If the task's earlier attempt there ended, the server first releases that
+session with the host's `release`, only once a successful read shows its
+window dead or absent. A refused dispatch stays reserved, is retried each
+pass, and posts one operator notice per attempt.
 
 The host serializes dispatches by run ID and returns an existing run on
 replay. It uses ordinary Git credentials and identity, with isolated clones
