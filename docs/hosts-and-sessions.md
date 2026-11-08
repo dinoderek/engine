@@ -100,7 +100,7 @@ For each unpinned card, `harness_ratio` scores positive-weight harnesses by
 `(live sessions across hosts + 1) / weight`. Lowest wins; ties prefer
 `default_harness`, then name. If no host fits, try the next harness. Counts
 include pinned cards and unclaimed live starts. Zero
-weights exclude unpinned starts. Without a ratio, use `default_harness`.
+weights exclude unpinned starts. No ratio: `default_harness`.
 Unknown harnesses and all-zero ratios are refused.
 
 An unplaced task stays ready, logged each pass. If none could take it with

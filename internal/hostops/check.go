@@ -54,9 +54,10 @@ type CheckResult struct {
 	// State is the state the file last recorded, when it is there.
 	State string
 	// Joined is true when the session joined the host's remote-control
-	// daemon, as a spawn would; Embedded says why it did not.
-	Joined   bool
-	Embedded string
+	// daemon, as a spawn would; Note says why it did not, or why the apps
+	// may not see a joined session.
+	Joined bool
+	Note   string
 	// GH is what `gh auth status` said in a window of the session engine.
 	GH GHAuth
 }
@@ -101,7 +102,7 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 		return CheckResult{}, err
 	}
 	if d.JoinRemote {
-		r.Joined, r.Embedded = h.Join(d.Exec, bin, line)
+		r.Joined, r.Note = h.Join(d.Exec, bin, line)
 	}
 	if err := h.Trust(work, work, r.Joined); err != nil {
 		return CheckResult{}, err
@@ -256,8 +257,9 @@ func ReportCheck(out io.Writer, r CheckResult) {
 	reportGH(out, mark, r.GH)
 	if r.Joined {
 		fmt.Fprintln(out, "ok   the session joined remote control")
-	} else if r.Embedded != "" {
-		fmt.Fprintf(out, "note %s\n", r.Embedded)
+	}
+	if r.Note != "" {
+		fmt.Fprintf(out, "note %s\n", r.Note)
 	}
 	fmt.Fprintf(out, "%s the session closed its own window\n", mark[r.Closed])
 	if r.Screen != "" {
