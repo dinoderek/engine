@@ -23,7 +23,11 @@ sessions through `engine start`, on whichever host placement picks
 (`hosts-and-sessions.md`, "Placement"). It stays alive until the work is done,
 you stop it, or the machine goes down, and logs one timestamped line per
 action. It exits 1 when the run ends short of done: a feature that is not
-approved, or a lone task that failed.
+approved, a lone task that failed, or GitHub refusing the host's gh sign-in
+(HTTP 401, or a 403 for a suspended account or SSO). That stops at once with
+gh's message and the remedy (`gh auth status`, `gh auth login`), as `engine
+ps --github` does; any other failed read, rate limits included, is retried at
+the next check.
 
 | Issue | Behaviour |
 | --- | --- |
@@ -63,8 +67,8 @@ older than a session start are ignored.
 At done, `engine run` posts the summary and closes the feature (a lone task
 has neither), then re-reads the work and every host's sessions each minute.
 It releases each hands-off window of a closed task as soon as the session is
-waiting, with no 10-minute wait, and exits when none is left or after 15
-minutes. Gated windows are never closed.
+waiting, with no 10-minute wait, and exits when none is left, after 15
+minutes, or, logging it, when GitHub refuses the sign-in. Gated windows are never closed.
 
 The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it

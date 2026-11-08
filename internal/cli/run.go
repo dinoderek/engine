@@ -22,6 +22,9 @@ func runRun(args []string, env Env, sleep func(time.Duration)) int {
 		return 2
 	}
 	sys, taskOnly, err := runSystem(ref, env, ratio)
+	if ae, ok := tracker.AsAuth(err); ok {
+		err = ae
+	}
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine run:", err)
 		return 1

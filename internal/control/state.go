@@ -28,13 +28,9 @@ func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
 		item.State = "approved"
 		item.ApprovedVersion = item.Version
 	case "run", "stop":
-		if err := operator(a); err != nil {
+		if err := s.coordinate(st, a, &item, r.Op); err != nil {
 			return Response{}, err
 		}
-		if r.Op == "run" && (!approved(st, item) || item.State == "done") {
-			return Response{}, problem(409, "item requires approval before coordination")
-		}
-		item.Coordinating = r.Op == "run"
 	case "state":
 		if !workerItem(st, a, item.ID) {
 			return Response{}, problem(403, "cannot change another execution's state")
@@ -51,6 +47,21 @@ func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
 	st.Items[item.ID] = item
 	st.update(a, r, r.Op, fmt.Sprintf("%s (version %d)", item.State, item.Version), s.now())
 	return Response{Item: &item}, nil
+}
+
+// coordinate records run or stop intent; a stop records when coordination stopped.
+func (s Service) coordinate(st *State, a Actor, item *Item, op string) error {
+	if err := operator(a); err != nil {
+		return err
+	}
+	if op == "run" && (!approved(st, *item) || item.State == "done") {
+		return problem(409, "item requires approval before coordination")
+	}
+	if op == "stop" && item.Coordinating {
+		item.StoppedAt = s.now()
+	}
+	item.Coordinating = op == "run"
+	return nil
 }
 
 func approved(st *State, item Item) bool {
@@ -121,7 +132,7 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	if active(st, item) {
 		return Response{}, problem(409, "item already has an active execution")
 	}
-	if item.State == "done" || item.State == "failed" || item.State == "needs-human" {
+	if item.State == "done" || item.State == "failed" || item.State == "needs-human" && !Vanished(st, item) {
 		return Response{}, problem(409, "item is not dispatchable")
 	}
 	for _, id := range item.Depends {
@@ -295,18 +306,8 @@ func (s Service) endAttempt(st *State, a Actor, r Request) (Response, error) {
 	if !ok {
 		return Response{}, problem(404, "unknown execution")
 	}
-	if at.State == "ended" {
-		return Response{Attempt: &at}, nil
+	if at.State != "ended" {
+		at = s.endDead(st, a, at, r.Body)
 	}
-	at.State = "ended"
-	at.Ended = s.now()
-	st.Attempts[at.ID] = at
-	item := st.Items[at.Item]
-	if item.Kind == "task" && item.State != "done" {
-		item.State = "failed"
-		item.Version++
-		st.Items[item.ID] = item
-	}
-	st.update(a, Request{ID: at.Item}, "execution-ended", r.Body, s.now())
 	return Response{Attempt: &at}, nil
 }

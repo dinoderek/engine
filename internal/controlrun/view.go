@@ -111,6 +111,10 @@ func (c *Coordinator) addSessions(st control.State, v *run.View, items []control
 			continue
 		}
 		ref := reference(st, t)
+		if control.Vanished(&st, t) {
+			resumeVanished(&st, v, t, ref)
+			continue
+		}
 		sess := observe(at, v.Fleet, st.Items[t.Repo].Slug, control.Number(t.ID))
 		sess.WaitingSince = at.WaitingSince
 		sess.StallNoted = at.Notice
@@ -132,6 +136,20 @@ func (c *Coordinator) addSessions(st control.State, v *run.View, items []control
 				state = ps.Dead
 			}
 			v.Rows[ref] = ps.Row{Task: ref.String(), Session: sess.Name, Host: at.Host, State: state}
+		}
+	}
+}
+
+// resumeVanished shows a task whose attempt vanished as ready to start, so
+// it is dispatched again as a resume, unless an operator question parks it.
+// Its ended attempt has no session to observe.
+func resumeVanished(st *control.State, v *run.View, t control.Item, ref tracker.Ref) {
+	if control.PendingQuestion(st, t.ID) > 0 {
+		return
+	}
+	for i, c := range v.Feature.Tasks {
+		if c.Ref == ref {
+			v.Feature.Tasks[i].Labels = nil
 		}
 	}
 }
@@ -173,23 +191,40 @@ func (c *Coordinator) keepObservations(st control.State, v run.View) error {
 			if at.ID == "" || sess.Unknown {
 				continue
 			}
-			if sess.Waiting && !sess.Limited && sess.ResetsAt == 0 {
-				if at.WaitingSince.IsZero() {
-					at.WaitingSince = v.Now
-				}
-			} else {
-				at.WaitingSince = time.Time{}
-			}
-			if sess.ResetsAt > 0 {
-				at.ResetsAt = sess.ResetsAt
-			}
-			if sess.Live && !sess.Waiting && !sess.Limited {
-				at.ResetsAt = 0
-			}
+			at = kept(at, sess, v.Now, coordinating(fresh, fresh.Items[item.ID]))
 			fresh.Attempts[at.ID] = at
 		}
 		return nil
 	})
+}
+
+// coordinating reports whether item's coordination, its own or its plan's,
+// still runs.
+func coordinating(st *control.State, item control.Item) bool {
+	return item.Coordinating || item.Plan != "" && st.Items[item.Plan].Coordinating
+}
+
+// kept is at with one pass's observation of its session applied. A window
+// is recorded as seen live only while coordination runs, so a pass that
+// overlaps a stop never dates the sighting after it.
+func kept(at control.Attempt, sess run.Session, now time.Time, coordinating bool) control.Attempt {
+	if sess.Waiting && !sess.Limited && sess.ResetsAt == 0 {
+		if at.WaitingSince.IsZero() {
+			at.WaitingSince = now
+		}
+	} else {
+		at.WaitingSince = time.Time{}
+	}
+	if sess.ResetsAt > 0 {
+		at.ResetsAt = sess.ResetsAt
+	}
+	if sess.Live && coordinating {
+		at.LiveAt = now
+	}
+	if sess.Live && !sess.Waiting && !sess.Limited {
+		at.ResetsAt = 0
+	}
+	return at
 }
 
 func (c *Coordinator) summary(st control.State, id string) string {

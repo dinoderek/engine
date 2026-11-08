@@ -82,9 +82,8 @@ and `codex.md`. Each harness maps every tier (`execution-protocol.md`, "Models")
 to a model and an effort level.
 
 Each host pins the path of every harness binary (`bin`), and `{bin}` in the
-launch line expands to it. Engine never runs whichever install comes first on
-`PATH`: this Mac has a second Codex under Homebrew that shadows the standalone
-one.
+launch line expands to it. Engine never runs whichever comes first on
+`PATH`.
 
 ## Placement
 
@@ -98,15 +97,15 @@ then the fewest capabilities, then the lowest name:
 - every capability in the card's `requires`.
 
 For each unpinned card, `harness_ratio` scores positive-weight harnesses by
-`(live sessions across all hosts + 1) / weight`. Lowest wins; ties prefer
+`(live sessions across hosts + 1) / weight`. Lowest wins; ties prefer
 `default_harness`, then name. If no host fits, try the next harness. Counts
-include pinned cards and unclaimed starts with recorded live windows. Zero
+include pinned cards and unclaimed live starts. Zero
 weights exclude unpinned starts. Without a ratio, use `default_harness`.
-Unknown harnesses and all-zero ratios are refused. The planner uses
-`default_harness`.
+Unknown harnesses and all-zero ratios are refused.
 
 An unplaced task stays ready, logged each pass. If none could take it with
-all slots free, comment once. The planner starts locally. For host calls,
+all slots free, comment once. The planner starts locally at `deep` on the
+feature's harness, else `default_harness`. For host calls,
 load `coordinator.md`.
 
 ## Naming
@@ -140,7 +139,9 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    "Worktrees"), else `git worktree add` from the default branch, refusing
    a branch on `origin`, or a local one with commits (one without is
    remade). A server dispatch marked a resume opens on `origin`'s branch
-   instead, at its tip, refusing a local branch with commits `origin` lacks;
+   instead, at its tip, refusing a local branch with commits `origin` lacks.
+   A worktree left there is adopted, fast-forwarded, when clean with no
+   commits `origin` lacks, else refused;
 3. makes the worktree trusted by its harness, so no trust dialog blocks the
    start (`claude.md` and `codex.md`, "Starting");
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
@@ -159,7 +160,7 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    prints how to attach.
 
 The checks run in `engine start`, which also picks the model, effort and
-kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
+kickoff. Steps 1 to 6, bar the attach hint, are the host's own
 `sync-repo` and `spawn` ops (`coordinator.md`, "Reaching hosts"), which
 `engine start` calls in-process, or over SSH with `--host`.
 The executor claims the task; its claim check stops a racing second start.
@@ -169,16 +170,15 @@ host's `status`; the host's own `spawn` refuses anything else, such as a
 missing harness binary.
 An unreachable host is an error, not a refusal. A host on another protocol
 is refused, naming `engine setup --host <name>` (`operator-setup.md`). A
-harness's cap across hosts is placement's alone, so `engine start` does not
-check it.
+harness's cap across hosts is placement's alone: `engine start` ignores it.
 
 **Preflight:** `engine start --check [--harness <name>] [--host <name>]` (Claude
-without `--harness`) opens a throwaway hands-off session,
-`engine-check`, at the light tier, that reads the skill, reads a file it
-wrote in `/tmp`, runs `gh` and `engine`, and closes its window. It exits 1,
-printing what it met, when the session had a permission request denied,
-stalled or skipped a step. A Codex check also needs the session's hooks to
-have written its state file (`codex.md`).
+without `--harness`) runs `gh auth status` in the `engine` tmux server
+(`operator-setup.md`, "GitHub access"); a hands-off light-tier session,
+`engine-check`, reads the skill and a file it wrote in `/tmp`, runs `gh` and
+`engine`, and closes its window. It exits 1, printing what it met, when gh
+failed or the session met a denial, stalled or skipped a step. A Codex check
+also needs the hooks to have written its state file (`codex.md`).
 
 **Other ways to start:** a session started any other way runs the same
 executor, creates its own worktree, and is reachable only where it was

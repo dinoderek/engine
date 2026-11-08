@@ -30,6 +30,8 @@ type Item struct {
 	Attempt         string   `json:"attempt,omitempty"`
 	Coordinating    bool     `json:"coordinating,omitempty"`
 	ApprovedVersion int      `json:"approved_version,omitempty"`
+	// StoppedAt is when the operator last stopped this item's coordination.
+	StoppedAt time.Time `json:"stopped_at,omitzero"`
 }
 
 // Attempt persists a dispatch before the host is contacted.
@@ -51,6 +53,10 @@ type Attempt struct {
 	Seen         int       `json:"seen,omitempty"`
 	FarFor       int64     `json:"far_for,omitempty"`
 	StuckFor     int64     `json:"stuck_for,omitempty"`
+	// LiveAt is the last coordinator pass that saw the attempt's window live.
+	LiveAt time.Time `json:"live_at,omitzero"`
+	// Reason is why a dead window ended the attempt: EndVanished or EndFailed.
+	Reason string `json:"reason,omitempty"`
 }
 
 // Update is immutable history; acknowledgement and resolution are separate records.
