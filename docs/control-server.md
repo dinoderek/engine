@@ -37,15 +37,13 @@ Without that file, the CLI uses the origin shown above. An explicit
 `ENGINE_SERVER_URL` overrides it. Provision the operator credential in
 `~/.config/engine/server-token` on each operator machine, or set
 `ENGINE_SERVER_TOKEN_FILE` to its path. Workers receive their scoped
-credential and the advertised URL at dispatch. Host definitions remain
-in the existing host config.
+credential and the advertised URL at dispatch.
 
 For backup, stop the server, run the same invocation with
 `--backup <new-path>`, and restart it. Copy the backup off-machine. Restore
 with the server stopped, retaining the private operator credential. A backup
 includes execution credentials and is private. The backup operation refuses
-to overwrite an existing file. Test restores into an isolated database before
-replacing the active database.
+to overwrite an existing file. Test restores in an isolated database first.
 
 ## Records and commands
 
@@ -68,7 +66,7 @@ engine task list p2
 engine attempt list t3
 ```
 
-Substitute returned IDs and versions. Task cards carry the skill's Outcome
+Task cards carry the skill's Outcome
 and Tests sections. Dependencies, capabilities, harness and tier are
 structured fields, supplied with `--depends`, `--requires`, `--harness`
 and `--tier`. The server adapter supplies card keys and maps these fields
@@ -158,26 +156,32 @@ implementation.
 `engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen`
 chooses another loopback address. It uses the CLI's server configuration and
 operator credential, and the credential never reaches the browser. Any local
-process or user that can reach the port reads with operator rights, so run it
-only on a single-user machine. The page calls fixed same-origin routes:
+process or user reaching the port reads with operator rights, so run it only
+on a single-user machine. The page calls fixed same-origin routes:
 
 - `/api/plans`: repositories and plans, filtered by `repo`, `state` and a
   case-insensitive `q` over plan ID, repository and title. With `cached=1`
-  it filters the last list it read without calling the control server.
+  it filters the last list read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts and unfinished prerequisites, including other plans' tasks.
+- `/api/items/<id>` and `/thread`: a plan or task with its description
+  rendered, and its messages, 50 after `after` (through `anchor`), with a
+  cursor and question statuses.
 
-The process forwards only the `list`, `plan-view` and `attempts` reads. It
-answers GET and HEAD for a loopback host name on any port, so an SSH tunnel
-works, and sends `Cache-Control: no-store`. When the control server fails,
-each route returns its last successful data marked stale. The page refreshes
-about every 30 seconds while visible.
+Descriptions support headings, flat lists, code, links. Raw HTML and
+messages are text; only absolute http, https and mailto links act.
+
+The process forwards only the `list`, `plan-view`, `attempts`, `get` and
+`updates` reads. It answers GET and HEAD for a loopback host name on any
+port, so an SSH tunnel works, and sends `Cache-Control: no-store`. When the
+control server fails, the page keeps its last data, marked stale. It
+refreshes every 30s while visible.
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
 unfinished prerequisite blocks it, todo or approved under an approved plan
 is ready to run, and anything else waits for the operator, so is blocked.
-Whether the plan is being coordinated does not change the summary.
+Coordination does not change it.
 
 ## Session view
 
