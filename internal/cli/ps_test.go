@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,6 +70,7 @@ type psEnv struct {
 	out     bytes.Buffer
 	errOut  bytes.Buffer
 	ghErr   error
+	ghOut   string // what gh prints when ghErr is set; empty is HTTP 500
 	tmuxErr error
 	ran     []string
 	claude  string // what `claude agents --json` prints
@@ -130,8 +132,11 @@ func jsonString(s string) string {
 
 func (e *psEnv) gh(_ []string, name string, args ...string) (string, error) {
 	e.ran = append(e.ran, name+" "+strings.Join(args, " "))
+	if args[0] == "auth" {
+		return "github.com\n  X Failed to log in to github.com account developer (keyring)", e.ghErr
+	}
 	if e.ghErr != nil {
-		return "HTTP 500", e.ghErr
+		return cmp.Or(e.ghOut, "HTTP 500"), e.ghErr
 	}
 	switch {
 	case args[1] == "user":

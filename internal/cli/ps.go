@@ -27,6 +27,9 @@ func runPs(args []string, env Env) int {
 		return 2
 	}
 	listing, err := listClaimed(env)
+	if ae, ok := tracker.AsAuth(err); ok {
+		err = ae
+	}
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine ps:", err)
 		return 1

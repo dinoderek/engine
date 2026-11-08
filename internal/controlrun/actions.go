@@ -1,6 +1,8 @@
 package controlrun
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -19,24 +21,23 @@ func (c *Coordinator) apply(st control.State, root string, a run.Action, cfg *ho
 	case run.StartTask, run.StartPlanner:
 		host, harness := a.Host, a.Harness
 		if a.Kind == run.StartPlanner {
-			host = c.Host.Name
-			if host == "" {
-				_, h, _ := c.configuration()
-				host = h.Name
+			var err error
+			if host, harness, err = c.plannerTarget(item, cfg); err != nil {
+				return err
 			}
-			harness = cfg.DefaultHarness
 		}
 		return c.dispatch(st, item, host, harness, cfg)
 	case run.SetLabel:
 		return c.change(item.ID, strings.TrimPrefix(a.Label, "engine:"))
 	case run.Fail:
-		if err := c.Service.SetAttempt(item.Attempt, "ended", ""); err != nil {
+		at, err := c.Service.EndDead(item.Attempt, a.Text)
+		if err != nil {
 			return err
 		}
-		if err := c.change(item.ID, "failed"); err != nil {
-			return err
+		if at.Reason == control.EndVanished {
+			return c.notice(item.ID, "vanished/"+at.ID, a.Text+"; the task stays resumable and is dispatched again as a resume")
 		}
-		return c.notice(item.ID, "failed/"+item.Attempt, a.Text)
+		return c.notice(item.ID, "failed/"+at.ID, a.Text)
 	case run.ReportLint:
 		return c.notice(item.ID, "lint/"+fmt.Sprint(item.Version), "Plan lint failed; no tasks were dispatched. Fix the cards and restart coordination.")
 	case run.LimitAlert:
@@ -140,4 +141,24 @@ func (c *Coordinator) limitAlert(item control.Item, a run.Action) error {
 		st.Attempts[at.ID] = at
 		return nil
 	})
+}
+
+// plannerTarget is where a plan's planner runs: on the server's own host,
+// with the plan's harness, else the default. A harness that host does not run
+// is refused with a notice before any execution is reserved.
+func (c *Coordinator) plannerTarget(item control.Item, cfg *hosts.Config) (host, harness string, err error) {
+	host = c.Host.Name
+	if host == "" {
+		_, h, _ := c.configuration()
+		host = h.Name
+	}
+	harness = cmp.Or(item.Harness, cfg.DefaultHarness)
+	if _, ok := cfg.Harnesses[harness]; ok && cfg.Hosts[host].Runs(harness) {
+		return host, harness, nil
+	}
+	err = fmt.Errorf("planner harness %s is not one host %s runs", harness, host)
+	if nerr := c.notice(item.ID, fmt.Sprintf("planner-harness/%d", item.Version), "The planner was not started: "+err.Error()+". Edit the plan's harness or the host config."); nerr != nil {
+		err = errors.Join(err, nerr)
+	}
+	return "", "", err
 }

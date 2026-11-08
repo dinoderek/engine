@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,11 @@ type host struct {
 	loseReply bool
 	calls     int
 	launches  map[string]hostops.ControlRequest
+	released  []string
+	// refuse, when set, is the reason the host refuses a new dispatch.
+	refuse string
+	// unresolved makes a dispatch fail with no reply and no effect.
+	unresolved bool
 }
 
 func (h *host) SyncRepo(string) (hostops.Synced, error)             { panic("legacy GitHub path used") }
@@ -31,6 +37,7 @@ func (h *host) Spawn(hostops.SpawnRequest) (hostops.Spawned, error) { panic("leg
 func (h *host) Collect(string) (hostops.Collected, error)           { return hostops.Collected{}, nil }
 func (h *host) Check(string, io.Writer) (bool, error)               { return true, nil }
 func (h *host) Release(name string, _ bool) (hostops.Released, error) {
+	h.released = append(h.released, name)
 	for i, w := range h.status.Windows {
 		if w.Name == name {
 			h.status.Windows = append(h.status.Windows[:i], h.status.Windows[i+1:]...)
@@ -53,8 +60,20 @@ func (h *host) ControlSpawn(r hostops.ControlRequest) (hostops.Spawned, error) {
 		}
 		return hostops.Spawned{Window: "@1"}, nil
 	}
-	h.launches[r.Spawn.RunID] = r
 	name := fmt.Sprintf("demo-%d", r.Spawn.Task)
+	if h.unresolved {
+		return hostops.Spawned{}, errors.New("connection closed")
+	}
+	if h.refuse != "" {
+		return hostops.Spawned{}, &hostops.RefusedError{Reason: h.refuse}
+	}
+	// As the host does, a window name in use, live or dead, is refused.
+	for _, w := range h.status.Windows {
+		if w.Name == name {
+			return hostops.Spawned{}, &hostops.RefusedError{Reason: "the tmux session engine already has a window " + name}
+		}
+	}
+	h.launches[r.Spawn.RunID] = r
 	h.status.Windows = append(h.status.Windows, hostops.Window{Name: name, ID: "@1", Alive: true, State: session.StateWorking})
 	h.status.Runs = append(h.status.Runs, hostops.Run{Name: name, Record: session.Record{RunID: r.Spawn.RunID, Name: name, Tmux: "engine:@1", Harness: r.Spawn.Harness, Spawned: time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)}})
 	h.status.FreeSlots--
@@ -200,7 +219,7 @@ func TestDeadExecutionFailsAndKeepsItsMergeLock(t *testing.T) {
 	}
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
-	if st.Items[task.ID].State != "failed" || st.Attempts[at.ID].State != "ended" || st.Locks[repo.ID].Attempt != at.ID {
+	if st.Items[task.ID].State != "failed" || st.Attempts[at.ID].Reason != control.EndFailed || st.Locks[repo.ID].Attempt != at.ID {
 		t.Fatal("failure dropped ownership evidence")
 	}
 }
@@ -220,6 +239,52 @@ func TestPlannerDispatchAndInvalidPlanBlock(t *testing.T) {
 	pass(t, c)
 	if h.calls != 1 {
 		t.Fatal("planner duplicated")
+	}
+}
+
+// The planner runs with the plan's harness, else the default, and a harness
+// the server's host does not run is refused with a notice and no execution.
+func TestPlannerHarnessIsThePlansElseTheDefault(t *testing.T) {
+	for _, tt := range []struct {
+		name, harness, want string
+		hostRuns            []string
+	}{
+		{"default", "", "claude", []string{"claude", "codex"}},
+		{"plan's", "codex", "codex", []string{"claude", "codex"}},
+		{"undefined", "gemini", "", []string{"claude", "codex"}},
+		{"not on the host", "codex", "", []string{"claude"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, h, _, plan, task := setup(t)
+			c.Config.Harnesses["codex"] = c.Config.Harnesses["claude"]
+			c.Config.Hosts["devbox"] = hosts.Host{Name: "devbox", Harnesses: tt.hostRuns, MaxSessions: 2}
+			if err := c.Service.Store.Transaction(func(st *control.State) error {
+				delete(st.Items, task.ID)
+				p := st.Items[plan.ID]
+				p.Harness = tt.harness
+				st.Items[plan.ID] = p
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			pass(t, c)
+			st, _ := c.Service.Store.Snapshot()
+			if tt.want == "" {
+				if h.calls != 0 || st.Items[plan.ID].Attempt != "" || len(st.Updates) == 0 ||
+					!strings.Contains(st.Updates[len(st.Updates)-1].Body, "planner harness "+tt.harness+" is not one host devbox runs") {
+					t.Fatalf("calls %d attempt %q updates %+v", h.calls, st.Items[plan.ID].Attempt, st.Updates)
+				}
+				return
+			}
+			if h.calls != 1 {
+				t.Fatalf("calls %d", h.calls)
+			}
+			for _, req := range h.launches {
+				if req.Spawn.Harness != tt.want || st.Attempts[st.Items[plan.ID].Attempt].Harness != tt.want {
+					t.Fatal(req.Spawn.Harness)
+				}
+			}
+		})
 	}
 }
 

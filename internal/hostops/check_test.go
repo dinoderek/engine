@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -14,8 +16,16 @@ import (
 
 // checkTmux plays tmux for the check: the session engine exists, new-window
 // opens @7, and the session behind it runs act when its command starts. The
-// window stays listed for openPolls polls.
+// window stays listed for openPolls polls. A window named GHProbeName opens
+// as @8 and, as its command starts, writes ghOut and ghCode to runDir, as gh
+// auth status would, unless ghStuck; it is gone at the next listing.
 type checkTmux struct {
+	runDir    string
+	ghCode    int
+	ghOut     string
+	ghStuck   bool // the probe's gh never finishes: @8 stays listed, alive
+	probed    bool
+	killedGH  bool
 	openPolls int
 	dead      bool  // the window's command has exited
 	listErr   error // list-windows fails once the session runs
@@ -30,13 +40,23 @@ type checkTmux struct {
 func (f *checkTmux) run(_ string, args ...string) (string, error) {
 	switch args[0] {
 	case "new-window":
+		if slices.Contains(args, GHProbeName) {
+			return "@8 %8\n", nil
+		}
 		return "@7 %7\n", nil
 	case "respawn-pane":
+		if slices.Contains(args, "%8") {
+			f.probe()
+			return "", nil
+		}
 		f.started, f.command = true, args[len(args)-1]
 		if f.act != nil {
 			f.act()
 		}
 	case "list-windows":
+		if f.probed && f.ghStuck && !f.started {
+			return "@8 %8 0 " + GHProbeName + "\n", nil
+		}
 		if !f.started {
 			return "@1 %1 0 other\n", nil
 		}
@@ -54,9 +74,28 @@ func (f *checkTmux) run(_ string, args ...string) (string, error) {
 	case "capture-pane":
 		return f.screen, nil
 	case "kill-window":
+		if strings.HasSuffix(args[len(args)-1], "@8") {
+			f.killedGH = true
+			return "", nil
+		}
 		f.killed = true
 	}
 	return "", nil
+}
+
+// probe is the gh probe's command: gh's output and exit code in the run
+// directory.
+func (f *checkTmux) probe() {
+	f.probed = true
+	if f.ghStuck {
+		return
+	}
+	out := f.ghOut
+	if out == "" && f.ghCode == 0 {
+		out = "github.com\n  ✓ Logged in to github.com account octo (/home/me/.config/gh/hosts.yml)\n"
+	}
+	_ = os.WriteFile(filepath.Join(f.runDir, ghAuthOut), []byte(out), 0o600)
+	_ = os.WriteFile(filepath.Join(f.runDir, ghAuthExit), []byte(strconv.Itoa(f.ghCode)+"\n"), 0o600)
 }
 
 func checkDeps(t *testing.T, f *checkTmux) (Deps, home, *int) {
@@ -65,6 +104,7 @@ func checkDeps(t *testing.T, f *checkTmux) (Deps, home, *int) {
 	old := checkTmp
 	checkTmp = tmp
 	t.Cleanup(func() { checkTmp = old })
+	f.runDir = filepath.Join(h.dir, ".local/share/engine/runs", checkRun)
 	sleeps := 0
 	d := Deps{Tmux: &session.Tmux{Run: f.run, Bin: "tmux"}, Home: h.dir, Getenv: func(string) string { return "" },
 		Now: fixedNow, Sleep: func(time.Duration) { sleeps++ }}
@@ -82,7 +122,7 @@ func TestCheckPasses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.OK() || r.RunDir != filepath.Join(h.dir, ".local/share/engine/runs", checkRun) || *sleeps != 3 || f.killed {
+	if !r.OK() || r.RunDir != filepath.Join(h.dir, ".local/share/engine/runs", checkRun) || *sleeps != 3 || f.killed || !f.probed || !r.GH.OK {
 		t.Errorf("result %+v, sleeps %d, killed %v", r, *sleeps, f.killed)
 	}
 	for _, want := range []string{"export ENGINE_UNATTENDED=1", "--model haiku-x", "preflight check", filepath.Join(h.dir, ".claude/plugins/cache/engine/skills/engine/SKILL.md")} {

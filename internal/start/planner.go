@@ -16,7 +16,9 @@ const (
 )
 
 // RunPlanner starts the planner session of an approved feature that has no
-// tasks yet, hands-off at the deep tier, as engine start does for a task.
+// tasks yet, hands-off at the deep tier, with the harness the feature's
+// Harness / tier section names, else the default, as engine start does for a
+// task.
 func RunPlanner(feature tracker.Ref, d Deps, out io.Writer) error {
 	p, err := checkPlanner(feature, d)
 	if err != nil {
@@ -51,7 +53,9 @@ func checkPlanner(feature tracker.Ref, d Deps) (plan, error) {
 	case issue.Has(planned):
 		return plan{}, refuse("%s is already %s", feature, planned)
 	}
-	p.task = tracker.Task{Ref: feature, Open: true, Tier: string(hosts.Deep)}
+	// The feature's Harness / tier section names the planner's harness; the
+	// planner always runs at the deep tier.
+	p.task = tracker.Task{Ref: feature, Open: true, Harness: issue.Harness, Tier: string(hosts.Deep)}
 	for _, step := range []func(Deps) error{p.pickModel, p.checkBin, p.checkTmux} {
 		if err := step(d); err != nil {
 			return plan{}, err

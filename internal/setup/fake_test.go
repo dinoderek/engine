@@ -81,6 +81,8 @@ type box struct {
 	badMode     map[string]bool
 	writeFail   bool
 	auth        string // claude auth status output
+	gh          string // gh auth status output; "" is signed in with a token in gh's config file
+	ghCode      int    // gh auth status exit code
 	os          string
 	noSystemd   bool
 	masked      int // sleep targets masked
@@ -181,6 +183,8 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 		return b.write(cmd, stdin, errOut)
 	case cmd == "claude auth status":
 		return say("%s", b.auth)
+	case cmd == "gh auth status -h github.com":
+		return b.ghStatus(out, errOut)
 	case strings.HasPrefix(cmd, "uname -s") && b.noSystemd:
 		return say("%s\n", b.os)
 	case strings.HasPrefix(cmd, "uname -s"):
@@ -188,6 +192,24 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 	}
 	fmt.Fprintf(errOut, "box: unexpected command %q", cmd)
 	return 99
+}
+
+// ghFileToken is gh auth status for a token in gh's config file.
+const ghFileToken = "github.com\n  ✓ Logged in to github.com account octo (/home/me/.config/gh/hosts.yml)\n  - Active account: true\n"
+
+// ghStatus answers gh auth status: on stdout when signed in, on stderr when
+// not, as gh does.
+func (b *box) ghStatus(out, errOut io.Writer) int {
+	status := b.gh
+	if status == "" {
+		status = ghFileToken
+	}
+	if b.ghCode != 0 {
+		fmt.Fprint(errOut, status)
+	} else {
+		fmt.Fprint(out, status)
+	}
+	return b.ghCode
 }
 
 func (b *box) goInstall(cmd string, errOut io.Writer) int {
