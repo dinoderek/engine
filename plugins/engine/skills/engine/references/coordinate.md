@@ -34,9 +34,10 @@ Repeat every 5 minutes until `done`:
 
    For unpinned cards, `harness_ratio` scores positive weights as
    `(live sessions across hosts + 1) / weight`; lowest wins, ties prefer
-   `default_harness`, then name. Try the next harness if none fits. Count
-   pinned sessions and unclaimed live starts. No ratio uses `default_harness`;
-   the planner always does. Refuse unknown harnesses or all-zero weights.
+   `default_harness`, then name. Else try the next. Count
+   pinned sessions and unclaimed live starts. No ratio, or a planner
+   whose feature names none, uses `default_harness`. Refuse unknown
+   harnesses or all-zero weights.
    `engine run --harness-ratio claude=4,codex=1` replaces the config ratio.
 
    Skip live unclaimed starts. If one died, @mention once with its screen,

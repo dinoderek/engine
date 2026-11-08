@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,6 +221,46 @@ func TestPlannerDispatchAndInvalidPlanBlock(t *testing.T) {
 	pass(t, c)
 	if h.calls != 1 {
 		t.Fatal("planner duplicated")
+	}
+}
+
+// The planner runs with the plan's harness, else the default, and a harness
+// the server's host does not run is refused with a notice and no execution.
+func TestPlannerHarnessIsThePlansElseTheDefault(t *testing.T) {
+	for _, tt := range []struct{ name, harness, want string }{
+		{"default", "", "claude"}, {"plan's", "codex", "codex"}, {"not run", "gemini", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, h, _, plan, task := setup(t)
+			c.Config.Harnesses["codex"] = c.Config.Harnesses["claude"]
+			c.Config.Hosts["devbox"] = hosts.Host{Name: "devbox", Harnesses: []string{"claude", "codex"}, MaxSessions: 2}
+			if err := c.Service.Store.Transaction(func(st *control.State) error {
+				delete(st.Items, task.ID)
+				p := st.Items[plan.ID]
+				p.Harness = tt.harness
+				st.Items[plan.ID] = p
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			pass(t, c)
+			st, _ := c.Service.Store.Snapshot()
+			if tt.want == "" {
+				if h.calls != 0 || st.Items[plan.ID].Attempt != "" || len(st.Updates) == 0 ||
+					!strings.Contains(st.Updates[len(st.Updates)-1].Body, "planner harness gemini") {
+					t.Fatalf("calls %d attempt %q updates %+v", h.calls, st.Items[plan.ID].Attempt, st.Updates)
+				}
+				return
+			}
+			if h.calls != 1 {
+				t.Fatalf("calls %d", h.calls)
+			}
+			for _, req := range h.launches {
+				if req.Spawn.Harness != tt.want || st.Attempts[st.Items[plan.ID].Attempt].Harness != tt.want {
+					t.Fatal(req.Spawn.Harness)
+				}
+			}
+		})
 	}
 }
 
