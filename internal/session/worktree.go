@@ -1,7 +1,9 @@
 package session
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,13 +37,17 @@ func Branch(repo Repo, task int) string {
 // create <branch>`, when the clone has an executable `dev` at its root whose
 // usage lists that verb, since that command also provisions what the task
 // needs. Otherwise it runs `git worktree add`, beside the clone in
-// <clone>-worktrees/. It refuses when the task's worktree already exists, or
-// its branch holds work, so it never reuses leftovers.
+// <clone>-worktrees/. Except on resume, below, it refuses when the task's
+// worktree already exists, or its branch holds work, so it never reuses
+// leftovers.
 //
 // resume is the caller's word that the task had an earlier attempt. Then a
 // branch that origin has is the task's own work: the worktree opens on it, at
 // origin's tip, rather than refusing. A local branch behind origin is
-// fast-forwarded; one with commits origin lacks is still refused.
+// fast-forwarded; one with commits origin lacks is still refused. A worktree
+// the earlier attempt left on the branch is adopted as it is, fast-forwarded
+// to origin's tip, when it is clean and holds no commits origin lacks;
+// otherwise it is refused, so that work is never discarded.
 func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, error) {
 	if task < 1 {
 		return Worktree{}, fmt.Errorf("task number must be positive, got %d", task)
@@ -52,9 +58,12 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, err
 		return Worktree{}, err
 	}
 	defer unlock()
-	adopt, err := r.prepareBranch(clone, branch, resume)
+	adopt, existing, err := r.prepareBranch(clone, branch, resume)
 	if err != nil {
 		return Worktree{}, err
+	}
+	if existing != "" {
+		return Worktree{Path: existing, Branch: branch}, nil
 	}
 	if script := filepath.Join(clone.Path, worktreeCommand); r.createsWorktrees(clone, script) {
 		// The repo's command checks out a local branch that exists as it is.
@@ -110,35 +119,74 @@ func taken(format string, args ...any) error {
 	return &BranchTakenError{Reason: fmt.Sprintf(format, args...)}
 }
 
-// refuseExisting stops when the branch is already taken, saying where. A
+// prepareBranch stops when the branch is already taken, saying where. A
 // local branch with no worktree and no commits of its own, such as one left
 // by a session that ended before it did any work, is deleted instead, so
 // the task can start again. On resume, a branch that origin has is set to
-// origin's tip locally instead, and adopt says the worktree opens on it.
-func (r Repos) prepareBranch(clone Clone, branch string, resume bool) (adopt bool, err error) {
+// origin's tip locally instead, and adopt says the worktree opens on it; a
+// worktree already on the branch is adopted, and existing is its path.
+func (r Repos) prepareBranch(clone Clone, branch string, resume bool) (adopt bool, existing string, err error) {
 	path, err := r.worktreeOf(clone, branch)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	if path != "" {
-		return false, taken("branch %s already has a worktree at %s; release it first", branch, path)
+		if !resume {
+			return false, "", taken("branch %s already has a worktree at %s; release it first", branch, path)
+		}
+		return false, path, r.adoptWorktree(clone, branch, path)
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch); err == nil {
 		if !resume {
-			return false, taken("origin already has branch %s, from an earlier run; delete it or continue that work by hand", branch)
+			return false, "", taken("origin already has branch %s, from an earlier run; delete it or continue that work by hand", branch)
 		}
-		return true, r.followOrigin(clone, branch)
+		return true, "", r.followOrigin(clone, branch)
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
-		return false, nil
+		return false, "", nil
 	}
 	if _, err := r.git(clone.Path, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/remotes/origin/"+clone.Default); err != nil {
-		return false, taken("branch %s already exists in %s with commits of its own and no worktree; delete it or check it out first", branch, clone.Path)
+		return false, "", taken("branch %s already exists in %s with commits of its own and no worktree; delete it or check it out first", branch, clone.Path)
 	}
 	if _, err := r.git(clone.Path, "branch", "-D", branch); err != nil {
-		return false, fmt.Errorf("delete the leftover branch %s, which has no commits of its own: %w", branch, err)
+		return false, "", fmt.Errorf("delete the leftover branch %s, which has no commits of its own: %w", branch, err)
 	}
-	return false, nil
+	return false, "", nil
+}
+
+// adoptWorktree readies a worktree an earlier attempt left on branch for a
+// resume: it fast-forwards it to origin's tip of the branch, or of the
+// default branch when origin lacks it. It refuses a worktree with
+// uncommitted changes, untracked files included, or with commits that tip
+// lacks, which moving it would lose. It refuses engine's clone itself, and a
+// worktree whose folder is gone, which `git worktree prune` clears. Ignored
+// files do not block adoption, and a fast-forward may replace one, as any
+// checkout does.
+func (r Repos) adoptWorktree(clone Clone, branch, path string) error {
+	if filepath.Clean(path) == filepath.Clean(clone.Path) {
+		return taken("branch %s is checked out in engine's clone %s; check out its default branch there first", branch, path)
+	}
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return taken("branch %s has a worktree at %s whose folder is gone; run git -C %s worktree prune first", branch, path, clone.Path)
+	}
+	status, err := r.git(path, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("read the status of the worktree at %s: %w", path, err)
+	}
+	if strings.TrimSpace(status) != "" {
+		return taken("branch %s already has a worktree at %s with uncommitted changes; commit and push them, or remove them, first", branch, path)
+	}
+	tip := "refs/remotes/origin/" + branch
+	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", tip); err != nil {
+		tip = "refs/remotes/origin/" + clone.Default
+	}
+	if _, err := r.git(path, "merge-base", "--is-ancestor", "HEAD", tip); err != nil {
+		return taken("branch %s already has a worktree at %s with commits that origin lacks; push or delete them first", branch, path)
+	}
+	if _, err := r.git(path, "merge", "--ff-only", "--quiet", tip); err != nil {
+		return fmt.Errorf("fast-forward the worktree at %s to %s: %w", path, tip, err)
+	}
+	return nil
 }
 
 // followOrigin sets the local branch to origin's tip, creating it when it is

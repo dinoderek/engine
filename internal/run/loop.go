@@ -19,13 +19,17 @@ const (
 // Loop runs passes over ref until the feature, or the task, is over. Between
 // passes it checks every host's sessions every CheckEvery, and passes again
 // early when one has died, closed, or crossed a wait. A pass that cannot read
-// its view is logged and tried again at the next check. At done it winds
-// down before it returns. It returns an error when the run ends short of
-// done.
+// its view is logged and tried again at the next check, unless GitHub refuses
+// the host's sign-in: waiting does not cure that, so the loop returns the
+// tracker.AuthError. At done it winds down before it returns. It returns an
+// error when the run ends short of done.
 func Loop(w World, ref tracker.Ref, taskOnly bool, sleep func(time.Duration)) error {
 	down := outages{}
 	for {
 		v, err := Gather(w, ref, taskOnly)
+		if ae, ok := tracker.AsAuth(err); ok {
+			return ae
+		}
 		if err != nil {
 			w.Logf("pass: %v", err)
 			sleep(CheckEvery)
@@ -104,10 +108,15 @@ func passDue(w World, v View, down outages) bool {
 // finished hands-off window that is waiting for input, and it returns when
 // none of the closed tasks has a hands-off window left, or after DoneWait.
 // A window a task's executor still works in is left to close itself, and
-// one on a host that cannot be read is waited for.
+// one on a host that cannot be read is waited for. A refused sign-in ends
+// the wind down at once.
 func windDown(w World, ref tracker.Ref, taskOnly bool, sleep func(time.Duration)) {
 	for waited := time.Duration(0); ; waited += CheckEvery {
 		v, err := Gather(w, ref, taskOnly)
+		if _, ok := tracker.AsAuth(err); ok {
+			w.Logf("wind down: %v", err)
+			return
+		}
 		if err != nil {
 			w.Logf("wind down: %v", err)
 		} else {

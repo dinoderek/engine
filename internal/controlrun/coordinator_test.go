@@ -24,6 +24,11 @@ type host struct {
 	loseReply bool
 	calls     int
 	launches  map[string]hostops.ControlRequest
+	released  []string
+	// refuse, when set, is the reason the host refuses a new dispatch.
+	refuse string
+	// unresolved makes a dispatch fail with no reply and no effect.
+	unresolved bool
 }
 
 func (h *host) SyncRepo(string) (hostops.Synced, error)             { panic("legacy GitHub path used") }
@@ -31,6 +36,7 @@ func (h *host) Spawn(hostops.SpawnRequest) (hostops.Spawned, error) { panic("leg
 func (h *host) Collect(string) (hostops.Collected, error)           { return hostops.Collected{}, nil }
 func (h *host) Check(string, io.Writer) (bool, error)               { return true, nil }
 func (h *host) Release(name string, _ bool) (hostops.Released, error) {
+	h.released = append(h.released, name)
 	for i, w := range h.status.Windows {
 		if w.Name == name {
 			h.status.Windows = append(h.status.Windows[:i], h.status.Windows[i+1:]...)
@@ -53,8 +59,20 @@ func (h *host) ControlSpawn(r hostops.ControlRequest) (hostops.Spawned, error) {
 		}
 		return hostops.Spawned{Window: "@1"}, nil
 	}
-	h.launches[r.Spawn.RunID] = r
 	name := fmt.Sprintf("demo-%d", r.Spawn.Task)
+	if h.unresolved {
+		return hostops.Spawned{}, errors.New("connection closed")
+	}
+	if h.refuse != "" {
+		return hostops.Spawned{}, &hostops.RefusedError{Reason: h.refuse}
+	}
+	// As the host does, a window name in use, live or dead, is refused.
+	for _, w := range h.status.Windows {
+		if w.Name == name {
+			return hostops.Spawned{}, &hostops.RefusedError{Reason: "the tmux session engine already has a window " + name}
+		}
+	}
+	h.launches[r.Spawn.RunID] = r
 	h.status.Windows = append(h.status.Windows, hostops.Window{Name: name, ID: "@1", Alive: true, State: session.StateWorking})
 	h.status.Runs = append(h.status.Runs, hostops.Run{Name: name, Record: session.Record{RunID: r.Spawn.RunID, Name: name, Tmux: "engine:@1", Harness: r.Spawn.Harness, Spawned: time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)}})
 	h.status.FreeSlots--
@@ -200,7 +218,7 @@ func TestDeadExecutionFailsAndKeepsItsMergeLock(t *testing.T) {
 	}
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
-	if st.Items[task.ID].State != "failed" || st.Attempts[at.ID].State != "ended" || st.Locks[repo.ID].Attempt != at.ID {
+	if st.Items[task.ID].State != "failed" || st.Attempts[at.ID].Reason != control.EndFailed || st.Locks[repo.ID].Attempt != at.ID {
 		t.Fatal("failure dropped ownership evidence")
 	}
 }
