@@ -165,8 +165,8 @@ its liveness is unknown. A failed call leaves it unknown too. A session in
 **Stalls.** Limited sessions never stall, including before claiming. Their
 `waiting-since` is cleared; a later ordinary wait starts a fresh timer.
 Claude limit markers carry `resets_at`; busy wins over a marker. A window
-the coordinator opened whose task has not claimed in time (the skill's
-`coordinate` mode) is stalled before the claim. One that ended before
+the coordinator opened whose task has not claimed in time (`coordinate` mode
+sets the time) is stalled before the claim. One that ended before
 claiming is reported once, then started again. A session whose
 `waiting-since` is 10 minutes old while its task is open and not
 `needs-human` has stopped outside the protocol, as on a question asked in
