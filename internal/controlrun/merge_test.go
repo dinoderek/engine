@@ -124,8 +124,14 @@ func TestCoordinatorHandsBackAMergeItCannotMake(t *testing.T) {
 		"head changed": "the PR's head is fff, not the reviewed " + reviewedHead,
 	} {
 		t.Run(name, func(t *testing.T) {
-			c, _, task, _ := requested(t, true, reply(hostops.MergeRefused, reason))
+			c, m, task, _ := requested(t, true, reply(hostops.MergeRefused, reason))
+			woken := 0
+			c.Wake = func(run.Session, string) error { woken++; return nil }
+			m.status.Windows[0].State = "waiting"
 			pass(t, c)
+			if woken == 0 {
+				t.Fatal("the refusal did not wake the executor")
+			}
 			u, ok := lastUpdate(t, c, task.ID, control.MergeRefused)
 			st, _ := c.Service.Store.Snapshot()
 			if !ok || !strings.Contains(u.Body, reason) || st.Items[task.ID].State != "in-review" || st.Locks[task.Repo].Attempt == "" {

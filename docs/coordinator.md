@@ -14,8 +14,8 @@ load `control-server.md`. This document describes GitHub-mode coordination.
   and run directories. Run
   the same command again and it resumes, picking up the sessions that are
   still live.
-- **Never edits code, and in GitHub mode never merges.** Executors merge;
-  server coordination does (`control-server.md`).
+- **Never edits code.** In GitHub mode executors merge; in server mode the
+  coordinator does (`control-server.md`).
 
 ## V1: `engine run`
 
@@ -109,7 +109,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it for the harness the caller names (Claude by default), opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
 | `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (Claude’s newest run observation and a live Codex reading), free slots and free heavy slots, the last 20 screen lines of each window whose session is not working, and a waiting window's newest `permissions.jsonl` denial (`telemetry.md`). |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
-| `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once it is open, green, mergeable and not behind its base; otherwise refused or pending. |
+| `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable and not behind its base. Already merged there is done; otherwise refused or pending. |
 | `release` | Closes the session's window if it is open, deletes its Codex profile, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
 **The envelope.** Every reply, a failure too, carries `protocol` (the wire
@@ -189,9 +189,8 @@ text. A later reset permits another attempt.
 Waiting with a limit reset also clears the ordinary stall timer.
 
 Still `limited` 10 minutes after the attempt: one @mention with the last
-screen. A reset more than 24 hours away: one @mention immediately and no
-typing while it remains that far away. Both alerts are once per reset and
-session. Recovery covers
+screen. A reset over 24 hours away: one @mention at once, and no typing.
+Both alerts are once per reset and session. Recovery covers
 unclaimed engine windows and the feature’s planner.
 
 ## GitHub access and notifications
