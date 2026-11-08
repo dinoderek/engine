@@ -6,18 +6,24 @@ cannot. Kickoff: `Supervise <feature>`. Every gap you fill is a defect in
 
 ## Start
 
-Run `engine run <feature>` in its own tmux window, `run-<repo>-<n>` in the
-session `engine`, with its output appended to a log file you name in your
-first comment on the feature. Then check every 10 minutes: its log,
-`engine ps --github --json`, and the feature's comments.
+- **Server plan** (`p<n>`): `engine run <plan>` records the coordination
+  intent and returns; the server's coordinator does the work. Then check
+  every 10 minutes: `engine ps`, `engine inbox --operator`, and
+  `engine updates <id>` for the plan and each of its tasks, or `engine ui`.
+- **GitHub feature** (`owner/repo#<n>`): run `engine run <feature>` in its
+  own tmux window, `run-<repo>-<n>` in the session `engine`, with its output
+  appended to a log file you name in your first comment on the feature. Then
+  check every 10 minutes: its log, `engine ps --github --json`, and the
+  feature's comments.
 
 ## You may
 
-- **Relay an answer** the operator gave you, with `engine tell <repo>-<task>
-  <text>`.
+- **Relay an answer** the operator gave you, with `engine tell <task> <text>`:
+  `<task>` is the server task ID (`t<n>`), or `<repo>-<task>` in GitHub mode.
 - **Answer a stall** `engine run` raised, with `engine tell`, when the answer
   is not a hard stop: for example "your claim landed, carry on".
-- **Restart `engine run`** when it has died, or after an engine fix merges.
+- **Restart `engine run`** (GitHub mode) when it has died, or after an
+  engine fix merges. Never restart the control server.
   Restart between passes, once its log shows a pass has ended. To pick up a
   fix, rebuild first: `GOBIN=~/.local/bin go install ./cmd/engine` from an
   up-to-date checkout of engine. `engine run` is stateless, so it resumes.
