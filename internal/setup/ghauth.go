@@ -37,11 +37,21 @@ func ghAccount(status string) []string {
 	return first
 }
 
-// ghWhy is what gh said about a failure: its account line, or else its first
-// line that is not the host's name.
+// ghFailed is the first account line gh marks as failed, else ghAccount's.
+func ghFailed(status string) []string {
+	for _, m := range ghLogin.FindAllStringSubmatch(status, -1) {
+		if strings.HasPrefix(m[0], "Failed") {
+			return m
+		}
+	}
+	return ghAccount(status)
+}
+
+// ghWhy is what gh said about a failure: the failed account's line, or else
+// its first line that is not the host's name.
 func ghWhy(status string, res result) string {
-	if m := ghAccount(status); m != nil {
-		return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(m[0]), "X✓ "))
+	if m := ghFailed(status); m != nil {
+		return m[0]
 	}
 	for _, line := range strings.Split(status, "\n") {
 		if line = strings.TrimSpace(line); line != "" && line != "github.com" {
@@ -72,7 +82,7 @@ func (r *runner) ghAuth() (outcome, error) {
 	status := res.out + res.errOut
 	account := ghAccount(status)
 	switch {
-	case res.code != 0 && darwin:
+	case res.code != 0 && darwin && keychainOrUnknown(ghFailed(status)):
 		return open("gh cannot sign in to github.com ("+ghWhy(status, res)+"); ssh cannot read a token in the macOS login keychain, "+
 			"so in a Terminal on the host (after gh auth login -h github.com, if gh is signed out there too) run", ghTokenToFile), nil
 	case res.code != 0:
@@ -84,4 +94,10 @@ func (r *runner) ghAuth() (outcome, error) {
 			"in a Terminal on the host, run", ghTokenToFile), nil
 	}
 	return passed(account[1] + " (" + account[2] + ")"), nil
+}
+
+// keychainOrUnknown reports whether the account keeps its token in the
+// keyring, or names no account at all, as older gh does on a failure.
+func keychainOrUnknown(account []string) bool {
+	return account == nil || account[2] == "keyring"
 }

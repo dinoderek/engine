@@ -174,12 +174,14 @@ func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, string, error
 	if err != nil {
 		return nil, hosts.Host{}, "", err
 	}
-	ok, err := d.Tmux.HasWindow(CheckName)
-	if err != nil {
-		return nil, hosts.Host{}, "", refuse("cannot list the tmux windows: %v", err)
-	}
-	if ok {
-		return nil, hosts.Host{}, "", refuse("the tmux session %s already has a window %s: a check is running, or close it", session.Name, CheckName)
+	for _, name := range []string{CheckName, GHProbeName} {
+		ok, err := d.Tmux.HasWindow(name)
+		if err != nil {
+			return nil, hosts.Host{}, "", refuse("cannot list the tmux windows: %v", err)
+		}
+		if ok {
+			return nil, hosts.Host{}, "", refuse("the tmux session %s already has a window %s: a check is running, or close it", session.Name, name)
+		}
 	}
 	return cfg, host, bin, nil
 }

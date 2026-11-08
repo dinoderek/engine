@@ -48,6 +48,16 @@ func TestCheckPassesTheGhProbe(t *testing.T) {
 	}
 }
 
+func TestReportGHNamesTheFixForItsFailure(t *testing.T) {
+	var keychain, signedOut bytes.Buffer
+	reportGH(&keychain, map[bool]string{true: "ok  ", false: "FAIL"}, GHAuth{Output: gh401})
+	reportGH(&signedOut, map[bool]string{true: "ok  ", false: "FAIL"}, GHAuth{Output: "You are not logged into any GitHub hosts."})
+	if !strings.Contains(keychain.String(), GHRemedy) || strings.Contains(signedOut.String(), GHRemedy) ||
+		!strings.Contains(signedOut.String(), "gh auth login -h github.com") {
+		t.Errorf("keychain:\n%s\nsigned out:\n%s", keychain.String(), signedOut.String())
+	}
+}
+
 func TestCheckKillsAStuckGhProbe(t *testing.T) {
 	f := &checkTmux{openPolls: 1, ghStuck: true}
 	d, _, _ := checkDeps(t, f)
@@ -58,7 +68,7 @@ func TestCheckKillsAStuckGhProbe(t *testing.T) {
 	}
 }
 
-func TestCheckRefusesWhenTheGhProbeCannotOpen(t *testing.T) {
+func TestCheckRefusesALeftoverGhProbe(t *testing.T) {
 	f := &checkTmux{}
 	d, _, _ := checkDeps(t, f)
 	d.Tmux.Run = func(_ string, args ...string) (string, error) {
@@ -67,7 +77,7 @@ func TestCheckRefusesWhenTheGhProbeCannotOpen(t *testing.T) {
 		}
 		return "", nil
 	}
-	if _, err := Check(d, "", &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "open the gh probe's window") {
+	if _, err := Check(d, "", &bytes.Buffer{}); !isRefusal(err) || !strings.Contains(err.Error(), "already has a window "+GHProbeName) {
 		t.Errorf("got %v", err)
 	}
 }

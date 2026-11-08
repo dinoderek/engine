@@ -117,9 +117,9 @@ func TestSetupCommandLine(t *testing.T) {
 	}
 }
 
-// A Mac whose gh token sits in the login keychain: setup exits 1 with the
-// command that moves it to gh's config file.
-func TestSetupCommandLineFlagsAKeychainToken(t *testing.T) {
+// A Mac whose gh cannot read its keychain token: setup exits 1 with the
+// command that moves the token to gh's config file.
+func TestSetupCommandLineFlagsAGhThatCannotSignIn(t *testing.T) {
 	env, out, _ := setupEnv(t)
 	answer := env.SSH
 	env.SSH = func(in io.Reader, o, e io.Writer, name string, args ...string) (int, error) {

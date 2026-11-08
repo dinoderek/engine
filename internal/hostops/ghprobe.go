@@ -118,9 +118,12 @@ func reportGH(out io.Writer, mark map[bool]string, gh GHAuth) {
 		return
 	}
 	fmt.Fprintf(out, "%s\n", indent(gh.Output))
+	if !strings.Contains(gh.Output, "keyring") {
+		fmt.Fprint(out, "     every gh call a session here makes would fail; sign gh in on this host: gh auth login -h github.com\n")
+		return
+	}
 	fmt.Fprint(out, "     every gh call a session here makes would fail. On macOS a tmux server started over ssh cannot\n"+
 		"     read the login keychain, where gh keeps its token by default. In a Terminal on this host, run\n"+
 		"       "+GHRemedy+"\n"+
-		"     which stores the token in plaintext in gh's config file (gh auth login -h github.com first, if\n"+
-		"     gh is signed out there too), then rerun the check\n")
+		"     which stores the token in plaintext in gh's config file, then rerun the check\n")
 }

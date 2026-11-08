@@ -11,8 +11,8 @@ Check access with `gh api user` and `gh repo view <owner/repo>`.
 
 On a Mac, store gh's token in gh's own config file, not the login keychain.
 Every window of the `engine` tmux server inherits the context of whoever
-started it: after a reboot, usually the first dispatch, over ssh, and such a
-server cannot read the keychain, so every gh call in its sessions fails with a
+started it. After a reboot that is usually the first dispatch, over ssh, and
+such a server cannot read the keychain, so every gh call in its sessions fails with a
 401. A server started from a Terminal can, so `engine start --check` passes
 there until the next reboot. In a Terminal on the Mac, after
 `gh auth login -h github.com`, run

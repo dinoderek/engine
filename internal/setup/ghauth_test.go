@@ -17,6 +17,9 @@ const (
 	// gh401 is gh over ssh on macOS with its token in the keychain.
 	gh401 = "github.com\n  X Failed to log in to github.com account octo (keyring)\n  - Active account: true\n" +
 		"  - The token in keyring is invalid.\n  - To re-authenticate, run: gh auth login -h github.com\n"
+	// ghTwoFailing has a failed inactive account above a working active one.
+	ghTwoFailing = "github.com\n  ✓ Logged in to github.com account octo (/Users/o/.config/gh/hosts.yml)\n  - Active account: true\n" +
+		"  X Failed to log in to github.com account old (keyring)\n  - Active account: false\n"
 	ghSignedOut = "You are not logged into any GitHub hosts. To log in, run: gh auth login\n"
 )
 
@@ -64,6 +67,10 @@ func TestGhAuthStep(t *testing.T) {
 		{"the 401 over ssh on macOS", "Darwin", gh401, 1,
 			"7. gh auth: OPEN (gh cannot sign in to github.com (Failed to log in to github.com account octo (keyring)); ssh cannot read", ghTokenToFile},
 		{"signed out on Linux", "Linux", ghSignedOut, 1, "7. gh auth: OPEN (gh cannot sign in to github.com (You are not logged into any GitHub hosts", ssh},
+		{"a revoked file token on macOS", "Darwin", strings.Replace(gh401, "(keyring)", "(/Users/o/.config/gh/hosts.yml)", 1), 1,
+			"7. gh auth: OPEN (gh cannot sign in to github.com (Failed to log in to github.com account octo (/Users/o/.config/gh/hosts.yml)))", ssh},
+		{"an inactive account fails", "Linux", ghTwoFailing, 1,
+			"7. gh auth: OPEN (gh cannot sign in to github.com (Failed to log in to github.com account old (keyring)))", ssh},
 		{"a silent failure on Linux", "Linux", "\n", 4, "7. gh auth: OPEN (gh cannot sign in to github.com (exit status 4))", ssh},
 	}
 	for _, c := range cases {
