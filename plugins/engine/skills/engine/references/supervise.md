@@ -12,20 +12,20 @@ cannot. Kickoff: `Supervise <feature>`. Every gap you fill is a defect in
   task (`engine ui` is the operator's view). Below, a comment on the feature
   is `engine tell <plan> <text>`, and done means the plan is `done`.
 - **GitHub feature** (`owner/repo#<n>`): run `engine run <feature>` in its
-  own tmux window, `run-<repo>-<n>` in the session `engine`, with its output
-  appended to a log file you name in your first comment on the feature. Then
-  check every 10 minutes: its log, `engine ps --github --json`, and the
-  feature's comments.
+  own tmux window, `run-<repo>-<n>` in the session `engine`, its output
+  appended to a log you name in your first feature comment. Check every 10
+  minutes: its log, `engine ps --github --json`, and the feature's comments.
 
 ## You may
 
 - **Relay an answer** the operator gave you, with `engine tell <task> <text>`:
   `<task>` is the server task ID (`t<n>`), or `<repo>-<task>` in GitHub mode.
   Answer a server inbox question with `engine reply <seq> <text>`;
-  `engine resolve` and the state change record the operator's decision, so
-  leave them to the operator unless they gave you the decision.
+  `engine resolve` and the state change record the operator's decision:
+  leave them to the operator unless they gave it to you.
 - **Answer a stall** `engine run` raised, with `engine tell`, when the answer
-  is not a hard stop: for example "your claim landed, carry on".
+  is not a hard stop: for example "your claim landed, carry on". This
+  reaches an unclaimed session too.
 - **Restart `engine run`** (GitHub mode) when it has died, or after an
   engine fix merges. Never restart the control server.
   Restart between passes, once its log shows a pass has ended. To pick up a
