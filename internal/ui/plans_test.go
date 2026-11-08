@@ -132,7 +132,7 @@ func fixtureAttempts() []control.Attempt {
 }
 
 func TestPlanDetail(t *testing.T) {
-	got := planDetail("p24", fixtureView(), fixtureAttempts())
+	got := planDetail("p24", fixtureView(), fixtureAttempts(), nil)
 	if want := (PlanRow{ID: "p24", Repo: "r1", Slug: "dinoderek/engine", Title: "Control server rollout", State: "executing"}); got.Plan != want {
 		t.Fatalf("plan = %+v, want %+v", got.Plan, want)
 	}
@@ -157,17 +157,17 @@ func TestPlanDetail(t *testing.T) {
 }
 
 func TestPlanDetailEdges(t *testing.T) {
-	empty := planDetail("p24", fixtureView()[:2], nil)
+	empty := planDetail("p24", fixtureView()[:2], nil, nil)
 	if empty.Tasks == nil || len(empty.Tasks) != 0 || empty.Counts != (Counts{}) {
 		t.Fatalf("plan without tasks = %+v, want an empty table", empty)
 	}
 	missing := planDetail("p1", []control.Item{
 		{ID: "p1", Kind: "plan", Repo: "r1", State: "planned"},
 		{ID: "t2", Kind: "task", Plan: "p1", State: "todo", Depends: []string{"t99"}},
-	}, nil)
+	}, nil, nil)
 	unapproved := fixtureView()
 	unapproved[0].State, unapproved[0].ApprovedVersion = "prepare", 0
-	if got := planDetail("p24", unapproved, fixtureAttempts()).Counts; got != (Counts{Done: 1, InProgress: 2, Blocked: 4}) {
+	if got := planDetail("p24", unapproved, fixtureAttempts(), nil).Counts; got != (Counts{Done: 1, InProgress: 2, Blocked: 4}) {
 		t.Fatalf("unapproved plan counts = %+v, want its queued task blocked on approval", got)
 	}
 	if w := missing.Tasks[0].Waiting; len(w) != 1 || w[0].State != "unknown" || missing.Tasks[0].Group != groupBlocked {
