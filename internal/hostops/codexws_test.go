@@ -208,9 +208,10 @@ func TestWSReadsAMaskedFrame(t *testing.T) {
 func TestCodexDaemonRunsTheProxyInTheHome(t *testing.T) {
 	dir := t.TempDir()
 	bin := dir + "/codex"
-	// The fake proxy records its arguments and home, then answers the upgrade
-	// with garbage.
-	write(t, bin, "#!/bin/sh\necho \"$@ $CODEX_HOME\" > \"$0.args\"\nprintf 'nope\\r\\n\\r\\n'\n", 0o755)
+	// The fake proxy records its arguments and home, reads the upgrade
+	// request's first line, so the request is written before it exits, and
+	// answers with garbage.
+	write(t, bin, "#!/bin/sh\necho \"$@ $CODEX_HOME\" > \"$0.args\"\nread -r line\nprintf 'nope\\r\\n\\r\\n'\n", 0o755)
 	err := codexDaemon(context.Background(), bin, "/the/home", func(*wsConn) error { return nil })
 	if err == nil || !strings.Contains(err.Error(), "upgrade") {
 		t.Errorf("err = %v, want an upgrade error", err)
