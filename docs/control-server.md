@@ -149,8 +149,34 @@ Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
 on resolution. Messages may omit a task association for host or server
 problems. Wake-up pointers are attempted for waiting, unrestricted sessions;
-messages persist when wake-up fails. Phone push and a browser UI are outside
-this implementation.
+messages persist when wake-up fails. Phone push is outside this
+implementation.
+
+## Dashboard
+
+`engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen`
+chooses another loopback address. It uses the CLI's server configuration and
+operator credential, and the credential never reaches the browser. Any local
+process or user that can reach the port reads with operator rights, so run it
+only on a single-user machine. The page calls fixed same-origin routes:
+
+- `/api/plans`: repositories and plans, filtered by `repo`, `state` and a
+  case-insensitive `q` over plan ID, repository and title. With `cached=1`
+  it filters the last list it read without calling the control server.
+- `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
+  active attempts and unfinished prerequisites, including other plans' tasks.
+
+The process forwards only the `list`, `plan-view` and `attempts` reads. It
+answers GET and HEAD for a loopback host name on any port, so an SSH tunnel
+works, and sends `Cache-Control: no-store`. When the control server fails,
+each route returns its last successful data marked stale. The page refreshes
+about every 30 seconds while visible.
+
+Each task has one summary. Done is done. Failed and needs-human are blocked.
+An active attempt, running or in-review is in progress. Otherwise an
+unfinished prerequisite blocks it, todo or approved under an approved plan
+is ready to run, and anything else waits for the operator, so is blocked.
+Whether the plan is being coordinated does not change the summary.
 
 ## Session view
 

@@ -14,16 +14,17 @@
 | `internal/attach/` | `engine attach` |
 | `internal/hosts/` | host config: parsing, validation, slots and launch lines |
 | `internal/hostops/` | `engine host <op> --json`: the ops a host runs on itself for a caller, and the preflight check |
-| `internal/remote/` | the client that reaches a host's ops: `Local` is this host, in-process; `SSH` is another machine, and its tmux-over-SSH runner |
+| `internal/remote/` | a host's ops client: `Local` in-process, `SSH` to another machine, with its tmux-over-SSH runner |
 | `internal/session/` | local clones, worktrees, tmux, harness sessions, trust and run files |
 | `internal/setup/` | `engine setup`: the steps that bring a host to the caller's engine commit, plugin and config |
 | `internal/lint/` | `engine lint`: the plan rules |
+| `internal/ui/` | `engine ui` and its embedded page |
 | `internal/run/` | `engine run`: the coordinator loop (`coordinator.md`) |
 | `internal/ps/` | `engine ps --github` |
 | `internal/start/` | `engine start` |
 | `internal/tell/` | `engine tell` |
 | `devtools/cmd/dev/` | the `dev` main package |
-| `devtools/internal/` | the `./dev` verbs, lane runner, lane checks, baselines and git and file helpers |
+| `devtools/internal/` | the `./dev` verbs, lane runner, lane checks, baselines, git and file helpers |
 | `dev` | the shell entrypoint to `devtools/cmd/dev/` |
 | `scripts/` | registries: lanes, import rules, doc budgets and baselines |
 | `docs/` | the persistent docs |
@@ -32,7 +33,7 @@
 | `.claude-plugin/`, `.agents/plugins/` | the Claude and Codex marketplaces that publish `plugins/` |
 | `.claude/` | this repo's Claude Code settings: it enables the `engine` plugin |
 | `.github/` | the CI workflow, Dependabot config, PR template and task-issue template |
-| `go.mod`, `go.sum` | the module, the Go version, and the dev tools |
+| `go.mod`, `go.sum` | the module, Go version and dev tools |
 | `.golangci.yml` | the lint configuration |
 
 `.dev/` and `.test-ai-results/` are gitignored outputs.
