@@ -30,7 +30,7 @@ func TestSetupBringsAStaleHostToTheCallersBuild(t *testing.T) {
 	for _, want := range []string{
 		"1. tools: ok", "2. engine: changed (2a08a0c go1.27.3, was d8c1744 go1.27.2)", "3. plugin: changed (0.7.1, was 0.2.0)",
 		"4. config: changed (wrote host, hosts.toml)", "5. sign-in: ok (claude.ai)",
-		"6. no suspend: ok (masked)", "7. preflight: ok", "the check report", "box is set up",
+		"6. no suspend: ok (masked)", "8. preflight: ok", "the check report", "box is set up",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -113,9 +113,9 @@ func TestEachStepFailsOpenWithItsCommand(t *testing.T) {
 			"the host can suspend", "ssh -t dev@box 'sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target'"},
 		{"no systemd", "6. no suspend: OPEN", func(r *rig) { r.box.noSystemd = true },
 			"the host can suspend", "sudo systemctl mask"},
-		{"the check finds a prompt", "7. preflight: OPEN", func(r *rig) { r.check = func() (bool, error) { return false, nil } },
+		{"the check finds a prompt", "8. preflight: OPEN", func(r *rig) { r.check = func() (bool, error) { return false, nil } },
 			"an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'"},
-		{"the check cannot run", "7. preflight: OPEN", func(r *rig) { r.check = func() (bool, error) { return false, errors.New("no protocol") } },
+		{"the check cannot run", "8. preflight: OPEN", func(r *rig) { r.check = func() (bool, error) { return false, errors.New("no protocol") } },
 			"no protocol", "engine setup --host box"},
 	}
 	for _, c := range cases {
@@ -137,7 +137,7 @@ func TestPreflightWaitsForTheOtherItems(t *testing.T) {
 	r.box = settledBox(r.home)
 	r.box.masked = 0
 	mustRun(t, r, "box")
-	if len(r.checked) != 0 || !strings.Contains(r.out.String(), "7. preflight: OPEN (not run while items above are open)") {
+	if len(r.checked) != 0 || !strings.Contains(r.out.String(), "8. preflight: OPEN (not run while items above are open)") {
 		t.Errorf("the check ran with an item open:\n%s", r.out.String())
 	}
 }
@@ -286,7 +286,7 @@ func TestLocalModeOnlyChecks(t *testing.T) {
 			t.Errorf("host %q reached out or changed: %q %q", host, r.ssh, r.local.mutations)
 		}
 		out := r.out.String()
-		for _, want := range []string{"1. tools: ok", "2. engine: ok", "3. plugin: ok (0.7.1)", "5. sign-in: ok", "6. no suspend: ok (not Linux)", "7. preflight: ok"} {
+		for _, want := range []string{"1. tools: ok", "2. engine: ok", "3. plugin: ok (0.7.1)", "5. sign-in: ok", "6. no suspend: ok (not Linux)", "8. preflight: ok"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("host %q lacks %q:\n%s", host, want, out)
 			}
@@ -324,7 +324,7 @@ func TestLocalModeOpenItems(t *testing.T) {
 		"1. tools: OPEN (missing: gh", "~/.zshenv.new",
 		"2. engine: OPEN (engine is not on the PATH)",
 		"3. plugin: OPEN", "claude plugin marketplace add dinoderek/engine && claude plugin install engine@engine --scope user",
-		"5. sign-in: OPEN", ": claude /login", "5 open item(s); run each command, then rerun engine setup:",
+		"5. sign-in: OPEN", ": claude /login", "7. gh auth: OPEN (gh is missing (step 1))", "6 open item(s); run each command, then rerun engine setup:",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)

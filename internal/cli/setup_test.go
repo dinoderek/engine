@@ -108,11 +108,30 @@ func TestSetupCommandLine(t *testing.T) {
 	}
 	// The preflight is the real one: this home has no claude binary, so it
 	// refuses, and an open item exits 1.
-	if code != 1 || !strings.Contains(out.String(), "7. preflight: OPEN (") || !strings.Contains(out.String(), "is not an executable claude binary") {
+	if code != 1 || !strings.Contains(out.String(), "8. preflight: OPEN (") || !strings.Contains(out.String(), "is not an executable claude binary") {
 		t.Errorf("the preflight did not run through engine start --check: exit %d\n%s", code, out.String())
 	}
 	var help bytes.Buffer
 	if Run([]string{"help"}, Env{Out: &help}) != 0 || !strings.Contains(help.String(), "setup [--host <name>]") {
 		t.Errorf("the usage lacks engine setup:\n%s", help.String())
+	}
+}
+
+// A Mac whose gh token sits in the login keychain: setup exits 1 with the
+// command that moves it to gh's config file.
+func TestSetupCommandLineFlagsAKeychainToken(t *testing.T) {
+	env, out, _ := setupEnv(t)
+	answer := env.SSH
+	env.SSH = func(in io.Reader, o, e io.Writer, name string, args ...string) (int, error) {
+		if args[len(args)-1] == "gh auth status -h github.com" {
+			_, _ = io.WriteString(e, "github.com\n  X Failed to log in to github.com account octo (keyring)\n  - The token in keyring is invalid.\n")
+			return 1, nil
+		}
+		return answer(in, o, e, name, args...)
+	}
+	code := Run([]string{"setup"}, env)
+	if code != 1 || !strings.Contains(out.String(), "7. gh auth: OPEN (gh cannot sign in to github.com (Failed to log in to github.com account octo (keyring))") ||
+		!strings.Contains(out.String(), "  7. gh auth: gh auth token | gh auth login -h github.com --with-token --insecure-storage\n") {
+		t.Errorf("exit %d\n%s", code, out.String())
 	}
 }

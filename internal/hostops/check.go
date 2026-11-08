@@ -59,6 +59,8 @@ type CheckResult struct {
 	// daemon, as a spawn would; Embedded says why it did not.
 	Joined   bool
 	Embedded string
+	// GH is what `gh auth status` said in a window of the session engine.
+	GH GHAuth
 }
 
 // autoReview is the decision the permission hook logs for a request it left
@@ -67,7 +69,7 @@ const autoReview = "left to auto-review"
 
 // OK reports whether an unattended session would run here without a prompt.
 func (r CheckResult) OK() bool {
-	return r.Closed && r.Finished && len(r.Denied) == 0 && (r.Signalled || !r.hooked)
+	return r.Closed && r.Finished && len(r.Denied) == 0 && (r.Signalled || !r.hooked) && r.GH.OK
 }
 
 // Check launches a throwaway hands-off session of the harness (Claude when
@@ -75,7 +77,9 @@ func (r CheckResult) OK() bool {
 // and has it do what an executor does that has needed a prompt before: read
 // the skill, read a file it wrote in /tmp, run gh and engine, and close its
 // own window. It reports every permission request, a stall, and a step left
-// undone. Each run gets its own run directory, which it leaves in place.
+// undone. First, without the harness, it runs `gh auth status` in a window of
+// the same tmux session, so a gh that cannot read its token there fails the
+// check. Each run gets its own run directory, which it leaves in place.
 func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	h, err := harnessFor(d, harnessName, CheckName)
 	if err != nil {
@@ -99,6 +103,9 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 		return CheckResult{}, err
 	}
 	r := CheckResult{RunDir: runDir, hooked: h.Name() == Codex}
+	if r.GH, err = probeGH(d, runDir, work); err != nil {
+		return CheckResult{}, err
+	}
 	if d.JoinRemote {
 		r.Joined, r.Embedded = h.Join(d.Exec, bin, line)
 	}
@@ -283,6 +290,7 @@ func RunCheck(d Deps, harness string, out io.Writer) (bool, error) {
 // ReportCheck prints the check's findings.
 func ReportCheck(out io.Writer, r CheckResult) {
 	mark := map[bool]string{true: "ok  ", false: "FAIL"}
+	reportGH(out, mark, r.GH)
 	if r.Joined {
 		fmt.Fprintln(out, "ok   the session joined remote control")
 	} else if r.Embedded != "" {

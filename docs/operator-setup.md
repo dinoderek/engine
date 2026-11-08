@@ -9,6 +9,22 @@ target repositories, plus normal Git authentication and commit identity.
 Engine uses that configuration for GitHub calls, clones, pushes and PRs.
 Check access with `gh api user` and `gh repo view <owner/repo>`.
 
+On a Mac, store gh's token in gh's own config file, not the login keychain.
+Every window of the `engine` tmux server inherits the context of whoever
+started it: after a reboot, usually the first dispatch, over ssh, and such a
+server cannot read the keychain, so every gh call in its sessions fails with a
+401. A server started from a Terminal can, so `engine start --check` passes
+there until the next reboot. In a Terminal on the Mac, after
+`gh auth login -h github.com`, run
+
+```
+gh auth token | gh auth login -h github.com --with-token --insecure-storage
+```
+
+which keeps the token in plaintext in `~/.config/gh/hosts.yml`. Setup's
+`gh auth` step runs `gh auth status` on the host, over ssh for `--host`, and is
+open while gh fails there or, on macOS, keeps its token in the keychain.
+
 ## Notifications
 
 1. **Phone:** GitHub Mobile, signed in as you, with push on for
