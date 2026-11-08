@@ -79,9 +79,9 @@ func TestPlanListFacets(t *testing.T) {
 
 func TestGroup(t *testing.T) {
 	for _, tc := range []struct {
-		state                      string
-		active, waiting, unplanned bool
-		want                       string
+		state                            string
+		active, waiting, held, unplanned bool
+		want                             string
 	}{
 		{state: "done", want: groupDone},
 		{state: "done", waiting: true, want: groupDone},
@@ -97,9 +97,13 @@ func TestGroup(t *testing.T) {
 		{state: "prepare", want: groupBlocked},
 		{state: "todo", unplanned: true, want: groupBlocked},
 		{state: "running", unplanned: true, want: groupInProgress},
+		{state: "todo", held: true, want: groupBlocked},
+		{state: "approved", held: true, want: groupBlocked},
+		{state: "running", held: true, want: groupInProgress},
+		{state: "done", held: true, want: groupDone},
 	} {
-		if got := group(tc.state, tc.active, tc.waiting, !tc.unplanned); got != tc.want {
-			t.Errorf("group(%q, active %t, waiting %t, approved %t) = %q, want %q", tc.state, tc.active, tc.waiting, !tc.unplanned, got, tc.want)
+		if got := group(tc.state, tc.active, tc.waiting, tc.held, !tc.unplanned); got != tc.want {
+			t.Errorf("group(%q, active %t, waiting %t, held %t, approved %t) = %q, want %q", tc.state, tc.active, tc.waiting, tc.held, !tc.unplanned, got, tc.want)
 		}
 	}
 }

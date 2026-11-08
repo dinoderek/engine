@@ -74,11 +74,31 @@ func TestPlanDetailCarriesApplicableFeedback(t *testing.T) {
 	if f := byID["t28"].Feedback; f == nil || f.Item != "p24" || f.Update != 12 {
 		t.Fatalf("t28 feedback = %+v, want the plan's question", f)
 	}
-	if byID["t29"].Feedback != nil || byID["t31"].Feedback != nil {
-		t.Fatalf("a waiting session or a task with no session shows feedback: %+v", got.Tasks)
+	if byID["t29"].Feedback != nil {
+		t.Fatalf("a waiting session shows feedback: %+v", byID["t29"])
 	}
-	if byID["t33"].Group != groupBlocked || byID["t28"].Group != groupInProgress {
-		t.Fatalf("feedback changed a summary group: %+v", got.Tasks)
+	if f := byID["t33"].Feedback; f == nil || f.Item != "t33" || byID["t33"].Group != groupBlocked || byID["t28"].Group != groupInProgress {
+		t.Fatalf("feedback changed an active or failed task's group: %+v", got.Tasks)
+	}
+	// The plan's open question holds up every task waiting to start: the
+	// server dispatches none of them until it is resolved.
+	for _, id := range []string{"t30", "t31", "t32"} {
+		if f := byID[id].Feedback; f == nil || f.Item != "p24" || f.Update != 12 || byID[id].Group != groupBlocked {
+			t.Fatalf("%s under an open plan question = %+v, want blocked with the plan's question", id, byID[id])
+		}
+	}
+	failedAlone := planDetail("p24", fixtureView(), fixtureAttempts(), rows[:1])
+	for _, tk := range failedAlone.Tasks {
+		if tk.ID == "t33" && (tk.Feedback != nil || tk.Group != groupBlocked) {
+			t.Fatalf("a failed task is not waiting to start, so does not link the plan's question: %+v", tk)
+		}
+	}
+	if byID["t26"].Feedback != nil || got.Counts != (Counts{Done: 1, InProgress: 2, Blocked: 4}) {
+		t.Fatalf("counts under an open plan question = %+v, done task %+v", got.Counts, byID["t26"])
+	}
+	without := planDetail("p24", fixtureView(), fixtureAttempts(), rows[1:])
+	if without.Counts != (Counts{Done: 1, InProgress: 2, Ready: 1, Blocked: 3}) {
+		t.Fatalf("a task's own question must not hold up its siblings: %+v", without.Counts)
 	}
 }
 
