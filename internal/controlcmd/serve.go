@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -22,11 +23,14 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
+// ServerDBPath is the control server's default database, under home.
+const ServerDBPath = ".local/share/engine/server/control.db"
+
 func serveMain(args []string, e Env) int {
 	fs := flag.NewFlagSet("engine serve", flag.ContinueOnError)
 	fs.SetOutput(e.Err)
-	db := fs.String("db", "", "database path")
-	tokenPath := fs.String("token-file", "", "private operator credential")
+	db := fs.String("db", filepath.Join(e.Home, ServerDBPath), "database path")
+	tokenPath := fs.String("token-file", filepath.Join(hosts.ConfigDir(e.Home), "server-token"), "private operator credential")
 	listen := fs.String("listen", "127.0.0.1:7331", "private listen address")
 	advertise := fs.String("advertise", "", "origin reachable from execution hosts")
 	backup := fs.String("backup", "", "write a consistent backup and exit")
@@ -35,7 +39,7 @@ func serveMain(args []string, e Env) int {
 	}
 	token, err := control.ReadCredential(*tokenPath)
 	if err != nil {
-		fmt.Fprintln(e.Err, "engine serve:", err)
+		fmt.Fprintf(e.Err, "engine serve: operator credential %s: %v\n", *tokenPath, err)
 		return 1
 	}
 	store, err := control.Open(*db, nil)
