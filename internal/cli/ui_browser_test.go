@@ -33,7 +33,7 @@ func TestDashboardInBrowser(t *testing.T) {
 	if shots == "" {
 		shots = t.TempDir()
 	}
-	t.Logf("browser %s (%s) on %s/%s; screenshots in %s", b.version(), path, runtime.GOOS, runtime.GOARCH, shots)
+	t.Logf("browser %s (%s, sandboxed %t) on %s/%s; screenshots in %s", b.version(), path, sandboxAvailable(), runtime.GOOS, runtime.GOARCH, shots)
 	b.viewport(1280, 900, false)
 	b.navigate(d.base + "/#/plans")
 	var visibility string

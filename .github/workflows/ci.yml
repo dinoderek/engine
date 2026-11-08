@@ -26,8 +26,8 @@ jobs:
       - name: Install node if the runner lacks it
         run: command -v node >/dev/null || (sudo apt-get update && sudo apt-get install -y nodejs)
       # The dashboard's browser test skips without a Chromium-family browser;
-      # the runner image ships Google Chrome. This prints the one the test
-      # drives: the first of its candidates on PATH.
+      # the runner image ships Chromium and Google Chrome. This prints the one
+      # the test drives: the first of its candidates on PATH.
       - name: Require a Chromium browser
         run: |
           for b in chromium chromium-browser google-chrome google-chrome-stable microsoft-edge; do
