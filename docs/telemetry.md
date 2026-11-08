@@ -59,9 +59,10 @@ for inspection after the marker clears.
 hook state, so a newer prompt cannot inherit an older failed turn. Stored
 failed-turn input is read through app-server; it is not a limit hook event.
 
-`codex-label.json` records how a joined Codex thread was labelled: the thread
-ID, title, project, repo, project root, time and any error. Its presence stops
-a second attempt; for how the label is set, load `codex.md`, "Apps".
+`codex-label.json` records the attempts to label a joined Codex thread: the
+thread ID, title, project, repo, project root, the latest attempt's time and
+error, and the attempt count; `codex-label.lock` is held during one. For how
+the label is set, load `codex.md`, "Apps".
 
 The coordinator logs each resume attempt with the task, timestamp and
 `resumed-for=<resets_at>`. Its notes retain the attempt and limit-alert times

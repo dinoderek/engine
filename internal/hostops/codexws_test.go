@@ -13,8 +13,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 // wsPeer is the server end of a WebSocket on a pipe: it answers the upgrade
@@ -223,5 +225,24 @@ func TestCodexDaemonRunsTheProxyInTheHome(t *testing.T) {
 	cancel()
 	if err := codexDaemon(ctx, bin, "/h", nil); err == nil {
 		t.Error("an ended context did not fail")
+	}
+}
+
+func TestCodexDaemonEndsAtTheDeadline(t *testing.T) {
+	dir := t.TempDir()
+	bin := dir + "/codex"
+	// The proxy never answers, and its child keeps the pipe open after the
+	// proxy is killed: only closing the pipe at the deadline ends the read.
+	write(t, bin, "#!/bin/sh\nsleep 600 &\necho $! > \"$0.pid\"\nwait\n", 0o755)
+	t.Cleanup(func() {
+		if pid, err := os.ReadFile(bin + ".pid"); err == nil {
+			_ = exec.Command("kill", strings.TrimSpace(string(pid))).Run()
+		}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	err := codexDaemon(ctx, bin, "/h", func(*wsConn) error { return nil })
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("err = %v, want the deadline", err)
 	}
 }

@@ -15,9 +15,21 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// CodexLabelFile, in a run directory, records that the run's Codex thread was
-// labelled, and how it went. Its presence stops a second attempt.
-const CodexLabelFile = "codex-label.json"
+// CodexLabelFile, in a run directory, records the attempts to label the
+// run's Codex thread and how the last one went; codexLabelLock is held while
+// one runs.
+const (
+	CodexLabelFile = "codex-label.json"
+	codexLabelLock = "codex-label.lock"
+)
+
+// codexLabelAttempts bounds the attempts per run, so a daemon that keeps
+// refusing costs a few background processes, not one per hook event.
+const codexLabelAttempts = 3
+
+// codexLabelStale is how old a lock is when its holder must have died: an
+// attempt ends within its deadline.
+const codexLabelStale = 30 * codexQuotaTimeout
 
 // CodexLabelRequest is how a joined Codex thread is shown in the apps: its
 // title, and the project it is filed under.
@@ -34,8 +46,22 @@ type CodexLabelRequest struct {
 // codexLabelRecord is CodexLabelFile's content.
 type codexLabelRecord struct {
 	CodexLabelRequest
-	At    time.Time `json:"at"`
-	Error string    `json:"error,omitempty"`
+	At       time.Time `json:"at"`
+	Attempts int       `json:"attempts"`
+	Error    string    `json:"error,omitempty"`
+}
+
+func readCodexLabel(runDir string) (codexLabelRecord, bool) {
+	var rec codexLabelRecord
+	data, err := os.ReadFile(filepath.Join(runDir, CodexLabelFile))
+	return rec, err == nil && json.Unmarshal(data, &rec) == nil
+}
+
+// CodexLabelPending is true while the run's thread is not labelled and
+// attempts remain.
+func CodexLabelPending(runDir string) bool {
+	rec, ok := readCodexLabel(runDir)
+	return !ok || rec.Error != "" && rec.Attempts < codexLabelAttempts
 }
 
 // codexProjectKey is the project metadata key that holds the repo engine
@@ -69,12 +95,19 @@ func CodexThreadTitle(rec session.Record) string {
 }
 
 // LabelCodexThread titles a joined Codex run's thread and files it under its
-// repo's project, through engine's daemon. It runs once per run: the first
-// call records the outcome in CodexLabelFile, and later calls do nothing.
-// A failure is returned for the caller to report; it never stops the session.
+// repo's project, through engine's daemon, and records the outcome in
+// CodexLabelFile. It does nothing once the thread is labelled, after the last
+// attempt, or while another attempt holds the lock. A failure is returned for
+// the caller to report; it never stops the session.
 func LabelCodexThread(d Deps, runDir string, rec session.Record, threadID string) error {
-	marker := filepath.Join(runDir, CodexLabelFile)
-	f, err := os.OpenFile(marker, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if !CodexLabelPending(runDir) {
+		return nil
+	}
+	lock := filepath.Join(runDir, codexLabelLock)
+	if info, err := os.Stat(lock); err == nil && d.Now().Sub(info.ModTime()) > codexLabelStale {
+		_ = os.Remove(lock)
+	}
+	f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if errors.Is(err, os.ErrExist) {
 		return nil
 	}
@@ -82,17 +115,23 @@ func LabelCodexThread(d Deps, runDir string, rec session.Record, threadID string
 		return err
 	}
 	_ = f.Close()
+	defer func() { _ = os.Remove(lock) }()
+	// Another attempt may have finished between the check and the lock.
+	if !CodexLabelPending(runDir) {
+		return nil
+	}
+	prev, _ := readCodexLabel(runDir)
 	req, err := codexLabelFor(d.Home, rec, threadID)
 	if err == nil {
 		err = sendCodexLabel(d, req)
 	}
-	out := codexLabelRecord{CodexLabelRequest: req, At: d.Now().UTC()}
+	out := codexLabelRecord{CodexLabelRequest: req, At: d.Now().UTC(), Attempts: prev.Attempts + 1}
 	if err != nil {
 		out.Error = err.Error()
 	}
 	data, merr := json.MarshalIndent(out, "", "  ")
 	if merr == nil {
-		merr = os.WriteFile(marker, data, 0o644)
+		merr = os.WriteFile(filepath.Join(runDir, CodexLabelFile), data, 0o644)
 	}
 	return errors.Join(err, merr)
 }
@@ -190,7 +229,8 @@ func codexProject(rpc *codexRPC, req CodexLabelRequest) (string, error) {
 	}
 	// The key is per repo, so sessions that race create one project. Once
 	// that project is deleted the key names it still, and the daemon refuses
-	// it: a key per thread then creates the new one.
+	// it: a key per thread then creates the new one. The daemon gives that
+	// refusal only the generic invalid-params code, so its wording is matched.
 	create := func(key string) (json.RawMessage, error) {
 		return rpc.call("project/create", map[string]any{
 			"name": req.Project, "roots": []map[string]string{{"path": req.Root}},

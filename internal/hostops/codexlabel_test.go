@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -202,7 +203,7 @@ func readLabel(t *testing.T, dir string) codexLabelRecord {
 	return rec
 }
 
-func TestLabelCodexThreadRunsOncePerRun(t *testing.T) {
+func TestLabelCodexThreadStopsOnceLabelled(t *testing.T) {
 	d, reqs, where := labelDeps(t, nil)
 	dir := t.TempDir()
 	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "138", Feature: "o/engine#" + "125"}
@@ -219,22 +220,58 @@ func TestLabelCodexThreadRunsOncePerRun(t *testing.T) {
 	if bin, home := (*where)[0], (*where)[1]; bin != filepath.Join(d.Home, "bin", "codex") || home != (codex{d: d}).engineHome() {
 		t.Errorf("sent with %s in %s", bin, home)
 	}
-	if got := readLabel(t, dir); got.CodexLabelRequest != want || got.Error != "" || !got.At.Equal(fixedNow()) {
+	if got := readLabel(t, dir); got.CodexLabelRequest != want || got.Error != "" || got.Attempts != 1 || !got.At.Equal(fixedNow()) {
 		t.Errorf("record %+v", got)
+	}
+	if CodexLabelPending(dir) {
+		t.Error("a labelled run is still pending")
+	}
+	if _, err := os.Stat(filepath.Join(dir, codexLabelLock)); err == nil {
+		t.Error("the lock was left behind")
 	}
 }
 
-func TestLabelCodexThreadRecordsAFailure(t *testing.T) {
-	d, _, _ := labelDeps(t, errors.New("daemon down"))
+func TestLabelCodexThreadRetriesAFailureAFewTimes(t *testing.T) {
+	d, reqs, _ := labelDeps(t, errors.New("daemon down"))
 	dir := t.TempDir()
 	rec := session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34", Feature: "p12"}
-	if err := LabelCodexThread(d, dir, rec, "th1"); err == nil || !strings.Contains(err.Error(), "daemon down") {
-		t.Fatalf("err = %v", err)
+	for i := range codexLabelAttempts {
+		if !CodexLabelPending(dir) {
+			t.Fatalf("attempt %d: not pending", i+1)
+		}
+		if err := LabelCodexThread(d, dir, rec, "th1"); err == nil || !strings.Contains(err.Error(), "daemon down") {
+			t.Fatalf("attempt %d: err = %v", i+1, err)
+		}
+	}
+	if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || len(*reqs) != codexLabelAttempts {
+		t.Errorf("after the last attempt: err %v, %d requests, want %d", err, len(*reqs), codexLabelAttempts)
 	}
 	got := readLabel(t, dir)
-	if got.Error != "daemon down" || got.Title != "p12 > t34" ||
+	if got.Error != "daemon down" || got.Attempts != codexLabelAttempts || got.Title != "p12 > t34" ||
 		got.Root != filepath.Join(d.Home, filepath.FromSlash(session.ControlReposDir), "o", "engine") {
 		t.Errorf("record %+v", got)
+	}
+	if CodexLabelPending(dir) {
+		t.Error("still pending after the last attempt")
+	}
+}
+
+func TestLabelCodexThreadLeavesAHeldLockAlone(t *testing.T) {
+	d, reqs, _ := labelDeps(t, nil)
+	dir := t.TempDir()
+	lock := filepath.Join(dir, codexLabelLock)
+	write(t, lock, "", 0o644)
+	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "1"}
+	if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || len(*reqs) != 0 {
+		t.Fatalf("with a fresh lock: err %v, %d requests", err, len(*reqs))
+	}
+	// A lock older than any attempt's deadline is a dead attempt's.
+	old := fixedNow().Add(-codexLabelStale - time.Second)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || len(*reqs) != 1 {
+		t.Errorf("with a stale lock: err %v, %d requests", err, len(*reqs))
 	}
 }
 
