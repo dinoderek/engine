@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -83,17 +84,26 @@ func serveMain(args []string, e Env) int {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	e.Context = ctx
-	service := control.Service{Store: store}
 	logf := func(format string, args ...any) { fmt.Fprintf(e.Err, format+"\n", args...) }
-	c := newCoordinator(service, *advertise, e)
-	service.Reconcile = c.ConfirmEnded
-	c.Service = service
+	service, c, obs := wire(store, *advertise, e)
 	fmt.Fprintf(e.Out, "engine server listening on %s\n", ln.Addr())
-	if err = Serve(ctx, ln, control.Handler(service, token, logf), c.Run); err != nil {
+	if err = Serve(ctx, ln, control.Handler(service, token, logf), background(c.Run, obs.Run)); err != nil {
 		fmt.Fprintln(e.Err, "engine serve:", err)
 		return 1
 	}
 	return 0
+}
+
+// wire connects the command service, the coordinator and the session view's observer.
+func wire(store *control.Store, url string, e Env) (control.Service, *controlrun.Coordinator, *controlrun.Observer) {
+	service := control.Service{Store: store}
+	c := newCoordinator(service, url, e)
+	obs := newObserver(store, e)
+	service.Reconcile = c.ConfirmEnded
+	service.Observe = obs.Observation
+	c.Service = service
+	c.Observer = obs
+	return service, c, obs
 }
 
 func newCoordinator(service control.Service, url string, e Env) *controlrun.Coordinator {
@@ -103,15 +113,7 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 	}
 	hostExec := session.ExecContext(ctx, 30*time.Second)
 	c := &controlrun.Coordinator{Service: service, URL: url, Home: e.Home, Logf: func(format string, args ...any) { fmt.Fprintf(e.Err, format+"\n", args...) }}
-	c.Client = func(h hosts.Host) remote.Client {
-		name, _ := hosts.ReadHostName(hosts.ConfigDir(e.Home) + "/host")
-		if h.Name == name {
-			tm := session.New()
-			tm.Run = hostExec
-			return remote.Local{Deps: hostops.Deps{Home: e.Home, Run: session.RunCommandContext(ctx, 7*time.Minute), Probe: session.RunCommandContext(ctx, 3*time.Minute), Exec: hostExec, Tmux: tm, Getenv: e.Getenv, Now: time.Now, JoinRemote: true}}
-		}
-		return remote.SSH{Name: h.Name, Address: h.Address, Exec: remote.ExecContext(ctx, 7*time.Minute)}
-	}
+	c.Client = hostClients(ctx, e, 7*time.Minute)
 	c.Wake = func(s run.Session, text string) error {
 		cfg, local, err := hosts.Open(hosts.ConfigDir(e.Home))
 		if err != nil {
@@ -136,6 +138,42 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 	}
 	c.Resume = func(s run.Session) error { return c.Wake(s, "continue") }
 	return c
+}
+
+// hostClients reaches each configured host, bounding every host command by limit.
+func hostClients(ctx context.Context, e Env, limit time.Duration) func(hosts.Host) remote.Client {
+	hostExec := session.ExecContext(ctx, 30*time.Second)
+	return func(h hosts.Host) remote.Client {
+		name, _ := hosts.ReadHostName(hosts.ConfigDir(e.Home) + "/host")
+		if h.Name == name {
+			tm := session.New()
+			tm.Run = hostExec
+			return remote.Local{Deps: hostops.Deps{Home: e.Home, Run: session.RunCommandContext(ctx, limit), Probe: session.RunCommandContext(ctx, min(limit, 3*time.Minute)), Exec: hostExec, Tmux: tm, Getenv: e.Getenv, Now: time.Now, JoinRemote: true}}
+		}
+		return remote.SSH{Name: h.Name, Address: h.Address, Exec: remote.ExecContext(ctx, limit)}
+	}
+}
+
+// newObserver samples active attempts for the session view, with a short host-read limit.
+func newObserver(store *control.Store, e Env) *controlrun.Observer {
+	ctx := e.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return &controlrun.Observer{Store: store, Client: hostClients(ctx, e, time.Minute),
+		Config: func() (*hosts.Config, error) { cfg, _, err := hosts.Open(hosts.ConfigDir(e.Home)); return cfg, err },
+		Logf:   func(format string, args ...any) { fmt.Fprintf(e.Err, format+"\n", args...) }}
+}
+
+// background runs every loop until shutdown and returns when all have stopped.
+func background(loops ...func(context.Context)) func(context.Context) {
+	return func(ctx context.Context) {
+		var wg sync.WaitGroup
+		for _, loop := range loops {
+			wg.Go(func() { loop(ctx) })
+		}
+		wg.Wait()
+	}
 }
 
 // Serve shuts down HTTP and the coordinator before its caller closes storage.

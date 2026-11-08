@@ -101,13 +101,14 @@ type Request struct {
 
 // Response contains one operation's result. Credentials are only returned at dispatch.
 type Response struct {
-	Item       *Item     `json:"item,omitempty"`
-	Items      []Item    `json:"items,omitempty"`
-	Updates    []Update  `json:"updates,omitempty"`
-	Attempt    *Attempt  `json:"attempt,omitempty"`
-	Attempts   []Attempt `json:"attempts,omitempty"`
-	Lock       *Lock     `json:"lock,omitempty"`
-	Credential string    `json:"credential,omitempty"`
+	Item       *Item        `json:"item,omitempty"`
+	Items      []Item       `json:"items,omitempty"`
+	Updates    []Update     `json:"updates,omitempty"`
+	Attempt    *Attempt     `json:"attempt,omitempty"`
+	Attempts   []Attempt    `json:"attempts,omitempty"`
+	Lock       *Lock        `json:"lock,omitempty"`
+	Sessions   []SessionRow `json:"sessions,omitempty"`
+	Credential string       `json:"credential,omitempty"`
 }
 
 type receipt struct {
