@@ -58,8 +58,8 @@ func TestPlanScopedResolutionRejectsAnotherPlan(t *testing.T) {
 		t.Fatalf("rejected rulings wrote %d updates", after-before)
 	}
 	planQuestion := call(t, s, op, Request{Op: "ask", ID: plan.ID, Body: "Scope?"}).Updates[0]
-	if out := call(t, s, op, Request{Op: "resolve", ReplyTo: planQuestion.ID, Body: "Narrow", Item: Item{Plan: plan.ID}}); len(out.Updates) != 2 || out.Updates[1].Item != plan.ID {
-		t.Fatalf("plan question ruling = %+v", out.Updates)
+	if out := call(t, s, op, Request{Op: "resolve", ReplyTo: planQuestion.ID, Body: "Narrow", Item: Item{Plan: plan.ID}}); len(out.Updates) != 1 || out.Updates[0].Item != plan.ID {
+		t.Fatalf("plan question resolution = %+v, want it alone on the plan", out.Updates)
 	}
 	if out := call(t, s, op, Request{Op: "resolve", ReplyTo: question.ID, Body: "Only this task"}); len(out.Updates) != 1 {
 		t.Fatalf("task-only resolution = %+v, want no ruling", out.Updates)

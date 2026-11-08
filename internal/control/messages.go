@@ -57,7 +57,7 @@ func (s Service) messages(st *State, a Actor, r Request) (Response, error) {
 	}
 	u := st.update(a, r, kind, r.Body, s.now())
 	out := Response{Updates: []Update{u}}
-	if kind == "resolved" && r.Item.Plan != "" {
+	if kind == "resolved" && r.Item.Plan != "" && r.ID != r.Item.Plan {
 		ruling := st.update(a, Request{ID: r.Item.Plan, ReplyTo: r.ReplyTo}, "ruling", r.Body, s.now())
 		out.Updates = append(out.Updates, ruling)
 	}

@@ -247,6 +247,14 @@ const scenarios = {
     });
   },
 
+  async "a plan ruling shows as one without a link into another thread"() {
+    const fx = { thread: (id) => ({ item: id, messages: [msg(9, "ruling", { reply_to: 7, body: "Approved for the plan" })], questions: [], next: 9, more: false }) };
+    await page("#/plans/p24?panel=p24&tab=communications", fx, async (t) => {
+      assert.ok(t.$("update-9").textContent.includes("Plan ruling"));
+      assert.equal(t.$("update-9").querySelector("a"), null);
+    });
+  },
+
   async "pages load on demand, move focus to the first new message and open at an update"() {
     const all = Array.from({ length: 120 }, (_, i) => msg(i + 1, "say"));
     const thread = (id, after, anchor) => {

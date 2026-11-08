@@ -86,7 +86,8 @@ window.engine.panel = function (ctx) {
       st.badges.set(m.id, badge);
       head.append(" ", badge);
     }
-    if (m.reply_to) {
+    // A ruling cites a task's question, which is not in the plan's thread.
+    if (m.reply_to && m.kind !== "ruling") {
       head.append(" ", el("a", { class: "muted", href: ctx.href(view.panel, "communications", m.reply_to) }, "in reply to update " + m.reply_to));
     }
     return el("li", { id: "update-" + m.id, class: "message kind-" + m.kind, tabindex: "-1", "data-key": "update-" + m.id },

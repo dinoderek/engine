@@ -129,8 +129,8 @@ Read up to 200 at a time, using the last sequence as the next cursor.
 Comments do not change workflow state. Asking a task question atomically
 puts it in needs-human. Acknowledgement and ordinary replies leave the
 question unresolved. Resolution records the operator decision; an explicit
-state change resumes the task. `--plan` also records the decision as a
-`ruling` on the question's plan. The server never answers a question from a
+state change resumes the task. On a task's question, `--plan` also
+posts the decision as a plan `ruling`. The server never answers a question from a
 ruling. Unresolved questions block completion and
 merge checks.
 An unresolved plan question also blocks planner handoff, child dispatch,
@@ -139,10 +139,10 @@ child merges and automatic quota resume until the operator resolves it.
 Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
 on resolution. Messages may omit a task association for host or server
-problems. Waiting, unrestricted sessions get wake-up pointers for messages on their
-item, and a task for its plan's messages and rulings, except those to the
-operator, their own and coordinator notices. Messages persist when wake-up
-fails.
+problems. Waiting, unrestricted sessions get wake-up pointers for others'
+messages on their item; tasks also for others' plan messages and rulings,
+except coordinator notices and those to the operator.
+Messages persist when wake-up fails.
 
 ## Dashboard
 
