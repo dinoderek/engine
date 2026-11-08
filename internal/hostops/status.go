@@ -2,6 +2,7 @@ package hostops
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -61,6 +62,9 @@ type Window struct {
 	// Screen is the last ScreenLines lines of a window whose session is not
 	// working.
 	Screen string `json:"screen,omitempty"`
+	// Denial is the newest entry of a waiting session's permissions.jsonl,
+	// when that entry is a denial.
+	Denial *Denial `json:"denial,omitempty"`
 }
 
 // Run is a run directory and its run.json.
@@ -110,6 +114,9 @@ func ReadStatus(d Deps) (Status, error) {
 			out.Harness = r.Record.Harness
 			if out.Alive {
 				s.probe(&out, r)
+			}
+			if out.State == session.StateWaiting {
+				out.Denial = LastDenial(filepath.Join(r.Dir, session.PermissionLog))
 			}
 		}
 		if out.State != session.StateWorking {

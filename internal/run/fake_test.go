@@ -56,6 +56,8 @@ type executor struct {
 	harness  string
 	limited  bool
 	resetsAt int64
+	// denial is the newest entry of its permission log, when a denial.
+	denial *hostops.Denial
 }
 
 // fakeHost is a host of the fake world.

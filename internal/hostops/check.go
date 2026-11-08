@@ -1,8 +1,6 @@
 package hostops
 
 import (
-	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -63,10 +61,6 @@ type CheckResult struct {
 	// GH is what `gh auth status` said in a window of the session engine.
 	GH GHAuth
 }
-
-// autoReview is the decision the permission hook logs for a request it left
-// to Codex's auto-review (hook.AutoReview; hostops cannot import hook).
-const autoReview = "left to auto-review"
 
 // OK reports whether an unattended session would run here without a prompt.
 func (r CheckResult) OK() bool {
@@ -244,39 +238,6 @@ func find(windows []session.WindowInfo, id string) (session.WindowInfo, bool) {
 		}
 	}
 	return session.WindowInfo{}, false
-}
-
-// readPermissions reads permissions.jsonl, if any, as one line per entry:
-// the denials, and apart from them the requests left to auto-review.
-func readPermissions(path string) (denied, reviewed []string, err error) {
-	f, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil, nil
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() { _ = f.Close() }()
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		var e struct {
-			Event, Tool, Decision, Reason string
-			Input                         json.RawMessage
-		}
-		if err := json.Unmarshal(scan.Bytes(), &e); err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", path, err)
-		}
-		line := fmt.Sprintf("%s %s: %s", e.Tool, e.Input, e.Decision)
-		if e.Reason != "" {
-			line += " (" + e.Reason + ")"
-		}
-		if e.Decision == autoReview {
-			reviewed = append(reviewed, line)
-		} else {
-			denied = append(denied, line)
-		}
-	}
-	return denied, reviewed, scan.Err()
 }
 
 // RunCheck runs the check of the harness, prints its report to out, and

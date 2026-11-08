@@ -106,7 +106,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | --- | --- |
 | `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it for the harness the caller names (Claude by default), opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
-| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (Claude’s newest run observation and a live Codex reading), free slots and free heavy slots, and the last 20 screen lines of each window whose session is not working. |
+| `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (Claude’s newest run observation and a live Codex reading), free slots and free heavy slots, the last 20 screen lines of each window whose session is not working, and a waiting window's newest `permissions.jsonl` denial (`telemetry.md`). |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
 | `release` | Closes the session's window if it is open, deletes its Codex profile, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
@@ -164,17 +164,17 @@ its liveness is unknown. A failed call leaves it unknown too. A session in
 
 **Stalls.** Limited sessions never stall, including before claiming. Their
 `waiting-since` is cleared; a later ordinary wait starts a fresh timer.
-Claude limit markers carry `resets_at`; busy wins over a marker.
-A window the coordinator opened whose task has not claimed in
-time is stalled before the claim, for example on a prompt (the skill's
-`coordinate` mode sets the time). One that ended before claiming is reported
-once, then started again. A session whose `waiting-since` is 10
-minutes old while its task is open and not `needs-human` has stopped outside
-the protocol, for example on a question asked in the session rather than on
-the issue. The coordinator @mentions you on the task's issue, with the last
-screen the host's `status` sent (it sends one for a window whose session is
-not working), once per session start or wait: it notes the start or wait it
-flagged, and flags only another one.
+Claude limit markers carry `resets_at`; busy wins over a marker. A window
+the coordinator opened whose task has not claimed in time (`coordinate` mode
+sets the time) is stalled before the claim. One that ended before
+claiming is reported once, then started again. A session whose
+`waiting-since` is 10 minutes old while its task is open and not
+`needs-human` has stopped outside the protocol, as on a question asked in
+the session. The coordinator @mentions you on the task's issue, with the
+last screen the host's `status` sent, once per session start or wait: it
+notes each one it flags. A denial at most 10 minutes older than
+`waiting-since` makes the stall a Permission hard stop, naming the tool,
+input and reason.
 
 **Limit recovery.** Never resume `needs-human`; recheck labels before typing.
 Each session check resumes an engine window still `limited`,

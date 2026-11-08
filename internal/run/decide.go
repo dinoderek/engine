@@ -2,8 +2,10 @@ package run
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/ps"
@@ -67,7 +69,7 @@ func planStep(v View) ([]Action, bool) {
 		}
 		if planner.waited(v.Now, StallWait) && !planner.flagged(planner.WaitingSince) {
 			return []Action{{Kind: Stall, Ref: f.Ref, Session: planner, At: planner.WaitingSince,
-				Text: fmt.Sprintf("the planner %s has waited for input for %s", planner.Name, StallWait)}}, true
+				Text: waitText(planner, "the planner "+planner.Name+" has waited for input for "+StallWait.String())}}, true
 		}
 		return nil, true
 	case len(f.Tasks) == 0 && started:
@@ -126,11 +128,49 @@ func stalls(v View) []Action {
 				Text: fmt.Sprintf("%s has not claimed the task %s after it started", s.Name, ClaimWait)})
 		case hasAny(c.Labels, claimStates) && !c.Has(NeedsHuman) && s.waited(v.Now, StallWait) && !s.flagged(s.WaitingSince):
 			acts = append(acts, Action{Kind: Stall, Ref: c.Ref, Session: s, At: s.WaitingSince,
-				Text: fmt.Sprintf("%s has waited for input for %s, outside a hard stop", s.Name, StallWait)})
+				Text: waitText(s, fmt.Sprintf("%s has waited for input for %s, outside a hard stop", s.Name, StallWait))})
 		}
 	}
 	return acts
 }
+
+// waitText is a waiting session's stall text: plain, unless the wait
+// follows a permission denial. Then it is the Permission hard stop the
+// session did not raise, naming the tool, its exact input and why.
+func waitText(s Session, plain string) string {
+	if !s.denied() {
+		return plain
+	}
+	d := s.Denial
+	why := d.Decision
+	if d.Reason != "" {
+		why += ": " + d.Reason
+	}
+	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (rulings.md): "+
+		"%s %s was %s. Allow it with a permission rule in the session, or do it by hand, then tell the session to carry on",
+		s.Name, StallWait, d.Tool, deniedInput(d.Input), why)
+}
+
+// deniedInput is a denied tool's input quoted for a comment: a shell
+// command as itself, any other input as its JSON, cut to maxInput
+// characters, with backticks made quotes. The exact input stays in the
+// run's permissions.jsonl.
+func deniedInput(raw json.RawMessage) string {
+	var bash struct {
+		Command string `json:"command"`
+	}
+	text := strings.TrimSpace(string(raw))
+	if json.Unmarshal(raw, &bash) == nil && bash.Command != "" {
+		text = bash.Command
+	}
+	if r := []rune(text); len(r) > maxInput {
+		text = string(r[:maxInput]) + "…"
+	}
+	return "`" + strings.ReplaceAll(text, "`", "'") + "`"
+}
+
+// maxInput is how much of a denied tool's input a stall comment quotes.
+const maxInput = 500
 
 // reaps is step 7: close a finished hands-off session that left its window,
 // once it has waited StallWait.
