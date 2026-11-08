@@ -63,6 +63,7 @@ headings, in order:
 | `## Design` | The approach, and the risks with their answers. Link the mocks. |
 | `## Left to the agent` | The questions executors decide themselves. |
 | `## Overrides` | Repo rules this feature waives, each as `<rule> → <instead>`. |
+| `## Harness / tier` | Optional: the planner's harness, else `default_harness`. The planner always runs `deep`. |
 | `## Questions` | For the operator. Empty when ready to approve. |
 
 Answer every open question here or move it to `## Left to the agent`. Prepare
