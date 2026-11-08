@@ -41,7 +41,7 @@ bin = { claude = "~/bin/claude" }
 
 // launchEnv is a home on host mac whose config.toml names server, with a
 // private tmux server and a fake engine binary that records its arguments
-// and then runs script.
+// and tmux variables, then runs script.
 type launchEnv struct {
 	Env
 	deps *ServerDeps
@@ -97,7 +97,7 @@ func (l *launchEnv) engine(t *testing.T, script string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("#!/bin/sh\necho \"$@\" > "+l.args+"\n"+script+"\n"), 0o700); err != nil {
+	if err := os.WriteFile(path, []byte("#!/bin/sh\necho \"TMUX=$TMUX TMUX_PANE=$TMUX_PANE $@\" > "+l.args+"\n"+script+"\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	l.deps.Executable = func() (string, error) { return path, nil }
@@ -134,7 +134,7 @@ func TestServeStartsTheServerOnceInItsOwnTmuxServer(t *testing.T) {
 	}
 	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		if b, err := os.ReadFile(l.args); err == nil && len(b) > 0 {
-			if got := strings.TrimSpace(string(b)); got != "serve --foreground --listen mac.example.ts.net:7331 --advertise http://mac.example.ts.net:7331" {
+			if got := strings.TrimSpace(string(b)); got != "TMUX= TMUX_PANE= serve --foreground --listen mac.example.ts.net:7331 --advertise http://mac.example.ts.net:7331" {
 				t.Fatalf("server started with %q", got)
 			}
 			break

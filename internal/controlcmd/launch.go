@@ -138,9 +138,11 @@ func startHere(e Env, d ServerDeps, h hosts.Host) error {
 		return err
 	}
 	opened, err := d.Tmux.Open(session.Window{
-		Name:    ServerWindow,
-		Dir:     e.Home,
-		Command: remote.ShellJoin([]string{bin, "serve", "--foreground", "--listen", listen, "--advertise", origin}),
+		Name: ServerWindow,
+		Dir:  e.Home,
+		// Without TMUX, the server's own tmux calls reach the host's default
+		// tmux server, where task windows live, not engine-server.
+		Command: remote.ShellJoin([]string{"env", "-u", "TMUX", "-u", "TMUX_PANE", bin, "serve", "--foreground", "--listen", listen, "--advertise", origin}),
 		Log:     filepath.Join(e.Home, ServerLog),
 	})
 	if err != nil {
