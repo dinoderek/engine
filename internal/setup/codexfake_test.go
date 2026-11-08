@@ -49,6 +49,11 @@ type codexState struct {
 	instance             string
 	environment          string
 	environmentWriteFail bool
+	// etime is ps's elapsed time for the daemon, and log what sqlite3 prints
+	// for its newest remote-control record; logFail fails the read.
+	etime   string
+	log     string
+	logFail bool
 }
 
 func (c *codexState) engineHome() string { return c.home + "/.local/share/engine/codex" }
@@ -58,6 +63,7 @@ func settledCodex(home string) *codexState {
 	c := &codexState{home: home, userHome: home + "/.codex", bin: home + "/.local/bin/codex", signedIn: true, userAuth: true,
 		operatorRC: result{out: `{"status":"connected"}`}, plugin: callerPlugin, userPlugin: callerPlugin, operatorDaemon: true, daemonUp: true, rcOn: true}
 	c.instance = "123 Mon Nov 2 12:00:00 2026"
+	c.etime, c.log = "01:02:03", `[{"body":"connected to app-server remote control websocket server_name=box"}]`
 	c.environment = c.instance
 	cfg := withEngineBlock("[marketplaces.engine]\nsource_type = \"git\"\n", engineBlock(home))
 	c.config, c.authLink = &cfg, c.userHome+"/auth.json"
@@ -125,6 +131,13 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 		}
 		c.environment = c.instance
 		return 0, true
+	case cmd == "ps -o etime= -p 123":
+		return say("%s\n", c.etime)
+	case cmd == remoteConnectionCommand(eh, 123, 3723) || cmd == remoteConnectionCommand(eh, 123, 30):
+		if c.logFail {
+			return fail(1, "Error: unable to open database")
+		}
+		return say("%s", c.log)
 	case cmd == remoteOnCommand(eh):
 		if c.rcOn && c.daemonUp {
 			return say("on\n")
