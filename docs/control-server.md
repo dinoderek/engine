@@ -178,6 +178,45 @@ unfinished prerequisite blocks it, todo or approved under an approved plan
 is ready to run, and anything else waits for the operator, so is blocked.
 Whether the plan is being coordinated does not change the summary.
 
+## Session view
+
+`session-view` is an operator-only read; execution credentials get 403. It
+returns `sessions`: one row per item's current, unended attempt, ordered by
+item number. An empty view omits the field. The row and reference fields in
+`internal/control/sessions.go` are the whole contract: credentials, screens,
+run files, item bodies and full update bodies never join them.
+
+- `item`, `kind`, `title`, `repo`, `repo_slug` and `state` describe the plan or
+  task and its workflow state. `role` is `planner` for a plan and `executor`
+  for a task. `plan` is the planner's own plan or a child task's parent; a
+  standalone task has none.
+- `attempt`, `host`, `harness` and `started` describe the execution.
+- `observed` is the harness's `working`, `waiting` or `limited`, `live` for
+  an open window without a harness state, `exited` once a reachable host shows
+  the window closed or gone, and otherwise `unknown`. An exited attempt stays
+  listed until engine ends it.
+- `last_seen` is when a host last reported the window live. It is absent until
+  then, survives unknown and exited observations, and a new attempt starts
+  without one.
+- `feedback` is the item's unresolved question, its own or its parent plan's.
+  Acknowledgements and replies leave it; resolution clears it. Waiting
+  without one is not a feedback request.
+- `latest` is the item's newest `say`, `ask`, `reply` or `resolved` update
+  with a body, excluding the coordinator's automatic notices. A task's
+  preview never shows its plan's messages.
+
+A reference has `item`, `update` (the `engine updates` sequence), `kind`,
+`author`, `at` and a one-line plain-text `summary`, cut to `SummaryRunes`.
+
+Observations live in an in-memory cache keyed by attempt, so a request never
+contacts a host. Each coordinator pass stores its host reads. Independently of
+coordination, the server periodically reads in the background each host
+whose active attempts lack a fresh observation. Each host has one read in
+flight, bounded by a short command limit. An unreachable host, unreadable run
+records or an old observation give `unknown`. The cache drops ended and
+replaced attempts and starts empty with the server. The timings are the
+constants in `internal/controlrun/observe.go`.
+
 ## Dispatch and recovery
 
 The server periodically reconciles persisted coordination intent. It shares
