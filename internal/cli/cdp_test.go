@@ -13,13 +13,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
 // browserCandidates are the Chromium-family browsers the browser smoke test
-// drives, by command name and then by macOS application path.
+// drives, by command name and then by macOS application path. The CI
+// workflow probes the same names, in the same order.
 var browserCandidates = []string{
 	"chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "microsoft-edge",
 	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -94,6 +97,7 @@ func launchBrowser(t *testing.T, path string) *browser {
 	}
 	b := &browser{t: t, send: fromTest, stderr: &syncBuffer{}, pending: map[int]chan cdpMessage{}, done: make(chan struct{})}
 	b.cmd = exec.Command(path, append(args, "about:blank")...)
+	b.cmd.Env = browserEnv(t.TempDir())
 	b.cmd.ExtraFiles = []*os.File{toBrowser, toTest}
 	b.cmd.Stdout, b.cmd.Stderr = b.stderr, b.stderr
 	if err = b.cmd.Start(); err != nil {
@@ -105,6 +109,22 @@ func launchBrowser(t *testing.T, path string) *browser {
 	t.Cleanup(b.close)
 	b.attach()
 	return b
+}
+
+// browserEnv gives the browser its own home: Linux keeps its NSS database
+// and caches under HOME and the XDG directories, and macOS resolves
+// Application Support, where Crashpad keeps its files whatever the profile,
+// from CFFIXED_USER_HOME.
+func browserEnv(home string) []string {
+	env := []string{"HOME=" + home, "CFFIXED_USER_HOME=" + home,
+		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "XDG_CACHE_HOME=" + filepath.Join(home, ".cache")}
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		if !slices.Contains([]string{"HOME", "CFFIXED_USER_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"}, name) {
+			env = append(env, kv)
+		}
+	}
+	return env
 }
 
 // read delivers each reply to its caller. Events are not used.
