@@ -17,14 +17,15 @@ Repeat every 5 minutes until `done`:
 1. **Read state.** Feature labels/comments; task states/blockers; live sessions
    (`engine ps --github --json` or cloud status); your starts and times.
 2. **Plan if needed.** An `engine:approved` feature with no sub-issues gets a
-   planner session, kickoff `Plan breakdown <feature>`, unless one you
+   `deep` planner on the feature's harness, else `default_harness`,
+   kickoff `Plan breakdown <feature>`, unless one you
    started is alive or ended. When the feature is `engine:approved`,
    has sub-issues and no planner is alive, lint the plan (`engine lint
    <feature>`, else by hand with `plan.md`'s lint list). If it passes, set
    `engine:planned`; if not, comment the failures on the feature and
    @mention the operator, once. A planner that waits for input for 10
    minutes, or ends with no tasks written, gets one @mention on the feature.
-   Steps 3 to 8 run only on a feature that is `engine:planned` or later.
+   Steps 3 to 8 run only once the feature is `engine:planned` or later.
 3. **Start ready tasks.** Ready means open, no `engine:` state label, all blockers
    closed. Start in order, each
    on a host placement allows (slot, harness cap, `## Requires`):
@@ -34,9 +35,9 @@ Repeat every 5 minutes until `done`:
 
    For unpinned cards, `harness_ratio` scores positive weights as
    `(live sessions across hosts + 1) / weight`; lowest wins, ties prefer
-   `default_harness`, then name. Try the next harness if none fits. Count
-   pinned sessions and unclaimed live starts. No ratio uses `default_harness`;
-   the planner always does. Refuse unknown harnesses or all-zero weights.
+   `default_harness`, then name; if no host fits, try the next harness. Count
+   pinned sessions and unclaimed live starts. No ratio: `default_harness`.
+   Refuse unknown harnesses or all-zero weights.
    `engine run --harness-ratio claude=4,codex=1` replaces the config ratio.
 
    Skip live unclaimed starts. If one died, @mention once with its screen,

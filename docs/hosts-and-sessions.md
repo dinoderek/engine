@@ -97,15 +97,15 @@ then the fewest capabilities, then the lowest name:
 - every capability in the card's `requires`.
 
 For each unpinned card, `harness_ratio` scores positive-weight harnesses by
-`(live sessions across all hosts + 1) / weight`. Lowest wins; ties prefer
+`(live sessions across hosts + 1) / weight`. Lowest wins; ties prefer
 `default_harness`, then name. If no host fits, try the next harness. Counts
-include pinned cards and unclaimed starts with recorded live windows. Zero
+include pinned cards and unclaimed live starts. Zero
 weights exclude unpinned starts. Without a ratio, use `default_harness`.
-Unknown harnesses and all-zero ratios are refused. The planner uses
-`default_harness`.
+Unknown harnesses and all-zero ratios are refused.
 
 An unplaced task stays ready, logged each pass. If none could take it with
-all slots free, comment once. The planner starts locally. For host calls,
+all slots free, comment once. The planner starts locally at `deep` on the
+feature's harness, else `default_harness`. For host calls,
 load `coordinator.md`.
 
 ## Naming
