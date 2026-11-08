@@ -24,7 +24,8 @@ func newCodexRig(t *testing.T, codex *codexState) *rig {
 }
 
 // A running daemon with remote control on is judged by its own log: one the
-// apps cannot see is reported not connected, with why, and setup stays done.
+// apps cannot see is reported not connected, with why, one whose log cannot
+// be read is unknown, and setup stays done either way.
 func TestCodexDaemonReportsItsConnection(t *testing.T) {
 	tests := []struct {
 		name, etime, log string
@@ -33,8 +34,9 @@ func TestCodexDaemonReportsItsConnection(t *testing.T) {
 	}{
 		{"never connected", "00:30", "", false, "not connected (no connection logged since the daemon started)"},
 		{"lost", "00:30", `[{"body":"remote control websocket reader disconnected, err: websocket disconnected"}]`, false, "not connected (its last remote-control log line: remote control websocket reader disconnected"},
-		{"log unreadable", "00:30", "", true, "not connected (its log cannot be read: Error: unable to open database)"},
-		{"start unreadable", "later", "", false, "not connected (its start cannot be read)"},
+		{"log unreadable", "00:30", "", true, "connection unknown (its log cannot be read: Error: unable to open database)"},
+		{"log reply unreadable", "00:30", "Error: oops", false, "connection unknown (its log reply cannot be read)"},
+		{"start unreadable", "later", "", false, "connection unknown (its start cannot be read)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

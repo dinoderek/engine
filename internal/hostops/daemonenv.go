@@ -36,26 +36,35 @@ func (c codex) daemonEnvironment(run session.Runner) (pid, why string) {
 	return pid, ""
 }
 
-// disconnected is why engine's daemon, process pid, has no remote-control
-// connection to the apps, or empty when it has one. It reads the daemon's
-// own log in engine's Codex home: the arguments only say remote control was
-// asked for.
+// disconnected is the warning for a session joined to engine's daemon,
+// process pid, that the apps may not show, or empty when the daemon has a
+// remote-control connection. It reads the daemon's own log in engine's Codex
+// home: the arguments only say remote control was asked for. A log that
+// cannot be read (sqlite3 missing, say) leaves the connection unknown.
 func (c codex) disconnected(run session.Runner, pid string) string {
+	const unknown = "the Codex session joined engine's daemon, but whether the ChatGPT and Codex apps show it is unknown: its remote-control connection cannot be read ("
 	n, err := strconv.Atoi(pid)
 	if err != nil {
-		return "its PID " + pid + " cannot be read"
+		return unknown + "its PID " + pid + " cannot be read)"
 	}
 	etime, err := run("ps", "-o", "etime=", "-p", pid)
 	if err != nil {
-		return "its start cannot be read (" + err.Error() + ")"
+		return unknown + "its start cannot be read: " + err.Error() + ")"
 	}
 	elapsed, err := hosts.ParseElapsed(etime)
 	if err != nil {
-		return "its start cannot be read (" + err.Error() + ")"
+		return unknown + "its start cannot be read: " + err.Error() + ")"
 	}
 	out, err := run("sqlite3", "-readonly", "-json", filepath.Join(c.engineHome(), hosts.CodexLogs), hosts.CodexRemoteSQL(n, elapsed))
 	if err != nil {
-		return "its log cannot be read (" + err.Error() + ")"
+		return unknown + "its log cannot be read: " + err.Error() + ")"
 	}
-	return hosts.CodexDisconnected(out)
+	why, known := hosts.CodexDisconnected(out)
+	switch {
+	case !known:
+		return unknown + why + ")"
+	case why != "":
+		return "the Codex session joined engine's daemon, but the ChatGPT and Codex apps do not show it: its remote control is not connected (" + why + ")"
+	}
+	return ""
 }

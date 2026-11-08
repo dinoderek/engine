@@ -133,7 +133,7 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 		return 0, true
 	case cmd == "ps -o etime= -p 123":
 		return say("%s\n", c.etime)
-	case strings.HasPrefix(cmd, "sqlite3 -readonly -json "+eh+"/logs_2.sqlite "):
+	case cmd == remoteConnectionCommand(eh, 123, 3723) || cmd == remoteConnectionCommand(eh, 123, 30):
 		if c.logFail {
 			return fail(1, "Error: unable to open database")
 		}

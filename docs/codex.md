@@ -201,20 +201,20 @@ with a writable root or `--add-dir`) the session starts embedded, and
 down daemon never refuses a spawn.
 
 `--remote-control` only asks for a connection to the apps. Whether the
-daemon has one is read from its own log, `logs_2.sqlite` in engine's Codex
-home: the newest record of the remote-control websocket target from the
+daemon has one is read with `sqlite3` from its own log, `logs_2.sqlite` in
+engine's Codex home: the newest remote-control websocket record from the
 daemon's process (`process_uuid` is `pid:<pid>:<uuid>`) since its start
-(`ps -o etime=`, which no locale or time zone changes). A connection record
-is connected; anything else, or no record, is not connected, with that line
-or "no connection logged" as the reason. A joined session with no
-connection still joins, and `spawn` and `engine start --check` warn that the
-apps do not show it; `engine setup` reports `remote control on, connected`
-or `not connected (<reason>)` and stays done. `codex remote-control --json`
-is no read of one Codex home's daemon: with no daemon it serves in the
-foreground until stopped, and at engine's daemon it reported the machine's
-errored connection while the daemon's log said connected.
-Setup also reads the operator's state only once `codex app-server daemon
-version` reports a daemon running there.
+(`ps -o etime=`, which no locale or time zone changes, with 30 seconds'
+slack). A connection record is connected; another record, or none, is not
+connected, with that line or "no connection logged" as the reason. A log,
+reply or start that cannot be read, such as with no `sqlite3`, is unknown. A
+joined session still joins either way; `spawn` and `engine start --check`
+warn that the apps do not show it, or may not. `engine setup` reports
+`remote control on, connected`, `not connected (<reason>)` or `connection
+unknown (<reason>)`, and stays done. `codex remote-control --json` is no read
+of one Codex home's daemon: with no daemon it serves in the foreground until
+stopped, and at engine's daemon it reported the machine's errored connection
+while the daemon's log said connected.
 
 A joined session differs from an embedded one (Codex 0.164.0), which is why
 "Starting" launches it differently:

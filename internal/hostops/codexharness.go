@@ -57,19 +57,15 @@ const startDaemon = "`engine setup` on this host starts it with remote control o
 // control on. It reads the daemon with `codex app-server daemon version` in
 // that home, which starts nothing, and its process's arguments. A joined
 // session is warned when the daemon's log shows no live connection to the
-// apps (see disconnected). `codex
-// remote-control --json` is no read: with no daemon it serves in the
-// foreground until stopped, and the state it reports is not one Codex
-// home's.
+// apps (see disconnected). `codex remote-control --json` is no read: with no
+// daemon it serves in the foreground until stopped, and the state it reports
+// is not one Codex home's.
 func (c codex) Join(run session.Runner, bin, line string) (bool, string) {
 	pid, why := c.unjoinable(run, bin, line)
 	if why != "" {
 		return false, "the Codex session runs embedded, so the ChatGPT and Codex apps do not show it: " + why
 	}
-	if why := c.disconnected(run, pid); why != "" {
-		return true, "the Codex session joined engine's daemon, but the ChatGPT and Codex apps do not show it: its remote control is not connected (" + why + ")"
-	}
-	return true, ""
+	return true, c.disconnected(run, pid)
 }
 
 // unjoinable is why the session cannot join engine's daemon, or empty with

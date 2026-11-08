@@ -35,19 +35,23 @@ func TestParseElapsed(t *testing.T) {
 }
 
 func TestCodexDisconnected(t *testing.T) {
-	long := strings.Repeat("x", 200)
-	tests := []struct{ name, out, want string }{
-		{"connected", `[{"body":"connected to app-server remote control websocket server_name=mac"}]`, ""},
-		{"status connected", `[{"body":"remote control websocket status changed previous_status=Connecting next_status=Connected"}]`, ""},
-		{"no record", "\n", "no connection logged since the daemon started"},
-		{"connecting", `[{"body":"remote control websocket status changed previous_status=Connected next_status=Connecting"}]`, "its last remote-control log line: remote control websocket status changed previous_status=Connected next_status=Connecting"},
-		{"long line is cut", `[{"body":"` + long + `"}]`, "its last remote-control log line: " + long[:120] + "…"},
-		{"unreadable", "Error: oops", "its log reply cannot be read"},
-		{"empty list", "[]", "its log reply cannot be read"},
+	long := strings.Repeat("é", 200)
+	tests := []struct {
+		name, out, want string
+		known           bool
+	}{
+		{"connected", `[{"body":"connected to app-server remote control websocket server_name=mac"}]`, "", true},
+		{"status connected", `[{"body":"remote control websocket status changed previous_status=Connecting next_status=Connected"}]`, "", true},
+		{"no record", "\n", "no connection logged since the daemon started", true},
+		{"connecting", `[{"body":"remote control websocket status changed previous_status=Connected next_status=Connecting"}]`, "its last remote-control log line: remote control websocket status changed previous_status=Connected next_status=Connecting", true},
+		{"long line is cut on a rune", `[{"body":"` + long + `"}]`, "its last remote-control log line: " + strings.Repeat("é", 120) + "…", true},
+		{"empty body", `[{"body":null}]`, "its last remote-control log line is empty", true},
+		{"unreadable", "Error: oops", "its log reply cannot be read", false},
+		{"empty list", "[]", "its log reply cannot be read", false},
 	}
 	for _, tt := range tests {
-		if got := CodexDisconnected(tt.out); got != tt.want {
-			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
+		if got, known := CodexDisconnected(tt.out); got != tt.want || known != tt.known {
+			t.Errorf("%s: got %q, %v; want %q, %v", tt.name, got, known, tt.want, tt.known)
 		}
 	}
 }
@@ -63,18 +67,20 @@ func TestCodexRemoteSQLAgainstAFixtureLog(t *testing.T) {
 	now := time.Now().Unix()
 	ws := codexRemoteTarget
 	rows := []struct {
-		ago                   int64
+		ago, nanos            int64
 		target, process, body string
 	}{
-		{5000, ws, "pid:123:old", "connected to app-server remote control websocket (an earlier process)"},
-		{50, ws, "pid:123:new", "remote control websocket reader disconnected, err: websocket disconnected"},
-		{40, ws, "pid:123:new", "connected to app-server remote control websocket server_name=mac"},
-		{30, "codex_app_server_transport::transport::remote_control::client_tracker", "pid:123:new", "forwarding remote control connection closed"},
-		{20, ws, "pid:999:other", "remote control websocket reader disconnected"},
+		{5000, 0, ws, "pid:123:old", "connected to app-server remote control websocket (an earlier process)"},
+		{50, 0, ws, "pid:123:new", "remote control websocket reader disconnected, err: websocket disconnected"},
+		{40, 0, ws, "pid:123:new", "connected to app-server remote control websocket server_name=mac"},
+		{30, 0, "codex_app_server_transport::transport::remote_control::client_tracker", "pid:123:new", "forwarding remote control connection closed"},
+		// In one second, the later nanosecond wins, though written first.
+		{20, 900, ws, "pid:999:other", "remote control websocket reader disconnected"},
+		{20, 100, ws, "pid:999:other", "connected to app-server remote control websocket server_name=mac"},
 	}
 	script := "create table logs (id integer primary key autoincrement, ts integer not null, ts_nanos integer not null, level text not null, target text not null, feedback_log_body text, process_uuid text);\n"
 	for _, r := range rows {
-		script += fmt.Sprintf("insert into logs (ts, ts_nanos, level, target, feedback_log_body, process_uuid) values (%d, 0, 'INFO', '%s', '%s', '%s');\n", now-r.ago, r.target, r.body, r.process)
+		script += fmt.Sprintf("insert into logs (ts, ts_nanos, level, target, feedback_log_body, process_uuid) values (%d, %d, 'INFO', '%s', '%s', '%s');\n", now-r.ago, r.nanos, r.target, r.body, r.process)
 	}
 	if out, err := exec.Command("sqlite3", db, script).CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, out)
@@ -87,15 +93,15 @@ func TestCodexRemoteSQLAgainstAFixtureLog(t *testing.T) {
 		}
 		return string(out)
 	}
-	if got := CodexDisconnected(query(123, 100)); got != "" {
+	if got, _ := CodexDisconnected(query(123, 100)); got != "" {
 		t.Errorf("the daemon's newest record is its connection, got %q", got)
 	}
-	// Started after its connection: nothing since, though the earlier
-	// process with its PID connected.
-	if got := CodexDisconnected(query(123, 10)); got != "no connection logged since the daemon started" {
+	// Started (with the slack) after its connection: nothing since, though
+	// the earlier process with its PID connected.
+	if got, _ := CodexDisconnected(query(123, 10-codexStartSlack)); got != "no connection logged since the daemon started" {
 		t.Errorf("got %q", got)
 	}
-	if got := CodexDisconnected(query(999, 100)); !strings.Contains(got, "reader disconnected") {
-		t.Errorf("another daemon's disconnection, got %q", got)
+	if got, _ := CodexDisconnected(query(999, 100)); !strings.Contains(got, "reader disconnected") {
+		t.Errorf("the same-second disconnection logged later, got %q", got)
 	}
 }

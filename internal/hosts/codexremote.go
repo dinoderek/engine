@@ -19,37 +19,48 @@ const codexRemoteTarget = "codex_app_server_transport::transport::remote_control
 // codexConnected opens the record of a connection the daemon made.
 const codexConnected = "connected to app-server remote control websocket"
 
+// codexStartSlack is the seconds the start bound reaches back past the
+// daemon's elapsed time.
+const codexStartSlack = 30
+
 // CodexRemoteSQL is the sqlite3 query for the newest remote-control record
 // of the daemon process pid, logged in the elapsed seconds since it started.
 // A record carries its process as pid:<pid>:<uuid>, and the start bound keeps
-// out an earlier process that had the same pid.
+// out an earlier process that had the same pid. The bound has slack for the
+// time between reading the elapsed time and running the query, which may be
+// separate round trips over SSH; an earlier process with the same pid inside
+// that slack is the only record it could wrongly take.
 func CodexRemoteSQL(pid, elapsed int) string {
 	return fmt.Sprintf("select feedback_log_body as body from logs where target = '%s' and process_uuid like 'pid:%d:%%' "+
 		"and ts >= cast(strftime('%%s','now') as integer) - %d order by ts desc, ts_nanos desc, id desc limit 1;",
-		codexRemoteTarget, pid, elapsed+1)
+		codexRemoteTarget, pid, elapsed+codexStartSlack)
 }
 
 // CodexDisconnected reads what `sqlite3 -json` printed for CodexRemoteSQL:
 // empty when the daemon's newest record is a connection, else why the daemon
-// is not connected. No record means it never connected since it started.
-func CodexDisconnected(out string) string {
+// is not connected. No record means it never connected since it started. A
+// reply that cannot be read is unknown, not a disconnection.
+func CodexDisconnected(out string) (why string, known bool) {
 	if strings.TrimSpace(out) == "" {
-		return "no connection logged since the daemon started"
+		return "no connection logged since the daemon started", true
 	}
 	var rows []struct {
 		Body string `json:"body"`
 	}
 	if err := json.Unmarshal([]byte(out), &rows); err != nil || len(rows) == 0 {
-		return "its log reply cannot be read"
+		return "its log reply cannot be read", false
 	}
 	body := strings.TrimSpace(rows[0].Body)
-	if strings.HasPrefix(body, codexConnected) || strings.Contains(body, "next_status=Connected") {
-		return ""
+	switch {
+	case strings.HasPrefix(body, codexConnected) || strings.Contains(body, "next_status=Connected"):
+		return "", true
+	case body == "":
+		return "its last remote-control log line is empty", true
 	}
-	if len(body) > 120 {
-		body = body[:120] + "…"
+	if r := []rune(body); len(r) > 120 {
+		body = string(r[:120]) + "…"
 	}
-	return "its last remote-control log line: " + body
+	return "its last remote-control log line: " + body, true
 }
 
 // ParseElapsed reads the elapsed time ps prints for etime, [[dd-]hh:]mm:ss,

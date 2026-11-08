@@ -220,7 +220,7 @@ func TestRunCheckPrintsTheReportAndItsVerdict(t *testing.T) {
 // A joined session the apps cannot see reports both the join and why.
 func TestReportCheckNotesAJoinedSessionTheAppsCannotSee(t *testing.T) {
 	var report bytes.Buffer
-	ReportCheck(&report, CheckResult{Joined: true, Embedded: "its remote control is not connected (no connection logged since the daemon started)"})
+	ReportCheck(&report, CheckResult{Joined: true, Note: "its remote control is not connected (no connection logged since the daemon started)"})
 	out := report.String()
 	if !strings.Contains(out, "ok   the session joined remote control\nnote its remote control is not connected") {
 		t.Errorf("report:\n%s", out)
