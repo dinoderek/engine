@@ -28,7 +28,7 @@ type harness interface {
 	// Join decides, through the harness binary bin, whether a session
 	// launched with the expanded launch line joins the host's remote-control
 	// daemon. It only reads. When the session starts without, warning says
-	// why.
+	// why; a joined session the apps cannot see yet is warned too.
 	Join(run session.Runner, bin, line string) (joined bool, warning string)
 	// Trust makes dir, a folder in clone, trusted for the session, so no
 	// trust prompt blocks its start.

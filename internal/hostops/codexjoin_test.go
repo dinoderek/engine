@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -24,7 +25,8 @@ func (h home) engineCodex(t *testing.T) (dir, config string) {
 }
 
 // daemon plays the host's Codex as the join reads it: `codex app-server
-// daemon version` in engine's Codex home, then ps. It records each call.
+// daemon version` in engine's Codex home, then ps, then the daemon's
+// elapsed time and its remote-control log. It records each call.
 type daemon struct {
 	version     string
 	versionErr  error
@@ -32,13 +34,26 @@ type daemon struct {
 	psErr       error
 	instance    string
 	instanceErr error
+	etime       string
+	log         string
+	logErr      error
 	calls       []string
 }
+
+// connectedLog is sqlite3's reply when the daemon's newest remote-control
+// record is its connection.
+const connectedLog = `[{"body":"connected to app-server remote control websocket websocket_url=wss://example.test server_name=mac"}]`
 
 func (d *daemon) run(name string, args ...string) (string, error) {
 	d.calls = append(d.calls, name+" "+strings.Join(args, " "))
 	if name == "ps" && slices.Contains(args, "pid=,lstart=,args=") {
 		return d.instance, d.instanceErr
+	}
+	if name == "ps" && slices.Contains(args, "etime=") {
+		return d.etime, nil
+	}
+	if name == "sqlite3" {
+		return d.log, d.logErr
 	}
 	if name == "ps" {
 		return d.ps, d.psErr
@@ -56,7 +71,8 @@ func daemonProcess(home string) string {
 // remote control on), down (no daemon) and errored (one whose version reply
 // is unreadable).
 func connected(home string) *daemon {
-	return &daemon{version: `{"status":"running","socketPath":"/x.sock"}`, ps: "/bin/zsh\n" + daemonProcess(home) + "\n", instance: "123 Mon Nov 2 12:00:00 2026 " + daemonProcess(home)}
+	return &daemon{version: `{"status":"running","socketPath":"/x.sock"}`, ps: "/bin/zsh\n" + daemonProcess(home) + "\n", instance: "123 Mon Nov 2 12:00:00 2026 " + daemonProcess(home),
+		etime: "01:02:03\n", log: connectedLog}
 }
 
 func down() *daemon {
@@ -98,7 +114,8 @@ func TestSpawnCodexJoins(t *testing.T) {
 		t.Fatalf("reply %+v, %v", got, err)
 	}
 	bin := filepath.Join(h.dir, "bin", "codex")
-	if want := []string{"env CODEX_HOME=" + engineHome + " " + bin + " app-server daemon version", "ps -ww -eo args=", "ps -ww -eo pid=,lstart=,args="}; !slices.Equal(d.calls, want) {
+	if want := []string{"env CODEX_HOME=" + engineHome + " " + bin + " app-server daemon version", "ps -ww -eo args=", "ps -ww -eo pid=,lstart=,args=",
+		"ps -o etime= -p 123", "sqlite3 -readonly -json " + filepath.Join(engineHome, "logs_2.sqlite") + " " + hosts.CodexRemoteSQL(123, 3723)}; !slices.Equal(d.calls, want) {
 		t.Errorf("asked\n %q\nwant %q", d.calls, want)
 	}
 	config, _ := os.ReadFile(filepath.Join(engineHome, "config.toml"))
@@ -454,12 +471,12 @@ func TestDaemonEnvironmentRejectsUnreadableOrAmbiguousProcess(t *testing.T) {
 	c := codex{d: Deps{Home: h.dir}}
 	d := connected(h.dir)
 	d.instanceErr = errors.New("ps failed")
-	if got := c.daemonEnvironment(d.run); !strings.Contains(got, "cannot identify") {
+	if _, got := c.daemonEnvironment(d.run); !strings.Contains(got, "cannot identify") {
 		t.Fatal(got)
 	}
 	d.instanceErr = nil
 	d.instance += "\n" + d.instance
-	if got := c.daemonEnvironment(d.run); !strings.Contains(got, "ambiguous") {
+	if _, got := c.daemonEnvironment(d.run); !strings.Contains(got, "ambiguous") {
 		t.Fatal(got)
 	}
 }
