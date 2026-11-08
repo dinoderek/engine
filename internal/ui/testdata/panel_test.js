@@ -85,7 +85,7 @@ async function page(hash, fx, body, opts) {
 
 const scenarios = {
   async "the page loads the scripts index.html names, in order"() {
-    await page("#/plans/p24", {}, async (t) => assert.deepEqual(t.p.scripts, ["/dom.js", "/panel.js", "/app.js"]));
+    await page("#/plans/p24", {}, async (t) => assert.deepEqual(t.p.scripts, ["/dom.js", "/panel.js", "/sessions.js", "/app.js"]));
   },
 
   async "opening from a link focuses the panel and closing returns focus to the link"() {

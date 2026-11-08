@@ -7,7 +7,6 @@ The CLI uses its authenticated command API. The server coordinates through
 the existing reconcile decisions and host operations. Executors edit, test,
 review and merge. GitHub supplies code, PRs and CI; task state and comms stay
 in the server. A feature's GitHub issue can hold a human-maintained PR summary.
-There is no automatic tracker migration or summary synchronisation.
 
 ## Start
 
@@ -40,17 +39,18 @@ Without that file, the CLI uses the origin shown above. An explicit
 credential and the advertised URL at dispatch.
 
 For backup, stop the server, run the same invocation with
-`--backup <new-path>`, and restart it. Copy the backup off-machine. Restore
+`--backup <new-path>`, and restart it. Copy the backup off-machine. The backup
+operation refuses to overwrite an existing file. Restore
 with the server stopped, retaining the private operator credential. A backup
-includes execution credentials and is private. The backup operation refuses
-to overwrite an existing file. Test restores in an isolated database first.
+includes execution credentials and is private. Test restores in an isolated
+database first.
 
 ## Records and commands
 
 IDs belong to engine: repositories, plans, tasks and attempts have separate
 prefixes and globally unique numeric parts. A plan is a feature-level
 requirements/design document. Standalone tasks have no parent plan.
-Commands return JSON. `engine ps` lists server tasks. Use `engine ps --github`
+`engine ps` lists server tasks. Use `engine ps --github`
 for GitHub claims. `engine help` lists server command groups; the source
 of the flags is `internal/controlcmd/command.go`.
 
@@ -66,8 +66,7 @@ engine task list p2
 engine attempt list t3
 ```
 
-Task cards carry the skill's Outcome
-and Tests sections. Dependencies, capabilities, harness and tier are
+Dependencies, capabilities, harness and tier are
 structured fields, supplied with `--depends`, `--requires`, `--harness`
 and `--tier`. The server adapter supplies card keys and maps these fields
 to plan lint and placement.
@@ -88,11 +87,11 @@ plan, without changing approval, workflow, history or host observations.
 work finished outside engine. Only the operator can use it, for an inactive
 task in todo, prepare, approved or failed, with no unresolved task or plan
 question. The URL must identify a PR in the task's GitHub repository; engine
-records the operator's evidence without fetching or verifying its merge.
-The command stores done and the PR in versioned history, stops coordination
-for that task and preserves dependency edges and prior attempts. It creates
-no attempt and requires no approval. Ordinary state transitions still require
-an execution for running and in-review.
+records it without verifying the merge. The command stores done and the PR in
+versioned history, stops coordination for that task and keeps dependency
+edges and prior attempts. It creates no attempt and needs no approval.
+Ordinary state transitions still require an execution for running and
+in-review.
 
 ## API and storage
 
@@ -105,15 +104,15 @@ Every write has a request key. Retries use exactly the same command and key.
 A reused key with different contents fails. The CLI retries uncertain
 delivery once with the original key; callers can retain one with
 `--request-key`. Version conflicts require reading the current record.
-Dispatch reservations validate the card version used for placement; an edit
-invalidates the decision before any execution is reserved or launched.
+An edit invalidates a placement decision before any execution is reserved or
+launched.
 
 SQLite runs locally through its CLI, with SQL on stdin. A process lock
 allows one engine server per database; a mutex serializes commands.
 Each transaction updates current records, immutable history and its request
 receipt together. History retains record snapshots. The database uses a
-versioned schema and rejects unknown versions. This small-store implementation
-loads its control records for each operation; bulk telemetry belongs elsewhere.
+versioned schema and rejects unknown versions. It loads its control records
+for each operation; bulk telemetry belongs elsewhere.
 
 The operator credential is an owner-only regular file. Every dispatch creates
 a separate execution credential, scoped to that plan or task. Workers cannot
@@ -134,7 +133,7 @@ engine resolve 12 "Approved for the task revision in this question"
 engine task state t3 --version 4 --state running
 ```
 
-Use returned sequences and versions. Updates are immutable and ordered.
+Updates are immutable and ordered.
 Read up to 200 at a time, using the last sequence as the next cursor.
 Comments do not change workflow state. Asking a task question atomically
 puts it in needs-human. Acknowledgement and ordinary replies leave the
@@ -148,22 +147,23 @@ Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
 on resolution. Messages may omit a task association for host or server
 problems. Wake-up pointers are attempted for waiting, unrestricted sessions;
-messages persist when wake-up fails. Phone push is outside this
-implementation.
+messages persist when wake-up fails.
 
 ## Dashboard
 
 `engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen`
 chooses another loopback address. It uses the CLI's server configuration and
 operator credential, and the credential never reaches the browser. Any local
-process or user reaching the port reads with operator rights, so run it only
-on a single-user machine. The page calls fixed same-origin routes:
+user reaching the port reads with operator rights; run it only on a
+single-user machine. The page calls fixed same-origin routes:
 
 - `/api/plans`: repositories and plans, filtered by `repo`, `state` and a
   case-insensitive `q` over plan ID, repository and title. With `cached=1`
   it filters the last list read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
-  active attempts and unfinished prerequisites, including other plans' tasks.
+  active attempts, unfinished prerequisites, including other plans' tasks, and
+  each active task's `feedback`.
+- `/api/sessions`: the `session-view` rows, feedback requests first.
 - `/api/items/<id>` and `/thread`: a plan or task with its description
   rendered, and its messages, 50 after `after` (through `anchor`), with a
   cursor and question statuses.
@@ -171,11 +171,16 @@ on a single-user machine. The page calls fixed same-origin routes:
 Descriptions support headings, flat lists, code, links. Raw HTML and
 messages are text; only absolute http, https and mailto links act.
 
-The process forwards only the `list`, `plan-view`, `attempts`, `get` and
-`updates` reads. It answers GET and HEAD for a loopback host name on any
-port, so an SSH tunnel works, and sends `Cache-Control: no-store`. When the
-control server fails, the page keeps its last data, marked stale. It
-refreshes every 30s while visible.
+The process forwards only the `list`, `plan-view`, `attempts`, `get`,
+`updates` and `session-view` reads. It answers GET and HEAD for a loopback
+host name on any port, so an SSH tunnel works, and sends
+`Cache-Control: no-store`. When the control server fails, the page keeps its
+last data, marked stale. It refreshes every 30s while visible, keeping focus,
+the open panel and the selected message.
+
+On Sessions, "Needs feedback" opens the question's thread at its update over
+the tab, on the plan's thread when the plan asked. The Plans task table links
+the same feedback.
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
@@ -187,7 +192,7 @@ Coordination does not change it.
 
 `session-view` is an operator-only read; execution credentials get 403. It
 returns `sessions`: one row per item's current, unended attempt, ordered by
-item number. An empty view omits the field. The row and reference fields in
+item number. The row and reference fields in
 `internal/control/sessions.go` are the whole contract: credentials, screens,
 run files, item bodies and full update bodies never join them.
 

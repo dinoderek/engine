@@ -238,12 +238,12 @@ window.engine.panel = function (ctx) {
   }
 
   function applyInert() {
-    for (const id of ["bar", "list", "pane"]) $(id).inert = mobileOverlay();
+    for (const id of ["bar", "list", "pane", "sessions"]) $(id).inert = mobileOverlay();
   }
 
   function restoreFocus() {
     const target = st.opener && document.querySelector('[data-key="' + CSS.escape(st.opener) + '"]');
-    (target || $("pane")).focus();
+    (target || $(view.page === "sessions" ? "sessions" : "pane")).focus();
   }
 
   // sync brings the panel in line with the page's view state: it opens,
@@ -327,6 +327,7 @@ window.engine.panel = function (ctx) {
   return {
     sync,
     refresh,
+    head: () => { if (st.shown) renderHead(); },
     envs: () => [st.item, st.threadEnv].filter(Boolean),
     noteOpener: (key) => {
       st.opener = key;

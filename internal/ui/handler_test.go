@@ -25,6 +25,7 @@ type fakeControl struct {
 	ops    []string
 	fail   int                                            // status to fail every call with; 0 answers
 	reads  func(control.Request) (control.Response, bool) // false answers unknown item
+	rows   []control.SessionRow                           // what session-view returns
 	server *httptest.Server
 }
 
@@ -76,6 +77,8 @@ func (f *fakeControl) serve(w http.ResponseWriter, r *http.Request) {
 		out.Items = fixtureView()
 	case req.Op == "attempts":
 		out.Attempts = fixtureAttempts()
+	case req.Op == "session-view":
+		out.Sessions = f.rows
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }
@@ -151,7 +154,7 @@ func TestRoutesServePageAndReads(t *testing.T) {
 	if res, _ := d.get(t, "HEAD", "localhost:9000", "/api/plans"); res.StatusCode != 200 {
 		t.Fatalf("HEAD = %d, want 200", res.StatusCode)
 	}
-	want := []string{"list", "list", "plan-view", "attempts", "list", "list"}
+	want := []string{"list", "list", "plan-view", "attempts", "session-view", "list", "list"}
 	if got := fc.calls(); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("forwarded %v, want %v", got, want)
 	}
@@ -272,7 +275,7 @@ func (r *recordingCaller) Call(_ context.Context, req control.Request) (control.
 func TestUpstreamForwardsOnlyReads(t *testing.T) {
 	rc := &recordingCaller{}
 	up := newUpstream(rc, time.Now, nil)
-	for _, op := range []string{"create", "state", "say", "ask", "lock-acquire", "approve", "run", "session-view", ""} {
+	for _, op := range []string{"create", "state", "say", "ask", "lock-acquire", "approve", "run", "inbox", ""} {
 		if _, err := up.call(context.Background(), control.Request{Op: op}); err == nil || !strings.Contains(err.Error(), "not a dashboard read") {
 			t.Errorf("op %q: err = %v, want refusal", op, err)
 		}

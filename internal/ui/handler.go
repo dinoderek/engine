@@ -17,11 +17,12 @@ var static embed.FS
 
 // assets are the embedded files the page loads, by route.
 var assets = map[string]struct{ file, kind string }{
-	"/":         {"static/index.html", "text/html; charset=utf-8"},
-	"/app.css":  {"static/app.css", "text/css; charset=utf-8"},
-	"/app.js":   {"static/app.js", "text/javascript; charset=utf-8"},
-	"/dom.js":   {"static/dom.js", "text/javascript; charset=utf-8"},
-	"/panel.js": {"static/panel.js", "text/javascript; charset=utf-8"},
+	"/":            {"static/index.html", "text/html; charset=utf-8"},
+	"/app.css":     {"static/app.css", "text/css; charset=utf-8"},
+	"/app.js":      {"static/app.js", "text/javascript; charset=utf-8"},
+	"/dom.js":      {"static/dom.js", "text/javascript; charset=utf-8"},
+	"/panel.js":    {"static/panel.js", "text/javascript; charset=utf-8"},
+	"/sessions.js": {"static/sessions.js", "text/javascript; charset=utf-8"},
 }
 
 const policy = "default-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
@@ -49,6 +50,10 @@ func handler(up *upstream) http.Handler {
 			return
 		}
 		env, status := up.plan(r.Context(), id)
+		reply(w, status, env)
+	})
+	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
+		env, status := up.sessions(r.Context())
 		reply(w, status, env)
 	})
 	mux.HandleFunc("GET /api/items/{id}", func(w http.ResponseWriter, r *http.Request) {
