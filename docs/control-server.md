@@ -152,8 +152,7 @@ user reaching the port reads with operator rights; run it only on a
 single-user machine. The page calls fixed same-origin routes:
 
 - `/api/plans`: repositories and plans, filtered by `repo`, `state` and a
-  case-insensitive `q` over plan ID, repository and title. With `cached=1`
-  it filters the last list read without calling the control server.
+  case-insensitive `q` over plan ID, repository and title.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts, unfinished prerequisites, including other plans' tasks, and
   `feedback`: the session's, or the plan's question for a queued task.
@@ -169,8 +168,7 @@ The process forwards only the `list`, `plan-view`, `attempts`, `get`,
 `updates` and `session-view` reads. It answers GET and HEAD for a loopback
 host name on any port, so an SSH tunnel works, and sends
 `Cache-Control: no-store`. When the control server fails, the page keeps its
-last data, marked stale. It refreshes every 30s while visible, keeping focus,
-the open panel and the selected message.
+last data, marked stale.
 
 On both tabs, "Needs feedback" opens the question's thread at its
 update over the tab, on the plan's thread when it asked.
@@ -231,6 +229,9 @@ same dispatch identity on that host. An unreachable host means unknown,
 never dead. A dispatch for a task whose earlier attempt ran, a retry or
 resume, is marked a resume: the host opens the worktree on the task's
 branch from `origin` rather than refusing it (`hosts-and-sessions.md`).
+A new attempt first releases the ended one's session there, once a read
+shows its window dead or absent. A refused dispatch retries each pass,
+noticing once per attempt.
 
 The host serializes dispatches by run ID and returns an existing run on
 replay. It uses ordinary Git credentials and identity, with isolated clones

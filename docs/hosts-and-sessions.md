@@ -82,9 +82,8 @@ and `codex.md`. Each harness maps every tier (`execution-protocol.md`, "Models")
 to a model and an effort level.
 
 Each host pins the path of every harness binary (`bin`), and `{bin}` in the
-launch line expands to it. Engine never runs whichever install comes first on
-`PATH`: this Mac has a second Codex under Homebrew that shadows the standalone
-one.
+launch line expands to it. Engine never runs whichever comes first on
+`PATH`.
 
 ## Placement
 
@@ -140,7 +139,9 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    "Worktrees"), else `git worktree add` from the default branch, refusing
    a branch on `origin`, or a local one with commits (one without is
    remade). A server dispatch marked a resume opens on `origin`'s branch
-   instead, at its tip, refusing a local branch with commits `origin` lacks;
+   instead, at its tip, refusing a local branch with commits `origin` lacks.
+   A worktree left there is adopted, fast-forwarded, when clean with no
+   commits `origin` lacks, else refused;
 3. makes the worktree trusted by its harness, so no trust dialog blocks the
    start (`claude.md` and `codex.md`, "Starting");
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
