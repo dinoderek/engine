@@ -25,6 +25,9 @@ type Deps struct {
 	Run    session.Runner
 	Getenv func(string) string
 	Home   string
+	// Client reaches a host's ops, this host's in process when remote is
+	// false, to read the run records of a session that has no claim yet.
+	Client func(h hosts.Host, remote bool) remote.Client
 }
 
 // Told is what Tell did.
@@ -43,6 +46,8 @@ type Told struct {
 // host or over SSH on the claim's host. A session with no live window, or on
 // a host that cannot be reached, keeps the comment and gets an error: it
 // reads the comment at its next inbox check.
+// A session that has not claimed its task yet is found by its newest run
+// record instead (see unclaimed).
 func Tell(name, text string, d Deps) (Told, error) {
 	tasks, err := tracker.Claimed(d.Gh)
 	if err != nil {
@@ -50,7 +55,7 @@ func Tell(name, text string, d Deps) (Told, error) {
 	}
 	task, ok := tracker.FindClaim(tasks, name)
 	if !ok {
-		return Told{}, fmt.Errorf("no claimed task named %s", name)
+		return unclaimed(name, text, d)
 	}
 	if task.Claim.Host == "" {
 		return Told{}, fmt.Errorf("the claim of %s names no host", name)

@@ -90,7 +90,10 @@ ops in-process, and another machine's as `ssh -o BatchMode=yes -o
 ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`,
 and `status` for `engine ps --github`). `engine tell` has no op: it types the pointer
 with `tmux send-keys` over the same ssh options, and exits 1, keeping its
-comment, when the window is missing or the host is unreachable. `engine run`
+comment, when the window is missing or the host is unreachable. An unclaimed
+session is found by its newest run in the hosts' `status`; tell posts
+nothing unless its task is open, not `engine:needs-human`, and its window
+is live. `engine run`
 reads every host's `status` for placement, and starts a session elsewhere as
 `engine start --host` does. Its session check reads the same `status`
 replies. It reaps a finished window, and clears an ended session before

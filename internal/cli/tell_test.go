@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
@@ -118,5 +121,72 @@ func TestTellText(t *testing.T) {
 				t.Errorf("commented %q, want %q; stderr %s", posted, tt.want, errOut.String())
 			}
 		})
+	}
+}
+
+// A session with no claim is reached through this host's own status: its run
+// record names the task and the window the pointer is typed into.
+func TestTellReachesAnUnclaimedSessionOnThisHost(t *testing.T) {
+	home := t.TempDir()
+	dir := hosts.ConfigDir(home)
+	for name, body := range map[string]string{"hosts.toml": tellHosts, "host": "mac\n"} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := session.Record{Schema: 1, RunID: "r-7-20261026T225849Z", Repo: "o/r", Task: "o/r#" + "7", Host: "mac", Harness: "claude",
+		Name: "r-7", Tmux: "engine:@4", Spawned: time.Date(2026, 10, 26, 22, 58, 49, 0, time.UTC)}
+	if err := session.WriteRecord(filepath.Join(home, filepath.FromSlash(session.RunsDir), rec.RunID), rec); err != nil {
+		t.Fatal(err)
+	}
+	var posted string
+	var typed []string
+	local := func(name string, args ...string) (string, error) {
+		switch {
+		case name == "tmux" && args[0] == "list-windows":
+			return "@4 %9 0 r-7\n", nil
+		case name == "tmux" && args[0] == "send-keys":
+			typed = append(typed, strings.Join(args, " "))
+			return "", nil
+		case name == "tmux":
+			return "", nil
+		}
+		return "", errors.New("not here")
+	}
+	gh := func(_ []string, _ string, args ...string) (string, error) {
+		switch {
+		case args[1] == "user":
+			return "developer", nil
+		case args[1] == "search/issues":
+			return `{"incomplete_results":false,"items":[]}`, nil
+		case args[1] == "repos/o/r/"+"issues/7":
+			return `{"number":7,"title":"task","state":"open","labels":[],"body":""}`, nil
+		case strings.HasSuffix(args[1], "/blocked_by"):
+			return "[]", nil
+		case args[1] == tellComments && len(args) == 4:
+			posted = strings.TrimPrefix(args[3], "body=")
+			return `{"html_url":"https://example.test/c/1"}`, nil
+		}
+		t.Errorf("unexpected gh %v", args)
+		return "", errors.New("unexpected")
+	}
+	var out, errOut bytes.Buffer
+	env := Env{
+		In: strings.NewReader(""), Out: &out, Err: &errOut, Exec: gh, Stream: noStream(t),
+		Getenv: func(string) string { return "" }, Home: home, Local: local,
+		Tmux: &session.Tmux{Run: local, Bin: "tmux", Sleep: func(time.Duration) {}},
+		SSH: func(_ io.Reader, _, errOut io.Writer, _ string, _ ...string) (int, error) {
+			fmt.Fprintln(errOut, "ssh: connect to host: no route")
+			return 255, nil
+		},
+	}
+	if code := Run([]string{"tell", "r-7", "carry", "on"}, env); code != 0 {
+		t.Fatalf("exit %d, stderr %s", code, errOut.String())
+	}
+	if posted != "carry on" || !strings.Contains(out.String(), "typed a pointer into engine:@4 on mac") || len(typed) != 2 {
+		t.Errorf("posted %q, out %s, typed %q", posted, out.String(), typed)
 	}
 }

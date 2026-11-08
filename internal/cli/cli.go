@@ -201,7 +201,7 @@ func runTell(args []string, env Env) int {
 		fmt.Fprintln(env.Err, "engine tell:", err)
 		return 2
 	}
-	told, err := tell.Tell(args[0], text, tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Run: env.Local, Getenv: env.Getenv, Home: env.Home})
+	told, err := tell.Tell(args[0], text, tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Run: env.Local, Getenv: env.Getenv, Home: env.Home, Client: startDeps(env).HostClient})
 	if err != nil {
 		fmt.Fprintln(env.Err, "engine tell:", err)
 		return 1

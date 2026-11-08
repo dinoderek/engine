@@ -366,3 +366,33 @@ func TestExitCodes(t *testing.T) {
 		t.Error("a failed list: want an error")
 	}
 }
+
+// LiveWindow needs the id and the name on one running window.
+func TestLiveWindow(t *testing.T) {
+	windows := "@1 %1 0 r-7\n@2 %2 1 r-8\n@3 %3 0 other\n"
+	tests := []struct {
+		name, id, window string
+		want             bool
+	}{
+		{"match", "@1", "r-7", true},
+		{"dead", "@2", "r-8", false},
+		{"id under another name", "@3", "r-7", false},
+		{"name under another id", "@9", "r-7", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tm, f := newFake(t)
+			f.answer("has-session", "", nil)
+			f.answer("list-windows", windows, nil)
+			if live, err := tm.LiveWindow(tt.id, tt.window); err != nil || live != tt.want {
+				t.Errorf("live %v, err %v; want %v", live, err, tt.want)
+			}
+		})
+	}
+	tm, f := newFake(t)
+	f.answer("has-session", "", nil)
+	f.answer("list-windows", "", errors.New("tmux died"))
+	if _, err := tm.LiveWindow("@1", "r-7"); err == nil {
+		t.Error("a failed window list was not an error")
+	}
+}

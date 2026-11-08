@@ -87,14 +87,12 @@ func (s System) Resume(win Session) error {
 	if win.Host != s.Host.Name {
 		tm = &session.Tmux{Bin: "tmux", Run: remote.TmuxRunner(s.Starts.Exec, host.Address), Sleep: s.Starts.Sleep}
 	}
-	windows, err := tm.Windows()
+	live, err := tm.LiveWindow(win.WindowID, win.Name)
 	if err != nil {
 		return err
 	}
-	for _, w := range windows {
-		if w.ID == win.WindowID && w.Name == win.Name && !w.Dead {
-			return tm.Type(w.ID, "continue")
-		}
+	if live {
+		return tm.Type(win.WindowID, "continue")
 	}
 	return fmt.Errorf("no live engine window %s (%s) on %s", win.Name, win.WindowID, win.Host)
 }
