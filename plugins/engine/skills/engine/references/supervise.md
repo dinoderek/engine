@@ -14,7 +14,9 @@ first comment on the feature. Then check every 10 minutes: its log,
 ## You may
 
 - **Relay an answer** the operator gave you, with `engine tell <repo>-<task>
-  <text>`.
+  <text>`. On a server plan, relay an answer that holds for more than one
+  task once, to the plan: `engine tell <plan> <text>`, which wakes each of
+  its waiting tasks.
 - **Answer a stall** `engine run` raised, with `engine tell`, when the answer
   is not a hard stop: for example "your claim landed, carry on".
 - **Restart `engine run`** when it has died, or after an engine fix merges.

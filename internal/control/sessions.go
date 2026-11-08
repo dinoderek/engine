@@ -51,7 +51,7 @@ const SummaryRunes = 240
 // humanKinds are the updates a person reads as a message; acknowledgements,
 // lifecycle records and the coordinator's automatic notices are left out of
 // the session preview.
-var humanKinds = []string{"say", "ask", "reply", "resolved"}
+var humanKinds = []string{"say", "ask", "reply", "resolved", "ruling"}
 
 // sessionView projects every current, unended attempt from one snapshot.
 // Host observations come only from the cache, so a request never probes a host.

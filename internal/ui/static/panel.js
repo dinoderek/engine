@@ -9,7 +9,7 @@ window.engine.panel = function (ctx) {
   const view = ctx.view;
   const TABS = ["description", "communications"];
   const SAFE = /^(https?:\/\/|mailto:)/i;
-  const KINDS = { say: "Message", ask: "Question", reply: "Reply", acknowledged: "Acknowledged", resolved: "Decision" };
+  const KINDS = { say: "Message", ask: "Question", reply: "Reply", acknowledged: "Acknowledged", resolved: "Decision", ruling: "Plan ruling" };
 
   // shown is the open item's ID. item and threadEnv are envelopes in the page's
   // usual shape; thread holds the messages read so far and the cursor.

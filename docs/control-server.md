@@ -3,8 +3,7 @@
 # Control server
 
 `engine serve` owns plans, tasks, updates, execution attempts and merge locks.
-The CLI uses its authenticated command API. The server coordinates through
-the existing reconcile decisions and host operations. Executors edit, test,
+Executors edit, test,
 review and merge. GitHub supplies code, PRs and CI; task state and comms stay
 in the server. A feature's GitHub issue can hold a human-maintained PR summary.
 
@@ -62,8 +61,7 @@ engine attempt list t3
 
 Dependencies, capabilities, harness and tier are
 structured fields, supplied with `--depends`, `--requires`, `--harness`
-and `--tier`. The server adapter supplies card keys and maps these fields
-to plan lint and placement.
+and `--tier`.
 
 Edits replace the card's editable fields and require its current
 `--version`. Plan and standalone-task edits invalidate approval.
@@ -94,10 +92,9 @@ Unknown JSON fields, missing credentials and unsupported operations fail.
 The server derives authorship from the credential. Errors include an HTTP
 status; storage details remain in server logs.
 
-Every write has a request key. Retries use exactly the same command and key.
-A reused key with different contents fails. The CLI retries uncertain
-delivery once with the original key; callers can retain one with
-`--request-key`. Version conflicts require reading the current record.
+Every write has a request key; a key reused for a different command fails.
+The CLI retries uncertain delivery once with the same key; `--request-key`
+sets one. Version conflicts require reading the current record.
 An edit invalidates a placement decision before any execution is reserved or
 launched.
 
@@ -105,8 +102,7 @@ SQLite runs locally through its CLI, with SQL on stdin. A process lock
 allows one engine server per database; a mutex serializes commands.
 Each transaction updates current records, immutable history and its request
 receipt together. History retains record snapshots. The database uses a
-versioned schema and rejects unknown versions. It loads its control records
-for each operation; bulk telemetry belongs elsewhere.
+versioned schema and rejects unknown versions.
 
 The operator credential is an owner-only regular file. Every dispatch creates
 a separate execution credential, scoped to that plan or task. Workers cannot
@@ -124,6 +120,7 @@ engine inbox --operator
 engine ack 12
 engine reply 12 "Investigating"
 engine resolve 12 "Approved for the task revision in this question"
+engine resolve 14 "Every task may change the API" --plan p2
 engine task state t3 --version 4 --state running
 ```
 
@@ -132,7 +129,9 @@ Read up to 200 at a time, using the last sequence as the next cursor.
 Comments do not change workflow state. Asking a task question atomically
 puts it in needs-human. Acknowledgement and ordinary replies leave the
 question unresolved. Resolution records the operator decision; an explicit
-state change resumes the task. Unresolved questions block completion and
+state change resumes the task. `--plan` also records the decision as a
+`ruling` on the question's plan. The server never answers a question from a
+ruling. Unresolved questions block completion and
 merge checks.
 An unresolved plan question also blocks planner handoff, child dispatch,
 child merges and automatic quota resume until the operator resolves it.
@@ -140,8 +139,10 @@ child merges and automatic quota resume until the operator resolves it.
 Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
 on resolution. Messages may omit a task association for host or server
-problems. Wake-up pointers are attempted for waiting, unrestricted sessions;
-messages persist when wake-up fails.
+problems. Waiting, unrestricted sessions get wake-up pointers for messages on their
+item, and a task for its plan's messages and rulings, except those to the
+operator, their own and coordinator notices. Messages persist when wake-up
+fails.
 
 ## Dashboard
 
@@ -205,7 +206,7 @@ run files, item bodies and full update bodies never join them.
 - `feedback` is the item's unresolved question, its own or its parent plan's.
   Acknowledgements and replies leave it; resolution clears it. Waiting
   without one is not a feedback request.
-- `latest` is the item's newest `say`, `ask`, `reply` or `resolved` update
+- `latest` is the item's newest `say`, `ask`, `reply`, `resolved` or `ruling` update
   with a body, excluding the coordinator's automatic notices. A task's
   preview never shows its plan's messages.
 

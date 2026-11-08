@@ -21,9 +21,17 @@ code, PRs and CI with the operator's GitHub login.
 - Use `engine tell <task> <text>` to message another task. Record rulings
   and outcomes as updates, and include them in the PR body.
 - `engine ask <task> <question>` creates an explicit operator question and
-  stops the task. For every hard stop from the rulings reference, ask and
-  wait. Reading, acknowledgement and a conversational reply grant no approval.
-  The operator resolves the question and explicitly restores task state.
+  stops the task. For every hard stop from the rulings reference, first read
+  `engine updates <task>` and `engine updates <plan>`. An operator `resolved`
+  or `ruling` update that decides this same question, at this scope, covers
+  it: record a ruling update citing its sequence, repeat it in the PR body and
+  carry on. Never stretch an earlier decision to a different question or
+  scope; if unsure, it does not cover it. Otherwise ask and wait. Reading,
+  acknowledgement and a conversational reply grant no approval. The operator
+  resolves the question, with `--plan <plan>` when the decision holds for the
+  whole plan, and explicitly restores task state.
+- A waiting task session is woken for new messages on its task, and for
+  messages and rulings on its parent plan.
 
 ## Planner
 

@@ -27,13 +27,8 @@ func (s Service) messages(st *State, a Actor, r Request) (Response, error) {
 		}
 		return messageListing(st, a, r), nil
 	}
-	if r.ID != "" {
-		if _, ok := st.Items[r.ID]; !ok {
-			return Response{}, problem(404, "unknown item")
-		}
-		if a.Role == "worker" && st.Items[r.ID].Repo != st.Items[st.Attempts[a.Attempt].Item].Repo {
-			return Response{}, problem(403, "cannot message another repository")
-		}
+	if err := messageTarget(st, a, r); err != nil {
+		return Response{}, err
 	}
 	kind := r.Op
 	switch r.Op {
@@ -61,7 +56,40 @@ func (s Service) messages(st *State, a Actor, r Request) (Response, error) {
 		return Response{}, problem(400, "recipient must be operator or task")
 	}
 	u := st.update(a, r, kind, r.Body, s.now())
-	return Response{Updates: []Update{u}}, nil
+	out := Response{Updates: []Update{u}}
+	if kind == "resolved" && r.Item.Plan != "" {
+		ruling := st.update(a, Request{ID: r.Item.Plan, ReplyTo: r.ReplyTo}, "ruling", r.Body, s.now())
+		out.Updates = append(out.Updates, ruling)
+	}
+	return out, nil
+}
+
+// planRuling checks that a resolution published to a plan answers a
+// question asked on that plan or on one of its tasks.
+func planRuling(st *State, question Update, plan string) error {
+	if st.Items[plan].Kind != "plan" {
+		return problem(404, "unknown plan %s", plan)
+	}
+	if question.Item != plan && st.Items[question.Item].Plan != plan {
+		return problem(400, "the question is not in plan %s", plan)
+	}
+	return nil
+}
+
+// messageTarget checks the item a message is about and where it may publish.
+func messageTarget(st *State, a Actor, r Request) error {
+	if r.ID != "" {
+		if _, ok := st.Items[r.ID]; !ok {
+			return problem(404, "unknown item")
+		}
+		if a.Role == "worker" && st.Items[r.ID].Repo != st.Items[st.Attempts[a.Attempt].Item].Repo {
+			return problem(403, "cannot message another repository")
+		}
+	}
+	if r.Item.Plan != "" && r.Op != "resolve" {
+		return problem(400, "only resolve publishes a ruling to a plan")
+	}
+	return nil
 }
 
 func messageListing(st *State, a Actor, r Request) Response {
@@ -108,6 +136,11 @@ func replyCommand(st *State, a Actor, r Request) (Request, string, error) {
 		}
 		if r.Body == "" {
 			return r, "", problem(400, "resolution must record the decision")
+		}
+		if r.Item.Plan != "" {
+			if err := planRuling(st, parent, r.Item.Plan); err != nil {
+				return r, "", err
+			}
 		}
 		kind = "resolved"
 	}

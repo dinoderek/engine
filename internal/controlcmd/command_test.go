@@ -77,6 +77,11 @@ func TestCLIPlanTasksAndOperatorMessages(t *testing.T) {
 		t.Fatal("cursor")
 	}
 	command(t, e, "attempt", "list", task.ID)
+	question := command(t, e, "ask", plan.ID, "May", "tasks", "change", "the", "API?").Updates[0]
+	ruled := command(t, e, "resolve", itoa(question.ID), "Approved", "for", "the", "plan", "--plan", plan.ID).Updates
+	if len(ruled) != 2 || ruled[1].Kind != "ruling" || ruled[1].Item != plan.ID || ruled[1].Body != "Approved for the plan" {
+		t.Fatalf("resolve --plan = %+v, want a resolution and a plan ruling", ruled)
+	}
 }
 
 func itoa(n int) string { return fmt.Sprint(n) }
