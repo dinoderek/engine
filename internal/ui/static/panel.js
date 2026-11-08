@@ -9,7 +9,7 @@ window.engine.panel = function (ctx) {
   const view = ctx.view;
   const TABS = ["description", "communications"];
   const SAFE = /^(https?:\/\/|mailto:)/i;
-  const KINDS = { say: "Message", ask: "Question", reply: "Reply", acknowledged: "Acknowledged", resolved: "Decision" };
+  const KINDS = { say: "Message", ask: "Question", reply: "Reply", acknowledged: "Acknowledged", resolved: "Decision", ruling: "Plan ruling" };
 
   // shown is the open item's ID. item and threadEnv are envelopes in the page's
   // usual shape; thread holds the messages read so far and the cursor.
@@ -86,7 +86,8 @@ window.engine.panel = function (ctx) {
       st.badges.set(m.id, badge);
       head.append(" ", badge);
     }
-    if (m.reply_to) {
+    // A ruling cites a task's question, which is not in the plan's thread.
+    if (m.reply_to && m.kind !== "ruling") {
       head.append(" ", el("a", { class: "muted", href: ctx.href(view.panel, "communications", m.reply_to) }, "in reply to update " + m.reply_to));
     }
     return el("li", { id: "update-" + m.id, class: "message kind-" + m.kind, tabindex: "-1", "data-key": "update-" + m.id },

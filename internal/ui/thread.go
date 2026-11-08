@@ -56,7 +56,7 @@ type Thread struct {
 	More      bool       `json:"more"`
 }
 
-var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved"}
+var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved", "ruling"}
 
 func itemDetail(it control.Item) ItemDetail {
 	return ItemDetail{ID: it.ID, Kind: it.Kind, Repo: it.Repo, Plan: it.Plan, Title: it.Title, State: it.State, Description: RenderMarkdown(it.Body)}
