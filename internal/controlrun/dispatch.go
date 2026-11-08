@@ -80,12 +80,12 @@ func hadEarlierAttempt(st control.State, item, current string) bool {
 }
 
 // releaseEnded releases, before a new execution's first launch, the session
-// an ended earlier attempt of item left on the execution's host, as the host refuses a window name in use and a
-// worktree left on the task's branch. It acts only on a successful read of
-// the host that shows the task's window dead or absent, and whose newest run
-// under that name is not this execution's own; a live window, or one that
-// cannot be read, is left alone. Release keeps a worktree with uncommitted
-// changes, and the branch.
+// an ended earlier attempt of item left on the execution's host, as the host
+// refuses a window name in use and a worktree left on the task's branch. It
+// acts only on a successful read of the host that shows the task's window
+// dead or absent, and whose newest run under that name is not this
+// execution's own; a live window, or one that cannot be read, is left alone.
+// Release keeps a worktree with uncommitted changes, and the branch.
 func (c *Coordinator) releaseEnded(st control.State, item control.Item, at control.Attempt, client remote.Client) {
 	if !endedEarlier(st, item.ID, at) {
 		return
