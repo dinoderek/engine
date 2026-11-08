@@ -162,7 +162,7 @@ single-user machine. The page calls fixed same-origin routes:
   it filters the last list read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts, unfinished prerequisites, including other plans' tasks, and
-  each active task's `feedback`.
+  `feedback`: the session's, or the plan's question for a queued task.
 - `/api/sessions`: the `session-view` rows, feedback requests first.
 - `/api/items/<id>` and `/thread`: a plan or task with its description
   rendered, and its messages, 50 after `after` (through `anchor`), with a
@@ -178,14 +178,14 @@ host name on any port, so an SSH tunnel works, and sends
 last data, marked stale. It refreshes every 30s while visible, keeping focus,
 the open panel and the selected message.
 
-On Sessions, "Needs feedback" opens the question's thread at its update over
-the tab, on the plan's thread when the plan asked. The Plans task table links
-the same feedback.
+On Sessions and Plans, "Needs feedback" opens the question's thread at its
+update, on the plan's thread when the plan asked.
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
-unfinished prerequisite blocks it, todo or approved under an approved plan
-is ready to run, and anything else waits for the operator, so is blocked.
+unfinished prerequisite or the plan's open question (as its sessions report
+it) blocks it, todo or approved under an approved plan is ready to run, and
+anything else is blocked.
 Coordination does not change it.
 
 ## Session view

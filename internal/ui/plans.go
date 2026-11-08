@@ -131,12 +131,18 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 	out := PlanDetail{Plan: PlanRow{ID: plan.ID, Repo: plan.Repo, Slug: items[plan.Repo].Slug, Title: plan.Title, State: plan.State}, Tasks: []TaskRow{}}
 	hosts := activeHosts(live)
 	feedback := feedbackByTask(sessions)
+	asked := planQuestion(id, sessions)
 	dispatchable := plan.ApprovedVersion > 0 && plan.State != "prepare"
 	for _, t := range view {
 		if t.Kind != "task" || t.Plan != id {
 			continue
 		}
 		row := TaskRow{ID: t.ID, Title: t.Title, State: t.State, Host: hosts[t.Attempt], Waiting: []Prerequisite{}, Feedback: feedback[t.ID]}
+		// The plan's open question holds up every task waiting to start.
+		held := asked != nil && row.Host == "" && t.State != "done"
+		if held && row.Feedback == nil {
+			row.Feedback = asked
+		}
 		for _, dep := range t.Depends {
 			d, ok := items[dep]
 			if !ok {
@@ -146,7 +152,7 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 				row.Waiting = append(row.Waiting, Prerequisite{ID: d.ID, Title: d.Title, State: d.State, Plan: d.Plan})
 			}
 		}
-		row.Group = group(t.State, row.Host != "", len(row.Waiting) > 0, dispatchable)
+		row.Group = group(t.State, row.Host != "", len(row.Waiting) > 0, held, dispatchable)
 		out.Counts.add(row.Group)
 		out.Tasks = append(out.Tasks, row)
 	}
@@ -165,11 +171,23 @@ func activeHosts(attempts []control.Attempt) map[string]string {
 	return out
 }
 
-// group maps a task's workflow state, live attempt, prerequisites and its
-// plan's approval to its summary. Explicit blocking (operator intervention)
-// wins over activity; activity wins over prerequisites, because work on the
-// task is already under way. Only an approved plan's tasks can be dispatched.
-func group(state string, active, waiting, approved bool) string {
+// planQuestion is the plan's own unresolved question, as any of its
+// sessions reports it.
+func planQuestion(plan string, rows []control.SessionRow) *control.UpdateRef {
+	for _, r := range rows {
+		if r.Feedback != nil && r.Feedback.Item == plan {
+			return r.Feedback
+		}
+	}
+	return nil
+}
+
+// group maps a task's workflow state, live attempt, prerequisites, its plan's
+// open question (held) and its plan's approval to its summary. Explicit
+// blocking (operator intervention) wins over activity; activity wins over
+// prerequisites and the plan's question, because work on the task is already
+// under way. Only an approved plan's tasks can be dispatched.
+func group(state string, active, waiting, held, approved bool) string {
 	switch {
 	case state == "done":
 		return groupDone
@@ -177,7 +195,7 @@ func group(state string, active, waiting, approved bool) string {
 		return groupBlocked
 	case active || state == "running" || state == "in-review":
 		return groupInProgress
-	case waiting:
+	case waiting || held:
 		return groupBlocked
 	case approved && (state == "todo" || state == "approved"):
 		return groupReady

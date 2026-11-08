@@ -25,6 +25,10 @@ jobs:
       # The dashboard's browser-script tests skip without node.
       - name: Install node if the runner lacks it
         run: command -v node >/dev/null || (sudo apt-get update && sudo apt-get install -y nodejs)
+      # The dashboard's browser test skips without a Chromium-family browser;
+      # the runner image ships Google Chrome.
+      - name: Require a Chromium browser
+        run: command -v google-chrome || command -v chromium || command -v chromium-browser
       - name: Install sqlite3 if the runner lacks it
         run: command -v sqlite3 >/dev/null || (sudo apt-get update && sudo apt-get install -y sqlite3)
       - name: Quality gates

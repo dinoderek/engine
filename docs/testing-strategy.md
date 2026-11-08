@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Unit | a table-driven test of a pure function in the same package | parsing, matching, comparison or rendering, such as a registry parser, trigger patterns or baseline comparison |
 | Fake boundary | the code under test gets a fake `repo.Runner`, `tracker.Runner` or `session.RunFunc`, or `dev.Tool` fields (`Run`, `LookPath`, `Fetch`, `Attach`) that return canned output | how the code reacts to what git, go, Homebrew or the network say, especially their failures |
-| Real process | real `git`, `go`, `sqlite3`, `tmux` or `node` in `t.TempDir()` or on a private socket (`tmux -L <unique name>`, killed afterwards) | actual storage transactions, worktrees, formatting or session operations |
+| Real process | real `git`, `go`, `sqlite3`, `tmux`, `node` or a Chromium browser in `t.TempDir()` or on a private socket (`tmux -L <unique name>`, killed afterwards) | actual storage transactions, worktrees, formatting or session operations |
 | Command line | `cli.Run` or `dev.Tool.Main` with buffers for stdout and stderr | exit codes, usage text and verb dispatch |
 
 Pick the lowest layer that can prove the claim. Use a real process only when
@@ -21,9 +21,9 @@ a fake would assume the very behaviour under test.
   passes. A check that cannot be made to fail is a hole.
 - **No network, no home directory.** Serve HTTP from `httptest`, and write
   only under `t.TempDir()`.
-- **Skip only for a missing tool.** A test that needs `git`, `go`, `sqlite3`, `tmux` or `node`
-  skips when the tool is absent. CI installs missing tools (including tmux and node when the
-  runner lacks them), so CI never skips. A tmux test never touches the default
+- **Skip only for a missing tool.** A test that needs `git`, `go`, `sqlite3`, `tmux`, `node`
+  or a Chromium browser skips when the tool is absent. CI installs missing tools (including
+  tmux and node when the runner lacks them) and requires a browser, so CI never skips. A tmux test never touches the default
   server, and never runs `caffeinate`.
 - **Race detector on.** The `unit` lane runs every test with `-race`. Shared
   state in a test is a bug.

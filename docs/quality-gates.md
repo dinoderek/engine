@@ -18,7 +18,7 @@ Every `required` lane in `scripts/lanes.tsv` must be green before a PR. CI
 (`.github/workflows/ci.yml`) runs `./dev test` on every pull request and every
 push to `main`, and uploads `.test-ai-results/` as the `test-ai-results`
 artifact. Every lane runs in CI; none is local-only. CI installs `tmux` and `node` when
-the runner lacks them, because their tests skip without them.
+the runner lacks them, and requires a Chromium browser, because their tests skip without them.
 
 ## What each lane enforces
 
