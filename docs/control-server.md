@@ -11,41 +11,46 @@ There is no automatic tracker migration or summary synchronisation.
 
 ## Start
 
-The server requires `sqlite3`. Run one server on `devbox` and give every
-CLI and execution host access to its origin. Bind port 7331 to the devbox's
-Tailscale address and advertise its MagicDNS origin. The tailnet provides
-confidential transport for bearer credentials. For other networks, use an
-SSH tunnel or a TLS reverse proxy.
-
-```sh
-mkdir -p ~/.config/engine ~/.local/share/engine/server
-(umask 077; openssl rand -hex 32 > ~/.config/engine/server-token)
-engine serve --listen "$(tailscale ip -4):7331" --advertise http://devbox:7331
-```
-
-`--db` defaults to `~/.local/share/engine/server/control.db` and
-`--token-file` to `~/.config/engine/server-token`.
-
-Each operator CLI reads `~/.config/engine/config.toml`:
+The server needs `sqlite3` and `tmux`, and every CLI and execution host must
+reach it. Each operator's `~/.config/engine/config.toml` names its
+host from `hosts.toml`:
 
 ```toml
 [server]
-url = "http://devbox:7331"
+host = "mac"
 ```
 
-Without that file, the CLI uses the origin shown above. An explicit
-`ENGINE_SERVER_URL` overrides it. Provision the operator credential in
-`~/.config/engine/server-token` on each operator machine, or set
-`ENGINE_SERVER_TOKEN_FILE` to its path. Workers receive their scoped
-credential and the advertised URL at dispatch. Host definitions remain
-in the existing host config.
+```sh
+mkdir -p ~/.config/engine
+(umask 077; openssl rand -hex 32 > ~/.config/engine/server-token)
+engine serve
+```
 
-For backup, stop the server, run the same invocation with
-`--backup <new-path>`, and restart it. Copy the backup off-machine. Restore
-with the server stopped, retaining the private operator credential. A backup
-includes execution credentials and is private. The backup operation refuses
-to overwrite an existing file. Test restores into an isolated database before
-replacing the active database.
+`engine serve` starts the server on that host (over ssh if remote) and
+returns. It runs in the private tmux server `engine-server`
+(`tmux -L engine-server attach`), apart from task windows, logging to
+`~/.local/share/engine/server/serve.log`. It listens on port 7331 of the
+Tailscale name in the host's address, the origin it advertises and the CLI
+uses; the tailnet keeps bearer credentials confidential. To restart a
+running server (as after updating engine), close its window and rerun. A server exiting at once fails it, with its last screen.
+
+`engine serve --foreground` runs it in the calling process, with `--listen`
+(default `127.0.0.1:7331`) and `--advertise`. `--db` defaults to
+`~/.local/share/engine/server/control.db`, `--token-file` to
+`~/.config/engine/server-token`.
+
+For other networks, use an SSH tunnel or a TLS reverse proxy, set
+`[server] url` instead of `host`, and use `--foreground`. Without
+config.toml, the CLI uses `http://devbox:7331`; `ENGINE_SERVER_URL` overrides
+both. Operator machines hold the credential at the `--token-file` default,
+or at `ENGINE_SERVER_TOKEN_FILE`. Workers receive their scoped credential
+and the advertised URL at dispatch.
+
+For backup, stop the server, run `engine serve --backup <new-path>`, and
+restart it. Copy it off-machine. Restore
+with the server stopped, keeping the operator credential. A backup holds
+execution credentials and is private. Backup never overwrites a file.
+Test restores in an isolated database before replacing the active one.
 
 ## Records and commands
 

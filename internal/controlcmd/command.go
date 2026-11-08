@@ -25,9 +25,14 @@ type Env struct {
 	Client   *control.Client
 	Context  context.Context
 	Attach   func([]string) error
+	// Server starts the control server's process; nil is the real tmux,
+	// ssh, binary and clock.
+	Server *ServerDeps
 }
 
-const Usage = "engine serve [--db <path>] [--token-file <path>] [--listen 127.0.0.1:7331] [--advertise <origin>] [--backup <path>]\n" +
+const Usage = "engine serve\n" +
+	"engine serve --foreground [--db <path>] [--token-file <path>] [--listen 127.0.0.1:7331] [--advertise <origin>]\n" +
+	"engine serve --backup <path> [--db <path>] [--token-file <path>]\n" +
 	"engine repo add --title <name> --slug <owner/name> --remote <git-url>\n" +
 	"engine plan|task create --repo <id> --title <text> --body-file <path|-> [--plan <id>]\n" +
 	"engine plan|task show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
@@ -108,7 +113,7 @@ func makeClient(e Env) (control.Client, error) {
 	url := e.Getenv("ENGINE_SERVER_URL")
 	if url == "" {
 		var err error
-		url, err = hosts.ReadServerURL(dir)
+		url, err = hosts.ServerOrigin(dir)
 		if err != nil {
 			return control.Client{}, err
 		}
