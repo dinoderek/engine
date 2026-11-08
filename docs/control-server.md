@@ -20,10 +20,11 @@ SSH tunnel or a TLS reverse proxy.
 ```sh
 mkdir -p ~/.config/engine ~/.local/share/engine/server
 (umask 077; openssl rand -hex 32 > ~/.config/engine/server-token)
-engine serve --db ~/.local/share/engine/server/control.db \
-  --token-file ~/.config/engine/server-token \
-  --listen "$(tailscale ip -4):7331" --advertise http://devbox:7331
+engine serve --listen "$(tailscale ip -4):7331" --advertise http://devbox:7331
 ```
+
+`--db` defaults to `~/.local/share/engine/server/control.db` and
+`--token-file` to `~/.config/engine/server-token`.
 
 Each operator CLI reads `~/.config/engine/config.toml`:
 

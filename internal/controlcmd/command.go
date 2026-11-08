@@ -27,7 +27,7 @@ type Env struct {
 	Attach   func([]string) error
 }
 
-const Usage = "engine serve --db <path> --token-file <path> [--listen 127.0.0.1:7331] [--advertise <origin>]\n" +
+const Usage = "engine serve [--db <path>] [--token-file <path>] [--listen 127.0.0.1:7331] [--advertise <origin>] [--backup <path>]\n" +
 	"engine repo add --title <name> --slug <owner/name> --remote <git-url>\n" +
 	"engine plan|task create --repo <id> --title <text> --body-file <path|-> [--plan <id>]\n" +
 	"engine plan|task show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
@@ -121,7 +121,7 @@ func makeClient(e Env) (control.Client, error) {
 	}
 	path := e.Getenv("ENGINE_SERVER_TOKEN_FILE")
 	if path == "" {
-		path = filepath.Join(dir, "server-token")
+		path = filepath.Join(dir, ServerTokenFile)
 	}
 	token, err := control.ReadCredential(path)
 	return control.Client{URL: url, Token: token}, err
