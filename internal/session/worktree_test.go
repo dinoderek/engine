@@ -53,7 +53,11 @@ func worktreeFixture(t *testing.T, withDev bool, mode os.FileMode) (Repos, Clone
 	}
 	f.onRun = func(c call) {
 		if strings.Contains(c.line, "worktree create") || strings.Contains(c.line, "worktree add") {
-			f.replies[1].out = porcelain(path, wt, "task/r-7")
+			for i := range f.replies {
+				if f.replies[i].key == "worktree list" {
+					f.replies[i].out = porcelain(path, wt, "task/r-7")
+				}
+			}
 		}
 	}
 	return r, Clone{Repo: repo, Path: path, Default: "main"}, f, wt
@@ -232,8 +236,8 @@ func TestCreateWorktreeFailsWhenTheLockCannotBeTaken(t *testing.T) {
 func TestCreateWorktreeOnResumeOpensOnOriginsBranch(t *testing.T) {
 	for _, withDev := range []bool{false, true} {
 		r, clone, f, wt := worktreeFixture(t, withDev, 0o755)
-		// Origin has the branch; the fixture's side effect fills replies[1].
-		f.replies = append([]reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}, f.replies[1], f.replies[0]}, f.replies[2:]...)
+		// Origin has the branch, and the worktree opens at its tip.
+		f.replies = append([]reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}, {key: "rev-parse HEAD", out: "abc\n"}}, f.replies...)
 		got, err := r.CreateWorktree(clone, 7, true)
 		if err != nil || got.Path != wt {
 			t.Fatalf("dev %v: worktree = %+v, %v", withDev, got, err)
@@ -261,5 +265,14 @@ func TestCreateWorktreeOnResumeFailsWhenTheBranchCannotBeSet(t *testing.T) {
 	}
 	if f.has("worktree add") {
 		t.Error("created a worktree though the branch was not set")
+	}
+}
+
+func TestCreateWorktreeOnResumeFailsWhenTheReposCommandMovesTheBranch(t *testing.T) {
+	r, clone, f, _ := worktreeFixture(t, true, 0o755)
+	// The repo's command made the branch anew from the default branch.
+	f.replies = append([]reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}, {key: "rev-parse HEAD", out: "main-tip\n"}}, f.replies...)
+	if _, err := r.CreateWorktree(clone, 7, true); err == nil || !strings.Contains(err.Error(), "not at origin's tip of task/r-7") {
+		t.Errorf("err = %v", err)
 	}
 }

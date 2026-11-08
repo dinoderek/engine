@@ -77,7 +77,27 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, err
 	if path == "" {
 		return Worktree{}, fmt.Errorf("the worktree command ran but no worktree has branch %s", branch)
 	}
+	if adopt {
+		if err := r.checkAtOrigin(clone, path, branch); err != nil {
+			return Worktree{}, err
+		}
+	}
 	return Worktree{Path: path, Branch: branch}, nil
+}
+
+// checkAtOrigin fails when a resumed worktree is not at origin's tip of its
+// branch, as when a repo's command made the branch anew rather than checking
+// it out as it is.
+func (r Repos) checkAtOrigin(clone Clone, path, branch string) error {
+	head, err := r.git(path, "rev-parse", "HEAD")
+	if err != nil {
+		return fmt.Errorf("read the head of %s: %w", path, err)
+	}
+	tip, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
+	if err != nil || strings.TrimSpace(head) != strings.TrimSpace(tip) {
+		return fmt.Errorf("the worktree at %s is not at origin's tip of %s; the repo's worktree command must check out an existing branch as it is", path, branch)
+	}
+	return nil
 }
 
 // BranchTakenError is a worktree CreateWorktree did not create, changing

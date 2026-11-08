@@ -121,3 +121,18 @@ func TestRetriedTaskDispatchesAsAResume(t *testing.T) {
 		t.Error("a retry did not dispatch as a resume, so its branch on origin would be refused")
 	}
 }
+
+func TestOnlyAnEarlierAttemptThatRanMakesAResume(t *testing.T) {
+	st := control.State{Attempts: map[string]control.Attempt{
+		"a1": {ID: "a1", Item: "t1", State: "ended"},
+		"a2": {ID: "a2", Item: "t1", State: "dispatching"},
+		"a3": {ID: "a3", Item: "t2", State: "ended", Window: "@3"},
+	}}
+	if hadEarlierAttempt(st, "t1", "a2") {
+		t.Error("an attempt that never opened a window, such as a refused one, made a resume")
+	}
+	st.Attempts["a1"] = control.Attempt{ID: "a1", Item: "t1", State: "ended", Window: "@1"}
+	if !hadEarlierAttempt(st, "t1", "a2") || hadEarlierAttempt(st, "t1", "a1") {
+		t.Error("only another attempt of the same task that ran makes a resume")
+	}
+}

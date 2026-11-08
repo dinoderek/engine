@@ -140,7 +140,7 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    "Worktrees"), else `git worktree add` from the default branch, refusing
    a branch on `origin`, or a local one with commits (one without is
    remade). A server dispatch marked a resume opens on `origin`'s branch
-   instead, at its tip, refusing a local branch ahead of it;
+   instead, at its tip, refusing a local branch with commits `origin` lacks;
 3. makes the worktree trusted by its harness, so no trust dialog blocks the
    start (`claude.md` and `codex.md`, "Starting");
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,

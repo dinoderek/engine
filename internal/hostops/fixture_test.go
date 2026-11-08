@@ -214,7 +214,7 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		return "https://github.com/o/r.git\n", nil
 	case strings.Contains(line, "symbolic-ref"):
 		return "origin/main\n", nil
-	case f.origin && strings.Contains(line, "rev-parse --verify") && strings.Contains(line, "refs/remotes/"):
+	case f.origin && (strings.Contains(line, "rev-parse HEAD") || strings.Contains(line, "rev-parse --verify") && strings.Contains(line, "refs/remotes/")):
 		return "abc\n", nil
 	case strings.Contains(line, "rev-parse --verify") && (!f.branch || strings.Contains(line, "refs/remotes/")),
 		strings.Contains(line, "merge-base --is-ancestor"):

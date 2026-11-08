@@ -52,11 +52,13 @@ func (c *Coordinator) launch(st control.State, item control.Item, at control.Att
 	return c.Service.SetAttempt(at.ID, "running", spawned.Window)
 }
 
-// hadEarlierAttempt reports whether the server holds an attempt for item
-// other than current: a retry or a resume, whose branch is the task's own.
+// hadEarlierAttempt reports whether an attempt for item other than current
+// ran on a host: a retry or a resume, whose branch is the task's own. An
+// attempt that never opened a window, such as one the host refused, does not
+// count, so a stray branch it was refused for is never adopted.
 func hadEarlierAttempt(st control.State, item, current string) bool {
 	for _, at := range st.Attempts {
-		if at.Item == item && at.ID != current {
+		if at.Item == item && at.ID != current && at.Window != "" {
 			return true
 		}
 	}

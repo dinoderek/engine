@@ -225,7 +225,7 @@ placement decisions with the CLI coordinator and serializes plans against
 fresh fleet capacity. A dispatch records its attempt, host and credential
 before calling the host. Restart adopts matching sessions or retries the
 same dispatch identity on that host. An unreachable host means unknown,
-never dead. A dispatch for a task with an earlier attempt, a retry or
+never dead. A dispatch for a task whose earlier attempt ran, a retry or
 resume, is marked a resume: the host opens the worktree on the task's
 branch from `origin` rather than refusing it (`hosts-and-sessions.md`).
 
