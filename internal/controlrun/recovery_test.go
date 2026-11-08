@@ -10,17 +10,30 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-func TestDeathDuringUnresolvedQuestionFailsIdempotently(t *testing.T) {
+func TestDeathDuringUnresolvedQuestionParksTheTaskUntilAnswered(t *testing.T) {
 	c, h, _, _, task := setup(t)
 	pass(t, c)
 	pass(t, c)
+	pass(t, c) // the coordinator sees the session live
 	execute(t, c.Service, control.Request{Op: "ask", ID: task.ID, Body: "Need an operator decision"})
+	st, _ := c.Service.Store.Snapshot()
+	first := st.Items[task.ID].Attempt
 	h.status.Windows[0].Alive = false
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
-	if st.Items[task.ID].State != "failed" || st.Attempts[st.Items[task.ID].Attempt].State != "ended" {
-		t.Fatal("failed session left in needs-human")
+	st, _ = c.Service.Store.Snapshot()
+	if at := st.Attempts[first]; at.State != "ended" || at.Reason != control.EndVanished || st.Items[task.ID].State != "needs-human" {
+		t.Fatalf("a session that died during a question failed its task: %+v %s", at, st.Items[task.ID].State)
+	}
+	if h.calls != 1 || st.Items[task.ID].Attempt != first {
+		t.Fatal("a task parked on an operator question was dispatched again")
+	}
+	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.PendingQuestion(&st, task.ID), Body: "Take the first option."})
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	resumed := st.Attempts[st.Items[task.ID].Attempt]
+	if resumed.ID == first || st.Items[task.ID].State != "running" || !h.launches[resumed.RunID].Spawn.Resume {
+		t.Fatalf("the answered task was not dispatched again as a resume: %+v", resumed)
 	}
 }
 
@@ -134,5 +147,54 @@ func TestOnlyAnEarlierAttemptThatRanMakesAResume(t *testing.T) {
 	st.Attempts["a1"] = control.Attempt{ID: "a1", Item: "t1", State: "ended", Window: "@1"}
 	if !hadEarlierAttempt(st, "t1", "a2") || hadEarlierAttempt(st, "t1", "a1") {
 		t.Error("only another attempt of the same task that ran makes a resume")
+	}
+}
+
+func TestRebootWhileThePlanIsStoppedLeavesTheTaskResumable(t *testing.T) {
+	c, h, repo, plan, task := setup(t)
+	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	c.Service.Now = func() time.Time { return now }
+	pass(t, c)
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	first := st.Attempts[st.Items[task.ID].Attempt]
+	execute(t, c.Service, control.Request{Op: "lock-acquire", Attempt: first.ID})
+	now = now.Add(time.Minute)
+	execute(t, c.Service, control.Request{Op: "stop", ID: plan.ID})
+	h.status.Windows = nil // the host rebooted: its tmux server, and the window, are gone
+	now = now.Add(time.Hour)
+	execute(t, c.Service, control.Request{Op: "run", ID: plan.ID})
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	if at := st.Attempts[first.ID]; at.Reason != control.EndVanished || st.Items[task.ID].State != "running" {
+		t.Fatalf("a window lost while the plan was stopped failed its task: %+v %s", at, st.Items[task.ID].State)
+	}
+	if st.Locks[repo.ID].Attempt != first.ID {
+		t.Error("a vanished attempt's merge lock was not kept for operator recovery")
+	}
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	resumed := st.Attempts[st.Items[task.ID].Attempt]
+	if resumed.ID == first.ID || !h.launches[resumed.RunID].Spawn.Resume {
+		t.Fatalf("the resumable task was not dispatched again as a resume: %+v", resumed)
+	}
+}
+
+func TestDeathAfterCoordinationRestartedStillFails(t *testing.T) {
+	c, h, _, plan, task := setup(t)
+	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	c.Service.Now = func() time.Time { return now }
+	pass(t, c)
+	execute(t, c.Service, control.Request{Op: "stop", ID: plan.ID})
+	now = now.Add(time.Minute)
+	execute(t, c.Service, control.Request{Op: "run", ID: plan.ID})
+	pass(t, c)
+	h.status.Windows[0].Alive = false
+	now = now.Add(time.Minute)
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	at := st.Attempts[st.Items[task.ID].Attempt]
+	if at.Reason != control.EndFailed || st.Items[task.ID].State != "failed" || h.calls != 1 {
+		t.Fatalf("a session that died after coordination restarted did not fail: %+v %s", at, st.Items[task.ID].State)
 	}
 }

@@ -4,9 +4,8 @@
 
 `engine serve` owns plans, tasks, updates, execution attempts and merge locks.
 The CLI uses its authenticated command API. The server coordinates through
-the existing reconcile decisions and host operations. Executors edit, test,
-review and merge. GitHub supplies code, PRs and CI; task state and comms stay
-in the server. A feature's GitHub issue can hold a human-maintained PR summary.
+the existing reconcile decisions and host operations. GitHub supplies code,
+PRs and CI; task state and comms stay in the server. A feature's GitHub issue can hold a human-maintained PR summary.
 
 ## Start
 
@@ -170,7 +169,7 @@ The process forwards only the `list`, `plan-view`, `attempts`, `get`,
 host name on any port, so an SSH tunnel works, and sends
 `Cache-Control: no-store`. When the control server fails, the page keeps its
 last data, marked stale. It refreshes every 30s while visible, keeping focus,
-the open panel and the selected message.
+the open panel and selection.
 
 On both tabs, "Needs feedback" opens the question's thread at its
 update over the tab, on the plan's thread when it asked.
@@ -190,11 +189,8 @@ item number. The row and reference fields in
 `internal/control/sessions.go` are the whole contract: credentials, screens,
 run files, item bodies and full update bodies never join them.
 
-- `item`, `kind`, `title`, `repo`, `repo_slug` and `state` describe the plan or
-  task and its workflow state. `role` is `planner` for a plan and `executor`
-  for a task. `plan` is the planner's own plan or a child task's parent; a
-  standalone task has none.
-- `attempt`, `host`, `harness` and `started` describe the execution.
+- `role` is `planner` for a plan and `executor` for a task. `plan` is the
+  planner's own plan or a child task's parent; a standalone task has none.
 - `observed` is the harness's `working`, `waiting` or `limited`, `live` for
   an open window without a harness state, `exited` once a reachable host shows
   the window closed or gone, and otherwise `unknown`. An exited attempt stays
@@ -215,9 +211,9 @@ A reference has `item`, `update` (the `engine updates` sequence), `kind`,
 Observations live in an in-memory cache keyed by attempt, so a request never
 contacts a host. Each coordinator pass stores its host reads. Independently of
 coordination, the server periodically reads in the background each host
-whose active attempts lack a fresh observation. Each host has one read in
-flight, bounded by a short command limit. An unreachable host, unreadable run
-records or an old observation give `unknown`. The cache drops ended and
+whose active attempts lack a fresh observation, one read in flight per host.
+An unreachable host, unreadable run records or an old observation give
+`unknown`. The cache drops ended and
 replaced attempts and starts empty with the server. The timings are the
 constants in `internal/controlrun/observe.go`.
 
@@ -228,9 +224,8 @@ placement decisions with the CLI coordinator and serializes plans against
 fresh fleet capacity. A dispatch records its attempt, host and credential
 before calling the host. Restart adopts matching sessions or retries the
 same dispatch identity on that host. An unreachable host means unknown,
-never dead. A dispatch for a task whose earlier attempt ran, a retry or
-resume, is marked a resume: the host opens the worktree on the task's
-branch from `origin` rather than refusing it (`hosts-and-sessions.md`).
+never dead. A dispatch for a task whose earlier attempt ran is a resume: the
+host opens the task's branch from `origin` (`hosts-and-sessions.md`).
 
 The host serializes dispatches by run ID and returns an existing run on
 replay. It uses ordinary Git credentials and identity, with isolated clones
@@ -240,11 +235,16 @@ path; joined Codex sessions receive that path too. The server-session record
 lets hooks recover their connection from a worktree. Credential and lock-token
 files are excluded from collected artifacts.
 
+A window gone from a host that answered ends its attempt `vanished` if the
+task is resumable: coordination stopped after the window was last seen live,
+or the window was seen live and the task has a PR or open question. The task
+keeps its state and is resumed once any question is resolved. Otherwise
+attempt and task end `failed`. The attempt keeps any merge lock.
+
 `engine attempt reconcile <id> --body <evidence>` is operator-only. The
 server requires a successful host observation with no live matching window
-and a recorded run. Unknown dispatch outcomes remain reserved. Ending an
-unfinished task's attempt marks it failed. Inspect the PR outcome before
-recovering a retained merge lock.
+and a recorded run, then applies the same rule. Unknown dispatch outcomes
+remain reserved.
 
 ## Merge locks
 

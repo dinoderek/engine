@@ -200,7 +200,7 @@ func TestDeadExecutionFailsAndKeepsItsMergeLock(t *testing.T) {
 	}
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
-	if st.Items[task.ID].State != "failed" || st.Attempts[at.ID].State != "ended" || st.Locks[repo.ID].Attempt != at.ID {
+	if st.Items[task.ID].State != "failed" || st.Attempts[at.ID].Reason != control.EndFailed || st.Locks[repo.ID].Attempt != at.ID {
 		t.Fatal("failure dropped ownership evidence")
 	}
 }
