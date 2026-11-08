@@ -168,8 +168,8 @@ on a single-user machine. The page calls fixed same-origin routes:
   rendered, and its messages, 50 after `after` (through `anchor`), with a
   cursor and question statuses.
 
-Descriptions support headings, lists, code and links. Raw HTML is text; only
-absolute http, https and mailto links act.
+Descriptions support headings, flat lists, code, links. Raw HTML and
+messages are text; only absolute http, https and mailto links act.
 
 The process forwards only the `list`, `plan-view`, `attempts`, `get` and
 `updates` reads. It answers GET and HEAD for a loopback host name on any
