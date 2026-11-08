@@ -77,6 +77,15 @@ func TestCLIPlanTasksAndOperatorMessages(t *testing.T) {
 		t.Fatal("cursor")
 	}
 	command(t, e, "attempt", "list", task.ID)
+	other := command(t, e, "plan", "create", "--repo", repo.ID, "--title", "Other", "--body", "Other").Item
+	question := command(t, e, "ask", plan.ID, "May", "tasks", "change", "the", "API?").Updates[0]
+	if code := Main([]string{"resolve", itoa(question.ID), "Approved", "--plan", other.ID}, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), "not in plan") {
+		t.Fatalf("resolve into another plan exited %d: %s", code, e.Err)
+	}
+	ruled := command(t, e, "resolve", itoa(question.ID), "Approved", "for", "the", "plan", "--plan", plan.ID).Updates
+	if len(ruled) != 1 || ruled[0].Kind != "resolved" || ruled[0].Body != "Approved for the plan" {
+		t.Fatalf("resolve --plan = %+v, want the plan's resolution alone", ruled)
+	}
 }
 
 func itoa(n int) string { return fmt.Sprint(n) }

@@ -50,6 +50,7 @@ func TestThreadShowsMessagesOnlyForItsItem(t *testing.T) {
 		upd(8, "", "say", "Host problem"),
 		replyTo(9, "t7", "acknowledged", 2),
 		upd(10, "t7", "say", "<b>not markup</b>"),
+		replyTo(11, "p2", "ruling", 2),
 	}
 	th := threadWindow("t7", updates, 0, 0)
 	if want := []int{2, 9, 10}; !reflect.DeepEqual(messageIDs(th), want) {
@@ -58,7 +59,7 @@ func TestThreadShowsMessagesOnlyForItsItem(t *testing.T) {
 	if th.Messages[2].Body != "<b>not markup</b>" || th.Messages[0].Author != "operator" || !th.Messages[0].At.Equal(t0.Add(2*time.Minute)) {
 		t.Fatalf("message = %+v, want body, author and time carried as is", th.Messages)
 	}
-	if plan := threadWindow("p2", updates, 0, 0); !reflect.DeepEqual(messageIDs(plan), []int{3}) {
+	if plan := threadWindow("p2", updates, 0, 0); !reflect.DeepEqual(messageIDs(plan), []int{3, 11}) {
 		t.Fatalf("plan thread = %v, want only its own message", messageIDs(plan))
 	}
 }
