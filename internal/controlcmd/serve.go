@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -39,8 +40,23 @@ func serveMain(args []string, e Env) int {
 	listen := fs.String("listen", "127.0.0.1:7331", "private listen address")
 	advertise := fs.String("advertise", "", "origin reachable from execution hosts")
 	backup := fs.String("backup", "", "write a consistent backup and exit")
+	foreground := fs.Bool("foreground", false, "run the server in this process instead of starting it on its host")
+	onHost := fs.String("on-host", "", "start the server here, on the named host (engine serve's own hop)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
 		return 2
+	}
+	if !*foreground && *backup == "" {
+		var set []string
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name != "on-host" {
+				set = append(set, "--"+f.Name)
+			}
+		})
+		if len(set) > 0 {
+			fmt.Fprintf(e.Err, "engine serve: %s needs --foreground; without it, engine serve starts the server on the host config.toml names\n", strings.Join(set, ", "))
+			return 2
+		}
+		return launchServer(e, *onHost)
 	}
 	token, err := control.ReadCredential(*tokenPath)
 	if err != nil {

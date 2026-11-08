@@ -179,7 +179,7 @@ func TestServeCancellationAndCredentialValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	e, _ := environment(t)
-	if code := Main([]string{"serve", "--token-file", "/missing", "--db", filepath.Join(t.TempDir(), "db")}, e); code != 1 {
+	if code := Main([]string{"serve", "--foreground", "--token-file", "/missing", "--db", filepath.Join(t.TempDir(), "db")}, e); code != 1 {
 		t.Fatal(code)
 	}
 	if code := Main([]string{"serve", "--bad"}, e); code != 2 {
