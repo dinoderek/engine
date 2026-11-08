@@ -132,6 +132,9 @@ func jsonString(s string) string {
 
 func (e *psEnv) gh(_ []string, name string, args ...string) (string, error) {
 	e.ran = append(e.ran, name+" "+strings.Join(args, " "))
+	if args[0] == "auth" {
+		return "github.com\n  X Failed to log in to github.com account developer (keyring)", e.ghErr
+	}
 	if e.ghErr != nil {
 		return cmp.Or(e.ghOut, "HTTP 500"), e.ghErr
 	}

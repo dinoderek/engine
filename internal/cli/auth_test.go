@@ -8,10 +8,10 @@ import (
 )
 
 // When GitHub refuses the host's sign-in, engine run and engine ps --github
-// exit 1 with the same message, which says what to do.
+// exit 1 with the same message, which names the account and says what to do.
 func TestGitHubRefusingTheSignInEndsRunAndPs(t *testing.T) {
 	const refused = `{"message":"Bad credentials","status":"401"}` + "\ngh: Bad credentials (HTTP 401)"
-	want := "GitHub refuses the host's gh sign-in: gh: Bad credentials (HTTP 401). Check it with `gh auth status`, and sign in again with `gh auth login`\n"
+	want := "GitHub refuses the gh sign-in of GitHub account developer: gh: Bad credentials (HTTP 401). Check it with `gh auth status`, and sign in again with `gh auth login`\n"
 	e := newPsEnv(t, "mac")
 	e.ghErr, e.ghOut = errors.New("exit status 1"), refused
 	if code := e.run(); code != 1 || e.errOut.String() != "engine ps: "+want {

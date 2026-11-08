@@ -21,7 +21,7 @@ type AuthError struct {
 func (e *AuthError) Error() string {
 	who := "the host's gh sign-in"
 	if e.Account != "" {
-		who = "GitHub account " + e.Account
+		who = "the gh sign-in of GitHub account " + e.Account
 	}
 	return fmt.Sprintf("GitHub refuses %s: %s. Check it with `gh auth status`, and sign in again with `gh auth login`", who, e.Detail)
 }
@@ -35,19 +35,42 @@ func AsAuth(err error) (*AuthError, bool) {
 
 var (
 	rateLimited = regexp.MustCompile(`(?i)rate limit|x-ratelimit-remaining: 0`)
-	unsignedIn  = regexp.MustCompile(`(?i)http 401|bad credentials|requires authentication|token\b.*\binvalid|gh auth login`)
+	unsignedIn  = regexp.MustCompile(`(?i)http 401|bad credentials|requires authentication|the token in \S+ is invalid|gh auth login`)
 	forbidden   = regexp.MustCompile(`(?i)http 403`)
 	deniedUser  = regexp.MustCompile(`(?i)suspended|saml|\bsso\b|single sign-on`)
 	authAccount = regexp.MustCompile(`github\.com (?:account|as) ([A-Za-z0-9][A-Za-z0-9-]*)`)
 )
 
-// IsAuthFailure says whether out, a failed gh call's output, is GitHub
-// refusing the sign-in, rather than a rate limit or anything else.
-func IsAuthFailure(out string) bool {
-	if rateLimited.MatchString(out) {
-		return false
+// ghLines are the lines of a failed gh call's output that gh wrote itself.
+// Response bodies, which gh prints first, are JSON, and what an issue or
+// comment says is never read as gh's verdict.
+func ghLines(out string) []string {
+	var lines []string
+	for _, l := range strings.Split(out, "\n") {
+		l = strings.TrimSpace(l)
+		if l != "" && !strings.ContainsAny(l[:1], `{}[]"`) {
+			lines = append(lines, l)
+		}
 	}
-	return unsignedIn.MatchString(out) || forbidden.MatchString(out) && deniedUser.MatchString(out)
+	return lines
+}
+
+// IsAuthFailure says whether out, a failed gh call's output, is GitHub
+// refusing the sign-in, rather than a rate limit or anything else. Each
+// verdict comes from one of gh's own lines.
+func IsAuthFailure(out string) bool {
+	lines := ghLines(out)
+	for _, l := range lines {
+		if rateLimited.MatchString(l) {
+			return false
+		}
+	}
+	for _, l := range lines {
+		if unsignedIn.MatchString(l) || forbidden.MatchString(l) && deniedUser.MatchString(l) {
+			return true
+		}
+	}
+	return false
 }
 
 // authError returns the AuthError for out, a failed gh call's output, or
@@ -65,14 +88,14 @@ func authError(run Runner, out string) *AuthError {
 	return &AuthError{Account: account, Detail: ghMessage(out)}
 }
 
-// ghMessage is the line of gh's output that says why it failed: the one
-// naming the HTTP status, else the last line.
+// ghMessage is gh's own line that says why it failed: the last one naming
+// an HTTP status, else the first. IsAuthFailure has found at least one.
 func ghMessage(out string) string {
-	lines := strings.Split(strings.TrimSpace(out), "\n")
-	for _, l := range lines {
-		if strings.Contains(strings.ToUpper(l), "HTTP 4") {
-			return strings.TrimSpace(l)
+	lines := ghLines(out)
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(strings.ToUpper(lines[i]), "HTTP 4") {
+			return lines[i]
 		}
 	}
-	return strings.TrimSpace(lines[len(lines)-1])
+	return lines[0]
 }

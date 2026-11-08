@@ -36,6 +36,9 @@ func TestIsAuthFailure(t *testing.T) {
 		{"not found", "gh: Not Found (HTTP 404)", false},
 		{"network", ghNetwork, false},
 		{"server error", "gh: Server Error (HTTP 502)", false},
+		{"body text on an earlier page", `{"body":"run gh auth login after HTTP 401: Bad credentials"}` + "\n" + `[{"body":"SSO"}]` + "\ngh: Server Error (HTTP 502)", false},
+		{"pretty body", "{\n  \"body\": \"gh auth login\"\n}\ngh: Not Found (HTTP 404)", false},
+		{"403 and SSO on different lines", "gh: Forbidden (HTTP 403)\nsee the SSO docs", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := IsAuthFailure(tc.out); got != tc.auth {
@@ -99,8 +102,13 @@ func TestSyncLabelsReturnsAnAuthError(t *testing.T) {
 	}
 }
 
-func TestGhMessageFallsBackToTheLastLine(t *testing.T) {
-	if got := ghMessage("first\n  To get started, run gh auth login  \n"); got != "To get started, run gh auth login" {
-		t.Errorf("got %q", got)
+func TestGhMessage(t *testing.T) {
+	for out, want := range map[string]string{
+		"  To get started with GitHub CLI, please run:  gh auth login  \nAlternatively, set GH_TOKEN.\n":    "To get started with GitHub CLI, please run:  gh auth login",
+		`{"body":"gh: Bad credentials (HTTP 401)"}` + "\ngh: Sorry. Your account was suspended. (HTTP 403)": "gh: Sorry. Your account was suspended. (HTTP 403)",
+	} {
+		if got := ghMessage(out); got != want {
+			t.Errorf("ghMessage(%q) = %q", out, got)
+		}
 	}
 }
