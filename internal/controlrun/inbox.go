@@ -2,6 +2,7 @@ package controlrun
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hosts"
@@ -21,11 +22,15 @@ func (c *Coordinator) wakeMessages(st control.State, v run.View) error {
 			continue
 		}
 		at := st.Attempts[item.Attempt]
-		last := pendingMessage(st, item.ID, at)
+		last := pendingMessage(st, item, at)
 		if last == 0 {
 			continue
 		}
 		text := fmt.Sprintf("Read the new task updates: engine updates %s --after %d", item.ID, at.Seen)
+		if item.Kind == "task" && item.Plan != "" {
+			text = fmt.Sprintf("Read the new task and plan updates: engine updates %s --after %d; engine updates %s --after %d",
+				item.ID, at.Seen, item.Plan, at.Seen)
+		}
 		if err := c.Wake(sess, text); err != nil {
 			return err
 		}
@@ -43,17 +48,29 @@ func (c *Coordinator) wakeMessages(st control.State, v run.View) error {
 	return nil
 }
 
-func pendingMessage(st control.State, id string, at control.Attempt) int {
+// pendingMessage is the newest update a session has not been woken for: a
+// message on its own item, or a message or ruling on its task's plan that
+// is addressed to the plan's sessions rather than the operator. A session's
+// own updates and the coordinator's notices never wake it.
+func pendingMessage(st control.State, item control.Item, at control.Attempt) int {
 	last := 0
 	for _, u := range st.Updates {
-		if u.Item != id || u.ID <= at.Seen || u.Author == at.ID {
+		if u.ID <= at.Seen || u.Author == at.ID {
 			continue
 		}
-		if u.Kind == "say" || u.Kind == "reply" || u.Kind == "resolved" {
+		if u.Item == item.ID && slices.Contains(itemWakeKinds, u.Kind) || planWake(item, u) {
 			last = u.ID
 		}
 	}
 	return last
+}
+
+var itemWakeKinds = []string{"say", "reply", "resolved"}
+var planWakeKinds = []string{"say", "resolved", "ruling"}
+
+func planWake(item control.Item, u control.Update) bool {
+	return item.Kind == "task" && item.Plan != "" && u.Item == item.Plan &&
+		u.Author != "coordinator" && u.Recipient != "operator" && slices.Contains(planWakeKinds, u.Kind)
 }
 
 func (c *Coordinator) cleanup(st control.State, root string, v run.View, cfg *hosts.Config) error {
