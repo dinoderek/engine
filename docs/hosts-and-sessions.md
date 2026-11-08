@@ -178,7 +178,7 @@ without `--harness`) runs `gh auth status` in the `engine` tmux server
 `engine-check`, reads the skill and a file it wrote in `/tmp`, runs `gh` and
 `engine`, and closes its window. It exits 1, printing what it met, when gh
 failed or the session met a denial, stalled or skipped a step. A Codex check
-also needs the hooks to write its state file (`codex.md`).
+also needs the hooks to have written its state file (`codex.md`).
 
 **Other ways to start:** a session started any other way runs the same
 executor, creates its own worktree, and is reachable only where it was
