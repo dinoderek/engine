@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/hook"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -136,6 +137,43 @@ func TestPermissionHookFindsItsRunByCwd(t *testing.T) {
 				} else if len(log) != 0 {
 					t.Errorf("%s: logged %q", filepath.Base(dir), log)
 				}
+			}
+		})
+	}
+}
+
+func TestStateHookLabelsAJoinedThreadOnItsFirstPrompt(t *testing.T) {
+	tests := []struct {
+		name, event string
+		vars        bool // the run comes from the environment: an embedded session
+		labelled    bool
+	}{
+		{"a joined session's prompt", "UserPromptSubmit", false, true},
+		{"a joined session's other event", "Stop", false, false},
+		{"an embedded session's prompt", "UserPromptSubmit", true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHookHome(t)
+			var vars map[string]string
+			if tt.vars {
+				vars = map[string]string{session.RunDirVar: h.codexRun, session.HarnessVar: "codex"}
+			}
+			code, _, stderr := h.run([]string{"hook", "state"}, eventAt(tt.event, h.codex), vars)
+			if code != 0 {
+				t.Fatalf("exit %d, stderr %q", code, stderr)
+			}
+			// The run names no repo, so the label fails, is reported,
+			// and is recorded once: the session carries on.
+			_, err := os.Stat(filepath.Join(h.codexRun, hostops.CodexLabelFile))
+			if got := err == nil; got != tt.labelled {
+				t.Errorf("label recorded %v, want %v", got, tt.labelled)
+			}
+			if got := strings.Contains(stderr, "label the Codex thread"); got != tt.labelled {
+				t.Errorf("stderr %q", stderr)
+			}
+			if st, ok := session.ReadHarnessState(h.codexRun); !ok || st.Event != tt.event {
+				t.Errorf("state %+v, %v", st, ok)
 			}
 		})
 	}

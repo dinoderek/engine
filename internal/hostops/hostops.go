@@ -56,6 +56,9 @@ type Deps struct {
 	// CodexTurns reads the newest stored turn for each engine thread, without
 	// resuming it. Nil uses a short-lived app-server subprocess.
 	CodexTurns func(context.Context, string, string, []string) (map[string]json.RawMessage, error)
+	// CodexLabel titles a thread and files it under a project, through
+	// engine's daemon. Nil uses `codex app-server proxy`.
+	CodexLabel func(context.Context, string, string, CodexLabelRequest) error
 }
 
 // RefusedError is an op that refused before it changed anything.

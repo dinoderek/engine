@@ -288,7 +288,23 @@ func stateHook(env Env) int {
 	}
 	h := hook.State{Err: env.Err, Unattended: run.unattended}
 	h.Write = func(sig hook.Signal) error {
-		return session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID})
+		if err := session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID}); err != nil {
+			return err
+		}
+		labelCodexThread(env, run, sig)
+		return nil
 	}
 	return h.Handle(in)
+}
+
+// labelCodexThread titles a joined Codex session's thread and files it under
+// its repo's project, on the session's first prompt, when the thread exists.
+// A failure is reported, and the session carries on.
+func labelCodexThread(env Env, run hookRun, sig hook.Signal) {
+	if !run.joined || sig.Event != "UserPromptSubmit" || sig.SessionID == "" {
+		return
+	}
+	if err := hostops.LabelCodexThread(hostDeps(env), run.dir, run.record, sig.SessionID); err != nil {
+		fmt.Fprintln(env.Err, "engine hook: label the Codex thread:", err)
+	}
 }
