@@ -22,7 +22,7 @@
   const panel = window.engine.panel({
     $, view, writeHash, status: () => status(), repoName,
     href: (id, tab, update) => here({ id, tab, update }),
-    render: () => { renderPlans(); renderPane(); },
+    render: () => { renderPlans(); renderPane(); renderSessions(); },
   });
   const sessions = window.engine.sessions({
     $, view,

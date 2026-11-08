@@ -175,6 +175,19 @@ const scenarios = {
       assert.equal(t.$("panel").hidden, true);
       assert.equal(t.active().dataset.key, "s-fb-t29");
       assert.equal(t.p.win.location.hash, "#/sessions");
+      assert.equal(t.key("s-fb-t29").getAttribute("aria-current"), null, "the closed panel leaves no selected message");
+    });
+  },
+
+  async "a resolved question drops the feedback request on refresh"() {
+    await page("#/sessions", {}, async (t) => {
+      assert.equal(t.rows().length, 6);
+      assert.ok(t.key("s-fb-t28"));
+      t.fx.sessions = DATA(ROWS.map((r) => (r.item === "t28" ? Object.assign({}, r, { feedback: undefined }) : r)));
+      await t.refresh();
+      assert.equal(t.key("s-fb-t28"), null);
+      assert.equal(t.$("session-t28").className, "");
+      assert.match(t.$("sessions").querySelector("h1").textContent, /1 needs feedback/);
     });
   },
 

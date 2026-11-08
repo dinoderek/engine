@@ -39,10 +39,11 @@ Without that file, the CLI uses the origin shown above. An explicit
 credential and the advertised URL at dispatch.
 
 For backup, stop the server, run the same invocation with
-`--backup <new-path>`, and restart it. Copy the backup off-machine. The backup operation refuses to overwrite an
-existing file. Restore
+`--backup <new-path>`, and restart it. Copy the backup off-machine. The backup
+operation refuses to overwrite an existing file. Restore
 with the server stopped, retaining the private operator credential. A backup
-includes execution credentials and is private. Test restores in an isolated database first.
+includes execution credentials and is private. Test restores in an isolated
+database first.
 
 ## Records and commands
 
@@ -88,8 +89,9 @@ task in todo, prepare, approved or failed, with no unresolved task or plan
 question. The URL must identify a PR in the task's GitHub repository; engine
 records it without verifying the merge. The command stores done and the PR in
 versioned history, stops coordination for that task and keeps dependency
-edges and prior attempts. It creates no attempt and needs no approval. Ordinary state transitions
-still require an execution for running and in-review.
+edges and prior attempts. It creates no attempt and needs no approval.
+Ordinary state transitions still require an execution for running and
+in-review.
 
 ## API and storage
 
@@ -109,7 +111,8 @@ SQLite runs locally through its CLI, with SQL on stdin. A process lock
 allows one engine server per database; a mutex serializes commands.
 Each transaction updates current records, immutable history and its request
 receipt together. History retains record snapshots. The database uses a
-versioned schema and rejects unknown versions. It loads its control records for each operation; bulk telemetry belongs elsewhere.
+versioned schema and rejects unknown versions. It loads its control records
+for each operation; bulk telemetry belongs elsewhere.
 
 The operator credential is an owner-only regular file. Every dispatch creates
 a separate execution credential, scoped to that plan or task. Workers cannot

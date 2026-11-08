@@ -110,7 +110,7 @@ window.engine.sessions = function (ctx) {
     $("tab-sessions").textContent = tabText(env);
     const box = $("sessions");
     if (!env || !env.data) {
-      box.replaceChildren(el("h1", { class: "visually-hidden" }, "Sessions"), el("p", { class: "empty" }, env ? env.error : "Loading sessions…"));
+      keep(() => box.replaceChildren(el("h1", { class: "visually-hidden" }, "Sessions"), el("p", { class: "empty" }, env ? env.error : "Loading sessions…")));
       return;
     }
     const d = env.data;
