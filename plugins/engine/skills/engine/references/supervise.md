@@ -16,7 +16,8 @@ first comment on the feature. Then check every 10 minutes: its log,
 - **Relay an answer** the operator gave you, with `engine tell <repo>-<task>
   <text>`.
 - **Answer a stall** `engine run` raised, with `engine tell`, when the answer
-  is not a hard stop: for example "your claim landed, carry on".
+  is not a hard stop: for example "your claim landed, carry on". A session
+  that has not claimed its task yet is reached too, by its run record.
 - **Restart `engine run`** when it has died, or after an engine fix merges.
   Restart between passes, once its log shows a pass has ended. To pick up a
   fix, rebuild first: `GOBIN=~/.local/bin go install ./cmd/engine` from an
