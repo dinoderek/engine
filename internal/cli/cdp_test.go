@@ -92,7 +92,7 @@ func launchBrowser(t *testing.T, path string) *browser {
 		"--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-extensions",
 		"--disable-background-networking", "--disable-sync", "--disable-component-update", "--mute-audio",
 		"--use-mock-keychain", "--password-store=basic", "--window-size=1280,900"}
-	if runtime.GOOS == "linux" && os.Getuid() == 0 {
+	if !sandboxAvailable() {
 		args = append(args, "--no-sandbox")
 	}
 	b := &browser{t: t, send: fromTest, stderr: &syncBuffer{}, pending: map[int]chan cdpMessage{}, done: make(chan struct{})}
@@ -109,6 +109,22 @@ func launchBrowser(t *testing.T, path string) *browser {
 	t.Cleanup(b.close)
 	b.attach()
 	return b
+}
+
+// userNamespaceRestriction is where Ubuntu 23.10 and later say whether
+// AppArmor forbids the unprivileged user namespaces Chromium sandboxes with.
+const userNamespaceRestriction = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
+
+// sandboxAvailable reports whether Chromium can sandbox itself here. On
+// Linux it cannot as root, nor where AppArmor forbids unprivileged user
+// namespaces to a browser it has no profile for, as on CI runners. The test
+// browser loads only the test's own loopback page, so it then runs without.
+func sandboxAvailable() bool {
+	if runtime.GOOS != "linux" {
+		return true
+	}
+	restricted, err := os.ReadFile(userNamespaceRestriction)
+	return os.Getuid() != 0 && (err != nil || strings.TrimSpace(string(restricted)) != "1")
 }
 
 // browserEnv gives the browser its own home: Linux keeps its NSS database
