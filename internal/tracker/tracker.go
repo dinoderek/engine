@@ -64,6 +64,9 @@ func SyncLabels(run Runner, repo string, out io.Writer) error {
 		output, err := run(nil, "gh", "label", "create", l.Name, "--repo", repo,
 			"--color", l.Color, "--description", l.Description, "--force")
 		if err != nil {
+			if ae := authError(run, output); ae != nil {
+				return ae
+			}
 			return fmt.Errorf("label %s: %w\n%s", l.Name, err, strings.TrimSpace(output))
 		}
 		fmt.Fprintf(out, "%-22s %s\n", l.Name, l.Description)

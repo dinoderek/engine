@@ -84,11 +84,15 @@ func (i apiIssue) ref() (Ref, error) {
 	return Ref{Repo: repo, Number: i.Number}, nil
 }
 
-// api runs gh api with the host's configured authentication and returns its output. A failure
-// carries gh's own output, which says why.
+// api runs gh api with the host's configured authentication and returns its
+// output. A failure carries gh's own output, which says why, and is an
+// AuthError when GitHub refuses the sign-in.
 func api(run Runner, args ...string) (string, error) {
 	out, err := run(nil, "gh", append([]string{"api"}, args...)...)
 	if err != nil {
+		if ae := authError(run, out); ae != nil {
+			return "", ae
+		}
 		return "", fmt.Errorf("%w\n%s", err, strings.TrimSpace(out))
 	}
 	return out, nil
