@@ -1,6 +1,7 @@
 package controlrun
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,6 +17,11 @@ func (c *Coordinator) dispatch(st control.State, item control.Item, host, harnes
 	out, err := c.Service.Dispatch(item, host, harness, key)
 	if err != nil {
 		return err
+	}
+	// Only a new execution releases: a replayed one may have a spawn still
+	// in flight on the host, whose window and worktree release would take.
+	if _, replay := st.Attempts[out.Attempt.ID]; !replay {
+		c.releaseEnded(st, *out.Item, *out.Attempt, c.Client(cfg.Hosts[out.Attempt.Host]))
 	}
 	return c.launch(st, *out.Item, *out.Attempt, out.Credential, cfg)
 }
@@ -45,6 +51,14 @@ func (c *Coordinator) launch(st control.State, item control.Item, at control.Att
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
 			Resume: hadEarlierAttempt(st, item.ID, at.ID), Kickoff: kickoff(item, at, reviewer.Model)}}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
+	var refused *hostops.RefusedError
+	if errors.As(err, &refused) {
+		// One notice per execution: a retry's reason may differ, and the
+		// reused key refuses a second body.
+		_ = c.notice(item.ID, "refused/"+at.ID, fmt.Sprintf("Host %s refused to start this execution: %s. "+
+			"The coordinator tries again each pass until the host accepts it.", at.Host, refused.Reason))
+		return err
+	}
 	if err != nil {
 		_ = c.notice(item.ID, "dispatch/"+at.ID, "Dispatch has an unresolved outcome; its execution stays reserved. "+err.Error())
 		return err
@@ -63,6 +77,53 @@ func hadEarlierAttempt(st control.State, item, current string) bool {
 		}
 	}
 	return false
+}
+
+// releaseEnded releases, before a new execution's first launch, the session
+// an ended earlier attempt of item left on the execution's host, as the host
+// refuses a window name in use and a worktree left on the task's branch. It
+// acts only on a successful read of the host that shows the task's window
+// dead or absent, and whose newest run under that name is not this
+// execution's own; a live window, or one that cannot be read, is left alone.
+// Release keeps a worktree with uncommitted changes, and the branch.
+func (c *Coordinator) releaseEnded(st control.State, item control.Item, at control.Attempt, client remote.Client) {
+	if !endedEarlier(st, item.ID, at) {
+		return
+	}
+	status, err := client.Status()
+	if err != nil || status.RunsError != "" {
+		return
+	}
+	name := windowName(st, item)
+	for _, w := range status.Windows {
+		if w.Name == name && w.Alive {
+			return
+		}
+	}
+	for _, r := range status.Runs {
+		if r.Name == name && r.Record.RunID == at.RunID {
+			return
+		}
+	}
+	if _, err := client.Release(name, false); err != nil {
+		c.log("release the ended session %s on %s: %v", name, at.Host, err)
+	}
+}
+
+// endedEarlier reports whether an attempt of item other than current ran on
+// current's host and has ended.
+func endedEarlier(st control.State, item string, current control.Attempt) bool {
+	for _, at := range st.Attempts {
+		if at.Item == item && at.ID != current.ID && at.Host == current.Host && at.State == "ended" && at.Window != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// windowName is the task's tmux window name on a host, <repo>-<task>.
+func windowName(st control.State, item control.Item) string {
+	return fmt.Sprintf("%s-%d", strings.Split(st.Items[item.Repo].Slug, "/")[1], control.Number(item.ID))
 }
 
 func kickoff(item control.Item, at control.Attempt, reviewer string) string {
@@ -155,8 +216,7 @@ func (c *Coordinator) ConfirmEnded(id string) error {
 	if status.RunsError != "" {
 		return fmt.Errorf("host run records are unreadable")
 	}
-	item := st.Items[at.Item]
-	name := fmt.Sprintf("%s-%d", strings.Split(st.Items[item.Repo].Slug, "/")[1], control.Number(item.ID))
+	name := windowName(st, st.Items[at.Item])
 	for _, w := range status.Windows {
 		if w.Name == name && w.Alive {
 			return fmt.Errorf("execution is still alive")
