@@ -109,7 +109,7 @@ you are changing host names or addresses, load `hosts-and-sessions.md`.
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it for the harness the caller names (Claude by default), opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
 | `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (Claude’s newest run observation and a live Codex reading), free slots and free heavy slots, the last 20 screen lines of each window whose session is not working, and a waiting window's newest `permissions.jsonl` denial (`telemetry.md`). |
 | `collect` | Returns a run directory, its `run.json` and its file list. Nothing is uploaded. |
-| `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable and not behind its base. Already merged there is done; otherwise refused or pending. |
+| `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable and not behind its base. Already merged there is done. |
 | `release` | Closes the session's window if it is open, deletes its Codex profile, and removes its worktree unless the run failed. A worktree with changes is kept too, and the branch always stays. |
 
 **The envelope.** Every reply, a failure too, carries `protocol` (the wire
@@ -161,28 +161,26 @@ is waiting for input. Three sources:
 session is alive while its window's command runs, and dead once the window
 is gone or its command exited. A session started by hand is alive only when
 the reply's harness list shows it (`claude.md`, "Session list"); otherwise
-its liveness is unknown. A failed call leaves it unknown too. A session in
+its liveness, like a failed call's, is unknown. A session in
 `needs-human` or `in-review` keeps that state while alive.
 
 **Stalls.** Limited sessions never stall, including before claiming. Their
 `waiting-since` is cleared; a later ordinary wait starts a fresh timer.
-Claude limit markers carry `resets_at`; busy wins over a marker. A window
-the coordinator opened whose task has not claimed in time (`coordinate` mode
-sets the time) is stalled before the claim. One that ended before
-claiming is reported once, then started again. A session whose
+Claude limit markers carry `resets_at`; busy wins over a marker. An
+unclaimed window the coordinator opened stalls after `coordinate` mode's
+time; one that ended before claiming is reported once, then restarted. A session whose
 `waiting-since` is 10 minutes old while its task is open and not
 `needs-human` has stopped outside the protocol, as on a question asked in
-the session. The coordinator @mentions you on the task's issue, with the
-last screen the host's `status` sent, once per session start or wait: it
-notes each one it flags. A denial at most 10 minutes older than
+the session. The coordinator @mentions you on the task's issue with the
+last screen `status` sent, once per session start or wait. A denial at most 10 minutes older than
 `waiting-since` makes the stall a Permission hard stop, naming the tool,
 input and reason.
 
 **Limit recovery.** Never resume `needs-human`; recheck labels before typing.
 Each session check resumes an engine window still `limited`,
 or `waiting` with a positive limit `resets_at`, once the reset plus 2 minutes
-has passed. It types literal `continue`, then Enter, as `engine tell` does,
-Working, unknown and dead sessions are left alone.
+has passed. It types literal `continue`, then Enter, as `engine tell` does;
+working, unknown and dead sessions are left alone.
 Observed resets outlive quota expiry; unknown resets are never resumed.
 The attempt is noted before typing, so Enter failing never duplicates
 text. A later reset permits another attempt.
