@@ -87,6 +87,12 @@ func TestPlanDetailCarriesApplicableFeedback(t *testing.T) {
 			t.Fatalf("%s under an open plan question = %+v, want blocked with the plan's question", id, byID[id])
 		}
 	}
+	failedAlone := planDetail("p24", fixtureView(), fixtureAttempts(), rows[:1])
+	for _, tk := range failedAlone.Tasks {
+		if tk.ID == "t33" && (tk.Feedback != nil || tk.Group != groupBlocked) {
+			t.Fatalf("a failed task is not waiting to start, so does not link the plan's question: %+v", tk)
+		}
+	}
 	if byID["t26"].Feedback != nil || got.Counts != (Counts{Done: 1, InProgress: 2, Blocked: 4}) {
 		t.Fatalf("counts under an open plan question = %+v, done task %+v", got.Counts, byID["t26"])
 	}

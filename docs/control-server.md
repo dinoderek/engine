@@ -178,12 +178,12 @@ host name on any port, so an SSH tunnel works, and sends
 last data, marked stale. It refreshes every 30s while visible, keeping focus,
 the open panel and the selected message.
 
-On Sessions and Plans, "Needs feedback" opens the question's thread at its
-update, on the plan's thread when the plan asked.
+On both tabs, "Needs feedback" opens the question's thread at its
+update over the tab, on the plan's thread when it asked.
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
-unfinished prerequisite or the plan's open question (as its sessions report
+unfinished prerequisite or the plan's open question (as sessions report
 it) blocks it, todo or approved under an approved plan is ready to run, and
 anything else is blocked.
 Coordination does not change it.

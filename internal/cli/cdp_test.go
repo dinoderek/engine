@@ -83,10 +83,12 @@ func launchBrowser(t *testing.T, path string) *browser {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The mock keychain and basic password store keep the browser out of
+	// the user's keychain: it writes only under its temporary profile.
 	args := []string{"--headless=new", "--remote-debugging-pipe", "--user-data-dir=" + t.TempDir(),
 		"--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-extensions",
 		"--disable-background-networking", "--disable-sync", "--disable-component-update", "--mute-audio",
-		"--window-size=1280,900"}
+		"--use-mock-keychain", "--password-store=basic", "--window-size=1280,900"}
 	if runtime.GOOS == "linux" && os.Getuid() == 0 {
 		args = append(args, "--no-sandbox")
 	}
