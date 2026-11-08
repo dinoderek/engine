@@ -192,17 +192,19 @@ func (u *upstream) thread(ctx context.Context, id string, after, anchor int) (En
 			return nil, err
 		}
 		var all []control.Update
-		for cursor, reads := 0, 0; reads < maxThreadReads; reads++ {
+		for cursor, reads := 0, 0; ; reads++ {
+			if reads == maxThreadReads {
+				return nil, &control.Problem{Status: 502, Message: "thread too long to show"}
+			}
 			page, err := u.call(ctx, control.Request{Op: "updates", ID: id, After: cursor})
 			if err != nil {
 				return nil, err
 			}
 			all = append(all, page.Updates...)
 			if len(page.Updates) < 200 {
-				break
+				return threadWindow(id, all, after, anchor), nil
 			}
 			cursor = page.Updates[len(page.Updates)-1].ID
 		}
-		return threadWindow(id, all, after, anchor), nil
 	})
 }

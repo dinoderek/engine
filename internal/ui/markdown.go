@@ -206,15 +206,19 @@ func parseInline(s string) []Inline {
 	return out
 }
 
+// maxLinkPart bounds the label and the destination of a link.
+const maxLinkPart = 2048
+
 // parseLink reads "[label](destination)" at the start of s, allowing one
 // level of balanced parentheses in the destination and an optional title.
 func parseLink(s string) (label, dest string, n int, ok bool) {
-	end := strings.IndexByte(s, ']')
+	// Bounded scans keep a long run of unclosed brackets linear.
+	end := strings.IndexByte(s[:min(len(s), maxLinkPart)], ']')
 	if end < 2 || end+1 >= len(s) || s[end+1] != '(' || strings.ContainsAny(s[1:end], "[\n") {
 		return "", "", 0, false
 	}
 	depth := 0
-	for j := end + 2; j < len(s); j++ {
+	for j := end + 2; j < len(s) && j < end+2+maxLinkPart; j++ {
 		switch s[j] {
 		case '(':
 			depth++

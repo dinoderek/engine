@@ -166,10 +166,10 @@ on a single-user machine. The page calls fixed same-origin routes:
   it filters the last list read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts and unfinished prerequisites, including other plans' tasks.
-- `/api/items/<id>`: a plan or task, its description rendered.
+- `/api/items/<id>`: a plan or task with its description.
 - `/api/items/<id>/thread`: the item's messages (`say`, `ask`, `reply`,
   `acknowledged`, `resolved`): 50 after `after`, extended to include
-  `anchor`, with the next cursor, a more flag and every question's status.
+  `anchor`, with the next cursor, a more flag and all question statuses.
 
 Descriptions support headings, flat lists, code and links. Raw HTML and
 messages are text; only absolute http, https and mailto links act.
@@ -178,13 +178,13 @@ The process forwards only the `list`, `plan-view`, `attempts`, `get` and
 `updates` reads. It answers GET and HEAD for a loopback host name on any
 port, so an SSH tunnel works, and sends `Cache-Control: no-store`. When the
 control server fails, the plan routes return their last data, marked stale, and
-the page keeps its item and thread data. It refreshes every 30 seconds
-while visible.
+the page keeps its item and thread data. It refreshes every 30s while
+visible.
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
 unfinished prerequisite blocks it, todo or approved under an approved plan
-is ready to run, and anything else is blocked.
+is ready to run, and anything else is blocked. Coordination is ignored.
 
 ## Session view
 

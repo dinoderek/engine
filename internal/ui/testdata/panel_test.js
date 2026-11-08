@@ -202,7 +202,7 @@ const scenarios = {
       const list = t.$("messages");
       assert.equal(list.children.length, 3);
       const q = t.$("update-2");
-      assert.ok(q.textContent.includes("operator") && q.textContent.includes("Question") && q.textContent.includes("Approve the API?"));
+      assert.ok(q.textContent.includes("operator") && q.textContent.includes("Question to operator") && q.textContent.includes("Approve the API?"));
       assert.equal(q.querySelector("time").getAttribute("datetime"), AT);
       assert.equal(q.querySelector(".question").textContent, "Open · acknowledged · 1 reply");
       assert.equal(t.$("update-3").textContent.includes("Acknowledged"), true);
@@ -266,6 +266,7 @@ const scenarios = {
       await t.refresh();
       assert.equal(t.$("messages").children.length, 100, "a refresh does not load further pages");
       t.$("more").click();
+      t.p.doc.fire("visibilitychange"); // a refresh lands while the page is loading
       await t.flush();
       assert.equal(t.$("more").hidden, true);
       assert.equal(t.$("messages").children.length, 120);
@@ -316,10 +317,10 @@ const scenarios = {
     await page("#/plans/p24", {}, async (t) => {
       t.opener("p24").click();
       await t.flush();
-      assert.equal(t.$("list").inert && t.$("pane").inert, true);
+      assert.equal(t.$("bar").inert && t.$("list").inert && t.$("pane").inert, true);
       is(t.active(), t.$("panel-title"));
       t.key(t.$("panel-title"), "Escape");
-      assert.equal(t.$("list").inert || t.$("pane").inert, false);
+      assert.equal(t.$("bar").inert || t.$("list").inert || t.$("pane").inert, false);
       assert.equal(t.active().dataset.key, "open-p24", "focus returns to the link that was inert while the panel was open");
     }, { narrow: true });
   },

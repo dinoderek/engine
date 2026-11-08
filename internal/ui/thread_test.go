@@ -213,3 +213,15 @@ func TestThreadReadsEveryPageOfUpdates(t *testing.T) {
 		t.Fatalf("update reads after %v, want 0, 200, 400", after)
 	}
 }
+
+func TestThreadTooLongToReadIsAnError(t *testing.T) {
+	var all []control.Update
+	for i := 1; i <= 200*maxThreadReads+1; i++ {
+		all = append(all, upd(i, "t7", "say", "m"))
+	}
+	pc := &pagedCaller{updates: all}
+	env, status := newUpstream(pc, func() time.Time { return t0 }, nil).thread(context.Background(), "t7", 0, 0)
+	if status != 502 || env.Data != nil || !strings.Contains(env.Error, "too long") {
+		t.Fatalf("overlong thread = %d %+v, want an error rather than a partial thread", status, env)
+	}
+}

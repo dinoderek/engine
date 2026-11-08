@@ -15,7 +15,7 @@ window.engine.panel = function (ctx) {
   // usual shape; thread holds the messages read so far and the cursor.
   const st = {
     shown: "", item: null, thread: null, threadEnv: null, opener: "", rendered: "",
-    nodes: new Map(), badges: new Map(), update: 0, want: 0, itemSeq: 0, threadSeq: 0,
+    nodes: new Map(), badges: new Map(), update: 0, want: 0, itemSeq: 0, threadSeq: 0, statusSeq: 0,
   };
 
   function inline(runs) {
@@ -79,7 +79,7 @@ window.engine.panel = function (ctx) {
   function messageNode(m) {
     const head = el("div", { class: "message-head" },
       el("b", {}, m.author), " ",
-      el("span", { class: "muted" }, KINDS[m.kind] || m.kind + (m.recipient ? " to " + m.recipient : "")), " ",
+      el("span", { class: "muted" }, (KINDS[m.kind] || m.kind) + (m.recipient ? " to " + m.recipient : "")), " ",
       el("time", { datetime: m.at }, new Date(m.at).toLocaleString()));
     if (m.requires_reply) {
       const badge = el("span", { class: "question" });
@@ -162,7 +162,8 @@ window.engine.panel = function (ctx) {
   // statuses, which is how a refresh behaves while pages remain to load.
   async function fetchThread(opts) {
     const id = st.shown;
-    const n = ++st.threadSeq;
+    // A status-only refresh must not cancel a page the user asked for.
+    const n = opts.statusOnly ? ++st.statusSeq : ++st.threadSeq;
     const t = st.thread;
     const after = opts.after !== undefined ? opts.after : t ? t.next : 0;
     const anchor = opts.anchor ? "&anchor=" + opts.anchor : "";
@@ -172,7 +173,7 @@ window.engine.panel = function (ctx) {
     } catch (err) {
       env = failed(st.threadEnv, err);
     }
-    if (n !== st.threadSeq || id !== st.shown) return;
+    if (n !== (opts.statusOnly ? st.statusSeq : st.threadSeq) || id !== st.shown) return;
     st.threadEnv = env;
     if (env.data && !env.failed) {
       st.thread = st.thread || { messages: [], seen: new Set(), questions: new Map(), next: 0, more: false };
@@ -227,6 +228,7 @@ window.engine.panel = function (ctx) {
     st.badges.clear();
     st.itemSeq++;
     st.threadSeq++;
+    st.statusSeq++;
     $("messages").replaceChildren();
     $("thread-note").textContent = "";
   }
@@ -236,7 +238,7 @@ window.engine.panel = function (ctx) {
   }
 
   function applyInert() {
-    for (const id of ["list", "pane"]) $(id).inert = mobileOverlay();
+    for (const id of ["bar", "list", "pane"]) $(id).inert = mobileOverlay();
   }
 
   function restoreFocus() {

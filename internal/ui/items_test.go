@@ -81,7 +81,7 @@ func TestItemRoutesRefuseOtherItems(t *testing.T) {
 		t.Fatalf("refused items still made calls %v", calls)
 	}
 	res, body := d.get(t, "GET", "127.0.0.1", "/api/items/t99")
-	if env := decode(t, body); res.StatusCode != 404 && env.Data == nil || env.Error == "" {
+	if env := decode(t, body); res.StatusCode != 404 || env.Error == "" {
 		t.Fatalf("GET unknown item = %d %s, want 404", res.StatusCode, body)
 	}
 }

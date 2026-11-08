@@ -132,3 +132,20 @@ func TestUnsafeLinkKeepsOnlyItsText(t *testing.T) {
 		t.Fatalf("inline = %+v, want %+v", got, want)
 	}
 }
+
+func TestLinkPartsAreBounded(t *testing.T) {
+	long := strings.Repeat("a", maxLinkPart+1)
+	for _, src := range []string{"[x](https://example.com/" + long + ")", "[" + long + "](https://example.com)"} {
+		for _, run := range parseInline(src) {
+			if run.Href != "" {
+				t.Errorf("an over-long link part still made a link: %.60q", src)
+			}
+		}
+	}
+	if got := parseInline("[x](https://example.com/" + strings.Repeat("a", 1000) + ")"); got[0].Href == "" {
+		t.Fatal("a link within the bound lost its destination")
+	}
+	if got := parseInline(strings.Repeat("[a](", 5000)); len(got) != 1 {
+		t.Fatalf("unclosed links = %d runs, want the text kept whole", len(got))
+	}
+}
