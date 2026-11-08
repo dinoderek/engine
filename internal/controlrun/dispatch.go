@@ -18,6 +18,11 @@ func (c *Coordinator) dispatch(st control.State, item control.Item, host, harnes
 	if err != nil {
 		return err
 	}
+	// Only a new execution releases: a replayed one may have a spawn still
+	// in flight on the host, whose window and worktree release would take.
+	if _, replay := st.Attempts[out.Attempt.ID]; !replay {
+		c.releaseEnded(st, *out.Item, *out.Attempt, c.Client(cfg.Hosts[out.Attempt.Host]))
+	}
 	return c.launch(st, *out.Item, *out.Attempt, out.Credential, cfg)
 }
 
@@ -45,14 +50,12 @@ func (c *Coordinator) launch(st control.State, item control.Item, at control.Att
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
 			Resume: hadEarlierAttempt(st, item.ID, at.ID), Kickoff: kickoff(item, at, reviewer.Model)}}
-	client := c.Client(cfg.Hosts[at.Host])
-	c.releaseEnded(st, item, at, client)
-	spawned, err := remote.ControlSpawn(client, req)
+	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
 	var refused *hostops.RefusedError
 	if errors.As(err, &refused) {
 		// One notice per execution: a retry's reason may differ, and the
 		// reused key refuses a second body.
-		_ = c.notice(item.ID, "refused/"+at.ID, fmt.Sprintf("Host %s refused to start this execution and changed nothing: %s. "+
+		_ = c.notice(item.ID, "refused/"+at.ID, fmt.Sprintf("Host %s refused to start this execution: %s. "+
 			"The coordinator tries again each pass until the host accepts it.", at.Host, refused.Reason))
 		return err
 	}
@@ -76,8 +79,8 @@ func hadEarlierAttempt(st control.State, item, current string) bool {
 	return false
 }
 
-// releaseEnded releases the session an ended earlier attempt of item left on
-// the execution's host, as the host refuses a window name in use and a
+// releaseEnded releases, before a new execution's first launch, the session
+// an ended earlier attempt of item left on the execution's host, as the host refuses a window name in use and a
 // worktree left on the task's branch. It acts only on a successful read of
 // the host that shows the task's window dead or absent, and whose newest run
 // under that name is not this execution's own; a live window, or one that

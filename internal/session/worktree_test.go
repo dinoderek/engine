@@ -285,20 +285,27 @@ func TestCreateWorktreeOnResumeAdoptsALeftWorktree(t *testing.T) {
 		{name: "clean, origin lacks the branch", resume: true, ff: "refs/remotes/origin/main"},
 		{name: "uncommitted changes", resume: true, replies: []reply{{key: "status --porcelain", out: "?? notes.txt\n"}}, wantErr: "with uncommitted changes", taken: true},
 		{name: "commits origin lacks", resume: true, replies: append([]reply{{key: "merge-base", err: errBoom}}, originTip...), wantErr: "with commits that origin lacks", taken: true},
-		{name: "status unreadable", resume: true, replies: []reply{{key: "status --porcelain", err: errBoom}}, wantErr: "read the status of the worktree at /old"},
-		{name: "fast-forward fails", resume: true, replies: []reply{{key: "merge --ff-only", err: errBoom}}, wantErr: "fast-forward the worktree at /old"},
-		{name: "no resume", replies: originTip, wantErr: "already has a worktree at /old; release it first", taken: true},
+		{name: "status unreadable", resume: true, replies: []reply{{key: "status --porcelain", err: errBoom}}, wantErr: "read the status of the worktree at {old}"},
+		{name: "fast-forward fails", resume: true, replies: []reply{{key: "merge --ff-only", err: errBoom}}, wantErr: "fast-forward the worktree at {old}"},
+		{name: "no resume", replies: originTip, wantErr: "already has a worktree at {old}; release it first", taken: true},
+		{name: "folder gone", resume: true, left: "gone", wantErr: "whose folder is gone; run git -C", taken: true},
+		{name: "engine's clone", resume: true, left: "clone", wantErr: "is checked out in engine's clone", taken: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &gitFake{replies: append(tt.replies,
-				reply{key: "worktree list", out: porcelain("/c", "/old", "task/r-7")},
-				reply{key: "rev-parse --verify", err: errBoom})}
+			f := &gitFake{}
 			r := newRepos(t, f)
 			path, _ := r.Path(repo)
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				t.Fatal(err)
 			}
+			tt.old = map[string]string{"": t.TempDir(), "gone": filepath.Join(t.TempDir(), "gone"), "clone": path}[tt.left]
+			tt.wantErr = strings.ReplaceAll(tt.wantErr, "{old}", tt.old)
+			list := porcelain("/c", tt.old, "task/r-7")
+			if tt.left == "clone" {
+				list = "worktree " + path + "\nHEAD abc\nbranch refs/heads/task/r-7\n"
+			}
+			f.replies = append(tt.replies, reply{key: "worktree list", out: list}, reply{key: "rev-parse --verify", err: errBoom})
 			got, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7, tt.resume)
 			checkAdoption(t, f, tt, got, err)
 		})
@@ -313,6 +320,8 @@ type adoption struct {
 	ff      string // the tip the worktree is fast-forwarded to; "" when it is not adopted
 	wantErr string
 	taken   bool
+	left    string // where the left worktree is: "" a folder, "gone" a missing one, "clone" engine's clone
+	old     string // its path, set by the test
 }
 
 // checkAdoption checks that a left worktree was adopted, fast-forwarded to
@@ -333,14 +342,14 @@ func checkAdoption(t *testing.T, f *gitFake, tt adoption, got Worktree, err erro
 		}
 		return
 	}
-	if err != nil || got != (Worktree{Path: "/old", Branch: "task/r-7"}) {
+	if err != nil || got != (Worktree{Path: tt.old, Branch: "task/r-7"}) {
 		t.Fatalf("worktree = %+v, %v", got, err)
 	}
 	want := "git merge --ff-only --quiet " + ff
 	for _, c := range f.calls {
-		if c.dir == "/old" && c.line == want {
+		if c.dir == tt.old && c.line == want {
 			return
 		}
 	}
-	t.Errorf("commands %v lack %q in /old", f.lines(), want)
+	t.Errorf("commands %v lack %q in %s", f.lines(), want, tt.old)
 }

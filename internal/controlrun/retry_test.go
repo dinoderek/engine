@@ -67,7 +67,9 @@ func TestRetryReleasesTheDeadWindowOfTheEndedAttemptFirst(t *testing.T) {
 	}
 }
 
-func TestRetryLeavesALiveWindowAlone(t *testing.T) {
+// A live window holds the task in placement, so the retry never launches;
+// releaseEnded's own guard is in TestReleaseEndedActsOnlyOnAReadThatShowsTheWindowGone.
+func TestRetryIsNotDispatchedPastALiveWindow(t *testing.T) {
 	c, h, _, _, task := setup(t)
 	first := endFirstAttempt(t, c, h, task, true)
 	for range 3 {
@@ -101,6 +103,25 @@ func TestARefusalWhoseReasonChangesIsNoticedOncePerExecution(t *testing.T) {
 	st, _ = c.Service.Store.Snapshot()
 	if at := st.Attempts[st.Items[task.ID].Attempt]; at.State != "running" {
 		t.Errorf("once the host accepts, the execution is %s, want running", at.State)
+	}
+}
+
+func TestAReplayedDispatchNeverReleases(t *testing.T) {
+	c, h, _, _, task := setup(t)
+	endFirstAttempt(t, c, h, task, false)
+	h.unresolved = true
+	pass(t, c)
+	if len(h.released) != 1 {
+		t.Fatalf("the new execution released %v, want the dead window once", h.released)
+	}
+	// The host may still be running the unresolved spawn: a window it opened
+	// is not the earlier attempt's to release, dead or not.
+	h.status.Windows = append(h.status.Windows, hostops.Window{Name: h.released[0], ID: "@2"})
+	for range 3 {
+		pass(t, c)
+	}
+	if len(h.released) != 1 || h.calls < 3 {
+		t.Errorf("replays released %v over %d dispatch calls, want no release", h.released[1:], h.calls)
 	}
 }
 

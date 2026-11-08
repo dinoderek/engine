@@ -1,7 +1,9 @@
 package session
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,8 +37,9 @@ func Branch(repo Repo, task int) string {
 // create <branch>`, when the clone has an executable `dev` at its root whose
 // usage lists that verb, since that command also provisions what the task
 // needs. Otherwise it runs `git worktree add`, beside the clone in
-// <clone>-worktrees/. It refuses when the task's worktree already exists, or
-// its branch holds work, so it never reuses leftovers.
+// <clone>-worktrees/. Except on resume, below, it refuses when the task's
+// worktree already exists, or its branch holds work, so it never reuses
+// leftovers.
 //
 // resume is the caller's word that the task had an earlier attempt. Then a
 // branch that origin has is the task's own work: the worktree opens on it, at
@@ -155,8 +158,17 @@ func (r Repos) prepareBranch(clone Clone, branch string, resume bool) (adopt boo
 // resume: it fast-forwards it to origin's tip of the branch, or of the
 // default branch when origin lacks it. It refuses a worktree with
 // uncommitted changes, untracked files included, or with commits that tip
-// lacks, which moving it would lose.
+// lacks, which moving it would lose. It refuses engine's clone itself, and a
+// worktree whose folder is gone, which `git worktree prune` clears. Ignored
+// files do not block adoption, and a fast-forward may replace one, as any
+// checkout does.
 func (r Repos) adoptWorktree(clone Clone, branch, path string) error {
+	if filepath.Clean(path) == filepath.Clean(clone.Path) {
+		return taken("branch %s is checked out in engine's clone %s; check out its default branch there first", branch, path)
+	}
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return taken("branch %s has a worktree at %s whose folder is gone; run git -C %s worktree prune first", branch, path, clone.Path)
+	}
 	status, err := r.git(path, "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("read the status of the worktree at %s: %w", path, err)
