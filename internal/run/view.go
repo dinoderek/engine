@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/ps"
 	"github.com/dinoderek/engine/internal/tracker"
 )
@@ -26,6 +27,11 @@ const (
 	// StartRetry is how long a task whose start failed waits to be tried
 	// again; until then it holds no slot.
 	StartRetry = 30 * time.Minute
+	// DenialLead is how long before a wait was first seen a permission
+	// denial may have been logged and still be the wait's cause: a session
+	// stops soon after a denial it has no route around, and the coordinator
+	// sees the wait on a later pass.
+	DenialLead = 10 * time.Minute
 )
 
 // Labels the pass reads and writes.
@@ -87,6 +93,9 @@ type Session struct {
 	// Screen is the window's last lines, when its host sent them: it does
 	// for a window whose session is not working.
 	Screen string
+	// Denial is the newest entry of a waiting session's permission log,
+	// when that entry is a denial.
+	Denial *hostops.Denial
 }
 
 // flagged reports whether at, the session's start or the start of its
@@ -99,6 +108,13 @@ func (s Session) flagged(at time.Time) bool {
 // waited reports whether the session has waited for input for d by now.
 func (s Session) waited(now time.Time, d time.Duration) bool {
 	return s.Live && !s.Limited && s.ResetsAt <= 0 && s.Waiting && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
+}
+
+// denied reports whether the session's wait follows a permission denial:
+// its newest permission log entry is a denial logged no more than
+// DenialLead before the wait was first seen.
+func (s Session) denied() bool {
+	return s.Denial != nil && !s.WaitingSince.IsZero() && !s.Denial.At.Before(s.WaitingSince.Add(-DenialLead))
 }
 
 // View is everything one pass decides on.

@@ -140,6 +140,7 @@ func see(s *Session, h HostLoad, name string) bool {
 			s.Limited = win.Alive && win.State == session.StateLimited
 			s.ResetsAt = win.ResetsAt
 			s.Waiting = win.Alive && win.State == session.StateWaiting
+			s.Denial = win.Denial
 			known = !win.Alive || win.State != ""
 		}
 	}

@@ -35,6 +35,9 @@ func (w *world) status(h fakeHost) hostops.Status {
 		if win.State != session.StateWorking {
 			win.Screen = "Do you want to proceed?\n"
 		}
+		if win.State == session.StateWaiting {
+			win.Denial = e.denial
+		}
 		st.Windows = append(st.Windows, win)
 	}
 	runs, err := session.LatestRuns(w.hostHome(h.name))

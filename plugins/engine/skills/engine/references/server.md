@@ -59,8 +59,9 @@ The server has claimed the task for this attempt and opened its worktree.
    Omit GitHub issue-closing directives: the server owns task completion.
 5. Take the repository merge lock with `engine lock acquire` before the
    final default-branch update and gate run. If occupied, wait and read
-   updates. Hold it through review, green CI and
-   `gh pr merge --squash --match-head-commit <reviewed-sha>`.
+   updates. Hold it through review, green CI and the merge, run as a
+   command of its own after any base or head check:
+   `gh pr merge <n> -R <repo> --squash --match-head-commit <reviewed-sha>`.
 6. Release the lock when waiting for an operator, fixing a finding, or
    closing the PR unmerged. After reacquiring it, refresh the default branch
    and repeat the final gates/review/check validation.

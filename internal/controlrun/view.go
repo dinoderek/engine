@@ -153,6 +153,7 @@ func observe(at control.Attempt, fleet run.Fleet, slug string, number int) run.S
 			s.Limited = w.Alive && w.State == session.StateLimited
 			s.ResetsAt = w.ResetsAt
 			s.Screen = w.Screen
+			s.Denial = w.Denial
 			return s
 		}
 		s.Unknown = at.State == "dispatching"

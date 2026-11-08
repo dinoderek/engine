@@ -89,9 +89,11 @@ Use the host's working `gh` installation and normal Git configuration.
     - If the default branch moved, merge it in and go back to step 5. Keep
       the lock if it merged cleanly; a conflict you resolved is a fix.
     - Before merging, read the task's comments once more.
-    - When every check is green, merge with the repo's merge method and
-      `--match-head-commit <sha>`, where `<sha>` is the commit you reviewed
-      and gated.
+    - When every check is green, merge with a command of its own,
+      `gh pr merge <n> -R <repo> --<method> --match-head-commit <sha>`, where
+      `<sha>` is the commit you reviewed and gated. Run base or head checks
+      as separate commands first: an allow rule matches only a command
+      starting with its prefix.
     - A repo with no CI merges on the local gates alone.
     - In gated mode, wait for the operator's approval before merging.
 11. **Report.** Remove `engine:in-review` and `engine:merging`: the merge
@@ -112,8 +114,9 @@ when you resume after a stop. Leave every label the steps don't set to the
 coordinator.
 
 **Unattended sessions.** When `ENGINE_UNATTENDED=1` is in your environment,
-nobody watches your screen. A denied permission request may be the
-**Permission** hard stop (`rulings.md`).
+nobody watches your screen. A denied permission request with no route
+needing no new permission is the **Permission** hard stop (`rulings.md`,
+class 12): raise it with the exact tool, input and rule, a denied merge too.
 
 ## Merge lock
 
