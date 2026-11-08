@@ -86,12 +86,13 @@ type world struct {
 	placed   []string       // each start, as <task>@<host>
 	plans    func(w *world) // the planner's work, when it is started
 	refuse   func(tracker.Ref) error
-	failNext map[string]error // the next call of a write fails: "comment", "close", "release"
-	killed   []string         // the ids of the windows released
-	released []string         // each release, as <name>@<host>
-	keep     string           // why release keeps a worktree, when it does
-	attempts int              // planner starts tried, refused or not
-	history  []string         // the labels set on the feature, in order
+	readFail func(w *world) error // when set, why a read of the feature fails, or nil
+	failNext map[string]error     // the next call of a write fails: "comment", "close", "release"
+	killed   []string             // the ids of the windows released
+	released []string             // each release, as <name>@<host>
+	keep     string               // why release keeps a worktree, when it does
+	attempts int                  // planner starts tried, refused or not
+	history  []string             // the labels set on the feature, in order
 	do       map[int]behaviour
 	execs    map[tracker.Ref]*executor
 	nextID   int
@@ -131,6 +132,11 @@ func (w *world) card(r tracker.Ref) *tracker.Card {
 }
 
 func (w *world) Feature(tracker.Ref) (tracker.Feature, error) {
+	if w.readFail != nil {
+		if err := w.readFail(w); err != nil {
+			return tracker.Feature{}, err
+		}
+	}
 	f := w.feature
 	f.Labels = slices.Clone(f.Labels)
 	f.Tasks = slices.Clone(f.Tasks)

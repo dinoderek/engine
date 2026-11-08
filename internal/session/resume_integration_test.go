@@ -2,6 +2,8 @@ package session
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -106,5 +108,70 @@ func TestCreateWorktreeResumesWithTheReposOwnCommand(t *testing.T) {
 	}
 	if branch, head := headOf(t, wt); branch != "task/r-5" || head != tip {
 		t.Errorf("worktree on %s at %s, want task/r-5 at origin's tip %s", branch, head, tip)
+	}
+}
+
+func TestCreateWorktreeOnResumeAdoptsTheWorktreeAnEarlierAttemptLeft(t *testing.T) {
+	remote, r, clone, _ := resumeFixture(t, "")
+	left, err := r.CreateWorktree(clone, 5, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Origin moves on while the left worktree is clean: the retry adopts it
+	// where it is and fast-forwards it to origin's new tip.
+	newer := remote.commit(t, "task/r-5", "more.txt", "more", 0o644)
+	if _, err := r.Sync(mustRepo(t, "o/r")); err != nil {
+		t.Fatal(err)
+	}
+	wt, err := r.CreateWorktree(clone, 5, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wt != left {
+		t.Errorf("worktree = %+v, want the left one %+v", wt, left)
+	}
+	if branch, head := headOf(t, wt); branch != "task/r-5" || head != newer {
+		t.Errorf("worktree on %s at %s, want task/r-5 at origin's tip %s", branch, head, newer)
+	}
+}
+
+func TestCreateWorktreeOnResumeRefusesALeftWorktreeWithWork(t *testing.T) {
+	tests := []struct {
+		name    string
+		work    func(t *testing.T, path string)
+		wantErr string
+	}{
+		{"untracked file", func(t *testing.T, path string) {
+			if err := os.WriteFile(filepath.Join(path, "notes.txt"), []byte("draft"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, "with uncommitted changes"},
+		{"unpushed commit", func(t *testing.T, path string) {
+			mustGit(t, path, "commit", "--quiet", "--allow-empty", "-m", "unpushed")
+		}, "with commits that origin lacks"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, r, clone, _ := resumeFixture(t, "")
+			left, err := r.CreateWorktree(clone, 5, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tt.work(t, left.Path)
+			before := mustGit(t, left.Path, "rev-parse", "HEAD")
+			_, err = r.CreateWorktree(clone, 5, true)
+			var takenErr *BranchTakenError
+			if !errors.As(err, &takenErr) || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("err = %v, want a BranchTakenError with %q", err, tt.wantErr)
+			}
+			if got := mustGit(t, left.Path, "rev-parse", "HEAD"); got != before {
+				t.Errorf("the refusal moved the worktree from %s to %s", before, got)
+			}
+			if tt.name == "untracked file" {
+				if _, err := os.Stat(filepath.Join(left.Path, "notes.txt")); err != nil {
+					t.Errorf("the refusal discarded the work: %v", err)
+				}
+			}
+		})
 	}
 }

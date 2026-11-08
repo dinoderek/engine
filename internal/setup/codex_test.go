@@ -23,6 +23,36 @@ func newCodexRig(t *testing.T, codex *codexState) *rig {
 	return r
 }
 
+// A running daemon with remote control on is judged by its own log: one the
+// apps cannot see is reported not connected, with why, one whose log cannot
+// be read is unknown, and setup stays done either way.
+func TestCodexDaemonReportsItsConnection(t *testing.T) {
+	tests := []struct {
+		name, etime, log string
+		logFail          bool
+		want             string
+	}{
+		{"never connected", "00:30", "", false, "not connected (no connection logged since the daemon started)"},
+		{"lost", "00:30", `[{"body":"remote control websocket reader disconnected, err: websocket disconnected"}]`, false, "not connected (its last remote-control log line: remote control websocket reader disconnected"},
+		{"log unreadable", "00:30", "", true, "connection unknown (its log cannot be read: Error: unable to open database)"},
+		{"log reply unreadable", "00:30", "Error: oops", false, "connection unknown (its log reply cannot be read)"},
+		{"start unreadable", "later", "", false, "connection unknown (its start cannot be read)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := settledCodex(boxHome)
+			c.etime, c.log, c.logFail = tt.etime, tt.log, tt.logFail
+			r := newCodexRig(t, c)
+			if !mustRun(t, r, "box") {
+				t.Fatalf("items left open:\n%s", r.out.String())
+			}
+			if want := "11. codex daemon: ok (running; remote control on, " + tt.want; !strings.Contains(r.out.String(), want) {
+				t.Errorf("want %q in:\n%s", want, r.out.String())
+			}
+		})
+	}
+}
+
 func TestCodexStepsOnASettledHost(t *testing.T) {
 	r := newCodexRig(t, settledCodex(boxHome))
 	if !mustRun(t, r, "box") {
@@ -31,7 +61,7 @@ func TestCodexStepsOnASettledHost(t *testing.T) {
 	out := r.out.String()
 	for _, want := range []string{
 		"7. codex: ok (codex-cli 0.164.0)", "8. codex sign-in: ok (Logged in using ChatGPT)", "9. codex home: ok (" + boxEngineH + ")",
-		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control on)", "12. preflight: ok",
+		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control on, connected)", "12. gh auth: ok", "13. preflight: ok",
 		"checking --harness codex", "box is set up",
 	} {
 		if !strings.Contains(out, want) {
@@ -55,7 +85,7 @@ func TestCodexSetsUpAFreshHostAndStaysSafeToRerun(t *testing.T) {
 	out := r.out.String()
 	for _, want := range []string{
 		"9. codex home: changed (wrote config.toml, linked the login)", "10. codex plugin: changed (0.7.1, was none)",
-		"11. codex daemon: changed (started; remote control on)", "12. preflight: ok",
+		"11. codex daemon: changed (started; remote control on, connected)", "13. preflight: ok",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
@@ -126,7 +156,7 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startFail = false, false, true }},
 		{"remote control stays off", "11. codex daemon: OPEN", "remote control is off after the start", "remote-control start",
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startNoRC = false, false, true }},
-		{"the check finds a prompt", "12. preflight: OPEN", "an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'",
+		{"the check finds a prompt", "13. preflight: OPEN", "an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'",
 			func(*codexState) {}},
 	}
 	for _, c := range cases {
@@ -206,7 +236,7 @@ func TestAStartThatExitsOnAnErroredConnectionStillStartedTheDaemon(t *testing.T)
 	codex := settledCodex(boxHome)
 	codex.daemonUp, codex.rcOn, codex.startExit1 = false, false, true
 	r := newCodexRig(t, codex)
-	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "11. codex daemon: changed (started; remote control on)") {
+	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "11. codex daemon: changed (started; remote control on, connected)") {
 		t.Errorf("errored start:\n%s", r.out.String())
 	}
 }
@@ -247,7 +277,7 @@ func TestACodexCheckThatFailsLeavesCodexOpenAfterClaudePasses(t *testing.T) {
 		t.Fatal("closed")
 	}
 	out := r.out.String()
-	if !strings.Contains(out, "12. preflight: OPEN (an unattended Codex session there would stop") || !strings.Contains(out, "engine start --check --harness codex --host box") {
+	if !strings.Contains(out, "13. preflight: OPEN (an unattended Codex session there would stop") || !strings.Contains(out, "engine start --check --harness codex --host box") {
 		t.Errorf("out:\n%s", out)
 	}
 	if got := strings.Join(r.checked, ","); got != "checked,codex" {
@@ -285,7 +315,7 @@ func TestACodexHostCheckingItselfAlsoActs(t *testing.T) {
 	}
 	out := r.out.String()
 	for _, want := range []string{"mac (this host; the Codex steps act)", "6. no suspend: ok (not Linux)", "7. codex: ok", "9. codex home: changed (wrote config.toml, linked the login)",
-		"10. codex plugin: changed (0.7.1, was none)", "11. codex daemon: changed", "12. preflight: ok"} {
+		"10. codex plugin: changed (0.7.1, was none)", "11. codex daemon: changed", "13. preflight: ok"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
 		}
@@ -305,7 +335,7 @@ func TestAHostWithoutCodexRunsNoCodexSteps(t *testing.T) {
 	if !mustRun(t, r, "box") {
 		t.Fatalf("open:\n%s", r.out.String())
 	}
-	if out := r.out.String(); strings.Contains(out, "codex") || !strings.Contains(out, "7. preflight: ok") {
+	if out := r.out.String(); strings.Contains(out, "codex") || !strings.Contains(out, "8. preflight: ok") {
 		t.Errorf("out:\n%s", out)
 	}
 	if got := strings.Join(r.checked, ","); got != "checked" {

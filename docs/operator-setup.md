@@ -9,6 +9,22 @@ target repositories, plus normal Git authentication and commit identity.
 Engine uses that configuration for GitHub calls, clones, pushes and PRs.
 Check access with `gh api user` and `gh repo view <owner/repo>`.
 
+On a Mac, store gh's token in gh's own config file, not the login keychain.
+Every window of the `engine` tmux server inherits the context of whoever
+started it. After a reboot that is usually the first dispatch, over ssh, and
+such a server cannot read the keychain, so every gh call in its sessions fails with a
+401. A server started from a Terminal can, so `engine start --check` passes
+there until the next reboot. In a Terminal on the Mac, after
+`gh auth login -h github.com`, run
+
+```
+gh auth token | gh auth login -h github.com --with-token --insecure-storage
+```
+
+which keeps the token in plaintext in `~/.config/gh/hosts.yml`. Setup's
+`gh auth` step runs `gh auth status` on the host, over ssh for `--host`, and is
+open while gh fails there or, on macOS, keeps its token in the keychain.
+
 ## Notifications
 
 1. **Phone:** GitHub Mobile, signed in as you, with push on for
@@ -20,7 +36,8 @@ Check access with `gh api user` and `gh repo view <owner/repo>`.
 
 ## Each host
 
-**The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude`, and put
+**The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
+`sqlite3` on a Codex host, `codex.md` "Apps"), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
 name, one line, as claims post it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
@@ -102,7 +119,8 @@ then run `engine setup --host devbox`.
    `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
    prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
    "Names and addresses"), which goes in `hosts.toml` on the Mac.
-4. **Install the tools** `go`, `tmux`, `gh`, `git` and `claude` on the devbox.
+4. **Install the tools** `go`, `tmux`, `gh`, `git` and `claude` on the devbox,
+   and `sqlite3` if it runs Codex.
    `engine setup` lists what is missing and prints the `PATH` line for
    `~/.bashrc`, and the `sudo systemctl mask` line that stops the devbox
    suspending. Sign in once over SSH: `ssh -t <address> claude /login`.
