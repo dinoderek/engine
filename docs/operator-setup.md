@@ -36,7 +36,8 @@ open while gh fails there or, on macOS, keeps its token in the keychain.
 
 ## Each host
 
-**The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude`, and put
+**The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
+`sqlite3` on a Codex host, `codex.md` "Apps"), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
 name, one line, as claims post it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
@@ -118,7 +119,8 @@ then run `engine setup --host devbox`.
    `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
    prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
    "Names and addresses"), which goes in `hosts.toml` on the Mac.
-4. **Install the tools** `go`, `tmux`, `gh`, `git` and `claude` on the devbox.
+4. **Install the tools** `go`, `tmux`, `gh`, `git` and `claude` on the devbox,
+   and `sqlite3` if it runs Codex.
    `engine setup` lists what is missing and prints the `PATH` line for
    `~/.bashrc`, and the `sudo systemctl mask` line that stops the devbox
    suspending. Sign in once over SSH: `ssh -t <address> claude /login`.
