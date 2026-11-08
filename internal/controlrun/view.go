@@ -191,15 +191,23 @@ func (c *Coordinator) keepObservations(st control.State, v run.View) error {
 			if at.ID == "" || sess.Unknown {
 				continue
 			}
-			at = kept(at, sess, v.Now)
+			at = kept(at, sess, v.Now, coordinating(fresh, fresh.Items[item.ID]))
 			fresh.Attempts[at.ID] = at
 		}
 		return nil
 	})
 }
 
-// kept is at with one pass's observation of its session applied.
-func kept(at control.Attempt, sess run.Session, now time.Time) control.Attempt {
+// coordinating reports whether item's coordination, its own or its plan's,
+// still runs.
+func coordinating(st *control.State, item control.Item) bool {
+	return item.Coordinating || item.Plan != "" && st.Items[item.Plan].Coordinating
+}
+
+// kept is at with one pass's observation of its session applied. A window
+// is recorded as seen live only while coordination runs, so a pass that
+// overlaps a stop never dates the sighting after it.
+func kept(at control.Attempt, sess run.Session, now time.Time, coordinating bool) control.Attempt {
 	if sess.Waiting && !sess.Limited && sess.ResetsAt == 0 {
 		if at.WaitingSince.IsZero() {
 			at.WaitingSince = now
@@ -210,7 +218,7 @@ func kept(at control.Attempt, sess run.Session, now time.Time) control.Attempt {
 	if sess.ResetsAt > 0 {
 		at.ResetsAt = sess.ResetsAt
 	}
-	if sess.Live {
+	if sess.Live && coordinating {
 		at.LiveAt = now
 	}
 	if sess.Live && !sess.Waiting && !sess.Limited {

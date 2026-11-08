@@ -5,7 +5,8 @@
 `engine serve` owns plans, tasks, updates, execution attempts and merge locks.
 The CLI uses its authenticated command API. The server coordinates through
 the existing reconcile decisions and host operations. GitHub supplies code,
-PRs and CI; task state and comms stay in the server. A feature's GitHub issue can hold a human-maintained PR summary.
+PRs and CI; task state and comms stay in the server. A feature's GitHub issue
+can hold a human-maintained PR summary.
 
 ## Start
 
@@ -127,7 +128,7 @@ engine task state t3 --version 4 --state running
 ```
 
 Updates are immutable and ordered.
-Read up to 200 at a time, using the last sequence as the next cursor.
+Read up to 200 at a time after a sequence cursor.
 Comments do not change workflow state. Asking a task question atomically
 puts it in needs-human. Acknowledgement and ordinary replies leave the
 question unresolved. Resolution records the operator decision; an explicit
@@ -138,9 +139,8 @@ child merges and automatic quota resume until the operator resolves it.
 
 Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
-on resolution. Messages may omit a task association for host or server
-problems. Wake-up pointers are attempted for waiting, unrestricted sessions;
-messages persist when wake-up fails.
+on resolution. Wake-up pointers are attempted for waiting, unrestricted
+sessions; messages persist when wake-up fails.
 
 ## Dashboard
 
@@ -184,8 +184,8 @@ Coordination does not change it.
 ## Session view
 
 `session-view` is an operator-only read; execution credentials get 403. It
-returns `sessions`: one row per item's current, unended attempt, ordered by
-item number. The row and reference fields in
+returns `sessions`: one row per item's current, unended or vanished attempt,
+ordered by item number. The row and reference fields in
 `internal/control/sessions.go` are the whole contract: credentials, screens,
 run files, item bodies and full update bodies never join them.
 
@@ -237,14 +237,15 @@ files are excluded from collected artifacts.
 
 A window gone from a host that answered ends its attempt `vanished` if the
 task is resumable: coordination stopped after the window was last seen live,
-or the window was seen live and the task has a PR or open question. The task
-keeps its state and is resumed once any question is resolved. Otherwise
-attempt and task end `failed`. The attempt keeps any merge lock.
+or the window was seen live and the task has a PR or open question, unless
+it resumed a vanished attempt. The task keeps its state and resumes once any
+question is resolved. Otherwise attempt and task end `failed`.
 
 `engine attempt reconcile <id> --body <evidence>` is operator-only. The
 server requires a successful host observation with no live matching window
 and a recorded run, then applies the same rule. Unknown dispatch outcomes
-remain reserved.
+remain reserved. An ended attempt keeps its merge lock; inspect the PR outcome
+before recovering it.
 
 ## Merge locks
 

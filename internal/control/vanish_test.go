@@ -13,6 +13,7 @@ func TestResumableWhenWorkRemainsAfterTheWindowWentAway(t *testing.T) {
 		task, plan Item
 		at         Attempt
 		question   bool
+		prev       string
 		want       bool
 	}{
 		{name: "crash while coordinating", at: Attempt{Started: start, LiveAt: live}},
@@ -24,6 +25,9 @@ func TestResumableWhenWorkRemainsAfterTheWindowWentAway(t *testing.T) {
 		{name: "task stopped after last seen live", task: Item{StoppedAt: live}, at: Attempt{Started: start, LiveAt: live}, want: true},
 		{name: "stopped before it was dispatched", plan: Item{StoppedAt: start.Add(-time.Minute)}, at: Attempt{Started: start}},
 		{name: "stopped, then seen live after the restart", plan: Item{StoppedAt: live.Add(-time.Minute)}, at: Attempt{Started: start, LiveAt: live}},
+		{name: "resume of a vanished attempt", prev: EndVanished, task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}},
+		{name: "retry of a failed attempt", prev: EndFailed, task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}, want: true},
+		{name: "resume of a vanished attempt, then stopped", prev: EndVanished, plan: Item{StoppedAt: live}, at: Attempt{Started: start, LiveAt: live}, want: true},
 		{name: "stopped before it was ever seen live", plan: Item{StoppedAt: start.Add(time.Minute)}, at: Attempt{Started: start}, want: true},
 	}
 	for _, c := range cases {
@@ -33,6 +37,10 @@ func TestResumableWhenWorkRemainsAfterTheWindowWentAway(t *testing.T) {
 			c.at.ID, c.at.Item, c.at.State = "a3", "t2", "running"
 			st := emptyState()
 			st.Items[c.plan.ID], st.Items[c.task.ID], st.Attempts[c.at.ID] = c.plan, c.task, c.at
+			if c.prev != "" {
+				st.Attempts["a1"] = Attempt{ID: "a1", Item: "t2", State: "ended", Reason: c.prev}
+				st.Attempts["a9"] = Attempt{ID: "a9", Item: "t8", State: "ended", Reason: EndFailed}
+			}
 			if c.question {
 				st.Updates = append(st.Updates, Update{ID: 1, Item: "t2", Kind: "ask", RequiresReply: true})
 			}

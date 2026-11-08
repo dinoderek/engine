@@ -198,3 +198,62 @@ func TestDeathAfterCoordinationRestartedStillFails(t *testing.T) {
 		t.Fatalf("a session that died after coordination restarted did not fail: %+v %s", at, st.Items[task.ID].State)
 	}
 }
+
+func TestAPlanQuestionParksAVanishedTaskUntilAnswered(t *testing.T) {
+	c, h, _, plan, task := setup(t)
+	pass(t, c)
+	pass(t, c)
+	pass(t, c) // the coordinator sees the session live
+	execute(t, c.Service, control.Request{Op: "ask", ID: plan.ID, Body: "Is the plan still right?"})
+	h.status.Windows = nil
+	pass(t, c)
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	first := st.Attempts[st.Items[task.ID].Attempt]
+	if first.Reason != control.EndVanished || h.calls != 1 {
+		t.Fatalf("a task under an open plan question was failed or dispatched again: %+v, %d launches", first, h.calls)
+	}
+	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.PendingQuestion(&st, task.ID), Body: "Yes."})
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	if resumed := st.Attempts[st.Items[task.ID].Attempt]; resumed.ID == first.ID || !h.launches[resumed.RunID].Spawn.Resume {
+		t.Fatalf("the answered task was not resumed: %+v", resumed)
+	}
+}
+
+func TestRebootWhileAStandaloneTaskIsStoppedLeavesItResumable(t *testing.T) {
+	c, h, repo, plan, _ := setup(t)
+	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	c.Service.Now = func() time.Time { return now }
+	execute(t, c.Service, control.Request{Op: "stop", ID: plan.ID})
+	task := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Alone", Repo: repo.ID, Body: "## Outcome\nWorks\n## Tests\nProve it"}})
+	task = execute(t, c.Service, control.Request{Op: "approve", ID: task.ID, Version: task.Version})
+	execute(t, c.Service, control.Request{Op: "run", ID: task.ID, Version: task.Version})
+	pass(t, c)
+	pass(t, c)
+	now = now.Add(time.Minute)
+	execute(t, c.Service, control.Request{Op: "stop", ID: task.ID})
+	h.status.Windows = nil
+	now = now.Add(time.Hour)
+	execute(t, c.Service, control.Request{Op: "run", ID: task.ID})
+	pass(t, c)
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	resumed := st.Attempts[st.Items[task.ID].Attempt]
+	if st.Items[task.ID].State != "running" || h.calls != 2 || !h.launches[resumed.RunID].Spawn.Resume {
+		t.Fatalf("a standalone task stopped across a reboot was not resumed: %s %+v", st.Items[task.ID].State, resumed)
+	}
+}
+
+func TestAPassRecordsASightingOnlyWhileCoordinating(t *testing.T) {
+	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	if at := kept(control.Attempt{}, run.Session{Live: true}, now, false); !at.LiveAt.IsZero() {
+		t.Error("a pass overlapping a stop recorded a sighting")
+	}
+	if at := kept(control.Attempt{}, run.Session{Live: true}, now, true); !at.LiveAt.Equal(now) {
+		t.Error("a live window was not recorded")
+	}
+	if at := kept(control.Attempt{LiveAt: now}, run.Session{}, now.Add(time.Minute), true); !at.LiveAt.Equal(now) {
+		t.Error("a dead window moved the last sighting")
+	}
+}

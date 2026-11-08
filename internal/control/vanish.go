@@ -11,11 +11,13 @@ const (
 // resumable reports whether task item still has work to resume after its
 // attempt at's window was confirmed gone: its coordination was stopped after
 // the window was last seen live, as when a host reboots while the operator
-// has a plan stopped; or the window was seen live and the task has a PR or
-// an open operator question. A session that dies before it is ever seen live
-// fails, so one that crashes on launch is not dispatched again and again.
+// has a plan stopped; or the window was seen live, the task has a PR or an
+// open operator question, and the attempt was not itself the resume of a
+// vanished one. So a session that crashes on launch, or every resume of
+// one, is not dispatched again and again.
 func resumable(st *State, item Item, at Attempt) bool {
-	if !at.LiveAt.IsZero() && (item.PR != "" || PendingQuestion(st, item.ID) > 0) {
+	work := item.PR != "" || PendingQuestion(st, item.ID) > 0
+	if work && !at.LiveAt.IsZero() && !resumedVanished(st, at) {
 		return true
 	}
 	stopped := item.StoppedAt
@@ -27,6 +29,18 @@ func resumable(st *State, item Item, at Attempt) bool {
 		last = at.LiveAt
 	}
 	return !stopped.IsZero() && !stopped.Before(last)
+}
+
+// resumedVanished reports whether the attempt of at's task just before at
+// ended vanished. Attempt numbers are allocated in order.
+func resumedVanished(st *State, at Attempt) bool {
+	var prev Attempt
+	for _, o := range st.Attempts {
+		if o.Item == at.Item && Number(o.ID) < Number(at.ID) && Number(o.ID) > Number(prev.ID) {
+			prev = o
+		}
+	}
+	return prev.Reason == EndVanished
 }
 
 // Vanished reports whether item is an unfinished task whose current attempt
