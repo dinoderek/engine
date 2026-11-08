@@ -26,7 +26,7 @@ const usage = `usage: ./dev <verb>
   test <lane>...               run the named lanes
   test for <path>...           run the required lanes those paths trigger
   test --list                  print the lane registry (scripts/lanes.tsv)
-  worktree create <branch>     new branch and worktree from the remote's default branch
+  worktree create <branch>     worktree on a new branch from the remote's default branch, or on an existing local one
   worktree release <branch>    remove the worktree and delete its merged branch
   deps                         outdated modules, Go releases and govulncheck findings
 

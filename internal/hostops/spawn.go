@@ -30,6 +30,11 @@ type SpawnRequest struct {
 	Kickoff string
 	// Heavy is true when the card requires a heavy capability.
 	Heavy bool
+	// Resume is true when the task had an earlier attempt, so a branch
+	// origin already has is the task's own work and the worktree opens on
+	// it. It is omitted when false, so a host that predates it still takes
+	// every first attempt.
+	Resume bool `json:",omitempty"`
 }
 
 // Spawned is spawn's reply.
@@ -76,7 +81,7 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	if err != nil {
 		return Spawned{}, refuse("%v", err)
 	}
-	wt, err := repos.CreateWorktree(clone, s.Task)
+	wt, err := repos.CreateWorktree(clone, s.Task, s.Resume)
 	var taken *session.BranchTakenError
 	if errors.As(err, &taken) {
 		return Spawned{}, refuse("%v", err)
