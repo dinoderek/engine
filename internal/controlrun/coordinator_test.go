@@ -227,13 +227,19 @@ func TestPlannerDispatchAndInvalidPlanBlock(t *testing.T) {
 // The planner runs with the plan's harness, else the default, and a harness
 // the server's host does not run is refused with a notice and no execution.
 func TestPlannerHarnessIsThePlansElseTheDefault(t *testing.T) {
-	for _, tt := range []struct{ name, harness, want string }{
-		{"default", "", "claude"}, {"plan's", "codex", "codex"}, {"not run", "gemini", ""},
+	for _, tt := range []struct {
+		name, harness, want string
+		hostRuns            []string
+	}{
+		{"default", "", "claude", []string{"claude", "codex"}},
+		{"plan's", "codex", "codex", []string{"claude", "codex"}},
+		{"undefined", "gemini", "", []string{"claude", "codex"}},
+		{"not on the host", "codex", "", []string{"claude"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c, h, _, plan, task := setup(t)
 			c.Config.Harnesses["codex"] = c.Config.Harnesses["claude"]
-			c.Config.Hosts["devbox"] = hosts.Host{Name: "devbox", Harnesses: []string{"claude", "codex"}, MaxSessions: 2}
+			c.Config.Hosts["devbox"] = hosts.Host{Name: "devbox", Harnesses: tt.hostRuns, MaxSessions: 2}
 			if err := c.Service.Store.Transaction(func(st *control.State) error {
 				delete(st.Items, task.ID)
 				p := st.Items[plan.ID]
@@ -247,7 +253,7 @@ func TestPlannerHarnessIsThePlansElseTheDefault(t *testing.T) {
 			st, _ := c.Service.Store.Snapshot()
 			if tt.want == "" {
 				if h.calls != 0 || st.Items[plan.ID].Attempt != "" || len(st.Updates) == 0 ||
-					!strings.Contains(st.Updates[len(st.Updates)-1].Body, "planner harness gemini") {
+					!strings.Contains(st.Updates[len(st.Updates)-1].Body, "planner harness "+tt.harness+" is not one host devbox runs") {
 					t.Fatalf("calls %d attempt %q updates %+v", h.calls, st.Items[plan.ID].Attempt, st.Updates)
 				}
 				return
