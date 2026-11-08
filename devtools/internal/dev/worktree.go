@@ -78,6 +78,15 @@ func (t Tool) createWorktree(main, branch string) error {
 		return err
 	}
 	dir := WorktreePath(main, branch)
+	// A local branch that exists, such as one engine set to a resumed
+	// task's work, is checked out as it is.
+	if _, err := t.git(main, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+		if _, err := t.git(main, "worktree", "add", "--quiet", dir, branch); err != nil {
+			return err
+		}
+		fmt.Fprintf(t.Stdout, "worktree %s on existing branch %s\n", dir, branch)
+		return nil
+	}
 	if _, err := t.git(main, "worktree", "add", "--quiet", "--no-track", "-b", branch, dir, "origin/"+base); err != nil {
 		return err
 	}

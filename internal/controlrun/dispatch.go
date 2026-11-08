@@ -43,13 +43,26 @@ func (c *Coordinator) launch(st control.State, item control.Item, at control.Att
 	req := hostops.ControlRequest{URL: c.URL, Credential: credential, Attempt: at.ID, Remote: repo.Remote,
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
-			Kickoff: kickoff(item, at, reviewer.Model)}}
+			Resume: hadEarlierAttempt(st, item.ID, at.ID), Kickoff: kickoff(item, at, reviewer.Model)}}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
 	if err != nil {
 		_ = c.notice(item.ID, "dispatch/"+at.ID, "Dispatch has an unresolved outcome; its execution stays reserved. "+err.Error())
 		return err
 	}
 	return c.Service.SetAttempt(at.ID, "running", spawned.Window)
+}
+
+// hadEarlierAttempt reports whether an attempt for item other than current
+// ran on a host: a retry or a resume, whose branch is the task's own. An
+// attempt that never opened a window, such as one the host refused, does not
+// count, so a stray branch it was refused for is never adopted.
+func hadEarlierAttempt(st control.State, item, current string) bool {
+	for _, at := range st.Attempts {
+		if at.Item == item && at.ID != current && at.Window != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func kickoff(item control.Item, at control.Attempt, reviewer string) string {

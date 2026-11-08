@@ -224,6 +224,23 @@ func TestWorktreeKeepsCommitsAfterTheMergedHead(t *testing.T) {
 	}
 }
 
+func TestWorktreeCreateChecksOutAnExistingBranchAsItIs(t *testing.T) {
+	tool, stdout, stderr := clone(t)
+	gitIn(t, tool.Root, "branch", "feat/e", "main")
+	gitIn(t, tool.Root, "worktree", "add", "-q", tool.Root+"-scratch", "feat/e")
+	commit(t, tool.Root+"-scratch", "work.txt")
+	gitIn(t, tool.Root, "worktree", "remove", tool.Root+"-scratch")
+	tip := strings.TrimSpace(gitIn(t, tool.Root, "rev-parse", "feat/e"))
+	if code := tool.Worktree([]string{"create", "feat/e"}); code != 0 {
+		t.Fatalf("create: %d\n%s", code, stderr)
+	}
+	dir := WorktreePath(tool.Root, "feat/e")
+	if got := strings.TrimSpace(gitIn(t, dir, "rev-parse", "HEAD")); got != tip {
+		t.Errorf("worktree at %s, want the branch's own tip %s", got, tip)
+	}
+	want(t, 0, 0, stdout, "on existing branch feat/e")
+}
+
 func TestWorktreeRefusals(t *testing.T) {
 	tool, _, stderr := clone(t)
 	want(t, tool.Worktree([]string{"create"}), 2, stderr, "usage: ./dev worktree")

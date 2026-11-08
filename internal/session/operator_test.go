@@ -31,7 +31,7 @@ func TestOperatorCloneUsesNormalGitIdentityAndSeparateStorage(t *testing.T) {
 	if helpers(t, clone.Path) != "" {
 		t.Fatal("operator credential helpers overwritten")
 	}
-	wt, err := repos.CreateWorktree(clone, 7)
+	wt, err := repos.CreateWorktree(clone, 7, false)
 	if err != nil {
 		t.Fatal(err)
 	}
