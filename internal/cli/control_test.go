@@ -3,8 +3,6 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,56 +12,53 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-func TestServerHookFindsJoinedSessionAndFailsClosedWithoutLock(t *testing.T) {
-	fail := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req control.Request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Error(err)
-		}
-		if req.Op != "lock-check" {
-			t.Errorf("unexpected op %s", req.Op)
-		}
-		if fail {
-			w.WriteHeader(http.StatusConflict)
-			_, _ = w.Write([]byte(`{"error":"wrong lock"}`))
-			return
-		}
-		_, _ = w.Write([]byte("{}"))
-	}))
-	defer server.Close()
+func TestServerHookRefusesEveryExecutorMergeAndPointsAtMergeReady(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
 	dir := filepath.Join(home, session.RunsDir, "demo-1-a2")
 	if err := session.WriteRecord(dir, session.Record{Control: true, RunID: "demo-1-a2", Harness: "codex", Mode: "hands-off", Worktree: work}); err != nil {
 		t.Fatal(err)
 	}
-	metadata, _ := json.Marshal(struct{ URL, Attempt string }{server.URL, "a2"})
-	for name, b := range map[string][]byte{"server-session.json": metadata, "server-token": []byte(control.Secret())} {
+	invoke := func(cwd, command string, getenv func(string) string) (int, string) {
+		b, _ := json.Marshal(map[string]any{"cwd": cwd, "tool_name": "Bash", "tool_input": map[string]string{"command": command}})
+		var stderr bytes.Buffer
+		code := Run([]string{"hook", "pre-tool-use"}, Env{Home: home, In: strings.NewReader(string(b)), Err: &stderr, Out: &bytes.Buffer{}, Getenv: getenv})
+		return code, stderr.String()
+	}
+	none := func(string) string { return "" }
+	pinned := "gh pr merge 7 --squash --match-head-commit abc"
+	// A session engine started by hand, outside the server, still merges itself.
+	if code, msg := invoke(work, pinned, none); code != 0 {
+		t.Fatalf("GitHub-mode merge: %d %s", code, msg)
+	}
+	// A session file that cannot be read fails closed.
+	loop := filepath.Join(dir, "server-session.json")
+	if err := os.Symlink(loop, loop); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := invoke(work, pinned, none); code != 2 {
+		t.Fatalf("an unreadable session file allowed a merge: %d", code)
+	}
+	if err := os.Remove(loop); err != nil {
+		t.Fatal(err)
+	}
+	metadata, _ := json.Marshal(struct{ URL, Attempt string }{"http://control.test", "a2"})
+	lock, _ := json.Marshal(control.Lock{Token: control.Secret()})
+	for name, b := range map[string][]byte{"server-session.json": metadata, "server-token": []byte(control.Secret()), "merge-lock.json": lock} {
 		if err := os.WriteFile(filepath.Join(dir, name), b, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	raw := func() string {
-		b, _ := json.Marshal(map[string]any{"cwd": work, "tool_name": "Bash", "tool_input": map[string]string{"command": "gh pr merge --squash --match-head-commit abc"}})
-		return string(b)
+	// Holding the lock is not enough: the coordinator merges.
+	if code, msg := invoke(work, pinned, none); code != 2 || !strings.Contains(msg, "engine task merge-ready") {
+		t.Fatalf("server merge: %d %s", code, msg)
 	}
-	var stderr bytes.Buffer
-	env := Env{Home: home, Err: &stderr, Out: &bytes.Buffer{}, Getenv: func(string) string { return "" }}
-	invoke := func() int { env.In = strings.NewReader(raw()); return Run([]string{"hook", "pre-tool-use"}, env) }
-	if got := invoke(); got != 2 {
-		t.Fatalf("missing lock: %d %s", got, &stderr)
+	if code, msg := invoke(work, "gh pr view 7", none); code != 0 {
+		t.Fatalf("a read was blocked: %d %s", code, msg)
 	}
-	lock, _ := json.Marshal(control.Lock{Token: control.Secret()})
-	if err := os.WriteFile(filepath.Join(dir, "merge-lock.json"), lock, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got := invoke(); got != 0 {
-		t.Fatalf("valid lock: %d %s", got, &stderr)
-	}
-	fail = true
-	if got := invoke(); got != 2 {
-		t.Fatal("rejected ownership did not block merge")
+	server := func(k string) string { return map[string]string{"ENGINE_SERVER_URL": "http://control.test"}[k] }
+	if code, msg := invoke(t.TempDir(), pinned, server); code != 2 || !strings.Contains(msg, "never merges") {
+		t.Fatalf("server environment merge: %d %s", code, msg)
 	}
 }
 

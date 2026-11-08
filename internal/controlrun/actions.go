@@ -43,23 +43,11 @@ func (c *Coordinator) apply(st control.State, root string, a run.Action, cfg *ho
 	case run.LimitAlert:
 		return c.limitAlert(item, a)
 	case run.Stall:
-		if err := c.notice(item.ID, fmt.Sprintf("%s/%s/%d", a.Kind, item.Attempt, a.At.Unix()), a.Text); err != nil {
-			return err
-		}
-		return c.Service.Store.Transaction(func(s *control.State) error {
-			at := s.Attempts[item.Attempt]
-			at.Notice = a.At
-			s.Attempts[at.ID] = at
-			return nil
-		})
+		return c.stall(st, item, a)
 	case run.Resume:
 		return c.resume(item, a)
 	case run.Reap:
-		_, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false)
-		if err == nil && item.Attempt != "" {
-			err = c.Service.SetAttempt(item.Attempt, "ended", "")
-		}
-		return err
+		return c.reap(st, item, a, cfg)
 	case run.Finish:
 		if err := c.change(item.ID, "done"); err != nil {
 			return err
@@ -161,4 +149,31 @@ func (c *Coordinator) plannerTarget(item control.Item, cfg *hosts.Config) (host,
 		err = errors.Join(err, nerr)
 	}
 	return "", "", err
+}
+
+func (c *Coordinator) stall(st control.State, item control.Item, a run.Action) error {
+	if _, merging := control.PendingMerge(&st, item.ID); merging {
+		return nil // It waits on the coordinator's merge, not outside the protocol.
+	}
+	if err := c.notice(item.ID, fmt.Sprintf("%s/%s/%d", a.Kind, item.Attempt, a.At.Unix()), a.Text); err != nil {
+		return err
+	}
+	return c.Service.Store.Transaction(func(s *control.State) error {
+		at := s.Attempts[item.Attempt]
+		at.Notice = a.At
+		s.Attempts[at.ID] = at
+		return nil
+	})
+}
+
+// reap releases a finished session, once a merged one has had time to report.
+func (c *Coordinator) reap(st control.State, item control.Item, a run.Action, cfg *hosts.Config) error {
+	if c.justMerged(st, item.ID) {
+		return nil
+	}
+	_, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false)
+	if err == nil && item.Attempt != "" {
+		err = c.Service.SetAttempt(item.Attempt, "ended", "")
+	}
+	return err
 }

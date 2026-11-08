@@ -58,42 +58,19 @@ func preToolUse(e Env) int {
 	}
 	e.In = bytes.NewReader(raw)
 	run, _ := findHookRun(e)
-	ce := controlEnv(e)
+	server := e.Getenv("ENGINE_SERVER_URL") != ""
 	if run.dir != "" {
-		path := filepath.Join(run.dir, "server-session.json")
-		b, readErr := os.ReadFile(path)
-		if readErr == nil {
-			var session struct{ URL, Attempt string }
-			if err = json.Unmarshal(b, &session); err != nil {
-				fmt.Fprintln(e.Err, "engine merge guard: invalid server session")
-				return 2
-			}
-			base := e.Getenv
-			ce.Getenv = func(k string) string {
-				switch k {
-				case "ENGINE_SERVER_URL":
-					return session.URL
-				case "ENGINE_SERVER_TOKEN_FILE":
-					return filepath.Join(run.dir, "server-token")
-				case "ENGINE_ATTEMPT_ID":
-					return session.Attempt
-				case "ENGINE_RUN_DIR":
-					return run.dir
-				default:
-					return base(k)
-				}
-			}
-		} else if !os.IsNotExist(readErr) {
-			fmt.Fprintln(e.Err, "engine merge guard:", readErr)
-			return 2
-		}
+		// Fail closed: only a session file known to be absent allows a merge.
+		_, statErr := os.Stat(filepath.Join(run.dir, "server-session.json"))
+		server = server || !os.IsNotExist(statErr)
 	}
-	if ce.Getenv("ENGINE_SERVER_URL") == "" {
-		return 0
-	}
-	if err = controlcmd.CheckMerge(ce); err != nil {
-		fmt.Fprintln(e.Err, "engine merge guard:", err)
+	if server {
+		fmt.Fprintln(e.Err, "engine merge guard: "+serverMergeRefusal)
 		return 2
 	}
 	return 0
 }
+
+// serverMergeRefusal tells a server executor how its PR merges instead.
+const serverMergeRefusal = "a server session never merges: the coordinator merges on the task's host. " +
+	"Holding the merge lock, run: engine task merge-ready <task> --pr <url> --head <reviewed-sha> --method <squash|merge|rebase> --verdict APPROVED, then wait for its update"

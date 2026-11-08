@@ -82,7 +82,8 @@ Use the host's working `gh` installation and normal Git configuration.
 
    Push and open the PR. Swap `engine:running` for `engine:in-review`.
    Release any local resources the repo says to stop when a PR opens.
-10. **Merge on green.** Watch the PR's checks with `gh pr checks --watch`.
+10. **Merge on green.** With a server plan, `server.md` replaces this step.
+    Watch the PR's checks with `gh pr checks --watch`.
     - Take the merge lock (below) first. A standalone task, or one with no
       other open task in its feature, needs none.
     - On a failure, read the logs, fix, and go back to step 5.

@@ -67,16 +67,23 @@ The server has claimed the task for this attempt and opened its worktree.
    Omit GitHub issue-closing directives: the server owns task completion.
 5. Take the repository merge lock with `engine lock acquire` before the
    final default-branch update and gate run. If occupied, wait and read
-   updates. Hold it through review, green CI and the merge, run as a
-   command of its own after any base or head check:
-   `gh pr merge <n> -R <repo> --squash --match-head-commit <reviewed-sha>`.
-6. Release the lock when waiting for an operator, fixing a finding, or
-   closing the PR unmerged. After reacquiring it, refresh the default branch
+   updates. Hold it through review and green CI.
+6. **You never merge; the coordinator does.** With every check green on the
+   reviewed and gated head, read updates once more, then run
+   `engine task merge-ready <task> --pr <url> --head <full-sha> --method
+   <the repo's merge method> --verdict APPROVED` and end your turn. The pre-tool hook
+   refuses any `gh pr merge` here. Approval the repo or card requires is an
+   `engine ask` before the request.
+7. The coordinator wakes you with an update. `merged`: the task is done and
+   the lock is freed; record the outcome as an update and stop. Retain the
+   worktree until the coordinator releases the finished session; dirty
+   worktrees are kept. `merge-refused`: act on its reason (merge the default
+   branch in, fix, re-gate, review again) and request again; keep the lock
+   for a clean default-branch merge, release it while fixing anything else. Any other notice
+   about the merge: wait; never merge yourself.
+8. Keep the lock while a merge request is pending. Release it when waiting
+   for an operator, fixing a finding, or closing the PR unmerged. After reacquiring it, refresh the default branch
    and repeat the final gates/review/check validation.
-7. On merge, release the lock, record the outcome as a task update and mark
-   the task done. Retain the worktree until the coordinator releases the
-   finished session; dirty worktrees are kept.
 
-The pre-tool merge hook verifies the lock even for pinned merges. A server
-outage blocks merging; retain local output and wait. Never bypass gates or
-the lock to finish during an outage.
+A server outage blocks the merge request; retain local output and wait.
+Never bypass gates or the lock to finish during an outage.

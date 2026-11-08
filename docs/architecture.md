@@ -71,7 +71,8 @@ non-test imports. The reasons:
   Engine's own server exposes a versioned HTTP API.
 - **Coordination derives decisions from authoritative records and host
   observations.** The server persists intent and execution identities.
-  Coordinators never edit code or merge. For server changes, load
+  Coordinators never edit code; the server's coordinator merges its tasks.
+  For server changes, load
   `control-server.md`; for GitHub-mode changes, load `coordinator.md`.
 - **The reconcile core is a package with no CLI assumptions**, so a daemon can
   reuse it later. `internal/cli` stays a thin dispatcher.

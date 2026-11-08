@@ -38,6 +38,7 @@ const Usage = "engine serve\n" +
 	"engine plan|task show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
 	"engine lint <plan-id>\n" +
 	"engine task complete-external <task-id> --version <n> --pr <url>\n" +
+	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
 	"engine ps\nengine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\nengine resolve <sequence> <text> --plan <plan-id>\n" +
@@ -160,6 +161,10 @@ func Parse(args []string, e Env) (control.Request, error) {
 	toOperator := fs.Bool("operator", false, "")
 	fs.Bool("json", true, "")
 	fs.Bool("server", true, "")
+	var merge control.MergeRequest
+	fs.StringVar(&merge.Head, "head", "", "")
+	fs.StringVar(&merge.Method, "method", "", "")
+	fs.StringVar(&merge.Verdict, "verdict", "", "")
 	depends, requires := "", ""
 	fs.StringVar(&depends, "depends", "", "")
 	fs.StringVar(&requires, "requires", "", "")
@@ -170,6 +175,10 @@ func Parse(args []string, e Env) (control.Request, error) {
 	}
 	if *toOperator {
 		r.Recipient = "operator"
+	}
+	if r.Op == "merge-request" {
+		merge.PR, r.Item.PR = r.Item.PR, ""
+		r.Merge = &merge
 	}
 	r.Item.Depends = words(depends)
 	r.Item.Requires = words(requires)
@@ -205,7 +214,7 @@ func Parse(args []string, e Env) (control.Request, error) {
 }
 
 func lockToken(r *control.Request, tokenFile string, e Env) error {
-	if strings.HasPrefix(r.Op, "lock-") && r.Op != "lock-acquire" && r.Op != "lock-show" {
+	if strings.HasPrefix(r.Op, "lock-") && r.Op != "lock-acquire" && r.Op != "lock-show" || r.Op == "merge-request" {
 		if tokenFile != "" {
 			token, readErr := control.ReadCredential(tokenFile)
 			if readErr != nil {
@@ -265,6 +274,11 @@ func operation(args []string) (control.Request, []string, error) {
 				return r, nil, fmt.Errorf("complete-external requires a task")
 			}
 			r.Op = op
+		case "merge-ready":
+			if head != "task" {
+				return r, nil, fmt.Errorf("merge-ready requires a task")
+			}
+			r.Op = "merge-request"
 		case "edit", "approve", "state", "stop":
 			r.Op = op
 		default:

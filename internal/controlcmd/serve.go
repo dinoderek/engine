@@ -2,7 +2,6 @@ package controlcmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -219,28 +218,5 @@ func Serve(ctx context.Context, ln net.Listener, handler http.Handler, coordinat
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
-	return err
-}
-
-// CheckMerge is the extra guard for server sessions, invoked immediately before gh.
-func CheckMerge(e Env) error {
-	client, err := makeClient(e)
-	if err != nil {
-		return err
-	}
-	path := e.Getenv("ENGINE_RUN_DIR") + "/merge-lock.json"
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("take the repository merge lock first: %w", err)
-	}
-	var lock control.Lock
-	if err = json.Unmarshal(b, &lock); err != nil {
-		return err
-	}
-	ctx := e.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	_, err = client.Call(ctx, control.Request{Op: "lock-check", Attempt: e.Getenv("ENGINE_ATTEMPT_ID"), Token: lock.Token})
 	return err
 }

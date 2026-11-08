@@ -1,5 +1,5 @@
 {
-  "description": "engine's merge guard: blocks gh pr merge without --match-head-commit, auto-merge, --admin, and merges through the API. In unattended sessions, denies and logs permission requests.",
+  "description": "engine's merge guard: blocks gh pr merge without --match-head-commit, auto-merge, --admin, and merges through the API; in server sessions, blocks every PR merge. In unattended sessions, denies and logs permission requests.",
   "hooks": {
     "PreToolUse": [
       {

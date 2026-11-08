@@ -47,9 +47,11 @@ A task issue uses the template `.github/ISSUE_TEMPLATE/engine-task.md`, one
 section per card field. Dependencies have no section: they are the issue's
 "blocked by" list.
 
-The executor reviews its own work with a fresh reviewer (mode `review`), and
-merges itself once every check is green, with `--match-head-commit` pinned to
-the commit that was reviewed and gated.
+The executor reviews its own work with a fresh reviewer (mode `review`). In
+GitHub mode it merges itself once every check is green, with
+`--match-head-commit` pinned to the commit that was reviewed and gated. With a
+server plan it requests the merge and the coordinator makes it
+(`control-server.md`).
 
 **Executing a task:**
 

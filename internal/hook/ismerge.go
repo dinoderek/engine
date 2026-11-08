@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-// IsMerge detects gh merge invocations, including pinned ones, for server lock checks.
+// IsMerge detects gh merge invocations, including pinned ones: a server session makes none.
 func IsMerge(command string) bool { return isMerge(command, 0) }
 
 func isMerge(command string, depth int) bool {
