@@ -2,6 +2,7 @@ package setup
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
@@ -50,7 +51,52 @@ func (r *runner) recordDaemonEnvironment() (outcome, error) {
 	if res.code != 0 {
 		return open("could not record the daemon environment: "+res.why(), r.rerun()), nil
 	}
-	return changed("started; remote control on"), nil
+	conn, err := r.remoteConnection(instance)
+	if err != nil {
+		return outcome{}, err
+	}
+	return changed("started; remote control on, " + conn), nil
+}
+
+// remoteConnection is how the daemon of instance (its PID and start)
+// stands with the apps, from its own log in engine's Codex home: connected,
+// not connected and why, or unknown when the log cannot be read (sqlite3
+// missing, say). The --remote-control argument only says remote control was
+// asked for. A daemon just started may not have connected yet.
+func (r *runner) remoteConnection(instance string) (string, error) {
+	pid, _, _ := strings.Cut(instance, " ")
+	n, err := strconv.Atoi(pid)
+	if err != nil {
+		return "connection unknown (its PID cannot be read)", nil
+	}
+	res, err := r.t.sh("ps -o etime= -p "+pid, "")
+	if err != nil {
+		return "", err
+	}
+	elapsed, perr := hosts.ParseElapsed(res.out)
+	if res.code != 0 || perr != nil {
+		return "connection unknown (its start cannot be read)", nil
+	}
+	if res, err = r.t.sh(remoteConnectionCommand(r.codex.engineHome(), n, elapsed), ""); err != nil {
+		return "", err
+	}
+	if res.code != 0 {
+		return "connection unknown (its log cannot be read: " + res.why() + ")", nil
+	}
+	why, known := hosts.CodexDisconnected(res.out)
+	switch {
+	case !known:
+		return "connection unknown (" + why + ")", nil
+	case why != "":
+		return "not connected (" + why + ")", nil
+	}
+	return "connected", nil
+}
+
+// remoteConnectionCommand reads the newest remote-control record of the
+// daemon, process pid, from engine's Codex home's log.
+func remoteConnectionCommand(engineHome string, pid, elapsed int) string {
+	return "sqlite3 -readonly -json " + shellPath(engineHome, hosts.CodexLogs) + " " + hosts.ShellWord(hosts.CodexRemoteSQL(pid, elapsed))
 }
 
 func daemonReceiptCommand(path, instance string) string {
