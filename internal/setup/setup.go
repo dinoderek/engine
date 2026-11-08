@@ -1,5 +1,5 @@
 // Package setup is `engine setup [--host <name>]`: it brings a host to the
-// caller's engine commit, plugin and config, in seven steps, and a host that
+// caller's engine commit, plugin and config, in eight steps, and a host that
 // lists codex also gets Codex's five. It is safe to rerun. It changes only
 // engine's own files (~/.config/engine, ~/.local/bin, ~/.local/share/engine),
 // Claude's plugin, and Codex's plugin and daemon in engine's own Codex home,
@@ -146,7 +146,8 @@ func report(out io.Writer, t target, opens []string) bool {
 
 // steps lists the steps for the target. A host that is this one has no
 // engine to install or config to copy: it only checks. A host that lists
-// codex gets Codex's steps in either case, and the check runs last.
+// codex gets Codex's steps in either case. gh's sign-in comes next, and the
+// check runs last.
 func (r *runner) steps(out io.Writer) []step {
 	steps := []step{{1, "tools", r.tools}, {2, "engine", r.enginePath}, {3, "plugin", r.pluginInstalled},
 		{5, "sign-in", r.signIn}, {6, "no suspend", r.noSuspend}}
@@ -162,5 +163,5 @@ func (r *runner) steps(out io.Writer) []step {
 			step{9, "codex home", r.codexHome}, step{10, "codex plugin", r.codexPluginStep}, step{11, "codex daemon", r.codexDaemon})
 		last = 12
 	}
-	return append(steps, step{last, "preflight", func() (outcome, error) { return r.preflight(out) }})
+	return append(steps, step{last, "gh auth", r.ghAuth}, step{last + 1, "preflight", func() (outcome, error) { return r.preflight(out) }})
 }

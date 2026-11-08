@@ -160,7 +160,7 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    prints how to attach.
 
 The checks run in `engine start`, which also picks the model, effort and
-kickoff. Steps 1 to 6, all but printing how to attach, are the host's own
+kickoff. Steps 1 to 6, bar the attach hint, are the host's own
 `sync-repo` and `spawn` ops (`coordinator.md`, "Reaching hosts"), which
 `engine start` calls in-process, or over SSH with `--host`.
 The executor claims the task; its claim check stops a racing second start.
@@ -170,16 +170,15 @@ host's `status`; the host's own `spawn` refuses anything else, such as a
 missing harness binary.
 An unreachable host is an error, not a refusal. A host on another protocol
 is refused, naming `engine setup --host <name>` (`operator-setup.md`). A
-harness's cap across hosts is placement's alone, so `engine start` does not
-check it.
+harness's cap across hosts is placement's alone: `engine start` ignores it.
 
 **Preflight:** `engine start --check [--harness <name>] [--host <name>]` (Claude
-without `--harness`) opens a throwaway hands-off session,
-`engine-check`, at the light tier, that reads the skill, reads a file it
-wrote in `/tmp`, runs `gh` and `engine`, and closes its window. It exits 1,
-printing what it met, when the session had a permission request denied,
-stalled or skipped a step. A Codex check also needs the session's hooks to
-have written its state file (`codex.md`).
+without `--harness`) runs `gh auth status` in the `engine` tmux server
+(`operator-setup.md`, "GitHub access"); a hands-off light-tier session,
+`engine-check`, reads the skill and a file it wrote in `/tmp`, runs `gh` and
+`engine`, and closes its window. It exits 1, printing what it met, when gh
+failed or the session met a denial, stalled or skipped a step. A Codex check
+also needs the hooks to have written its state file (`codex.md`).
 
 **Other ways to start:** a session started any other way runs the same
 executor, creates its own worktree, and is reachable only where it was

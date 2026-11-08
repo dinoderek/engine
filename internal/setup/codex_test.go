@@ -31,7 +31,7 @@ func TestCodexStepsOnASettledHost(t *testing.T) {
 	out := r.out.String()
 	for _, want := range []string{
 		"7. codex: ok (codex-cli 0.164.0)", "8. codex sign-in: ok (Logged in using ChatGPT)", "9. codex home: ok (" + boxEngineH + ")",
-		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control on)", "12. preflight: ok",
+		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control on)", "12. gh auth: ok", "13. preflight: ok",
 		"checking --harness codex", "box is set up",
 	} {
 		if !strings.Contains(out, want) {
@@ -55,7 +55,7 @@ func TestCodexSetsUpAFreshHostAndStaysSafeToRerun(t *testing.T) {
 	out := r.out.String()
 	for _, want := range []string{
 		"9. codex home: changed (wrote config.toml, linked the login)", "10. codex plugin: changed (0.7.1, was none)",
-		"11. codex daemon: changed (started; remote control on)", "12. preflight: ok",
+		"11. codex daemon: changed (started; remote control on)", "13. preflight: ok",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
@@ -126,7 +126,7 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startFail = false, false, true }},
 		{"remote control stays off", "11. codex daemon: OPEN", "remote control is off after the start", "remote-control start",
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startNoRC = false, false, true }},
-		{"the check finds a prompt", "12. preflight: OPEN", "an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'",
+		{"the check finds a prompt", "13. preflight: OPEN", "an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'",
 			func(*codexState) {}},
 	}
 	for _, c := range cases {
@@ -247,7 +247,7 @@ func TestACodexCheckThatFailsLeavesCodexOpenAfterClaudePasses(t *testing.T) {
 		t.Fatal("closed")
 	}
 	out := r.out.String()
-	if !strings.Contains(out, "12. preflight: OPEN (an unattended Codex session there would stop") || !strings.Contains(out, "engine start --check --harness codex --host box") {
+	if !strings.Contains(out, "13. preflight: OPEN (an unattended Codex session there would stop") || !strings.Contains(out, "engine start --check --harness codex --host box") {
 		t.Errorf("out:\n%s", out)
 	}
 	if got := strings.Join(r.checked, ","); got != "checked,codex" {
@@ -285,7 +285,7 @@ func TestACodexHostCheckingItselfAlsoActs(t *testing.T) {
 	}
 	out := r.out.String()
 	for _, want := range []string{"mac (this host; the Codex steps act)", "6. no suspend: ok (not Linux)", "7. codex: ok", "9. codex home: changed (wrote config.toml, linked the login)",
-		"10. codex plugin: changed (0.7.1, was none)", "11. codex daemon: changed", "12. preflight: ok"} {
+		"10. codex plugin: changed (0.7.1, was none)", "11. codex daemon: changed", "13. preflight: ok"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
 		}
@@ -305,7 +305,7 @@ func TestAHostWithoutCodexRunsNoCodexSteps(t *testing.T) {
 	if !mustRun(t, r, "box") {
 		t.Fatalf("open:\n%s", r.out.String())
 	}
-	if out := r.out.String(); strings.Contains(out, "codex") || !strings.Contains(out, "7. preflight: ok") {
+	if out := r.out.String(); strings.Contains(out, "codex") || !strings.Contains(out, "8. preflight: ok") {
 		t.Errorf("out:\n%s", out)
 	}
 	if got := strings.Join(r.checked, ","); got != "checked" {
