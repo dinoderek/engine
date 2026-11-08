@@ -37,15 +37,13 @@ Without that file, the CLI uses the origin shown above. An explicit
 `ENGINE_SERVER_URL` overrides it. Provision the operator credential in
 `~/.config/engine/server-token` on each operator machine, or set
 `ENGINE_SERVER_TOKEN_FILE` to its path. Workers receive their scoped
-credential and the advertised URL at dispatch. Host definitions remain
-in the existing host config.
+credential and the advertised URL at dispatch.
 
 For backup, stop the server, run the same invocation with
 `--backup <new-path>`, and restart it. Copy the backup off-machine. Restore
 with the server stopped, retaining the private operator credential. A backup
 includes execution credentials and is private. The backup operation refuses
-to overwrite an existing file. Test restores into an isolated database before
-replacing the active database.
+to overwrite an existing file. Test restores in an isolated database first.
 
 ## Records and commands
 
@@ -68,7 +66,7 @@ engine task list p2
 engine attempt list t3
 ```
 
-Substitute returned IDs and versions. Task cards carry the skill's Outcome
+Task cards carry the skill's Outcome
 and Tests sections. Dependencies, capabilities, harness and tier are
 structured fields, supplied with `--depends`, `--requires`, `--harness`
 and `--tier`. The server adapter supplies card keys and maps these fields
@@ -166,25 +164,24 @@ on a single-user machine. The page calls fixed same-origin routes:
   it filters the last list read without calling the control server.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts and unfinished prerequisites, including other plans' tasks.
-- `/api/items/<id>`: a plan or task with its description.
-- `/api/items/<id>/thread`: the item's messages (`say`, `ask`, `reply`,
-  `acknowledged`, `resolved`): 50 after `after`, extended to include
-  `anchor`, with the next cursor, a more flag and all question statuses.
+- `/api/items/<id>` and `/thread`: a plan or task with its description
+  rendered, and its messages, 50 after `after` (through `anchor`), with a
+  cursor and question statuses.
 
-Descriptions support headings, flat lists, code and links. Raw HTML and
-messages are text; only absolute http, https and mailto links act.
+Descriptions support headings, lists, code and links. Raw HTML is text; only
+absolute http, https and mailto links act.
 
 The process forwards only the `list`, `plan-view`, `attempts`, `get` and
 `updates` reads. It answers GET and HEAD for a loopback host name on any
 port, so an SSH tunnel works, and sends `Cache-Control: no-store`. When the
-control server fails, the plan routes return their last data, marked stale, and
-the page keeps its item and thread data. It refreshes every 30s while
-visible.
+control server fails, the page keeps its last data, marked stale. It
+refreshes every 30s while visible.
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
 unfinished prerequisite blocks it, todo or approved under an approved plan
-is ready to run, and anything else is blocked. Coordination is ignored.
+is ready to run, and anything else waits for the operator, so is blocked.
+Coordination does not change it.
 
 ## Session view
 
