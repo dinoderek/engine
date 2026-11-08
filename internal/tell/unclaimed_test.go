@@ -23,11 +23,14 @@ const (
 
 // statusHost is a host whose status op lists runs, or fails.
 type statusHost struct {
-	runs []hostops.Run
-	err  error
+	runs    []hostops.Run
+	runsErr string
+	err     error
 }
 
-func (f statusHost) Status() (hostops.Status, error) { return hostops.Status{Runs: f.runs}, f.err }
+func (f statusHost) Status() (hostops.Status, error) {
+	return hostops.Status{Runs: f.runs, RunsError: f.runsErr}, f.err
+}
 func (statusHost) SyncRepo(string) (hostops.Synced, error) {
 	return hostops.Synced{}, errors.New("unused")
 }
@@ -129,6 +132,8 @@ func TestTellRefusesAnUntrustedPreClaimSession(t *testing.T) {
 	}{
 		{"no run anywhere", "open", live, "no claimed task or engine run named r-7", nil, statusHost{}, statusHost{}},
 		{"unread host is named", "open", live, "hosts not read: devbox: no route", nil, statusHost{}, statusHost{err: errors.New("no route")}},
+		{"unread run records are named", "open", live, "hosts not read: mac: run records: bad json", nil, statusHost{runsErr: "bad json"}, statusHost{}},
+		{"window outside the engine session", "open", live, `names window "other:@4"`, nil, statusHost{runs: []hostops.Run{{Name: "r-7", Record: session.Record{RunID: "r-7-1", Name: "r-7", Task: task7, Host: "mac", Tmux: "other:@4"}}}}, statusHost{}},
 		{"record names another host", "open", live, "no claimed task or engine run named r-7", nil, statusHost{runs: []hostops.Run{run("r-7", task7, "laptop", "@4", 1)}}, statusHost{}},
 		{"record of another task", "open", live, "whose session is r-8", nil, statusHost{runs: []hostops.Run{run("r-7", task8, "mac", "@4", 1)}}, statusHost{}},
 		{"closed task", "closed", live, task7 + " is closed", nil, statusHost{runs: []hostops.Run{run("r-7", task7, "mac", "@4", 1)}}, statusHost{}},
@@ -149,5 +154,18 @@ func TestTellRefusesAnUntrustedPreClaimSession(t *testing.T) {
 				t.Errorf("posted %q, keys %q", g.posted, tm.keys)
 			}
 		})
+	}
+}
+
+// Status lists each host's newest run of a name, so the newest of all is
+// chosen across hosts.
+func TestTellPicksTheNewestRunAcrossHosts(t *testing.T) {
+	g := &preClaimGh{t: t, state: "open"}
+	tm := &tmux{windows: "@2 %2 0 r-7\n@4 %9 0 r-7\n"}
+	mac := statusHost{runs: []hostops.Run{run("r-7", task7, "mac", "@2", 1)}}
+	devbox := statusHost{runs: []hostops.Run{run("r-7", task7, "devbox", "@4", 5)}}
+	told, err := Tell("r-7", "hi", preClaimRig(t, g, tm, mac, devbox))
+	if err != nil || told.Host != "devbox" || told.Window != "engine:@4" {
+		t.Fatalf("told %+v, err %v", told, err)
 	}
 }

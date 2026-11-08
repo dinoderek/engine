@@ -38,7 +38,10 @@ func unclaimed(name, text string, d Deps) (Told, error) {
 	if err != nil {
 		return Told{}, err
 	}
-	_, id, _ := strings.Cut(rec.Tmux, ":")
+	sess, id, ok := strings.Cut(rec.Tmux, ":")
+	if !ok || sess != session.Name || id == "" {
+		return Told{}, fmt.Errorf("the run %s of %s names window %q, not one in the session %s", rec.RunID, name, rec.Tmux, session.Name)
+	}
 	live, err := tm.LiveWindow(id, name)
 	if err != nil {
 		return Told{}, fmt.Errorf("listing the windows on %s failed: %w", host, err)
@@ -57,9 +60,10 @@ func unclaimed(name, text string, d Deps) (Told, error) {
 	return told, nil
 }
 
-// newestRun is the record of the newest run named name on any host in hosts.toml, and its
-// host. A record that names another host is not trusted. Hosts that cannot
-// be read are named when no run is found.
+// newestRun is the record of the newest run named name on any host in
+// hosts.toml, and its host. A record that names another host is not
+// trusted. Hosts whose status or run records cannot be read are named when
+// no run is found.
 func newestRun(name string, cfg *hosts.Config, local hosts.Host, d Deps) (session.Record, string, error) {
 	if d.Client == nil {
 		return session.Record{}, "", fmt.Errorf("no claimed task named %s", name)
@@ -73,6 +77,9 @@ func newestRun(name string, cfg *hosts.Config, local hosts.Host, d Deps) (sessio
 		if err != nil {
 			unread = append(unread, fmt.Errorf("%s: %w", n, err))
 			continue
+		}
+		if st.RunsError != "" {
+			unread = append(unread, fmt.Errorf("%s: run records: %s", n, st.RunsError))
 		}
 		for _, r := range st.Runs {
 			if r.Name == name && r.Record.Name == name && r.Record.Host == n && (host == "" || r.Record.Spawned.After(best.Spawned)) {
