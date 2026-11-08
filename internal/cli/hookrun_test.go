@@ -158,6 +158,7 @@ func TestStateHookStartsTheLabelForAJoinedThread(t *testing.T) {
 		{"an embedded session's prompt", "UserPromptSubmit", true, "", false},
 		{"a labelled thread", "UserPromptSubmit", false, `{"attempts":1}`, false},
 		{"a failure with attempts left", "Stop", false, `{"attempts":1,"error":"x"}`, true},
+		{"a failure too recent to retry", "Stop", false, `{"attempts":1,"error":"x","at":"` + stateAt.Add(-time.Second).Format(time.RFC3339) + `"}`, false},
 		{"no attempts left", "Stop", false, `{"attempts":3,"error":"x"}`, false},
 	}
 	for _, tt := range tests {

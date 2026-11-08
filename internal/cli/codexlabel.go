@@ -22,7 +22,7 @@ var labelEvents = map[string]bool{"UserPromptSubmit": true, "PostToolUse": true,
 // the daemon it would call, so it never waits for the daemon itself. A failure
 // to start is reported, and the session carries on.
 func labelCodexThread(env Env, run hookRun, sig hook.Signal) {
-	if !run.joined || !labelEvents[sig.Event] || sig.SessionID == "" || !hostops.CodexLabelPending(run.dir) {
+	if !run.joined || !labelEvents[sig.Event] || sig.SessionID == "" || !hostops.CodexLabelPending(run.dir, env.Now()) {
 		return
 	}
 	detach := env.Detach

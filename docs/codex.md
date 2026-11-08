@@ -234,8 +234,8 @@ Engine's daemon reads its own home's `config.toml` and `hooks.json`, apart
 from the operator's. It is named after the host: Codex has no override.
 Codex has no flag that names a session, so the kickoff's `rc=` is unused.
 From a joined session's first prompt, the state hook starts `engine hook
-codex-label` in the background (the hook runs inside the daemon), which calls
+codex-label` in the background (hooks run inside the daemon), which calls
 the daemon via `codex app-server proxy`: `thread/name/set` titles the
-thread `<plan> > <task>`, or the task alone, and the experimental project
+thread `<plan> > <task>`, or the task alone, and experimental project
 calls file it under the repo's project, found by its `engine_repo` metadata.
-Failures retry on later events, three attempts in all.
+Failures retry on later events, 15 seconds apart, three attempts max.

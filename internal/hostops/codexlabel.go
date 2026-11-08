@@ -57,11 +57,15 @@ func readCodexLabel(runDir string) (codexLabelRecord, bool) {
 	return rec, err == nil && json.Unmarshal(data, &rec) == nil
 }
 
-// CodexLabelPending is true while the run's thread is not labelled and
-// attempts remain.
-func CodexLabelPending(runDir string) bool {
+// codexLabelRetry spaces the attempts, so they span the daemon storing a new
+// thread rather than all failing in its first seconds.
+const codexLabelRetry = 15 * time.Second
+
+// CodexLabelPending is true while the run's thread is not labelled, attempts
+// remain and the last one is at least codexLabelRetry before now.
+func CodexLabelPending(runDir string, now time.Time) bool {
 	rec, ok := readCodexLabel(runDir)
-	return !ok || rec.Error != "" && rec.Attempts < codexLabelAttempts
+	return !ok || rec.Error != "" && rec.Attempts < codexLabelAttempts && now.Sub(rec.At) >= codexLabelRetry
 }
 
 // codexProjectKey is the project metadata key that holds the repo engine
@@ -100,7 +104,7 @@ func CodexThreadTitle(rec session.Record) string {
 // attempt, or while another attempt holds the lock. A failure is returned for
 // the caller to report; it never stops the session.
 func LabelCodexThread(d Deps, runDir string, rec session.Record, threadID string) error {
-	if !CodexLabelPending(runDir) {
+	if !CodexLabelPending(runDir, d.Now()) {
 		return nil
 	}
 	lock := filepath.Join(runDir, codexLabelLock)
@@ -117,7 +121,7 @@ func LabelCodexThread(d Deps, runDir string, rec session.Record, threadID string
 	_ = f.Close()
 	defer func() { _ = os.Remove(lock) }()
 	// Another attempt may have finished between the check and the lock.
-	if !CodexLabelPending(runDir) {
+	if !CodexLabelPending(runDir, d.Now()) {
 		return nil
 	}
 	prev, _ := readCodexLabel(runDir)

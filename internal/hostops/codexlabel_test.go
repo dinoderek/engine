@@ -223,7 +223,7 @@ func TestLabelCodexThreadStopsOnceLabelled(t *testing.T) {
 	if got := readLabel(t, dir); got.CodexLabelRequest != want || got.Error != "" || got.Attempts != 1 || !got.At.Equal(fixedNow()) {
 		t.Errorf("record %+v", got)
 	}
-	if CodexLabelPending(dir) {
+	if CodexLabelPending(dir, fixedNow().Add(time.Hour)) {
 		t.Error("a labelled run is still pending")
 	}
 	if _, err := os.Stat(filepath.Join(dir, codexLabelLock)); err == nil {
@@ -235,13 +235,21 @@ func TestLabelCodexThreadRetriesAFailureAFewTimes(t *testing.T) {
 	d, reqs, _ := labelDeps(t, errors.New("daemon down"))
 	dir := t.TempDir()
 	rec := session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34", Feature: "p12"}
+	now := fixedNow()
+	d.Now = func() time.Time { return now }
 	for i := range codexLabelAttempts {
-		if !CodexLabelPending(dir) {
+		if !CodexLabelPending(dir, now) {
 			t.Fatalf("attempt %d: not pending", i+1)
 		}
 		if err := LabelCodexThread(d, dir, rec, "th1"); err == nil || !strings.Contains(err.Error(), "daemon down") {
 			t.Fatalf("attempt %d: err = %v", i+1, err)
 		}
+		// Too soon after a failure, nothing is tried.
+		now = now.Add(codexLabelRetry - time.Second)
+		if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || CodexLabelPending(dir, now) || len(*reqs) != i+1 {
+			t.Fatalf("attempt %d: retried too soon: err %v, %d requests", i+1, err, len(*reqs))
+		}
+		now = now.Add(time.Second)
 	}
 	if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || len(*reqs) != codexLabelAttempts {
 		t.Errorf("after the last attempt: err %v, %d requests, want %d", err, len(*reqs), codexLabelAttempts)
@@ -251,7 +259,7 @@ func TestLabelCodexThreadRetriesAFailureAFewTimes(t *testing.T) {
 		got.Root != filepath.Join(d.Home, filepath.FromSlash(session.ControlReposDir), "o", "engine") {
 		t.Errorf("record %+v", got)
 	}
-	if CodexLabelPending(dir) {
+	if CodexLabelPending(dir, now.Add(time.Hour)) {
 		t.Error("still pending after the last attempt")
 	}
 }
