@@ -61,7 +61,7 @@ func worktreeFixture(t *testing.T, withDev bool, mode os.FileMode) (Repos, Clone
 
 func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	r, clone, f, wt := worktreeFixture(t, true, 0o755)
-	got, err := r.CreateWorktree(clone, 7)
+	got, err := r.CreateWorktree(clone, 7, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestCreateWorktreeProbesWithProbeWhenSet(t *testing.T) {
 		probed = append(probed, strings.Join(append([]string{name}, args...), " "))
 		return "", errBoom
 	}
-	got, err := r.CreateWorktree(clone, 7)
+	got, err := r.CreateWorktree(clone, 7, false)
 	if err != nil || got.Path != wt {
 		t.Fatalf("worktree = %+v, %v", got, err)
 	}
@@ -122,7 +122,7 @@ func TestCreateWorktreeFallsBackToGitWhenTheReposDevHasNoWorktreeVerb(t *testing
 	r, clone, f, wt := worktreeFixture(t, true, 0o755)
 	// A repo's own unrelated ./dev, here an argparse script with other verbs.
 	f.replies[3].out = "usage: ./dev [-h] {test,docs} ...\n./dev: error: the following arguments are required: command\n"
-	got, err := r.CreateWorktree(clone, 7)
+	got, err := r.CreateWorktree(clone, 7, false)
 	if err != nil || got.Path != wt || got.Branch != "task/r-7" {
 		t.Fatalf("worktree = %+v, %v", got, err)
 	}
@@ -147,7 +147,7 @@ func TestCreateWorktreeFallsBackToGit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r, clone, f, wt := worktreeFixture(t, tt.withDev, tt.mode)
-			got, err := r.CreateWorktree(clone, 7)
+			got, err := r.CreateWorktree(clone, 7, false)
 			if err != nil || got.Path != wt || got.Branch != "task/r-7" {
 				t.Fatalf("worktree = %+v, %v", got, err)
 			}
@@ -187,7 +187,7 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, tt.task)
+			_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, tt.task, false)
 			var takenErr *BranchTakenError
 			if want := strings.Contains(tt.name, "exists") || strings.Contains(tt.name, "has the branch"); errors.As(err, &takenErr) != want {
 				t.Errorf("a taken branch is a BranchTakenError, and nothing else is: %v", err)
@@ -210,7 +210,7 @@ func TestCreateWorktreeFailsWhenTheCommandMakesNone(t *testing.T) {
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7)
+	_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7, false)
 	if err == nil || !strings.Contains(err.Error(), "no worktree has branch task/r-7") {
 		t.Errorf("err = %v", err)
 	}
@@ -224,7 +224,42 @@ func TestCreateWorktreeFailsWhenTheLockCannotBeTaken(t *testing.T) {
 		t.Fatal(err)
 	}
 	clone := Clone{Repo: mustRepo(t, "o/r"), Path: filepath.Join(blocker, "clone"), Default: "main"}
-	if _, err := r.CreateWorktree(clone, 7); err == nil || len(f.calls) != 0 {
+	if _, err := r.CreateWorktree(clone, 7, false); err == nil || len(f.calls) != 0 {
 		t.Errorf("err %v, commands %v", err, f.lines())
+	}
+}
+
+func TestCreateWorktreeOnResumeOpensOnOriginsBranch(t *testing.T) {
+	for _, withDev := range []bool{false, true} {
+		r, clone, f, wt := worktreeFixture(t, withDev, 0o755)
+		// Origin has the branch; the fixture's side effect fills replies[1].
+		f.replies = append([]reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}, f.replies[1], f.replies[0]}, f.replies[2:]...)
+		got, err := r.CreateWorktree(clone, 7, true)
+		if err != nil || got.Path != wt {
+			t.Fatalf("dev %v: worktree = %+v, %v", withDev, got, err)
+		}
+		if !f.has("git branch --force --no-track task/r-7 refs/remotes/origin/task/r-7") {
+			t.Errorf("dev %v: the local branch was not set to origin's tip: %v", withDev, f.lines())
+		}
+		create := "git worktree add --quiet " + wt + " task/r-7"
+		if withDev {
+			create = filepath.Join(clone.Path, "dev") + " worktree create task/r-7"
+		}
+		if !f.has(create) || f.has("-b task/r-7") {
+			t.Errorf("dev %v: commands %v lack %q, or branch anew", withDev, f.lines(), create)
+		}
+	}
+}
+
+func TestCreateWorktreeOnResumeFailsWhenTheBranchCannotBeSet(t *testing.T) {
+	r, clone, f, _ := worktreeFixture(t, false, 0)
+	f.replies = append([]reply{{key: "branch --force", err: errBoom}, {key: "refs/remotes/origin/task/r-7", out: "abc"}}, f.replies...)
+	_, err := r.CreateWorktree(clone, 7, true)
+	var takenErr *BranchTakenError
+	if err == nil || errors.As(err, &takenErr) || !strings.Contains(err.Error(), "set branch task/r-7 to origin's tip") {
+		t.Errorf("err = %v", err)
+	}
+	if f.has("worktree add") {
+		t.Error("created a worktree though the branch was not set")
 	}
 }

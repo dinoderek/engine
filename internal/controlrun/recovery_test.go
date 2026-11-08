@@ -93,3 +93,31 @@ func TestQuotaMarkersAreIndependentForEachReset(t *testing.T) {
 		t.Fatal("later reset did not allow resume")
 	}
 }
+
+func TestRetriedTaskDispatchesAsAResume(t *testing.T) {
+	c, h, _, _, task := setup(t)
+	pass(t, c)
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	first := st.Attempts[st.Items[task.ID].Attempt]
+	if h.launches[first.RunID].Spawn.Resume {
+		t.Fatal("a first attempt dispatched as a resume")
+	}
+	h.status.Windows[0].Alive = false
+	if err := c.ConfirmEnded(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	execute(t, c.Service, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "todo"})
+	pass(t, c)
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	retry := st.Attempts[st.Items[task.ID].Attempt]
+	if retry.ID == first.ID {
+		t.Fatal("the retried task was not dispatched again")
+	}
+	if !h.launches[retry.RunID].Spawn.Resume {
+		t.Error("a retry did not dispatch as a resume, so its branch on origin would be refused")
+	}
+}
