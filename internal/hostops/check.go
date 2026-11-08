@@ -56,7 +56,8 @@ type CheckResult struct {
 	// State is the state the file last recorded, when it is there.
 	State string
 	// Joined is true when the session joined the host's remote-control
-	// daemon, as a spawn would; Embedded says why it did not.
+	// daemon, as a spawn would; Embedded says why it did not, or why the
+	// apps cannot see a joined session.
 	Joined   bool
 	Embedded string
 }
@@ -285,7 +286,8 @@ func ReportCheck(out io.Writer, r CheckResult) {
 	mark := map[bool]string{true: "ok  ", false: "FAIL"}
 	if r.Joined {
 		fmt.Fprintln(out, "ok   the session joined remote control")
-	} else if r.Embedded != "" {
+	}
+	if r.Embedded != "" {
 		fmt.Fprintf(out, "note %s\n", r.Embedded)
 	}
 	fmt.Fprintf(out, "%s the session closed its own window\n", mark[r.Closed])

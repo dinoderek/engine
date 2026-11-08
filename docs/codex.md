@@ -198,11 +198,21 @@ embedded execution until setup refreshes the daemon. Otherwise
 (no daemon, remote control off, a reply that cannot be read, or a launch line
 with a writable root or `--add-dir`) the session starts embedded, and
 `spawn`'s reply warns, saying why and that `engine setup` starts the daemon; a
-down daemon never refuses a spawn. The apps' own connection is not read:
-`codex remote-control --json` is not a read of one Codex home's daemon. With
-no daemon it serves in the foreground, with remote control on, until stopped;
-at engine's daemon it reported the machine's errored connection on the Mac
-while the daemon's log said connected, and a foreground failure on Linux.
+down daemon never refuses a spawn.
+
+`--remote-control` only asks for a connection to the apps. Whether the
+daemon has one is read from its own log, `logs_2.sqlite` in engine's Codex
+home: the newest record of the remote-control websocket target from the
+daemon's process (`process_uuid` is `pid:<pid>:<uuid>`) since its start
+(`ps -o etime=`, which no locale or time zone changes). A connection record
+is connected; anything else, or no record, is not connected, with that line
+or "no connection logged" as the reason. A joined session with no
+connection still joins, and `spawn` and `engine start --check` warn that the
+apps do not show it; `engine setup` reports `remote control on, connected`
+or `not connected (<reason>)` and stays done. `codex remote-control --json`
+is no read of one Codex home's daemon: with no daemon it serves in the
+foreground until stopped, and at engine's daemon it reported the machine's
+errored connection while the daemon's log said connected.
 Setup also reads the operator's state only once `codex app-server daemon
 version` reports a daemon running there.
 

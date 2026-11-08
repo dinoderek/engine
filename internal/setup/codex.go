@@ -391,7 +391,15 @@ func (r *runner) codexDaemon() (outcome, error) {
 			return open("engine's daemon must restart to inherit the host environment; finish its sessions, then stop it and rerun setup", stop+" && "+r.rerun()), nil
 		}
 		if on {
-			return passed("running; remote control on"), nil
+			instance, err := r.daemonInstance()
+			if err != nil {
+				return outcome{}, err
+			}
+			conn, err := r.remoteConnection(instance)
+			if err != nil {
+				return outcome{}, err
+			}
+			return passed("running; remote control on, " + conn), nil
 		}
 	}
 	// A start exits 1 when the connection to the apps is errored, though the

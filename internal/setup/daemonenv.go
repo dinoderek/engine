@@ -2,6 +2,7 @@ package setup
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
@@ -50,7 +51,42 @@ func (r *runner) recordDaemonEnvironment() (outcome, error) {
 	if res.code != 0 {
 		return open("could not record the daemon environment: "+res.why(), r.rerun()), nil
 	}
-	return changed("started; remote control on"), nil
+	conn, err := r.remoteConnection(instance)
+	if err != nil {
+		return outcome{}, err
+	}
+	return changed("started; remote control on, " + conn), nil
+}
+
+// remoteConnection is how the daemon of instance (its PID and start)
+// stands with the apps, from its own log in engine's Codex home: connected,
+// or not connected and why. The --remote-control argument only says remote
+// control was asked for. A daemon just started may not have connected yet.
+func (r *runner) remoteConnection(instance string) (string, error) {
+	pid, _, _ := strings.Cut(instance, " ")
+	n, err := strconv.Atoi(pid)
+	if err != nil {
+		return "not connected (its PID cannot be read)", nil
+	}
+	res, err := r.t.sh("ps -o etime= -p "+pid, "")
+	if err != nil {
+		return "", err
+	}
+	elapsed, perr := hosts.ParseElapsed(res.out)
+	if res.code != 0 || perr != nil {
+		return "not connected (its start cannot be read)", nil
+	}
+	sql := hosts.CodexRemoteSQL(n, elapsed)
+	if res, err = r.t.sh("sqlite3 -readonly -json "+shellPath(r.codex.engineHome(), hosts.CodexLogs)+" "+hosts.ShellWord(sql), ""); err != nil {
+		return "", err
+	}
+	if res.code != 0 {
+		return "not connected (its log cannot be read: " + res.why() + ")", nil
+	}
+	if why := hosts.CodexDisconnected(res.out); why != "" {
+		return "not connected (" + why + ")", nil
+	}
+	return "connected", nil
 }
 
 func daemonReceiptCommand(path, instance string) string {

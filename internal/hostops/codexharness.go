@@ -55,36 +55,42 @@ const startDaemon = "`engine setup` on this host starts it with remote control o
 
 // Join joins engine's daemon when it runs in engine's Codex home with remote
 // control on. It reads the daemon with `codex app-server daemon version` in
-// that home, which starts nothing, and its process's arguments. `codex
+// that home, which starts nothing, and its process's arguments. A joined
+// session is warned when the daemon's log shows no live connection to the
+// apps (see disconnected). `codex
 // remote-control --json` is no read: with no daemon it serves in the
 // foreground until stopped, and the state it reports is not one Codex
 // home's.
 func (c codex) Join(run session.Runner, bin, line string) (bool, string) {
-	why := c.unjoinable(run, bin, line)
-	if why == "" {
-		return true, ""
+	pid, why := c.unjoinable(run, bin, line)
+	if why != "" {
+		return false, "the Codex session runs embedded, so the ChatGPT and Codex apps do not show it: " + why
 	}
-	return false, "the Codex session runs embedded, so the ChatGPT and Codex apps do not show it: " + why
+	if why := c.disconnected(run, pid); why != "" {
+		return true, "the Codex session joined engine's daemon, but the ChatGPT and Codex apps do not show it: its remote control is not connected (" + why + ")"
+	}
+	return true, ""
 }
 
-// unjoinable is why the session cannot join engine's daemon, or empty.
-func (c codex) unjoinable(run session.Runner, bin, line string) string {
+// unjoinable is why the session cannot join engine's daemon, or empty with
+// the daemon's PID.
+func (c codex) unjoinable(run session.Runner, bin, line string) (pid, why string) {
 	for _, flag := range refusedFlags {
 		if strings.Contains(line, flag) {
-			return "hosts.toml's launch line has " + flag + ", which a joined session refuses"
+			return "", "hosts.toml's launch line has " + flag + ", which a joined session refuses"
 		}
 	}
 	home := c.engineHome()
 	out, err := run("env", "CODEX_HOME="+home, bin, "app-server", "daemon", "version")
 	if state := daemonState(out, err); state != "running" {
-		return "engine's Codex daemon is " + state + "; " + startDaemon
+		return "", "engine's Codex daemon is " + state + "; " + startDaemon
 	}
 	args, err := run("ps", "-ww", "-eo", "args=")
 	if err != nil {
-		return "cannot read engine's Codex daemon's arguments (" + err.Error() + ")"
+		return "", "cannot read engine's Codex daemon's arguments (" + err.Error() + ")"
 	}
 	if !remoteControlOn(args, home) {
-		return "engine's Codex daemon runs with remote control off; " + startDaemon
+		return "", "engine's Codex daemon runs with remote control off; " + startDaemon
 	}
 	return c.daemonEnvironment(run)
 }
