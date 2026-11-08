@@ -180,9 +180,8 @@ without `--harness`) runs `gh auth status` in the `engine` tmux server
 failed or the session met a denial, stalled or skipped a step. A Codex check
 also needs the hooks to have written its state file (`codex.md`).
 
-**Other ways to start:** a session started any other way runs the same
-executor, creates its own worktree, and is reachable only where it was
-started.
+**Other ways to start:** a session started otherwise runs the same executor,
+creates its own worktree, and is reachable only where it started.
 
 ## The claim comment is the registry
 
