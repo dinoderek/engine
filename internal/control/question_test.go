@@ -84,6 +84,31 @@ func TestTaskStaysHeldUntilItsLastQuestionIsResolved(t *testing.T) {
 	}
 }
 
+func TestPlanResolutionReleasesASiblingWhoseOwnQuestionWasResolvedFirst(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	one := newTask(t, s, repo.ID, plan.ID)
+	two := newTask(t, s, repo.ID, plan.ID)
+	parked := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	first, _ := dispatch(t, s, one)
+	second, _ := dispatch(t, s, two)
+	third, claimed := dispatch(t, s, parked)
+	call(t, s, third, Request{Op: "state", ID: parked.ID, Version: claimed.Item.Version, State: "needs-human"})
+	own := call(t, s, second, Request{Op: "ask", ID: two.ID, Body: "Approve the schema change?"}).Updates[0]
+	shared := call(t, s, first, Request{Op: "ask", ID: plan.ID, Body: "The unit lane is red on main"}).Updates[0]
+	call(t, s, op, Request{Op: "resolve", ReplyTo: own.ID, Body: "Approved"})
+	if got := mustSnapshot(t, s).Items[two.ID].State; got != "needs-human" {
+		t.Fatalf("the open plan question let %s go to %s", two.ID, got)
+	}
+	call(t, s, op, Request{Op: "resolve", ReplyTo: shared.ID, Body: "Fixed on main"})
+	st := mustSnapshot(t, s)
+	if st.Items[one.ID].State != "running" || st.Items[two.ID].State != "running" || st.Items[parked.ID].State != "needs-human" {
+		t.Fatalf("states = %s, %s, %s; want running, running and needs-human (held with no question)",
+			st.Items[one.ID].State, st.Items[two.ID].State, st.Items[parked.ID].State)
+	}
+}
+
 func TestResolveLeavesAMovedOrEndedTaskAlone(t *testing.T) {
 	s := service(t)
 	repo, plan := repoPlan(t, s)
@@ -128,9 +153,10 @@ func TestHeldFromIsTheNewestStateBeforeNeedsHuman(t *testing.T) {
 		want    string
 	}{
 		{"none", nil, ""},
-		{"in review", []Update{{Item: "t1", Snapshot: snap("running")}, {Item: "t1", Snapshot: snap("in-review")}, {Item: "t1", Snapshot: snap("needs-human")}}, "in-review"},
-		{"other item", []Update{{Item: "t1", Snapshot: snap("running")}, {Item: "p1", Snapshot: &Item{ID: "p1", State: "executing"}}}, "running"},
-		{"not active", []Update{{Item: "t1", Snapshot: snap("todo")}, {Item: "t1", Snapshot: snap("needs-human")}}, ""},
+		{"in review", []Update{{Item: "t1", Snapshot: snap("running")}, {Item: "t1", Snapshot: snap("in-review")}, {Item: "t1", RequiresReply: true, Snapshot: snap("needs-human")}}, "in-review"},
+		{"asked on the plan", []Update{{Item: "t1", Snapshot: snap("running")}, {Item: "p1", Task: "t1", RequiresReply: true, Snapshot: &Item{ID: "p1", State: "executing"}}}, "running"},
+		{"held without a question", []Update{{Item: "t1", RequiresReply: true, Snapshot: snap("running")}, {Item: "t1", Snapshot: snap("running")}, {Item: "t1", Snapshot: snap("needs-human")}}, ""},
+		{"not active", []Update{{Item: "t1", Snapshot: snap("todo")}, {Item: "t1", RequiresReply: true, Snapshot: snap("needs-human")}}, ""},
 	}
 	for _, tc := range cases {
 		if got := heldFrom(&State{Updates: tc.updates}, "t1"); got != tc.want {

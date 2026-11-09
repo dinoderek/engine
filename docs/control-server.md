@@ -120,7 +120,7 @@ engine resolve 12 "Approved for the task revision in this question"
 Updates are immutable and ordered; read up to 200 after a cursor.
 Comments leave workflow state alone. A question atomically holds a task in
 needs-human: its own, or the asking task (the update's `task`) of one a
-task's session asks on its plan. A worker asks only there. Acknowledgements
+task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements
 and replies leave it unresolved. Resolution records the decision and atomically
 restores the held task's earlier state, unless another question holds it,
 its state changed or its execution ended. Unresolved

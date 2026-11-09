@@ -56,8 +56,7 @@ type Thread struct {
 	More      bool       `json:"more"`
 }
 
-// messageKinds includes ruling: stored records may hold plan rulings,
-// which the server does not write.
+// messageKinds includes ruling, a plan update kind stored records may hold.
 var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved", "ruling"}
 
 func itemDetail(it control.Item) ItemDetail {

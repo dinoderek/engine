@@ -1,6 +1,9 @@
 package control
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 func resolved(st *State, id int) bool {
 	for _, u := range st.Updates {
@@ -63,9 +66,7 @@ func (s Service) messages(st *State, a Actor, r Request) (Response, error) {
 	}
 	out := Response{Updates: []Update{u}}
 	if kind == "resolved" {
-		if restored, ok := s.release(st, a, st.Updates[r.ReplyTo-1]); ok {
-			out.Updates = append(out.Updates, restored)
-		}
+		out.Updates = append(out.Updates, s.release(st, a, st.Updates[r.ReplyTo-1])...)
 	}
 	return out, nil
 }
@@ -163,38 +164,54 @@ func pauseForQuestion(st *State, a Actor, id string) (string, error) {
 	return asker, nil
 }
 
-// release restores the task a resolved question held to the state it had
-// before needs-human, in the resolution's transaction. It leaves the task
-// alone while another question holds it, once its state changed meanwhile,
-// or when its execution ended: the coordinator then resumes it.
-func (s Service) release(st *State, a Actor, question Update) (Update, bool) {
-	id := question.Task
-	if id == "" {
-		id = question.Item
+// release restores each task a resolved question held to the state it had
+// before needs-human, in the resolution's transaction: the question's task
+// or asker, and, for a plan question, every task in the plan. It leaves a
+// task alone while another question holds it, once its state changed
+// meanwhile, when its execution ended (the coordinator then resumes it), or
+// when no question held it.
+func (s Service) release(st *State, a Actor, question Update) []Update {
+	ids := []string{question.Task, question.Item}
+	if st.Items[question.Item].Kind == "plan" {
+		for _, t := range st.Items {
+			if t.Plan == question.Item {
+				ids = append(ids, t.ID)
+			}
+		}
 	}
-	item, ok := st.Items[id]
-	if !ok || item.Kind != "task" || item.State != "needs-human" || !active(st, item) || PendingQuestion(st, id) > 0 {
-		return Update{}, false
+	slices.Sort(ids)
+	var out []Update
+	for _, id := range slices.Compact(ids) {
+		item, ok := st.Items[id]
+		if !ok || item.Kind != "task" || item.State != "needs-human" || !active(st, item) || PendingQuestion(st, id) > 0 {
+			continue
+		}
+		prior := heldFrom(st, id)
+		if prior == "" {
+			continue
+		}
+		item.State = prior
+		item.Version++
+		st.Items[id] = item
+		out = append(out, st.update(a, Request{ID: id}, "state", fmt.Sprintf("%s (version %d)", item.State, item.Version), s.now()))
 	}
-	prior := heldFrom(st, id)
-	if prior == "" {
-		return Update{}, false
-	}
-	item.State = prior
-	item.Version++
-	st.Items[id] = item
-	return st.update(a, Request{ID: id}, "state", fmt.Sprintf("%s (version %d)", item.State, item.Version), s.now()), true
+	return out
 }
 
-// heldFrom is the state a needs-human task had before it was held: the state
-// in its newest update snapshot that is not needs-human.
+// heldFrom is the state a task held by a question had before needs-human:
+// the state in its newest update snapshot that is not needs-human, provided
+// a question on it, or one it asked, came after that snapshot.
 func heldFrom(st *State, id string) string {
+	asked := false
 	for i := len(st.Updates) - 1; i >= 0; i-- {
 		u := st.Updates[i]
+		if u.RequiresReply && (u.Item == id || u.Task == id) {
+			asked = true
+		}
 		if u.Item != id || u.Snapshot == nil || u.Snapshot.State == "needs-human" {
 			continue
 		}
-		if u.Snapshot.State == "running" || u.Snapshot.State == "in-review" {
+		if asked && (u.Snapshot.State == "running" || u.Snapshot.State == "in-review") {
 			return u.Snapshot.State
 		}
 		return ""
