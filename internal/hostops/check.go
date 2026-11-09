@@ -179,7 +179,7 @@ func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, string, error
 }
 
 // waitClosed polls until the window with id is gone, or CheckTimeout. A
-// window whose command has exited, as when Claude cannot start, ends the
+// window whose command has exited, as when the harness cannot start, ends the
 // wait at once, as not closed.
 func waitClosed(d Deps, id string) (bool, error) {
 	sleep := d.Sleep

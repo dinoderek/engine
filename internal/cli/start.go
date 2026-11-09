@@ -24,8 +24,8 @@ func runStart(args []string, env Env) int {
 	return runCheck(a.Host, a.Harness, env)
 }
 
-// runCheck runs the preflight check of harness (Claude when empty), on host,
-// which is this one when empty, and exits 1 when an unattended session there
+// runCheck runs the preflight check of harness (the default when empty), on
+// host (this one when empty), and exits 1 when an unattended session there
 // would stop.
 func runCheck(host, harness string, env Env) int {
 	ok, err := start.Check(startDeps(env), host, harness, env.Out)

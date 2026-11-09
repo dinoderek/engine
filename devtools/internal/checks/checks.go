@@ -24,7 +24,7 @@ type Env struct {
 }
 
 // Names lists the checks for usage messages.
-const Names = "format, lint, coverage, file-length, imports, versions, docs"
+const Names = "format, lint, coverage, file-length, imports, versions, docs, harness-names"
 
 // Run dispatches to the check called name.
 func Run(e Env, name string, args []string) int {
@@ -43,6 +43,8 @@ func Run(e Env, name string, args []string) int {
 		return Versions(e)
 	case "docs":
 		return Docs(e)
+	case "harness-names":
+		return HarnessNames(e, args)
 	default:
 		fmt.Fprintf(e.Out, "dev: unknown check %q (have %s)\n", name, Names)
 		return 2

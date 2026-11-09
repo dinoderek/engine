@@ -21,7 +21,7 @@ type SpawnRequest struct {
 	Task    int
 	Feature string // owner/repo#n, or empty
 	Mode    string
-	// Harness is claude or codex; empty is claude.
+	// Harness names an adapter; empty is the default.
 	Harness string
 	Tier    string
 	Model   string

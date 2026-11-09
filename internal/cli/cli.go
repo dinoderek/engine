@@ -54,7 +54,7 @@ type Env struct {
 	Out    io.Writer
 	Err    io.Writer
 	Stream Streamer
-	// Local runs the host's own CLIs (tmux, claude, git) and returns their
+	// Local runs the host's own CLIs (tmux, the harnesses, git) and returns their
 	// standard output.
 	Local session.Runner
 	// Run runs git and gh for engine's clones.
