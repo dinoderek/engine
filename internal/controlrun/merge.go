@@ -3,63 +3,35 @@ package controlrun
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
 )
 
-// reportWindow is how long a merged task's session keeps its window, while
-// waiting, to report before cleanup releases it.
-const reportWindow = 10 * time.Minute
-
-// merges answers each pending merge request under root. The merge runs on
-// the task's host with that host's gh, as code: no agent's permission
-// classifier judges it. A task waiting for the operator is left alone.
-func (c *Coordinator) merges(root string, cfg *hosts.Config) error {
+// merge answers a merge request, as reconcile decides on a reread of the
+// server just before the host call, so a question asked or a lock released
+// since the pass began holds or refuses it. The merge runs on the task's
+// host with that host's gh, as code: no agent's permission classifier
+// judges it.
+func (c *Coordinator) merge(a reconcile.Action, cfg *hosts.Config) error {
 	st, err := c.Service.Store.Snapshot()
 	if err != nil {
 		return err
 	}
-	if !st.Items[root].Coordinating {
+	t := st.Items[a.Item]
+	again, ok := reconcile.MergeStep(record(st, t))
+	if !ok || again.Request.ID != a.Request.ID {
 		return nil
 	}
-	for _, t := range featureItems(st, root) {
-		req, ok := control.PendingMerge(&st, t.ID)
-		if !ok {
-			continue
-		}
-		if err := c.merge(t.ID, req, cfg); err != nil {
-			c.log("merge %s: %v", t.ID, err)
-		}
+	req := again.Request
+	if again.Refuse != "" {
+		return c.answer(req, control.MergeRefused, again.Refuse)
 	}
-	return nil
-}
-
-// merge rereads the server just before the host call, so a question asked
-// or a lock released since the pass began holds the merge.
-func (c *Coordinator) merge(id string, req control.Update, cfg *hosts.Config) error {
-	st, err := c.Service.Store.Snapshot()
-	if err != nil {
-		return err
-	}
-	t := st.Items[id]
-	if current, ok := control.PendingMerge(&st, id); !ok || current.ID != req.ID || t.State == "needs-human" || control.PendingQuestion(&st, id) > 0 {
-		return nil
-	}
-	failures, held := control.MergeFailures(&st, req.ID)
-	if held {
-		return nil
-	}
+	failures, _ := control.MergeFailures(&st, req.ID)
 	at := st.Attempts[t.Attempt]
-	if lock, ok := st.Locks[t.Repo]; !ok || lock.Attempt != at.ID {
-		return c.answer(req, control.MergeRefused, "The task does not hold the repository merge lock; take it, refresh the default branch, gate and request the merge again.")
-	}
-	if t.State != "in-review" {
-		return c.answer(req, control.MergeRefused, "The task is "+t.State+", not in-review; set it in-review and request the merge again.")
-	}
 	m := req.Merge
 	host, ok := cfg.Hosts[at.Host]
 	if !ok {
@@ -95,10 +67,4 @@ func (c *Coordinator) mergeFailed(req control.Update, failures int, body string)
 	_, err := c.Service.Execute(control.Actor{Name: "coordinator", Role: "coordinator"}, control.Request{
 		Op: "say", ID: req.Item, ReplyTo: req.ID, Recipient: "operator", Body: body, Key: fmt.Sprintf("merge-failed/%d/%d", req.ID, failures)})
 	return err
-}
-
-// justMerged keeps a merged task's session for its report.
-func (c *Coordinator) justMerged(st control.State, id string) bool {
-	at := control.MergedAt(&st, id)
-	return !at.IsZero() && c.now().Sub(at) < reportWindow
 }

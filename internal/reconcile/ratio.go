@@ -1,4 +1,4 @@
-package run
+package reconcile
 
 import (
 	"cmp"
@@ -6,19 +6,16 @@ import (
 	"math/big"
 	"slices"
 	"strings"
-
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // harnesses orders unpinned choices by live load divided by weight. Rational
 // arithmetic keeps ties exact even for large integer weights.
-func (f Fleet) harnesses(c tracker.Card, running map[string]int) ([]string, error) {
-	pinned, _, err := tracker.ParseHarnessTier(c.Body)
-	if err != nil {
-		return nil, err
+func (f Fleet) harnesses(w Want, running map[string]int) ([]string, error) {
+	if w.Invalid != nil {
+		return nil, w.Invalid
 	}
-	if pinned != "" {
-		return []string{pinned}, nil
+	if w.Harness != "" {
+		return []string{w.Harness}, nil
 	}
 	if len(f.HarnessRatio) == 0 {
 		return []string{f.DefaultHarness}, nil
@@ -38,17 +35,17 @@ func (f Fleet) harnesses(c tracker.Card, running map[string]int) ([]string, erro
 	return names, nil
 }
 
-// choose tries every eligible harness before holding a card back. Notify is
-// true only when no choice could fit even with every slot free.
-func (f Fleet) choose(c tracker.Card, free map[string]slots, running map[string]int) (string, HostLoad, string, bool) {
-	names, err := f.harnesses(c, running)
+// choose tries every eligible harness before holding an item back. Notify
+// is true only when no choice could fit even with every slot free.
+func (f Fleet) choose(w Want, free map[string]slots, running map[string]int) (string, HostLoad, string, bool) {
+	names, err := f.harnesses(w, running)
 	if err != nil {
 		return "", HostLoad{}, "no host can take it: " + err.Error(), true
 	}
 	var reasons []string
 	possible := false
 	for _, name := range names {
-		fits, why := f.fits(c, name)
+		fits, why := f.fits(w, name)
 		if why != "" {
 			reasons = append(reasons, "no host can take it: "+why)
 			continue
@@ -58,10 +55,10 @@ func (f Fleet) choose(c tracker.Card, free map[string]slots, running map[string]
 			reasons = append(reasons, fmt.Sprintf("%s is at its cap of %d sessions", name, limit))
 			continue
 		}
-		if best, ok := pick(fits, free, f.heavy(c)); ok {
+		if best, ok := pick(fits, free, f.heavy(w)); ok {
 			return name, best, "", false
 		}
-		reasons = append(reasons, "no free "+slotKind(f.heavy(c))+" on "+slotList(fits, free, f.heavy(c)))
+		reasons = append(reasons, "no free "+slotKind(f.heavy(w))+" on "+slotList(fits, free, f.heavy(w)))
 	}
 	return "", HostLoad{}, strings.Join(reasons, "; "), !possible
 }

@@ -5,31 +5,29 @@ import (
 	"slices"
 
 	"github.com/dinoderek/engine/internal/control"
-	"github.com/dinoderek/engine/internal/hosts"
-	"github.com/dinoderek/engine/internal/run"
+	"github.com/dinoderek/engine/internal/reconcile"
 )
 
-func (c *Coordinator) wakeMessages(st control.State, v run.View) error {
+// wakeMessages points each waiting session at the updates it has not been
+// woken for. A session at a hard stop is left alone.
+func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
 	if c.Wake == nil {
 		return nil
 	}
-	for ref, sess := range v.Sessions {
-		item, ok := find(st, ref)
-		if !ok || !sess.Live || !sess.Waiting || sess.Limited || sess.Unknown || item.State == "needs-human" {
+	for _, t := range v.Sessions() {
+		sess := *t.Session
+		if !sess.Live || !sess.Waiting || sess.Limited || sess.Unknown || t.State == "needs-human" || t.Question > 0 {
 			continue
 		}
-		if control.PendingQuestion(&st, item.ID) > 0 {
-			continue
-		}
-		at := st.Attempts[item.Attempt]
-		last := pendingMessage(st, item, at)
+		at := t.Current
+		last := pendingMessage(st, t.Item, at)
 		if last == 0 {
 			continue
 		}
-		text := fmt.Sprintf("Read the new task updates: engine updates %s --after %d", item.ID, at.Seen)
-		if item.Kind == "task" && item.Plan != "" {
+		text := fmt.Sprintf("Read the new task updates: engine updates %s --after %d", t.ID, at.Seen)
+		if t.Kind == "task" && t.Plan != "" {
 			text = fmt.Sprintf("Read the new task and plan updates: engine updates %s --after %d; engine updates %s --after %d",
-				item.ID, at.Seen, item.Plan, at.Seen)
+				t.ID, at.Seen, t.Plan, at.Seen)
 		}
 		if err := c.Wake(sess, text); err != nil {
 			return err
@@ -71,38 +69,4 @@ var planWakeKinds = []string{"say", "resolved", "ruling"}
 func planWake(item control.Item, u control.Update) bool {
 	return item.Kind == "task" && item.Plan != "" && u.Item == item.Plan &&
 		u.Author != "coordinator" && u.Recipient != "operator" && slices.Contains(planWakeKinds, u.Kind)
-}
-
-func (c *Coordinator) cleanup(st control.State, root string, v run.View, cfg *hosts.Config) error {
-	pending := false
-	for ref, sess := range v.Sessions {
-		item, ok := find(st, ref)
-		if !ok {
-			continue
-		}
-		at := st.Attempts[item.Attempt]
-		if at.State == "ended" {
-			continue
-		}
-		if sess.Unknown || sess.Live && !sess.Waiting || c.justMerged(st, item.ID) {
-			pending = true
-			continue
-		}
-		if _, err := c.Client(cfg.Hosts[at.Host]).Release(sess.Name, false); err != nil {
-			return err
-		}
-		if err := c.Service.SetAttempt(at.ID, "ended", ""); err != nil {
-			return err
-		}
-	}
-	if pending {
-		return nil
-	}
-	return c.Service.Store.Transaction(func(s *control.State) error {
-		item := s.Items[root]
-		item.Coordinating = false
-		item.Version++
-		s.Items[root] = item
-		return nil
-	})
 }

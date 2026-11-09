@@ -9,8 +9,8 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/run"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -68,11 +68,11 @@ func (o *Observer) Observation(id string) control.Observation {
 }
 
 // Record keeps a coordinator pass's fleet reads, so the observer reuses them.
-func (o *Observer) Record(st control.State, fleet run.Fleet) {
+func (o *Observer) Record(st control.State, fleet reconcile.Fleet) {
 	if o == nil {
 		return
 	}
-	loads := map[string]run.HostLoad{}
+	loads := map[string]reconcile.HostLoad{}
 	for _, h := range fleet.Hosts {
 		loads[h.Name] = h
 	}
@@ -123,7 +123,7 @@ func (o *Observer) start(st control.State, cfg *hosts.Config, name string) {
 	}
 	h, ok := cfg.Hosts[name]
 	if !ok {
-		o.putHost(st, run.HostLoad{Name: name}, false)
+		o.putHost(st, reconcile.HostLoad{Name: name}, false)
 		return
 	}
 	o.inflight[name] = true
@@ -151,7 +151,7 @@ func (o *Observer) needsRead(st control.State, host string) bool {
 func (o *Observer) read(h hosts.Host) {
 	defer o.reads.Done()
 	status, err := o.Client(h).Status()
-	l := run.HostLoad{Name: h.Name, Status: status}
+	l := reconcile.HostLoad{Name: h.Name, Status: status}
 	if err != nil {
 		l.Unreachable = err.Error()
 	}
@@ -205,7 +205,7 @@ func (o *Observer) prune(st control.State) {
 	}
 }
 
-func (o *Observer) putHost(st control.State, h run.HostLoad, configured bool) {
+func (o *Observer) putHost(st control.State, h reconcile.HostLoad, configured bool) {
 	for _, at := range activeAttempts(st) {
 		if at.Host == h.Name {
 			o.put(st, at, h, configured)
@@ -214,7 +214,7 @@ func (o *Observer) putHost(st control.State, h run.HostLoad, configured bool) {
 }
 
 // put records one attempt's observation, keeping the last live time. Callers hold mu.
-func (o *Observer) put(st control.State, at control.Attempt, h run.HostLoad, configured bool) {
+func (o *Observer) put(st control.State, at control.Attempt, h reconcile.HostLoad, configured bool) {
 	e := o.entries[at.ID]
 	e.at, e.state = o.now(), "unknown"
 	if configured {
@@ -240,8 +240,8 @@ func activeAttempts(st control.State) []control.Attempt {
 // hostState is what the coordinator's own observation of an attempt says, on
 // the host that runs it. A reachable host without the attempt's live window
 // confirms its exit, unless the dispatch is unfinished.
-func hostState(at control.Attempt, h run.HostLoad, slug string, number int) string {
-	s := observe(at, run.Fleet{Hosts: []run.HostLoad{h}}, slug, number)
+func hostState(at control.Attempt, h reconcile.HostLoad, slug string, number int) string {
+	s := observe(at, reconcile.Fleet{Hosts: []reconcile.HostLoad{h}}, slug, number)
 	switch {
 	case s.Unknown:
 		return "unknown"

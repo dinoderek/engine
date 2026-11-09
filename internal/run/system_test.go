@@ -142,8 +142,8 @@ func TestSystemFleetReadsEveryHostsStatus(t *testing.T) {
 	if !reflect.DeepEqual(f, want) {
 		t.Errorf("fleet\n got %+v\nwant %+v", f, want)
 	}
-	if f.localFree() != 1 {
-		t.Errorf("local free %d", f.localFree())
+	if f.LocalFree() != 1 {
+		t.Errorf("local free %d", f.LocalFree())
 	}
 }
 

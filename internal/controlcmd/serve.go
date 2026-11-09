@@ -19,8 +19,8 @@ import (
 	"github.com/dinoderek/engine/internal/controlrun"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/run"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -129,7 +129,7 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 	hostExec := session.ExecContext(ctx, 30*time.Second)
 	c := &controlrun.Coordinator{Service: service, URL: url, Home: e.Home, Logf: func(format string, args ...any) { fmt.Fprintf(e.Err, format+"\n", args...) }}
 	c.Client = hostClients(ctx, e, 7*time.Minute)
-	c.Wake = func(s run.Session, text string) error {
+	c.Wake = func(s reconcile.Session, text string) error {
 		cfg, local, err := hosts.Open(hosts.ConfigDir(e.Home))
 		if err != nil {
 			return err
@@ -151,7 +151,7 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 		}
 		return fmt.Errorf("execution window changed")
 	}
-	c.Resume = func(s run.Session) error { return c.Wake(s, "continue") }
+	c.Resume = func(s reconcile.Session) error { return c.Wake(s, "continue") }
 	return c
 }
 

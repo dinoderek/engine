@@ -77,20 +77,6 @@ func TestAWaitingPlannerAfterADenialIsAPermissionStop(t *testing.T) {
 	}
 }
 
-func TestDeniedInput(t *testing.T) {
-	long := strings.Repeat("é", maxInput+10)
-	for _, tc := range []struct{ in, want string }{
-		{`{"command":"echo ` + "`x`" + `"}`, "`echo 'x'`"},
-		{` {"file_path":"/a"} `, "`{\"file_path\":\"/a\"}`"},
-		{`{"command":"` + long + `"}`, "`" + strings.Repeat("é", maxInput) + "…`"},
-		{`not json`, "`not json`"},
-	} {
-		if got := deniedInput(json.RawMessage(tc.in)); got != tc.want {
-			t.Errorf("deniedInput(%.40q) = %.60q, want %.60q", tc.in, got, tc.want)
-		}
-	}
-}
-
 // A session whose host's status reports a denial as its newest permission
 // log entry stalls as a Permission stop, once per wait.
 func TestTheRunReadsADenialFromTheHostStatus(t *testing.T) {

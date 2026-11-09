@@ -8,11 +8,11 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/run"
 )
 
-func (c *Coordinator) dispatch(st control.State, item control.Item, host, harness string, cfg *hosts.Config) error {
+func (c *Coordinator) dispatch(st control.State, item control.Item, host, harness string, resume bool, cfg *hosts.Config) error {
 	key := fmt.Sprintf("dispatch/%s/%d", item.ID, item.Version)
 	out, err := c.Service.Dispatch(item, host, harness, key)
 	if err != nil {
@@ -23,10 +23,12 @@ func (c *Coordinator) dispatch(st control.State, item control.Item, host, harnes
 	if _, replay := st.Attempts[out.Attempt.ID]; !replay {
 		c.releaseEnded(st, *out.Item, *out.Attempt, c.Client(cfg.Hosts[out.Attempt.Host]))
 	}
-	return c.launch(st, *out.Item, *out.Attempt, out.Credential, cfg)
+	return c.launch(st, *out.Item, *out.Attempt, out.Credential, resume, cfg)
 }
 
-func (c *Coordinator) launch(st control.State, item control.Item, at control.Attempt, credential string, cfg *hosts.Config) error {
+// launch has the attempt's host start its session; resume says an earlier
+// attempt ran, so the session resumes the task's own branch.
+func (c *Coordinator) launch(st control.State, item control.Item, at control.Attempt, credential string, resume bool, cfg *hosts.Config) error {
 	if err := c.Service.CheckDispatch(item.ID, at.ID); err != nil {
 		return err
 	}
@@ -49,7 +51,7 @@ func (c *Coordinator) launch(st control.State, item control.Item, at control.Att
 	req := hostops.ControlRequest{URL: c.URL, Credential: credential, Attempt: at.ID, Remote: repo.Remote,
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
-			Resume: hadEarlierAttempt(st, item.ID, at.ID), Kickoff: kickoff(item, at, reviewer.Model)}}
+			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model)}}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
 	var refused *hostops.RefusedError
 	if errors.As(err, &refused) {
@@ -137,7 +139,7 @@ func kickoff(item control.Item, at control.Attempt, reviewer string) string {
 		"Read the server plan-source reference before working.", role, item.ID, item.Kind, item.ID, at.ID, reviewer)
 }
 
-func (c *Coordinator) reconcileDispatches(root string, fleet run.Fleet, cfg *hosts.Config) error {
+func (c *Coordinator) reconcileDispatches(root string, fleet reconcile.Fleet, cfg *hosts.Config) error {
 	st, err := c.Service.Store.Snapshot()
 	if err != nil {
 		return err
@@ -165,7 +167,7 @@ func (c *Coordinator) reconcileDispatches(root string, fleet run.Fleet, cfg *hos
 	return nil
 }
 
-func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at control.Attempt, h run.HostLoad, cfg *hosts.Config) error {
+func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at control.Attempt, h reconcile.HostLoad, cfg *hosts.Config) error {
 	for _, r := range h.Status.Runs {
 		if r.Record.RunID == at.RunID {
 			_, window, _ := strings.Cut(r.Record.Tmux, ":")
@@ -179,7 +181,7 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 	if len(credentials) != 1 {
 		return fmt.Errorf("dispatch %s has no unique credential receipt", at.ID)
 	}
-	if err := c.launch(st, item, at, credentials[0], cfg); err != nil {
+	if err := c.launch(st, item, at, credentials[0], hadEarlierAttempt(st, item.ID, at.ID), cfg); err != nil {
 		c.log("recover dispatch %s: %v", at.ID, err)
 	}
 	return nil

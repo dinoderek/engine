@@ -10,17 +10,17 @@ import (
 	"slices"
 	"time"
 
-	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/ps"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // The waits the pass acts on.
 const (
 	// ClaimWait is how long a started session has to claim its task.
-	ClaimWait = 5 * time.Minute
+	ClaimWait = reconcile.ClaimWait
 	// StallWait is how long a session may wait for input outside a hard stop.
-	StallWait = 10 * time.Minute
+	StallWait = reconcile.StallWait
 	// DoneWait is how long the run, once the work is done, waits for the
 	// hands-off windows of closed tasks to go quiet before it exits.
 	DoneWait = 15 * time.Minute
@@ -28,10 +28,8 @@ const (
 	// again; until then it holds no slot.
 	StartRetry = 30 * time.Minute
 	// DenialLead is how long before a wait was first seen a permission
-	// denial may have been logged and still be the wait's cause: a session
-	// stops soon after a denial it has no route around, and the coordinator
-	// sees the wait on a later pass.
-	DenialLead = 10 * time.Minute
+	// denial may have been logged and still be the wait's cause.
+	DenialLead = reconcile.DenialLead
 )
 
 // Labels the pass reads and writes.
@@ -60,62 +58,8 @@ var claimStates = []string{Running, NeedsHuman, InReview}
 var takenStates = append(slices.Clone(claimStates), Failed)
 
 // Session is the newest run of a task, or of a feature's planner, on any
-// host.
-type Session struct {
-	Name string
-	// Host is where it runs. When that host could not be read, Unknown is
-	// true and nothing else is known: the session is neither live nor
-	// dead, and nothing is done to it.
-	Host     string
-	Unknown  bool
-	WindowID string
-	Mode     string
-	Spawned  time.Time
-	// Live is true while its window is open and its command runs.
-	Live bool
-	// DeadWindow is true when its window, by id and name, is still open with
-	// its command exited. Only then is the window its own to close: tmux
-	// reuses ids after a restart.
-	DeadWindow bool
-	// Limited is true while a live window is stopped on a usage limit;
-	// ResetsAt is its reset in epoch seconds, or zero if unknown.
-	Limited  bool
-	ResetsAt int64
-	// ResumeAt and the alert notes belong to this reset and session start.
-	ResumeAt   time.Time
-	FarNoted   bool
-	StuckNoted bool
-	// Waiting is true when its window's state, from status, is waiting.
-	Waiting      bool
-	WaitingSince time.Time
-	// StallNoted is the start, or the wait, the coordinator last flagged.
-	StallNoted time.Time
-	// Screen is the window's last lines, when its host sent them: it does
-	// for a window whose session is not working.
-	Screen string
-	// Denial is the newest entry of a waiting session's permission log,
-	// when that entry is a denial.
-	Denial *hostops.Denial
-}
-
-// flagged reports whether at, the session's start or the start of its
-// wait, is the one the coordinator last flagged. Notes keep whole seconds.
-// Equality, not order, so hosts' clocks need not agree.
-func (s Session) flagged(at time.Time) bool {
-	return s.StallNoted.Truncate(time.Second).Equal(at.Truncate(time.Second))
-}
-
-// waited reports whether the session has waited for input for d by now.
-func (s Session) waited(now time.Time, d time.Duration) bool {
-	return s.Live && !s.Limited && s.ResetsAt <= 0 && s.Waiting && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
-}
-
-// denied reports whether the session's wait follows a permission denial:
-// its newest permission log entry is a denial logged no more than
-// DenialLead before the wait was first seen.
-func (s Session) denied() bool {
-	return s.Denial != nil && !s.WaitingSince.IsZero() && !s.Denial.At.Before(s.WaitingSince.Add(-DenialLead))
-}
+// host: the reconcile core's.
+type Session = reconcile.Session
 
 // View is everything one pass decides on.
 type View struct {

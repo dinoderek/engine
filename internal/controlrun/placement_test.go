@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
-	"github.com/dinoderek/engine/internal/run"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -18,7 +18,7 @@ func TestEditedCardInvalidatesStalePlacement(t *testing.T) {
 	}
 	execute(t, c.Service, control.Request{Op: "edit", ID: task.ID, Version: task.Version,
 		Item: control.Item{Title: task.Title, Body: task.Body, Requires: []string{"linux"}, Tier: "deep"}})
-	if err = c.dispatch(before, task, "devbox", "claude", c.Config); err == nil {
+	if err = c.dispatch(before, task, "devbox", "claude", false, c.Config); err == nil {
 		t.Fatal("stale placement reserved an execution")
 	}
 	after, err := c.Service.Store.Snapshot()
@@ -47,7 +47,7 @@ func TestPlanQuestionPreventsAutomaticResumeUntilResolved(t *testing.T) {
 	h.status.Windows[0].State = session.StateLimited
 	h.status.Windows[0].ResetsAt = now.Add(-3 * time.Minute).Unix()
 	resumes := 0
-	c.Resume = func(run.Session) error { resumes++; return nil }
+	c.Resume = func(reconcile.Session) error { resumes++; return nil }
 	question, err := c.Service.Execute(control.Actor{Name: "operator", Role: "operator"},
 		control.Request{Op: "ask", ID: plan.ID, Body: "Pause to decide scope", Key: "plan-stop"})
 	if err != nil {

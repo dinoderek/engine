@@ -1,97 +1,86 @@
 package controlrun
 
 import (
-	"cmp"
-	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hosts"
-	"github.com/dinoderek/engine/internal/run"
+	"github.com/dinoderek/engine/internal/reconcile"
 )
 
-func (c *Coordinator) apply(st control.State, root string, a run.Action, cfg *hosts.Config) error {
-	item, ok := find(st, a.Ref)
-	if !ok {
-		return fmt.Errorf("unknown coordinator reference")
-	}
+// apply does one action of a pass decided on st. A Merge is applied by
+// merge, before the rest of the pass.
+func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Config) error {
 	switch a.Kind {
-	case run.StartTask, run.StartPlanner:
-		host, harness := a.Host, a.Harness
-		if a.Kind == run.StartPlanner {
-			var err error
-			if host, harness, err = c.plannerTarget(item, cfg); err != nil {
-				return err
-			}
+	case reconcile.Dispatch:
+		return c.dispatch(st, st.Items[a.Item], a.Host, a.Harness, a.Resume, cfg)
+	case reconcile.SetState:
+		if err := c.change(a.Item, a.State); err != nil || a.Key == "" {
+			return err
 		}
-		return c.dispatch(st, item, host, harness, cfg)
-	case run.SetLabel:
-		return c.change(item.ID, strings.TrimPrefix(a.Label, "engine:"))
-	case run.Fail:
-		at, err := c.Service.EndDead(item.Attempt, a.Text)
+		return c.notice(a.Item, a.Key, a.Text)
+	case reconcile.EndAttempt:
+		at, err := c.Service.EndDead(a.Attempt, a.Text)
 		if err != nil {
 			return err
 		}
 		if at.Reason == control.EndVanished {
-			return c.notice(item.ID, "vanished/"+at.ID, a.Text+"; the task stays resumable and is dispatched again as a resume")
+			return c.notice(a.Item, "vanished/"+at.ID, a.Text+"; the task stays resumable and is dispatched again as a resume")
 		}
-		return c.notice(item.ID, "failed/"+at.ID, a.Text)
-	case run.ReportLint:
-		return c.notice(item.ID, "lint/"+fmt.Sprint(item.Version), "Plan lint failed; no tasks were dispatched. Fix the cards and restart coordination.")
-	case run.LimitAlert:
-		return c.limitAlert(item, a)
-	case run.Stall:
-		return c.stall(st, item, a)
-	case run.Resume:
-		return c.resume(item, a)
-	case run.Reap:
-		return c.reap(st, item, a, cfg)
-	case run.Finish:
-		if err := c.change(item.ID, "done"); err != nil {
-			return err
-		}
-		return c.notice(item.ID, "finished", c.summary(st, item.ID))
-	case run.Exit:
-		out, err := c.Service.Execute(control.Actor{Name: "coordinator", Role: "coordinator"}, control.Request{Op: "get", ID: root})
-		if err != nil {
-			return err
-		}
-		// Completed and failed intent stays persisted; it cannot redispatch a task.
-		return c.Service.Store.Transaction(func(s *control.State) error {
-			i := s.Items[root]
-			if i.Version != out.Item.Version {
-				return nil
-			}
-			i.Coordinating = false
-			i.Version++
-			s.Items[root] = i
-			return nil
-		})
-	case run.Wait:
-		if a.Notify {
-			return c.notice(item.ID, "placement/"+fmt.Sprint(item.Version), a.Text)
-		}
+		return c.notice(a.Item, "failed/"+at.ID, a.Text)
+	case reconcile.Notice:
+		return c.mark(a)
+	case reconcile.Resume:
+		return c.resume(a)
+	case reconcile.Release:
+		return c.release(a, cfg)
+	case reconcile.Stop:
+		return c.stop(a.Item)
 	}
 	return nil
 }
 
-func (c *Coordinator) resume(item control.Item, a run.Action) error {
+// mark sends a notice, then records on its attempt what it flagged: the
+// stall's start or wait, or the limit reset it alerted.
+func (c *Coordinator) mark(a reconcile.Action) error {
+	if err := c.notice(a.Item, a.Key, a.Text); err != nil || a.Attempt == "" {
+		return err
+	}
+	if a.Stalled.IsZero() && a.Limit == 0 {
+		return nil
+	}
+	return c.Service.Store.Transaction(func(st *control.State) error {
+		at := st.Attempts[a.Attempt]
+		switch {
+		case !a.Stalled.IsZero():
+			at.Notice = a.Stalled
+		case a.Far:
+			at.FarFor = a.Limit
+		default:
+			at.StuckFor = a.Limit
+		}
+		st.Attempts[at.ID] = at
+		return nil
+	})
+}
+
+// resume types continue once per reset, after rechecking that the attempt
+// is current and no hard stop parks it.
+func (c *Coordinator) resume(a reconcile.Action) error {
 	if c.Resume == nil {
 		return nil
 	}
 	eligible := false
 	err := c.Service.Store.Transaction(func(st *control.State) error {
-		current := st.Items[item.ID]
+		current := st.Items[a.Item]
 		if control.PendingQuestion(st, current.ID) > 0 {
 			return nil
 		}
 		at := st.Attempts[current.Attempt]
-		if current.State == "needs-human" || at.ID != item.Attempt || at.State == "ended" || at.ResumedFor == a.Session.ResetsAt {
+		if current.State == "needs-human" || at.ID != a.Attempt || at.State == "ended" || at.ResumedFor == a.ResetsAt {
 			return nil
 		}
-		at.ResumedFor = a.Session.ResetsAt
+		at.ResumedFor = a.ResetsAt
 		at.ResumeAt = c.now()
 		st.Attempts[at.ID] = at
 		eligible = true
@@ -110,70 +99,30 @@ func (c *Coordinator) now() time.Time {
 	return time.Now().UTC()
 }
 
-func (c *Coordinator) limitAlert(item control.Item, a run.Action) error {
-	far := time.Unix(a.Session.ResetsAt, 0).Sub(c.now()) > 24*time.Hour
-	kind := "stuck"
-	if far {
-		kind = "far"
-	}
-	if err := c.notice(item.ID, fmt.Sprintf("limit/%s/%s/%d", kind, item.Attempt, a.Session.ResetsAt), a.Text); err != nil {
+// release closes a finished session's window and worktree on its host, and
+// ends its attempt.
+func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
+	if _, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false); err != nil || a.Attempt == "" {
 		return err
 	}
-	return c.Service.Store.Transaction(func(st *control.State) error {
-		at := st.Attempts[item.Attempt]
-		if far {
-			at.FarFor = a.Session.ResetsAt
-		} else {
-			at.StuckFor = a.Session.ResetsAt
-		}
-		st.Attempts[at.ID] = at
-		return nil
-	})
+	return c.Service.SetAttempt(a.Attempt, "ended", "")
 }
 
-// plannerTarget is where a plan's planner runs: on the server's own host,
-// with the plan's harness, else the default. A harness that host does not run
-// is refused with a notice before any execution is reserved.
-func (c *Coordinator) plannerTarget(item control.Item, cfg *hosts.Config) (host, harness string, err error) {
-	host = c.Host.Name
-	if host == "" {
-		_, h, _ := c.configuration()
-		host = h.Name
-	}
-	harness = cmp.Or(item.Harness, cfg.DefaultHarness)
-	if _, ok := cfg.Harnesses[harness]; ok && cfg.Hosts[host].Runs(harness) {
-		return host, harness, nil
-	}
-	err = fmt.Errorf("planner harness %s is not one host %s runs", harness, host)
-	if nerr := c.notice(item.ID, fmt.Sprintf("planner-harness/%d", item.Version), "The planner was not started: "+err.Error()+". Edit the plan's harness or the host config."); nerr != nil {
-		err = errors.Join(err, nerr)
-	}
-	return "", "", err
-}
-
-func (c *Coordinator) stall(st control.State, item control.Item, a run.Action) error {
-	if _, merging := control.PendingMerge(&st, item.ID); merging {
-		return nil // It waits on the coordinator's merge, not outside the protocol.
-	}
-	if err := c.notice(item.ID, fmt.Sprintf("%s/%s/%d", a.Kind, item.Attempt, a.At.Unix()), a.Text); err != nil {
+// stop clears root's coordination intent. Completed and failed intent stays
+// persisted; it cannot redispatch a task.
+func (c *Coordinator) stop(root string) error {
+	out, err := c.Service.Execute(control.Actor{Name: "coordinator", Role: "coordinator"}, control.Request{Op: "get", ID: root})
+	if err != nil {
 		return err
 	}
 	return c.Service.Store.Transaction(func(s *control.State) error {
-		at := s.Attempts[item.Attempt]
-		at.Notice = a.At
-		s.Attempts[at.ID] = at
+		i := s.Items[root]
+		if i.Version != out.Item.Version {
+			return nil
+		}
+		i.Coordinating = false
+		i.Version++
+		s.Items[root] = i
 		return nil
 	})
-}
-
-// reap releases a finished session, once a merged one has had time to report.
-func (c *Coordinator) reap(st control.State, item control.Item, a run.Action, cfg *hosts.Config) error {
-	if c.justMerged(st, item.ID) {
-		return nil
-	}
-	_, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false)
-	if err == nil && item.Attempt != "" {
-		err = c.Service.SetAttempt(item.Attempt, "ended", "")
-	}
-	return err
 }
