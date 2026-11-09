@@ -56,12 +56,6 @@ func TestActionTextsAndMarks(t *testing.T) {
 		{"the planner harness notice names it", view(harness(plan("approved"), "codex")), []string{"planner harness codex is not one host devbox runs"}, nil},
 		{"the summary lists each task and PR", view(plan("verifying"), task(2, "done"), task(3, "done")),
 			[]string{"Every task is complete.\nt2: Task 2 \nt3: Task 3 "}, nil},
-		{"a request without the lock is told to take it", view(plan("executing"), requesting(with(task(2, "in-review"), working()), false)),
-			nil, func(a Action) bool { return strings.Contains(a.Refuse, "does not hold the repository merge lock") }},
-		{"a request from a running task is told to be in-review", view(plan("executing"), requesting(with(task(2, "running"), working()), true)),
-			nil, func(a Action) bool {
-				return strings.Contains(a.Refuse, "The task is running, not in-review") && a.Request.ID == 9
-			}},
 		{"a dead session's attempt ends with why", view(plan("executing"), with(task(2, "running"), gone())), []string{"its session demo-2 has died"}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

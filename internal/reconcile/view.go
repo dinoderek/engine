@@ -45,14 +45,9 @@ type Item struct {
 	// Resume is true when an earlier attempt opened a window, so the next
 	// dispatch resumes the item's own branch.
 	Resume bool
-	// Merge is the pending merge request, nil when there is none.
+	// Merge is the request of the task's merge queue entry, nil when it has
+	// none.
 	Merge *control.Update
-	// MergeHeld is true while a failed merge waits for the operator to
-	// acknowledge it.
-	MergeHeld bool
-	// Locked is true when the current attempt holds the repository's merge
-	// lock.
-	Locked bool
 	// MergedAt is when the coordinator recorded the item's merge, or zero.
 	MergedAt time.Time
 }
@@ -76,8 +71,11 @@ const (
 	Resume Kind = "resume"
 	// Release closes a finished session's window and worktree on its host.
 	Release Kind = "release"
-	// Merge merges a requested PR on the task's host, or refuses it.
+	// Merge calls the merge op on the host of a merge queue entry's task:
+	// a merge for the head, a check for a waiting entry.
 	Merge Kind = "merge"
+	// QueueStep changes a merge queue entry.
+	QueueStep Kind = "queue"
 	// Stop clears the root's coordination intent.
 	Stop Kind = "stop"
 )
@@ -111,10 +109,13 @@ type Action struct {
 	ResetsAt int64
 	// Session is the window a Resume types into or a Release closes.
 	Session Session
-	// Request is the merge request a Merge answers. Refuse, when set, is the
-	// merge-refused reason; otherwise the PR is merged.
+	// Entry is the merge queue entry a Merge reads, Request its newest
+	// request, and Check is true for a read that never merges.
+	Entry   control.QueueEntry
 	Request control.Update
-	Refuse  string
+	Check   bool
+	// Step is the change a QueueStep makes.
+	Step *control.QueueStep
 }
 
 // open reports whether the item is unfinished.

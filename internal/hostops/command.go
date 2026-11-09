@@ -30,9 +30,10 @@ ops, each printing one JSON object:
                                      close a session's window, remove its
                                      worktree, kept when --failed, and delete
                                      its Codex profile
-  merge --repo <owner/repo> --pr <n> --head <sha> --method squash|merge|rebase
+  merge --repo <owner/repo> --pr <n> --head <sha> --method squash|merge|rebase [--check]
                                      merge a green PR pinned to its reviewed
-                                     head, with this host's gh
+                                     head, with this host's gh; --check only
+                                     judges it
 `
 
 // Envelope is what every reply carries.
@@ -137,6 +138,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		fs.IntVar(&merge.PR, "pr", 0, "")
 		fs.StringVar(&merge.Head, "head", "", "")
 		fs.StringVar(&merge.Method, "method", "", "")
+		fs.BoolVar(&merge.Check, "check", false, "")
 	}
 	if err := fs.Parse(args); err != nil {
 		return nil, refuse("engine host %s: %v", op, err)

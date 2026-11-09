@@ -39,7 +39,7 @@ var removedUsage = map[string]string{
 // server's own verbs, or run, tell, attach, lint or ps in their server form,
 // which take a plan or task ID (ps takes none).
 func serverCommand(args []string) bool {
-	if slices.Contains([]string{"serve", "repo", "plan", "task", "updates", "inbox", "ask", "reply", "ack", "resolve", "lock", "attempt"}, args[0]) {
+	if slices.Contains([]string{"serve", "repo", "plan", "task", "updates", "inbox", "ask", "reply", "ack", "resolve", "merge-queue", "attempt"}, args[0]) {
 		return true
 	}
 	if args[0] == "ps" {
@@ -78,4 +78,4 @@ func preToolUse(e Env) int {
 
 // serverMergeRefusal tells a server executor how its PR merges instead.
 const serverMergeRefusal = "a server session never merges: the coordinator merges on the task's host. " +
-	"Holding the merge lock, run: engine task merge-ready <task> --pr <url> --head <reviewed-sha> --method <squash|merge|rebase> --verdict APPROVED, then wait for its update"
+	"Run engine task merge-ready <task> --pr <url> --head <reviewed-sha> --method <squash|merge|rebase> --verdict APPROVED, then wait for the merge queue's update"

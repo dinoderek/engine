@@ -19,10 +19,14 @@ type MergeRequest struct {
 	Verdict string `json:"verdict"`
 }
 
-// The outcomes the coordinator records for a merge request.
+// The updates the merge queue writes on a task. Each one wakes its
+// executor; merged and merge-refused answer the request and end its entry.
 const (
-	MergeMerged  = "merged"
-	MergeRefused = "merge-refused"
+	MergeMerged    = "merged"
+	MergeRefused   = "merge-refused"
+	MergeTurn      = "merge-turn"
+	MergeDemoted   = "merge-demoted"
+	MergeWithdrawn = "merge-withdrawn"
 )
 
 var headRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -40,9 +44,9 @@ func PRNumber(url string) int {
 	return n
 }
 
-// mergeRequest records a worker's merge request for its own task. It holds
-// the repository merge lock, so no sibling moves the default branch before
-// the coordinator merges.
+// mergeRequest records a worker's merge request for its own task and puts
+// the task in its repository's merge queue. A task already queued keeps its
+// place with the new head, and a head told to refresh is checked again.
 func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if a.Role != "worker" {
 		return Response{}, problem(403, "only the task's execution can request its merge")
@@ -63,16 +67,21 @@ func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if PendingQuestion(st, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
-	lock, held := st.Locks[item.Repo]
-	if !held || lock.Attempt != a.Attempt || lock.Token != r.Token {
-		return Response{}, problem(409, "take the repository merge lock before requesting the merge")
-	}
 	m := *r.Merge
 	u := st.update(a, Request{ID: item.ID}, "merge-request",
 		fmt.Sprintf("Ready to merge %s at %s (%s); review %s.", m.PR, m.Head, m.Method, m.Verdict), s.now())
 	u.Merge = &m
 	st.Updates[len(st.Updates)-1] = u
-	return Response{Updates: []Update{u}}, nil
+	e, queued := st.Queue[item.ID]
+	if !queued {
+		e = QueueEntry{Task: item.ID, Repo: item.Repo, Seq: u.ID, Phase: QueueWaiting}
+	}
+	e.Request, e.PR, e.Head, e.WaitSince, e.Reason = u.ID, m.PR, m.Head, time.Time{}, ""
+	if e.Phase == QueueRefresh {
+		e.Phase, e.TurnAt = QueueCheck, time.Time{}
+	}
+	st.Queue[item.ID] = e
+	return Response{Updates: []Update{u}, Queue: []QueueEntry{e}}, nil
 }
 
 func validMerge(m *MergeRequest, slug string) error {
@@ -91,65 +100,118 @@ func validMerge(m *MergeRequest, slug string) error {
 	return nil
 }
 
-// PendingMerge is the task's newest merge request from its current execution
-// that the coordinator has not answered. A newer request supersedes an older
-// one.
+// PendingMerge is the newest merge request of a task in the merge queue.
 func PendingMerge(st *State, id string) (Update, bool) {
-	item := st.Items[id]
-	for i := len(st.Updates) - 1; i >= 0; i-- {
-		u := st.Updates[i]
-		if u.Item != id || u.Kind != "merge-request" || u.Merge == nil {
-			continue
-		}
-		if u.Author != item.Attempt || mergeAnswered(st, u.ID) {
-			return Update{}, false
-		}
-		return u, true
+	e, ok := st.Queue[id]
+	if !ok || e.Request < 1 || e.Request > len(st.Updates) {
+		return Update{}, false
 	}
-	return Update{}, false
+	return st.Updates[e.Request-1], true
 }
 
-func mergeAnswered(st *State, id int) bool {
-	for _, u := range st.Updates[id:] {
-		if u.ReplyTo == id && (u.Kind == MergeMerged || u.Kind == MergeRefused) {
-			return true
-		}
+// withdraw takes item out of the merge queue, answering its request, when
+// its task leaves in-review for anything but a hard stop.
+func withdraw(st *State, a Actor, item Item, why string, now time.Time) {
+	e, ok := st.Queue[item.ID]
+	if !ok {
+		return
 	}
-	return false
+	delete(st.Queue, item.ID)
+	st.update(a, Request{ID: item.ID, ReplyTo: e.Request}, MergeWithdrawn,
+		"Left the merge queue: "+why+". Request the merge again once the PR is in-review, reviewed and pushed.", now)
 }
 
-// mergeOutcome records the coordinator's answer to a merge request. A merged
-// PR completes the task, records the PR and frees the repository lock in the
-// same transaction. A refusal hands the task back to its executor.
-func (s Service) mergeOutcome(st *State, a Actor, r Request) (Response, error) {
-	if a.Role != "coordinator" {
-		return Response{}, problem(403, "only the coordinator records a merge")
-	}
-	if r.ReplyTo < 1 || r.ReplyTo > len(st.Updates) {
-		return Response{}, problem(404, "unknown merge request")
-	}
-	req := st.Updates[r.ReplyTo-1]
-	item, ok := st.Items[req.Item]
-	if !ok || req.Kind != "merge-request" || req.Merge == nil {
-		return Response{}, problem(404, "unknown merge request")
-	}
-	if mergeAnswered(st, req.ID) {
-		return Response{}, problem(409, "merge request was already answered")
-	}
-	if r.State != MergeMerged && r.State != MergeRefused || r.Body == "" {
-		return Response{}, problem(400, "a merge outcome is merged or merge-refused, with a reason")
-	}
-	if r.State == MergeMerged {
-		item.State, item.PR = "done", req.Merge.PR
-		item.Version++
-		st.Items[item.ID] = item
-		if lock, held := st.Locks[item.Repo]; held && lock.Attempt == req.Author {
-			delete(st.Locks, item.Repo)
-			st.update(a, Request{ID: item.ID}, "lock-released", lock.Attempt, s.now())
+// QueueStep is one change the coordinator makes to a merge queue entry. It
+// applies only while the entry is still From, so a request, withdrawal or
+// question that arrived since the pass read it wins.
+type QueueStep struct {
+	From QueueEntry
+	// To replaces the entry; nil ends it.
+	To *QueueEntry
+	// Kind and Text, when Kind is set, are the update on the task that
+	// wakes its executor, as a reply to the request.
+	Kind, Text string
+	// Notice, when set, tells the operator; Hold keeps the entry out of the
+	// head until they acknowledge it.
+	Notice string
+	Hold   bool
+	// Demote sends the entry to the back of the queue: its Seq becomes the
+	// update's sequence. It needs Kind.
+	Demote bool
+	// Done records the task done with the entry's PR.
+	Done bool
+}
+
+// QueueStep applies q in one transaction, and reports whether the entry was
+// still q.From.
+func (s Service) QueueStep(q QueueStep) (bool, error) {
+	applied := false
+	err := s.Store.Transaction(func(st *State) error {
+		cur, ok := st.Queue[q.From.Task]
+		if !ok || fingerprint(cur) != fingerprint(q.From) {
+			return nil
+		}
+		applied = true
+		a, now := Actor{Name: "coordinator", Role: "coordinator"}, s.now()
+		var next *QueueEntry
+		if q.To != nil {
+			copied := *q.To
+			next = &copied
+		}
+		if q.Done {
+			item := st.Items[cur.Task]
+			item.State, item.PR = "done", cur.PR
+			item.Version++
+			st.Items[item.ID] = item
+		}
+		if q.Kind != "" {
+			u := st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request}, q.Kind, q.Text, now)
+			if q.Demote && next != nil {
+				next.Seq = u.ID
+			}
+		}
+		if q.Notice != "" {
+			n := st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request, Recipient: "operator"}, "say", q.Notice, now)
+			if q.Hold && next != nil {
+				next.Held = n.ID
+			}
+		}
+		if next == nil {
+			delete(st.Queue, cur.Task)
+		} else {
+			st.Queue[cur.Task] = *next
+		}
+		return nil
+	})
+	return applied, err
+}
+
+// QueueHeld reports whether e waits for the operator to acknowledge the
+// notice that held it.
+func QueueHeld(st *State, e QueueEntry) bool {
+	return e.Held > 0 && !acknowledged(st, e.Held)
+}
+
+// Queue is repo's merge queue in order.
+func Queue(st *State, repo string) []QueueEntry {
+	var out []QueueEntry
+	for _, e := range st.Queue {
+		if e.Repo == repo {
+			out = append(out, e)
 		}
 	}
-	u := st.update(a, Request{ID: item.ID, ReplyTo: req.ID}, r.State, r.Body, s.now())
-	return Response{Item: &item, Updates: []Update{u}}, nil
+	slices.SortFunc(out, func(a, b QueueEntry) int { return a.Seq - b.Seq })
+	return out
+}
+
+func mergeQueue(st *State, a Actor, repo string) (Response, error) {
+	if st.Items[repo].Kind != "repo" {
+		return Response{}, problem(404, "unknown repository %s", repo)
+	}
+	if !readable(st, a, repo) {
+		return Response{}, problem(403, "repository is outside this execution's read scope")
+	}
+	return Response{Queue: Queue(st, repo)}, nil
 }
 
 // MergedAt is when the coordinator recorded the task's merge; zero when it
@@ -161,17 +223,4 @@ func MergedAt(st *State, id string) time.Time {
 		}
 	}
 	return time.Time{}
-}
-
-// MergeFailures counts the coordinator's failure notices for a merge
-// request, and reports whether the newest is still unacknowledged, which
-// holds the request until the operator has seen it.
-func MergeFailures(st *State, request int) (count int, held bool) {
-	for _, u := range st.Updates[min(request, len(st.Updates)):] {
-		if u.ReplyTo == request && u.Kind == "say" && u.Author == "coordinator" && u.Recipient == "operator" {
-			count++
-			held = !acknowledged(st, u.ID)
-		}
-	}
-	return count, held
 }

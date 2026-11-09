@@ -77,6 +77,9 @@ func (c *Coordinator) Pass(ctx context.Context) error {
 	if err != nil {
 		return c.notice("", "configuration", err.Error())
 	}
+	if err = c.queues(cfg); err != nil {
+		return err
+	}
 	for _, id := range ids {
 		if err = c.passItem(ctx, id, cfg, local); err != nil {
 			return err
@@ -95,7 +98,7 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	}
 	// Recovery may have launched or adopted a session after the first observation.
 	fleet := c.fleet(cfg, local)
-	st, v, acts, err := c.decide(id, &fleet, cfg, local)
+	st, v, acts, err := c.decide(id, fleet)
 	if err != nil {
 		return err
 	}
@@ -114,8 +117,8 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		// Merges ran first; a stop never abandons a window it failed to release.
-		if act.Kind == reconcile.Merge || act.Kind == reconcile.Stop && !released {
+		// A stop never abandons a window it failed to release.
+		if act.Kind == reconcile.Stop && !released {
 			continue
 		}
 		if err = c.apply(st, act, cfg); err != nil {
@@ -126,35 +129,14 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	return nil
 }
 
-// decide is the pass's decision for root id. Merges are applied first, and
-// when there were any the pass is decided again on the records they
-// changed, and on hosts read again after them: a merged task is done for
-// the rest of the pass.
-func (c *Coordinator) decide(id string, fleet *reconcile.Fleet, cfg *hosts.Config, local hosts.Host) (control.State, reconcile.View, []reconcile.Action, error) {
+// decide is the pass's decision for root id, on the records after the
+// merge queue ran.
+func (c *Coordinator) decide(id string, fleet reconcile.Fleet) (control.State, reconcile.View, []reconcile.Action, error) {
 	st, err := c.Service.Store.Snapshot()
 	if err != nil || !st.Items[id].Coordinating {
 		return st, reconcile.View{}, nil, err
 	}
-	v := c.view(st, id, *fleet)
-	acts := reconcile.Decide(v)
-	merging := false
-	for _, act := range acts {
-		if act.Kind != reconcile.Merge {
-			continue
-		}
-		merging = true
-		if err = c.merge(act, cfg); err != nil {
-			c.log("merge %s: %v", act.Item, err)
-		}
-	}
-	if !merging {
-		return st, v, acts, nil
-	}
-	*fleet = c.fleet(cfg, local)
-	if st, err = c.Service.Store.Snapshot(); err != nil || !st.Items[id].Coordinating {
-		return st, reconcile.View{}, nil, err
-	}
-	v = c.view(st, id, *fleet)
+	v := c.view(st, id, fleet)
 	return st, v, reconcile.Decide(v), nil
 }
 

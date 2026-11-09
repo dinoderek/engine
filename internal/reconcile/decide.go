@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-// Decide works out one pass for v's root, in order: merges first, since
-// their outcome changes the rest of the pass, then cleanup of a done root,
-// a lint failure, the planner, and the tasks.
+// Decide works out one pass for v's root, in order: cleanup of a done root,
+// a lint failure, the planner, and the tasks. The merge queue is decided
+// before it, by DecideQueue.
 func Decide(v View) []Action {
-	acts := merges(v)
+	var acts []Action
 	switch {
 	case v.Root.State == "done":
 		return append(acts, cleanup(v)...)

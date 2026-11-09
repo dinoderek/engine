@@ -75,13 +75,45 @@ type Update struct {
 	Merge *MergeRequest `json:"merge,omitempty"`
 }
 
-// Lock has no expiry. Only its owner can release it without recovery.
-type Lock struct {
-	Repo     string    `json:"repo"`
-	Attempt  string    `json:"attempt"`
-	Token    string    `json:"token"`
-	Acquired time.Time `json:"acquired"`
+// QueueEntry is a task's place in its repository's merge queue, from its
+// merge request until the merge, or until it leaves the queue. It belongs to
+// the task, not the attempt, so it outlives a vanished session.
+type QueueEntry struct {
+	Task string `json:"task"`
+	Repo string `json:"repo"`
+	// Request is the task's newest merge-request update; PR and Head are its.
+	Request int    `json:"request"`
+	PR      string `json:"pr"`
+	Head    string `json:"head"`
+	// Seq orders the queue: the request that created the entry, or the
+	// demotion that sent it to the back.
+	Seq int `json:"seq"`
+	// Phase is QueueWaiting, QueueCheck (the head, merged once current and
+	// green) or QueueRefresh (the head, told to refresh).
+	Phase  string    `json:"phase"`
+	HeadAt time.Time `json:"head_at,omitzero"`
+	TurnAt time.Time `json:"turn_at,omitzero"`
+	// ProbedAt is when a waiting entry's PR was last read.
+	ProbedAt time.Time `json:"probed_at,omitzero"`
+	// WaitSince is the head's first reading of unknown mergeability.
+	WaitSince time.Time `json:"wait_since,omitzero"`
+	// FailSince is the head's first unreachable host call; Failures counts
+	// its host's gh failures in a row.
+	FailSince time.Time `json:"fail_since,omitzero"`
+	Failures  int       `json:"failures,omitempty"`
+	// Held is the operator notice that holds the entry until acknowledged.
+	Held      int `json:"held,omitempty"`
+	Demotions int `json:"demotions,omitempty"`
+	// Reason is the last thing the queue said about the entry.
+	Reason string `json:"reason,omitempty"`
 }
+
+// The merge queue's phases.
+const (
+	QueueWaiting = "queued"
+	QueueCheck   = "check"
+	QueueRefresh = "refresh"
+)
 
 // Actor is derived from a credential, never from a request's author field.
 type Actor struct {
@@ -103,7 +135,6 @@ type Request struct {
 	RequiresReply bool   `json:"requires_reply,omitempty"`
 	After         int    `json:"after,omitempty"`
 	Attempt       string `json:"attempt,omitempty"`
-	Token         string `json:"token,omitempty"`
 	State         string `json:"state,omitempty"`
 	// Merge is a merge-request's PR, head, method and verdict.
 	Merge *MergeRequest `json:"merge,omitempty"`
@@ -116,7 +147,7 @@ type Response struct {
 	Updates    []Update     `json:"updates,omitempty"`
 	Attempt    *Attempt     `json:"attempt,omitempty"`
 	Attempts   []Attempt    `json:"attempts,omitempty"`
-	Lock       *Lock        `json:"lock,omitempty"`
+	Queue      []QueueEntry `json:"queue,omitempty"`
 	Sessions   []SessionRow `json:"sessions,omitempty"`
 	Credential string       `json:"credential,omitempty"`
 }
@@ -128,17 +159,17 @@ type receipt struct {
 
 // State is a consistent database snapshot used by one transaction.
 type State struct {
-	Items    map[string]Item    `json:"items"`
-	Attempts map[string]Attempt `json:"attempts"`
-	Updates  []Update           `json:"updates"`
-	Locks    map[string]Lock    `json:"locks"`
-	Auth     map[string]Actor   `json:"auth"`
-	Receipts map[string]receipt `json:"receipts"`
-	Next     int                `json:"next"`
+	Items    map[string]Item       `json:"items"`
+	Attempts map[string]Attempt    `json:"attempts"`
+	Updates  []Update              `json:"updates"`
+	Queue    map[string]QueueEntry `json:"queue"`
+	Auth     map[string]Actor      `json:"auth"`
+	Receipts map[string]receipt    `json:"receipts"`
+	Next     int                   `json:"next"`
 }
 
 func emptyState() State {
-	return State{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Locks: map[string]Lock{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Next: 1}
+	return State{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Queue: map[string]QueueEntry{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Next: 1}
 }
 
 func (s *State) id(prefix string) string {
@@ -157,7 +188,7 @@ func (s *State) update(a Actor, r Request, kind, body string, now time.Time) Upd
 	return u
 }
 
-// Secret generates an opaque credential or lock token.
+// Secret generates an opaque credential.
 func Secret() string { return hex.EncodeToString(randomBytes()) }
 func randomBytes() []byte {
 	b := make([]byte, 32)

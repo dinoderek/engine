@@ -72,10 +72,11 @@ func show(a Action) string {
 	case EndAttempt, Resume, Release:
 		parts = append(parts, a.Attempt)
 	case Merge:
-		parts = append(parts, fmt.Sprint(a.Request.ID))
-		if a.Refuse != "" {
-			parts = append(parts, "refused")
+		if a.Check {
+			parts = append(parts, "check")
 		}
+	case QueueStep:
+		parts = append(parts, showStep(*a.Step)...)
 	}
 	return strings.TrimSpace(strings.Join(parts, " "))
 }

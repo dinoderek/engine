@@ -38,6 +38,9 @@ func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
 		if err := stateChange(st, a, item, r.State); err != nil {
 			return Response{}, err
 		}
+		if r.State != "in-review" && r.State != "needs-human" {
+			withdraw(st, a, item, "the task moved to "+r.State, s.now())
+		}
 		item.State = r.State
 		if r.Item.PR != "" {
 			item.PR = r.Item.PR
@@ -217,88 +220,6 @@ func (s Service) CheckDispatch(id, attempt string) error {
 		}
 		return nil
 	})
-}
-
-func (s Service) mergeLock(st *State, a Actor, r Request) (Response, error) {
-	if r.Op == "lock-recover" {
-		return s.recoverLock(st, a, r)
-	}
-	if r.Op == "lock-show" {
-		if err := operator(a); err != nil {
-			return Response{}, err
-		}
-		lock, ok := st.Locks[r.ID]
-		if !ok {
-			return Response{}, problem(404, "repository has no merge lock")
-		}
-		return Response{Lock: &lock}, nil
-	}
-	at, ok := st.Attempts[r.Attempt]
-	if !ok {
-		return Response{}, problem(404, "unknown execution")
-	}
-	if a.Role == "worker" && a.Attempt != at.ID {
-		return Response{}, problem(403, "lock belongs to another execution")
-	}
-	item := st.Items[at.Item]
-	repo := item.Repo
-	lock, held := st.Locks[repo]
-	if r.Op == "lock-acquire" {
-		return s.acquireLock(st, a, item, at)
-	}
-	if !held || lock.Attempt != at.ID || lock.Token != r.Token {
-		return Response{}, problem(409, "merge lock ownership does not match")
-	}
-	if r.Op == "lock-check" {
-		if PendingQuestion(st, item.ID) > 0 {
-			return Response{}, problem(409, "operator question is unresolved")
-		}
-		if at.State == "ended" || !slices.Contains([]string{"running", "in-review"}, item.State) {
-			return Response{}, problem(409, "execution is not permitted to merge")
-		}
-		return Response{Lock: &lock}, nil
-	}
-	delete(st.Locks, repo)
-	st.update(a, Request{ID: item.ID}, "lock-released", at.ID, s.now())
-	return Response{}, nil
-}
-
-func (s Service) acquireLock(st *State, a Actor, item Item, at Attempt) (Response, error) {
-	if PendingQuestion(st, item.ID) > 0 {
-		return Response{}, problem(409, "operator question is unresolved")
-	}
-	if item.Kind != "task" || at.State == "ended" || !slices.Contains([]string{"running", "in-review"}, item.State) {
-		return Response{}, problem(409, "only an active task can take a merge lock")
-	}
-	lock, held := st.Locks[item.Repo]
-	if held && lock.Attempt != at.ID {
-		return Response{}, problem(409, "repository lock is held by %s", lock.Attempt)
-	}
-	if !held {
-		lock = Lock{Repo: item.Repo, Attempt: at.ID, Token: Secret(), Acquired: s.now()}
-		st.Locks[item.Repo] = lock
-		st.update(a, Request{ID: item.ID}, "lock-acquired", at.ID, s.now())
-	}
-	return Response{Lock: &lock}, nil
-}
-
-func (s Service) recoverLock(st *State, a Actor, r Request) (Response, error) {
-	if err := operator(a); err != nil {
-		return Response{}, err
-	}
-	lock, ok := st.Locks[r.ID]
-	if !ok {
-		return Response{}, problem(404, "repository has no merge lock")
-	}
-	if r.Attempt != lock.Attempt || r.Token != lock.Token || r.Body == "" {
-		return Response{}, problem(409, "recovery requires the current owner, token and reconciliation evidence")
-	}
-	if st.Attempts[lock.Attempt].State != "ended" {
-		return Response{}, problem(409, "execution must be confirmed ended before lock recovery")
-	}
-	delete(st.Locks, r.ID)
-	st.update(a, Request{ID: st.Attempts[lock.Attempt].Item}, "lock-recovered", r.Body, s.now())
-	return Response{}, nil
 }
 
 func (s Service) endAttempt(st *State, a Actor, r Request) (Response, error) {

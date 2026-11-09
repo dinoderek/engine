@@ -61,39 +61,65 @@ func TestMergeMergesAGreenPinnedPR(t *testing.T) {
 	}
 }
 
+// gated is a green, mergeable PR at the reviewed head with the given merge
+// state and review decision.
+func gated(mergeState, decision string) string {
+	return `{"state":"OPEN","headRefOid":"` + reviewed + `","baseRefName":"main","mergeable":"MERGEABLE","mergeStateStatus":"` + mergeState +
+		`","reviewDecision":"` + decision + `","statusCheckRollup":[` + green + `]}`
+}
+
 func TestMergeHandsBackOrWaits(t *testing.T) {
 	other := strings.Repeat("f", 40)
+	policyErr := errors.New("GraphQL: Base branch policy prohibits the merge")
 	for name, c := range map[string]struct {
 		g       ghFake
 		outcome string
+		code    string
 		reason  string
 	}{
-		"already merged":   {ghFake{view: view("MERGED", reviewed, "UNKNOWN", green)}, MergeDone, "already merged"},
-		"merged elsewhere": {ghFake{view: view("MERGED", other, "UNKNOWN", green)}, MergeRefused, "not the reviewed"},
-		"closed":           {ghFake{view: view("CLOSED", reviewed, "UNKNOWN", green)}, MergeRefused, "the PR is closed"},
-		"head changed":     {ghFake{view: view("OPEN", other, "MERGEABLE", green)}, MergeRefused, "gate and review it again"},
-		"red checks":       {ghFake{view: view("OPEN", reviewed, "MERGEABLE", running+","+red)}, MergeRefused, "check test is not green"},
-		"running checks":   {ghFake{view: view("OPEN", reviewed, "MERGEABLE", running)}, MergePending, "still running"},
-		"pending status":   {ghFake{view: view("OPEN", reviewed, "MERGEABLE", waiting)}, MergePending, "ci/legacy"},
-		"conflicting":      {ghFake{view: view("OPEN", reviewed, "CONFLICTING", green)}, MergeRefused, "conflicts with main"},
-		"unknown":          {ghFake{view: view("OPEN", reviewed, "UNKNOWN", green)}, MergePending, "mergeable"},
-		"main moved":       {ghFake{view: view("OPEN", reviewed, "MERGEABLE", green), behind: "3"}, MergeRefused, "main moved"},
-		"no CI":            {ghFake{view: view("OPEN", reviewed, "MERGEABLE", ""), behind: "0"}, MergeDone, "merged at"},
+		"already merged":    {ghFake{view: view("MERGED", reviewed, "UNKNOWN", green)}, MergeDone, CodeMerged, "already merged"},
+		"merged elsewhere":  {ghFake{view: view("MERGED", other, "UNKNOWN", green)}, MergeRefused, CodeMergedElsewhere, "not the reviewed"},
+		"closed":            {ghFake{view: view("CLOSED", reviewed, "UNKNOWN", green)}, MergeRefused, CodeClosed, "the PR is closed"},
+		"head changed":      {ghFake{view: view("OPEN", other, "MERGEABLE", green)}, MergeRefused, CodeHeadMoved, "gate and review it again"},
+		"red checks":        {ghFake{view: view("OPEN", reviewed, "MERGEABLE", running+","+red)}, MergeRefused, CodeRed, "check test is not green"},
+		"running checks":    {ghFake{view: view("OPEN", reviewed, "MERGEABLE", running)}, MergePending, CodePendingChecks, "still running"},
+		"pending status":    {ghFake{view: view("OPEN", reviewed, "MERGEABLE", waiting)}, MergePending, CodePendingChecks, "ci/legacy"},
+		"conflicting":       {ghFake{view: view("OPEN", reviewed, "CONFLICTING", green)}, MergeRefused, CodeConflict, "conflicts with main"},
+		"unknown":           {ghFake{view: view("OPEN", reviewed, "UNKNOWN", green)}, MergePending, CodePendingMergeable, "mergeable"},
+		"review required":   {ghFake{view: gated("BLOCKED", "REVIEW_REQUIRED")}, MergeRefused, CodeBlocked, "REVIEW_REQUIRED"},
+		"changes requested": {ghFake{view: gated("CLEAN", "CHANGES_REQUESTED")}, MergeRefused, CodeBlocked, "CHANGES_REQUESTED"},
+		"protected":         {ghFake{view: gated("BLOCKED", "")}, MergeRefused, CodeBlocked, "BLOCKED"},
+		"policy on merge":   {ghFake{view: gated("CLEAN", "APPROVED"), behind: "0", fail: map[string]error{"pr merge": policyErr}}, MergeRefused, CodeBlocked, "Base branch policy"},
+		"main moved":        {ghFake{view: view("OPEN", reviewed, "MERGEABLE", green), behind: "3"}, MergeRefused, CodeBehind, "main moved"},
+		"no CI":             {ghFake{view: view("OPEN", reviewed, "MERGEABLE", ""), behind: "0"}, MergeDone, CodeMerged, "merged at"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			g := c.g
 			m, err := merge(&g)
-			if err != nil || m.Outcome != c.outcome || !strings.Contains(m.Reason, c.reason) {
-				t.Fatalf("merge %+v, %v; want %s with %q", m, err, c.outcome, c.reason)
+			if err != nil || m.Outcome != c.outcome || m.Code != c.code || !strings.Contains(m.Reason, c.reason) {
+				t.Fatalf("merge %+v, %v; want %s (%s) with %q", m, err, c.outcome, c.code, c.reason)
 			}
-			if c.outcome != MergeDone || strings.Contains(c.reason, "already") {
+			if c.code != CodeMerged || strings.Contains(c.reason, "already") {
 				for _, call := range g.calls {
-					if strings.Contains(call, "pr merge") {
+					if strings.Contains(call, "pr merge") && c.g.fail == nil {
 						t.Errorf("merged anyway: %v", g.calls)
 					}
 				}
 			}
 		})
+	}
+}
+
+func TestACheckJudgesWithoutMerging(t *testing.T) {
+	for want, v := range map[string]string{
+		CodeReady: view("OPEN", reviewed, "MERGEABLE", green),
+		CodeRed:   view("OPEN", reviewed, "MERGEABLE", red),
+	} {
+		g := &ghFake{view: v, behind: "5"}
+		m, err := Merge(Deps{Run: g.run}, MergeRequest{Repo: "o/r", PR: 42, Head: reviewed, Method: "squash", Check: true})
+		if err != nil || m.Code != want || len(g.calls) != 1 {
+			t.Errorf("check %+v, %v, calls %v; want %s from one read", m, err, g.calls, want)
+		}
 	}
 }
 

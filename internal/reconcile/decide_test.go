@@ -16,9 +16,8 @@ func blocked(t Item, by ...string) Item { t.Blocked = by; return t }
 
 func tier(t Item, tier string) Item { t.Tier = tier; return t }
 
-func requesting(t Item, locked bool) Item {
+func requesting(t Item) Item {
 	t.Merge = &control.Update{ID: 9, Item: t.ID, Kind: "merge-request", Merge: &control.MergeRequest{PR: "https://github.com/o/r/pull/" + "4"}}
-	t.Locked = locked
 	return t
 }
 
@@ -35,10 +34,6 @@ func withFleet(v View, f Fleet) View { v.Fleet = f; return v }
 func withLint(v View) View { v.Lint = []string{"t2: no ## Tests section"}; return v }
 
 func mergedAt(t Item, d time.Duration) Item { t.MergedAt = t0.Add(-d); return t }
-
-func question(t Item, id int) Item { t.Question = id; return t }
-
-func held(t Item) Item { t.MergeHeld = true; return t }
 
 func harness(t Item, h string) Item { t.Harness = h; return t }
 
@@ -125,7 +120,7 @@ func TestDecide(t *testing.T) {
 		{"a flagged wait is not flagged again", view(plan("executing"), with(task(2, "running"), flagged(waiting(StallWait)))), nil},
 		{"a short wait is not flagged", view(plan("executing"), with(task(2, "running"), waiting(StallWait-time.Second))), nil},
 		{"a wait at a hard stop is not flagged", view(plan("executing"), with(task(2, "needs-human"), waiting(StallWait))), []string{"state p1 blocked"}},
-		{"a wait on the coordinator's merge is not flagged", view(plan("executing"), requesting(with(task(2, "in-review"), waiting(StallWait)), true)), []string{"merge t2 9"}},
+		{"a wait on the coordinator's merge is not flagged", view(plan("executing"), requesting(with(task(2, "in-review"), waiting(StallWait)))), nil},
 		{"a running task never waits for its claim: the server claims at dispatch", view(plan("executing"), with(task(2, "running"), working())), nil},
 		{"a live session of an unheld task is flagged after the claim wait", view(plan("executing"), with(task(2, "todo"), working())),
 			[]string{fmt.Sprintf("notice t2 stall/a2/%d", spawned)}},
@@ -146,14 +141,9 @@ func TestDecide(t *testing.T) {
 		{"a just-merged task keeps its window to report", view(plan("executing"), mergedAt(with(task(2, "done"), waiting(StallWait)), 5*time.Minute), task(3, "todo")),
 			[]string{"dispatch t3 devbox claude false"}},
 
-		// Merges.
-		{"a locked in-review request is merged", view(plan("executing"), requesting(with(task(2, "in-review"), working()), true)), []string{"merge t2 9"}},
-		{"a request without the lock is refused", view(plan("executing"), requesting(with(task(2, "in-review"), working()), false)), []string{"merge t2 9 refused"}},
-		{"a request from a task not in-review is refused", view(plan("executing"), requesting(with(task(2, "running"), working()), true)), []string{"merge t2 9 refused"}},
-		{"an operator question holds a request", view(plan("executing"), question(requesting(with(task(2, "in-review"), working()), true), 5)), nil},
-		{"a failed merge holds the request for the operator", view(plan("executing"), held(requesting(with(task(2, "in-review"), working()), true))), nil},
-		{"a request is answered while lint fails", withLint(view(plan("executing"), requesting(with(task(2, "in-review"), working()), true))),
-			[]string{"merge t2 9", "notice p1 lint/2"}},
+		// A queued merge is decided by DecideQueue, never by the root's pass.
+		{"a queued request is left to the merge queue", withLint(view(plan("executing"), requesting(with(task(2, "in-review"), working())))),
+			[]string{"notice p1 lint/2"}},
 
 		// Stop, and cleanup once done.
 		{"a failed standalone task stops", view(task(5, "failed")), []string{"stop t5"}},

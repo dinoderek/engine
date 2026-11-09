@@ -9,11 +9,11 @@ func TestPlanQuestionBlocksHandoffDispatchAndChildMerge(t *testing.T) {
 	plan = approve(t, s, plan)
 	planner, planned := dispatch(t, s, plan)
 	child, claimed := dispatch(t, s, task)
-	lock := call(t, s, child, Request{Op: "lock-acquire", Attempt: claimed.Attempt.ID}).Lock
+	review := call(t, s, child, Request{Op: "state", ID: task.ID, Version: claimed.Item.Version, State: "in-review", Item: Item{PR: good().PR}}).Item
 	question := call(t, s, planner, Request{Op: "ask", ID: plan.ID, Body: "May the feature change its public API?"}).Updates[0]
 	reject(t, s, planner, Request{Op: "state", ID: plan.ID, Version: planned.Item.Version, State: "planned"}, 409)
-	reject(t, s, child, Request{Op: "lock-check", Attempt: claimed.Attempt.ID, Token: lock.Token}, 409)
-	reject(t, s, child, Request{Op: "state", ID: task.ID, Version: claimed.Item.Version, State: "done"}, 409)
+	reject(t, s, child, ready(task.ID, good()), 409)
+	reject(t, s, child, Request{Op: "state", ID: task.ID, Version: review.Version, State: "done"}, 409)
 	other := newTask(t, s, repo.ID, plan.ID)
 	reject(t, s, op, Request{Op: "claim", ID: other.ID, Body: "devbox", State: "claude"}, 409)
 	call(t, s, op, Request{Op: "ack", ReplyTo: question.ID})
@@ -24,7 +24,7 @@ func TestPlanQuestionBlocksHandoffDispatchAndChildMerge(t *testing.T) {
 	}
 	call(t, s, op, Request{Op: "resolve", ReplyTo: question.ID, Body: "Approved for the plan revision in the question"})
 	call(t, s, planner, Request{Op: "state", ID: plan.ID, Version: planned.Item.Version, State: "planned"})
-	call(t, s, child, Request{Op: "lock-check", Attempt: claimed.Attempt.ID, Token: lock.Token})
+	call(t, s, child, ready(task.ID, good()))
 	call(t, s, op, Request{Op: "claim", ID: other.ID, Body: "devbox", State: "claude"})
 }
 
