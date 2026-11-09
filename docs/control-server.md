@@ -67,9 +67,10 @@ execution, a plan's children included, prevents it. Run/stop commands persist
 coordination intent; stopping coordination leaves existing sessions running.
 Retrying a failed task is an explicit operator state change.
 
-`engine lint <plan-id>` checks the current server plan before approval using
-the coordinator's plan projection and the same rules as GitHub lint. It
-reads one snapshot, including outside dependencies, and changes nothing.
+`engine lint <plan-id>` checks a server plan's tasks before approval:
+Outcome and Tests sections, no cycle, one acceptance task, one owner per
+Open question. It reads one snapshot, including outside dependencies, and
+changes nothing.
 
 `engine task complete-external <task-id> --version <n> --pr <url>` records
 work finished outside engine. It is operator-only, for an inactive task in
@@ -207,8 +208,8 @@ constants in `internal/controlrun/observe.go`.
 
 ## Dispatch and recovery
 
-The server periodically reconciles persisted coordination intent. It shares
-placement decisions with the CLI coordinator and serializes plans against
+Each pass, `internal/reconcile` decides persisted coordination intent from
+records and fresh host reads, merges first. Plans are serialized against
 fresh fleet capacity. A dispatch records its attempt, host and credential
 before calling the host. Restart adopts matching sessions or retries the
 same dispatch identity on that host. An unreachable host means unknown,

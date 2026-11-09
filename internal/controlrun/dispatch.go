@@ -12,9 +12,12 @@ import (
 	"github.com/dinoderek/engine/internal/remote"
 )
 
-func (c *Coordinator) dispatch(st control.State, item control.Item, host, harness string, resume bool, cfg *hosts.Config) error {
+// dispatch reserves an attempt for a's item, at its version in st, and
+// launches it where a places it.
+func (c *Coordinator) dispatch(st control.State, a reconcile.Action, cfg *hosts.Config) error {
+	item := st.Items[a.Item]
 	key := fmt.Sprintf("dispatch/%s/%d", item.ID, item.Version)
-	out, err := c.Service.Dispatch(item, host, harness, key)
+	out, err := c.Service.Dispatch(item, a.Host, a.Harness, key)
 	if err != nil {
 		return err
 	}
@@ -23,12 +26,13 @@ func (c *Coordinator) dispatch(st control.State, item control.Item, host, harnes
 	if _, replay := st.Attempts[out.Attempt.ID]; !replay {
 		c.releaseEnded(st, *out.Item, *out.Attempt, c.Client(cfg.Hosts[out.Attempt.Host]))
 	}
-	return c.launch(st, *out.Item, *out.Attempt, out.Credential, resume, cfg)
+	return c.launch(st, *out.Attempt, out.Credential, a.Resume, cfg)
 }
 
 // launch has the attempt's host start its session; resume says an earlier
 // attempt ran, so the session resumes the task's own branch.
-func (c *Coordinator) launch(st control.State, item control.Item, at control.Attempt, credential string, resume bool, cfg *hosts.Config) error {
+func (c *Coordinator) launch(st control.State, at control.Attempt, credential string, resume bool, cfg *hosts.Config) error {
+	item := st.Items[at.Item]
 	if err := c.Service.CheckDispatch(item.ID, at.ID); err != nil {
 		return err
 	}
@@ -181,7 +185,7 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 	if len(credentials) != 1 {
 		return fmt.Errorf("dispatch %s has no unique credential receipt", at.ID)
 	}
-	if err := c.launch(st, item, at, credentials[0], hadEarlierAttempt(st, item.ID, at.ID), cfg); err != nil {
+	if err := c.launch(st, at, credentials[0], hadEarlierAttempt(st, item.ID, at.ID), cfg); err != nil {
 		c.log("recover dispatch %s: %v", at.ID, err)
 	}
 	return nil

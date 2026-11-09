@@ -18,7 +18,7 @@ func TestEditedCardInvalidatesStalePlacement(t *testing.T) {
 	}
 	execute(t, c.Service, control.Request{Op: "edit", ID: task.ID, Version: task.Version,
 		Item: control.Item{Title: task.Title, Body: task.Body, Requires: []string{"linux"}, Tier: "deep"}})
-	if err = c.dispatch(before, task, "devbox", "claude", false, c.Config); err == nil {
+	if err = c.dispatch(before, reconcile.Action{Item: task.ID, Host: "devbox", Harness: "claude"}, c.Config); err == nil {
 		t.Fatal("stale placement reserved an execution")
 	}
 	after, err := c.Service.Store.Snapshot()

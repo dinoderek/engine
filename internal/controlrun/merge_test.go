@@ -11,8 +11,8 @@ import (
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
-	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/reconcile"
+	"github.com/dinoderek/engine/internal/remote"
 )
 
 const reviewedHead = "0123456789abcdef0123456789abcdef01234567"

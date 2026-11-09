@@ -14,8 +14,8 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
-	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/reconcile"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 )
 

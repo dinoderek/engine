@@ -13,7 +13,7 @@ import (
 func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Config) error {
 	switch a.Kind {
 	case reconcile.Dispatch:
-		return c.dispatch(st, st.Items[a.Item], a.Host, a.Harness, a.Resume, cfg)
+		return c.dispatch(st, a, cfg)
 	case reconcile.SetState:
 		if err := c.change(a.Item, a.State); err != nil || a.Key == "" {
 			return err

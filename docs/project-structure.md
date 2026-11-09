@@ -9,11 +9,12 @@
 | `cmd/engine/` | engine entrypoint |
 | `internal/` | product packages; `internal/cli` dispatches commands |
 | `internal/control/` | server records, transactions and API |
+| `internal/reconcile/` | coordination decisions |
 | `internal/controlrun/` | server coordination and host observations |
 | `internal/controlcmd/` | server CLI and lifecycle |
 | `internal/attach/` | `engine attach` |
 | `internal/hosts/` | host config: parsing, validation, slots, launch lines, Codex logs |
-| `internal/hostops/` | `engine host <op> --json`: the ops a host runs on itself for a caller, and the preflight check |
+| `internal/hostops/` | `engine host <op> --json`: a host's own ops, and the preflight check |
 | `internal/remote/` | a host's ops client: `Local` in-process, `SSH` to another machine, with its tmux-over-SSH runner |
 | `internal/session/` | local clones, worktrees, tmux, harness sessions, trust and run files |
 | `internal/setup/` | `engine setup`: the steps that bring a host to the caller's engine commit, plugin and config |

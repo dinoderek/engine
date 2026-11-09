@@ -8,10 +8,11 @@ Two programs share one Go module:
 
 - **`engine`**, the product: `cmd/engine` → `internal/cli` → one package per
   command. `internal/cli` parses arguments and dispatches. `internal/control`
-  owns server records, transactions and HTTP; `internal/controlrun` adapts
-  reconcile decisions to server state and caches host observations; `internal/controlcmd` supplies the CLI
-  and daemon lifecycle. The CLI and coordinator share the read-only plan
-  projection in `internal/controlrun` and validate it with `internal/lint`.
+  owns server records, transactions and HTTP; `internal/reconcile` decides
+  each server pass from a View of records and host observations;
+  `internal/controlrun` builds the View, applies its actions and caches host observations; `internal/controlcmd` supplies the CLI
+  and daemon lifecycle. The CLI and coordinator read a plan's tasks through
+  `internal/controlrun` and validate them with `internal/lint`.
   Other packages:
   `internal/version` (`engine version`), `internal/tracker` (the GitHub
   tracker adapter, through `gh`: `engine labels sync`, and reads
@@ -26,8 +27,8 @@ Two programs share one Go module:
   itself for a caller), `internal/remote` (the client that reaches a host's
   ops: `Local` calls them in-process, `SSH` over `ssh`), `internal/tell`
   (`engine tell`: comments on a task and points its session at it),
-  `internal/lint` (`engine lint`: a feature's plan rules), `internal/run`
-  (`engine run`: the coordinator's loop, on top of the others), `internal/ui`
+  `internal/lint` (`engine lint`: a plan's rules), `internal/run`
+  (`engine run`: the GitHub-mode loop), `internal/ui`
   (`engine ui`: the loopback dashboard, which holds the operator credential and
   forwards only fixed control reads). The commands
   share `internal/hosts`, the host config: it parses `hosts.toml` with an
@@ -74,7 +75,7 @@ non-test imports. The reasons:
   Coordinators never edit code; the server's coordinator merges its tasks.
   For server changes, load
   `control-server.md`; for GitHub-mode changes, load `coordinator.md`.
-- **The reconcile core is a package with no CLI assumptions**, so a daemon can
-  reuse it later. `internal/cli` stays a thin dispatcher.
+- **The reconcile core has no CLI assumptions.** `internal/reconcile` reads
+  only its View. `internal/cli` stays a thin dispatcher.
 - **Tooling is Go too.** The repo has one toolchain. A lane is either one
   external command or a `dev check` subcommand, tested like product code.
