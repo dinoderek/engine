@@ -189,7 +189,7 @@ func exchangeLabel(rpc *rpcClient, req LabelRequest) error {
 	return nil
 }
 
-// codexProject is the ID of the project engine filed for the repo, found by
+// findProject is the ID of the project engine filed for the repo, found by
 // its metadata so a rename in the apps keeps it, or a new one.
 func findProject(rpc *rpcClient, req LabelRequest) (string, error) {
 	type project struct {
