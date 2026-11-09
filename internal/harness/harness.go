@@ -56,6 +56,8 @@ type Adapter interface {
 	// run of every live window that names this harness, by window name. It
 	// never fails: what it cannot read stays unknown, with the reason.
 	Observe(ctx context.Context, host hosts.Host, runs map[string]session.Run) Snapshot
+	// Hooks are the harness's hook events and replies, and its own entries.
+	Hooks() Hooks
 	// Setup is what `engine setup` does for this harness on a host that
 	// runs it.
 	Setup() Setup

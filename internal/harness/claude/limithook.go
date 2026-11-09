@@ -1,4 +1,4 @@
-package hook
+package claude
 
 import (
 	"encoding/json"
@@ -10,13 +10,6 @@ import (
 	"time"
 )
 
-type limitRecord struct {
-	Since        int64  `json:"since"`
-	ResetsAt     int64  `json:"resets_at"`
-	Error        string `json:"error"`
-	Notification string `json:"notification_type,omitempty"`
-}
-
 type limitEvent struct {
 	Event        string          `json:"hook_event_name"`
 	Error        string          `json:"error"`
@@ -25,9 +18,10 @@ type limitEvent struct {
 	Notification string          `json:"notification_type"`
 }
 
-// Limit keeps Claude's limit marker and records each stop's complete input
-// in the run's telemetry. No run directory means this is not an engine run.
-func Limit(in io.Reader, dir string, now time.Time) error {
+// recordLimit is the `limit` entry: it keeps the run's limit marker
+// (LimitFile) and records each stop's complete input in the run's
+// limits.jsonl. No run directory means this is not an engine run.
+func recordLimit(in io.Reader, dir string, now time.Time) error {
 	if dir == "" {
 		return nil
 	}
@@ -39,13 +33,13 @@ func Limit(in io.Reader, dir string, now time.Time) error {
 	if err := json.Unmarshal(raw, &e); err != nil {
 		return err
 	}
-	file := filepath.Join(dir, "limit.json")
+	file := filepath.Join(dir, LimitFile)
 	switch e.Event {
 	case "StopFailure":
 		if e.Error != "rate_limit" && e.Error != "billing_error" {
 			return nil
 		}
-		r := limitRecord{Since: now.Unix(), ResetsAt: limitReset(e, dir), Error: e.Error}
+		r := Limit{Since: now.Unix(), ResetsAt: limitReset(e, dir), Error: e.Error}
 		if err := logLimit(dir, r, raw); err != nil {
 			return err
 		}
@@ -99,7 +93,7 @@ func notifyLimit(file, kind string) error {
 		if err != nil {
 			return err
 		}
-		var r limitRecord
+		var r Limit
 		if err := json.Unmarshal(data, &r); err != nil {
 			return err
 		}
@@ -117,7 +111,7 @@ func removeLimit(file string) error {
 	return err
 }
 
-func replaceLimit(file string, r limitRecord) error {
+func replaceLimit(file string, r Limit) error {
 	data, err := json.Marshal(r)
 	if err != nil {
 		return err
@@ -137,13 +131,13 @@ func replaceLimit(file string, r limitRecord) error {
 	return os.Rename(tmp.Name(), file)
 }
 
-func logLimit(dir string, r limitRecord, raw json.RawMessage) error {
+func logLimit(dir string, r Limit, raw json.RawMessage) error {
 	f, err := os.OpenFile(filepath.Join(dir, "limits.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
 	err = json.NewEncoder(f).Encode(struct {
-		limitRecord
+		Limit
 		Input json.RawMessage `json:"input"`
 	}{r, raw})
 	return errors.Join(err, f.Close())

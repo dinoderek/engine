@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"os"
 	"time"
-)
 
-// autoReview is the decision the permission hook logs for a request it left
-// to the harness's own review (hook.AutoReview; hostops cannot import hook).
-const autoReview = "left to auto-review"
+	"github.com/dinoderek/engine/internal/harness"
+)
 
 // permissionEntry is the part of a permissions.jsonl line hostops reads.
 type permissionEntry struct {
@@ -65,7 +63,7 @@ func readPermissions(path string) (denied, reviewed []string, err error) {
 		if e.Reason != "" {
 			line += " (" + e.Reason + ")"
 		}
-		if e.Decision == autoReview {
+		if e.Decision == harness.LeaveToReview.Decision() {
 			reviewed = append(reviewed, line)
 		} else {
 			denied = append(denied, line)
@@ -83,7 +81,7 @@ func LastDenial(path string) *Denial {
 		return nil
 	}
 	e := entries[len(entries)-1]
-	if e.Decision == autoReview || e.Decision == "" {
+	if e.Decision == harness.LeaveToReview.Decision() || e.Decision == "" {
 		return nil
 	}
 	return &Denial{At: e.Time, Tool: e.Tool, Input: e.Input, Decision: e.Decision, Reason: e.Reason}

@@ -15,17 +15,18 @@ func TestPermissionHook(t *testing.T) {
 	dir := t.TempDir()
 	tests := []struct {
 		name   string
+		flag   string
 		vars   map[string]string
 		denied bool
 		logged bool
 		stderr string
 	}{
-		{"unattended, with a run directory", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir}, true, true, ""},
-		{"unattended, no run directory", map[string]string{"ENGINE_UNATTENDED": "1"}, true, false, ""},
-		{"unattended, missing run directory", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": filepath.Join(dir, "gone")}, true, false, "open the permission log"},
-		{"attended", map[string]string{"ENGINE_RUN_DIR": dir}, false, false, ""},
-		{"unattended Codex", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir, "ENGINE_HARNESS": "codex"}, false, true, ""},
-		{"unattended Claude", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir, "ENGINE_HARNESS": "claude"}, true, true, ""},
+		{"unattended, with a run directory", "claude", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir}, true, true, ""},
+		{"unattended, no run directory", "claude", map[string]string{"ENGINE_UNATTENDED": "1"}, true, false, ""},
+		{"unattended, missing run directory", "claude", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": filepath.Join(dir, "gone")}, true, false, "open the permission log"},
+		{"attended", "claude", map[string]string{"ENGINE_RUN_DIR": dir}, false, false, ""},
+		{"unattended Codex", "codex", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir}, false, true, ""},
+		{"unattended Claude", "claude", map[string]string{"ENGINE_UNATTENDED": "1", "ENGINE_RUN_DIR": dir, "ENGINE_HARNESS": "codex"}, true, true, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -33,7 +34,7 @@ func TestPermissionHook(t *testing.T) {
 			var out, errOut bytes.Buffer
 			env := Env{In: strings.NewReader(request), Out: &out, Err: &errOut, Getenv: func(k string) string { return tt.vars[k] },
 				Now: func() time.Time { return time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC) }}
-			if code := Run([]string{"hook", "permission"}, env); code != 0 {
+			if code := Run([]string{"hook", "permission", "--harness", tt.flag}, env); code != 0 {
 				t.Fatalf("exit %d, stderr %s", code, errOut.String())
 			}
 			if got := strings.Contains(out.String(), `"deny"`); got != tt.denied {

@@ -1,4 +1,4 @@
-package hostops
+package codex
 
 import (
 	"context"
@@ -11,34 +11,32 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// CodexLabelFile, in a run directory, records the attempts to label the
-// run's Codex thread and how the last one went; codexLabelLock is held while
+// LabelFile, in a run directory, records the attempts to label the
+// run's Codex thread and how the last one went; labelLock is held while
 // one runs.
 const (
-	CodexLabelFile = "codex-label.json"
-	codexLabelLock = "codex-label.lock"
+	LabelFile = "codex-label.json"
+	labelLock = "codex-label.lock"
 )
 
-// codexLabelAttempts bounds the attempts per run, so a daemon that keeps
+// labelAttempts bounds the attempts per run, so a daemon that keeps
 // refusing costs a few background processes, not one per hook event.
-const codexLabelAttempts = 3
+const labelAttempts = 3
 
-// codexLabelStale is how old a lock is when its holder must have died: an
+// labelStale is how old a lock is when its holder must have died: an
 // attempt ends within its deadline.
-const codexLabelStale = 30 * codexLabelTimeout
+const labelStale = 30 * labelTimeout
 
-// codexLabelTimeout is how long one attempt may take.
-const codexLabelTimeout = 3 * time.Second
+// labelTimeout is how long one attempt may take.
+const labelTimeout = 3 * time.Second
 
-// codexHarness is the harness whose threads are labelled.
-const codexHarness = "codex"
-
-// CodexLabelRequest is how a joined Codex thread is shown in the apps: its
+// LabelRequest is how a joined Codex thread is shown in the apps: its
 // title, and the project it is filed under.
-type CodexLabelRequest struct {
+type LabelRequest struct {
 	ThreadID string `json:"thread_id"`
 	Title    string `json:"title"`
 	// Project is the project's name; Repo (owner/name) is the identity engine
@@ -48,39 +46,39 @@ type CodexLabelRequest struct {
 	Root    string `json:"root"`
 }
 
-// codexLabelRecord is CodexLabelFile's content.
-type codexLabelRecord struct {
-	CodexLabelRequest
+// labelRecord is LabelFile's content.
+type labelRecord struct {
+	LabelRequest
 	At       time.Time `json:"at"`
 	Attempts int       `json:"attempts"`
 	Error    string    `json:"error,omitempty"`
 }
 
-func readCodexLabel(runDir string) (codexLabelRecord, bool) {
-	var rec codexLabelRecord
-	data, err := os.ReadFile(filepath.Join(runDir, CodexLabelFile))
+func readLabelRecord(runDir string) (labelRecord, bool) {
+	var rec labelRecord
+	data, err := os.ReadFile(filepath.Join(runDir, LabelFile))
 	return rec, err == nil && json.Unmarshal(data, &rec) == nil
 }
 
-// codexLabelRetry spaces the attempts, so they span the daemon storing a new
+// labelRetry spaces the attempts, so they span the daemon storing a new
 // thread rather than all failing in its first seconds.
-const codexLabelRetry = 15 * time.Second
+const labelRetry = 15 * time.Second
 
-// CodexLabelPending is true while the run's thread is not labelled, attempts
-// remain and the last one is at least codexLabelRetry before now.
-func CodexLabelPending(runDir string, now time.Time) bool {
-	rec, ok := readCodexLabel(runDir)
-	return !ok || rec.Error != "" && rec.Attempts < codexLabelAttempts && now.Sub(rec.At) >= codexLabelRetry
+// LabelPending is true while the run's thread is not labelled, attempts
+// remain and the last one is at least labelRetry before now.
+func LabelPending(runDir string, now time.Time) bool {
+	rec, ok := readLabelRecord(runDir)
+	return !ok || rec.Error != "" && rec.Attempts < labelAttempts && now.Sub(rec.At) >= labelRetry
 }
 
-// codexProjectKey is the project metadata key that holds the repo engine
+// projectKey is the project metadata key that holds the repo engine
 // filed the project for.
-const codexProjectKey = "engine_repo"
+const projectKey = "engine_repo"
 
-// CodexThreadTitle is the title of a task's thread: "<plan> > <task>", or the
+// ThreadTitle is the title of a task's thread: "<plan> > <task>", or the
 // task alone when it belongs to no plan. Runs name them by their server IDs
 // (p12, t34).
-func CodexThreadTitle(rec session.Record) string {
+func ThreadTitle(rec session.Record) string {
 	task := rec.Task
 	if t, err := session.ParseRef(rec.Task); err == nil {
 		task = "t" + strconv.Itoa(t.Number)
@@ -91,17 +89,18 @@ func CodexThreadTitle(rec session.Record) string {
 	return rec.Feature + " > " + task
 }
 
-// LabelCodexThread titles a joined Codex run's thread and files it under its
-// repo's project, through engine's daemon, and records the outcome in
-// CodexLabelFile. It does nothing once the thread is labelled, after the last
-// attempt, or while another attempt holds the lock. A failure is returned for
-// the caller to report; it never stops the session.
-func LabelCodexThread(d Deps, runDir string, rec session.Record, threadID string) error {
-	if !CodexLabelPending(runDir, d.Now()) {
+// LabelThread titles a joined run's thread and files it under its repo's
+// project, through engine's daemon, and records the outcome in LabelFile. It
+// does nothing once the thread is labelled, after the last attempt, or while
+// another attempt holds the lock. A failure is returned for the caller to
+// report; it never stops the session.
+func (a Adapter) LabelThread(runDir string, rec session.Record, threadID string) error {
+	now := a.env.Time
+	if !LabelPending(runDir, now()) {
 		return nil
 	}
-	lock := filepath.Join(runDir, codexLabelLock)
-	if info, err := os.Stat(lock); err == nil && d.Now().Sub(info.ModTime()) > codexLabelStale {
+	lock := filepath.Join(runDir, labelLock)
+	if info, err := os.Stat(lock); err == nil && now().Sub(info.ModTime()) > labelStale {
 		_ = os.Remove(lock)
 	}
 	f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
@@ -114,68 +113,60 @@ func LabelCodexThread(d Deps, runDir string, rec session.Record, threadID string
 	_ = f.Close()
 	defer func() { _ = os.Remove(lock) }()
 	// Another attempt may have finished between the check and the lock.
-	if !CodexLabelPending(runDir, d.Now()) {
+	if !LabelPending(runDir, now()) {
 		return nil
 	}
-	prev, _ := readCodexLabel(runDir)
-	req, err := codexLabelFor(d.Home, rec, threadID)
+	prev, _ := readLabelRecord(runDir)
+	req, err := labelFor(a.env.Home, rec, threadID)
 	if err == nil {
-		err = sendCodexLabel(d, req)
+		err = a.sendLabel(req)
 	}
-	out := codexLabelRecord{CodexLabelRequest: req, At: d.Now().UTC(), Attempts: prev.Attempts + 1}
+	out := labelRecord{LabelRequest: req, At: now().UTC(), Attempts: prev.Attempts + 1}
 	if err != nil {
 		out.Error = err.Error()
 	}
 	data, merr := json.MarshalIndent(out, "", "  ")
 	if merr == nil {
-		merr = os.WriteFile(filepath.Join(runDir, CodexLabelFile), data, 0o644)
+		merr = os.WriteFile(filepath.Join(runDir, LabelFile), data, 0o644)
 	}
 	return errors.Join(err, merr)
 }
 
-func codexLabelFor(home string, rec session.Record, threadID string) (CodexLabelRequest, error) {
+func labelFor(home string, rec session.Record, threadID string) (LabelRequest, error) {
 	repo, err := session.ParseRepo(rec.Repo)
 	if err != nil {
-		return CodexLabelRequest{}, err
+		return LabelRequest{}, err
 	}
 	root, err := session.Repos{Home: home, Control: rec.Control}.Path(repo)
 	if err != nil {
-		return CodexLabelRequest{}, err
+		return LabelRequest{}, err
 	}
-	return CodexLabelRequest{ThreadID: threadID, Title: CodexThreadTitle(rec), Project: repo.Name, Repo: repo.String(), Root: root}, nil
+	return LabelRequest{ThreadID: threadID, Title: ThreadTitle(rec), Project: repo.Name, Repo: repo.String(), Root: root}, nil
 }
 
-func sendCodexLabel(d Deps, req CodexLabelRequest) error {
-	_, host, err := openHost(d.Home)
+func (a Adapter) sendLabel(req LabelRequest) error {
+	_, host, err := hosts.Open(hosts.ConfigDir(a.env.Home))
 	if err != nil {
 		return err
 	}
-	bin, err := host.BinPath(codexHarness, d.Home)
+	bin, err := host.BinPath(Name, a.env.Home)
 	if err != nil {
 		return err
 	}
-	send := d.CodexLabel
-	if send == nil {
-		send = labelCodexThread
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), codexLabelTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), labelTimeout)
 	defer cancel()
-	return send(ctx, bin, filepath.Join(d.Home, filepath.FromSlash(engineCodexHome)), req)
+	return a.opts.Label(ctx, bin, a.engineHome(), req)
 }
 
-// engineCodexHome is engine's own Codex home under the home, where the
-// daemon that labels a thread runs.
-const engineCodexHome = ".local/share/engine/codex"
-
-// labelCodexThread sets the title first, since thread/name/set is stable and
-// the project calls are experimental.
-func labelCodexThread(ctx context.Context, bin, home string, req CodexLabelRequest) error {
+// labelThroughDaemon sets the title first, since thread/name/set is stable
+// and the project calls are experimental.
+func labelThroughDaemon(ctx context.Context, bin, home string, req LabelRequest) error {
 	return codexDaemon(ctx, bin, home, func(c *wsConn) error {
-		return exchangeCodexLabel(&codexRPC{c: c}, req)
+		return exchangeLabel(&rpcClient{c: c}, req)
 	})
 }
 
-func exchangeCodexLabel(rpc *codexRPC, req CodexLabelRequest) error {
+func exchangeLabel(rpc *rpcClient, req LabelRequest) error {
 	if _, err := rpc.call("initialize", map[string]any{
 		"clientInfo":   map[string]any{"name": "engine", "version": "1"},
 		"capabilities": map[string]any{"experimentalApi": true},
@@ -188,7 +179,7 @@ func exchangeCodexLabel(rpc *codexRPC, req CodexLabelRequest) error {
 	if _, err := rpc.call("thread/name/set", map[string]any{"threadId": req.ThreadID, "name": req.Title}); err != nil {
 		return fmt.Errorf("title the thread: %w", err)
 	}
-	id, err := codexProject(rpc, req)
+	id, err := findProject(rpc, req)
 	if err != nil {
 		return fmt.Errorf("find or create project %s: %w", req.Project, err)
 	}
@@ -198,9 +189,9 @@ func exchangeCodexLabel(rpc *codexRPC, req CodexLabelRequest) error {
 	return nil
 }
 
-// codexProject is the ID of the project engine filed for the repo, found by
+// findProject is the ID of the project engine filed for the repo, found by
 // its metadata so a rename in the apps keeps it, or a new one.
-func codexProject(rpc *codexRPC, req CodexLabelRequest) (string, error) {
+func findProject(rpc *rpcClient, req LabelRequest) (string, error) {
 	type project struct {
 		ID       string            `json:"id"`
 		Metadata map[string]string `json:"metadata"`
@@ -219,7 +210,7 @@ func codexProject(rpc *codexRPC, req CodexLabelRequest) (string, error) {
 			return "", err
 		}
 		for _, p := range page.Data {
-			if p.Metadata[codexProjectKey] == req.Repo {
+			if p.Metadata[projectKey] == req.Repo {
 				return p.ID, nil
 			}
 		}
@@ -235,7 +226,7 @@ func codexProject(rpc *codexRPC, req CodexLabelRequest) (string, error) {
 	create := func(key string) (json.RawMessage, error) {
 		return rpc.call("project/create", map[string]any{
 			"name": req.Project, "roots": []map[string]string{{"path": req.Root}},
-			"metadata": map[string]string{codexProjectKey: req.Repo}, "idempotencyKey": key,
+			"metadata": map[string]string{projectKey: req.Repo}, "idempotencyKey": key,
 		})
 	}
 	data, err := create("engine-" + req.Repo)
@@ -254,13 +245,13 @@ func codexProject(rpc *codexRPC, req CodexLabelRequest) (string, error) {
 	return created.Project.ID, nil
 }
 
-// codexRPC is a JSON-RPC client over the daemon's WebSocket.
-type codexRPC struct {
+// rpcClient is a JSON-RPC client over the daemon's WebSocket.
+type rpcClient struct {
 	c    *wsConn
 	next int
 }
 
-func (r *codexRPC) notify(method string) error {
+func (r *rpcClient) notify(method string) error {
 	line, err := json.Marshal(map[string]any{"method": method, "params": map[string]any{}})
 	if err != nil {
 		return err
@@ -270,7 +261,7 @@ func (r *codexRPC) notify(method string) error {
 
 // call sends a request and returns its result, skipping the notifications
 // the daemon interleaves.
-func (r *codexRPC) call(method string, params any) (json.RawMessage, error) {
+func (r *rpcClient) call(method string, params any) (json.RawMessage, error) {
 	r.next++
 	id := r.next
 	line, err := json.Marshal(map[string]any{"id": id, "method": method, "params": params})

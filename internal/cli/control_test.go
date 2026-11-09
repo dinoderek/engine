@@ -20,7 +20,7 @@ func TestHookRefusesEveryMergeInAnEngineSessionAndPointsAtMergeReady(t *testing.
 	invoke := func(cwd, command string, getenv func(string) string) (int, string) {
 		b, _ := json.Marshal(map[string]any{"cwd": cwd, "tool_name": "Bash", "tool_input": map[string]string{"command": command}})
 		var stderr bytes.Buffer
-		code := Run([]string{"hook", "pre-tool-use"}, Env{Home: home, In: strings.NewReader(string(b)), Err: &stderr, Out: &bytes.Buffer{}, Getenv: getenv})
+		code := Run([]string{"hook", "pre-tool-use", "--harness", "codex"}, Env{Home: home, In: strings.NewReader(string(b)), Err: &stderr, Out: &bytes.Buffer{}, Getenv: getenv})
 		return code, stderr.String()
 	}
 	none := func(string) string { return "" }

@@ -99,7 +99,7 @@ func (l launcher) Args(s harness.Launch) string {
 	for _, rule := range tmpReads {
 		args += " " + hosts.ShellWord(rule)
 	}
-	args += " --settings " + hosts.ShellWord(`{"statusLine":{"type":"command","command":"engine hook statusline"}}`)
+	args += " --settings " + hosts.ShellWord(`{"statusLine":{"type":"command","command":"`+statuslineCommand+`"}}`)
 	return args + " -- " + hosts.ShellWord(s.Kickoff)
 }
 

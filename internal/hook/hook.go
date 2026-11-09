@@ -1,42 +1,27 @@
-// Package hook holds engine's harness hooks: checks that block an action the
-// executor's rules forbid, whatever the prompt said. They guard against
-// mistakes, not against a session set on getting round them: they read a
-// command's words, they do not run a shell.
+// Package hook holds the hooks engine runs for every harness, on events its
+// adapter has read: the merge guard, the permission log and the state file.
+// The guard blocks an action the executor's rules forbid, whatever the prompt
+// said. It guards against mistakes, not against a session set on getting
+// round it: it reads a command's words, it does not run a shell.
 package hook
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
-// event is the part of a Claude Code or Codex PreToolUse event the guard
-// reads: both name the shell tool Bash and put the command in tool_input.
-type event struct {
-	ToolName  string `json:"tool_name"`
-	ToolInput struct {
-		Command string `json:"command"`
-	} `json:"tool_input"`
-}
-
-// PreToolUse reads a Claude Code or Codex PreToolUse event from in. When a Bash
+// PreToolUse is the merge guard on a tool call about to run. When its shell
 // command merges a pull request unsafely it writes the reason to stderr and
 // returns 2, which blocks the call and shows the reason to the agent.
 // Otherwise it returns 0.
-func PreToolUse(in io.Reader, stderr io.Writer) int {
-	var e event
-	if err := json.NewDecoder(in).Decode(&e); err != nil {
-		fmt.Fprintln(stderr, "engine hook: unreadable PreToolUse event:", err)
-		return 1
-	}
-	if e.ToolName != "Bash" {
-		return 0
-	}
-	if reason := MergeProblem(e.ToolInput.Command); reason != "" {
+func PreToolUse(e harness.Event, stderr io.Writer) int {
+	if reason := MergeProblem(e.Command); reason != "" {
 		fmt.Fprintln(stderr, "engine merge guard: "+reason)
 		return 2
 	}

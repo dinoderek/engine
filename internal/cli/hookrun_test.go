@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dinoderek/engine/internal/hook"
-	"github.com/dinoderek/engine/internal/hostops"
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/codex"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -72,7 +72,7 @@ func TestStateHookFindsItsRunByCwd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHookHome(t)
-			code, _, stderr := h.run([]string{"hook", "state"}, eventAt(tt.event, tt.cwd(h)), nil)
+			code, _, stderr := h.run([]string{"hook", "state", "--harness", "codex"}, eventAt(tt.event, tt.cwd(h)), nil)
 			if code != 0 {
 				t.Fatalf("exit %d, stderr %q", code, stderr)
 			}
@@ -94,7 +94,7 @@ func TestStateHookFindsItsRunByCwd(t *testing.T) {
 func TestStateHookPrefersTheEnvironmentRun(t *testing.T) {
 	h := newHookHome(t)
 	dir := t.TempDir()
-	code, _, stderr := h.run([]string{"hook", "state"}, eventAt("Stop", h.codex), map[string]string{session.RunDirVar: dir})
+	code, _, stderr := h.run([]string{"hook", "state", "--harness", "codex"}, eventAt("Stop", h.codex), map[string]string{session.RunDirVar: dir})
 	if _, ok := session.ReadHarnessState(dir); code != 0 || !ok {
 		t.Errorf("exit %d (%q), state in the exported run directory %v", code, stderr, ok)
 	}
@@ -103,27 +103,42 @@ func TestStateHookPrefersTheEnvironmentRun(t *testing.T) {
 	}
 }
 
+// review is the logged decision on a request left to the harness's review.
+var review = harness.LeaveToReview.Decision()
+
+// A Codex hook without the launch's variables finds its run by cwd, among
+// Codex runs only; a Claude hook never looks. A Claude reviewer started in a
+// Codex run has the run's variables, and gets Claude's policy: deny.
 func TestPermissionHookFindsItsRunByCwd(t *testing.T) {
 	tests := []struct {
 		name   string
+		flag   string
 		cwd    func(hookHome) string
 		vars   map[string]string
 		denied bool
 		run    func(hookHome) string // the run whose log must hold the request; nil for none
 		logged string
 	}{
-		{"a hands-off Codex run is left to auto-review", func(h hookHome) string { return h.codex }, nil, false, func(h hookHome) string { return h.codexRun }, hook.AutoReview},
-		{"from a folder below the worktree", func(h hookHome) string { return filepath.Join(h.codex, "internal") }, nil, false, func(h hookHome) string { return h.codexRun }, hook.AutoReview},
-		{"a Claude session by hand in a run's worktree prompts as usual", func(h hookHome) string { return h.claude }, nil, false, nil, ""},
-		{"a gated run prompts as usual", func(h hookHome) string { return h.gated }, nil, false, nil, ""},
-		{"elsewhere nothing happens", func(h hookHome) string { return h.home }, nil, false, nil, ""},
-		{"elsewhere, the variables still deny", func(h hookHome) string { return h.home }, map[string]string{session.UnattendedVar: "1"}, true, nil, ""},
-		{"the variables win", func(h hookHome) string { return h.codex }, map[string]string{session.UnattendedVar: "1", session.HarnessVar: "claude"}, true, func(h hookHome) string { return h.codexRun }, `"decision":"deny"`},
+		{"a hands-off Codex run is left to auto-review", "codex", func(h hookHome) string { return h.codex }, nil, false, func(h hookHome) string { return h.codexRun }, review},
+		{"from a folder below the worktree", "codex", func(h hookHome) string { return filepath.Join(h.codex, "internal") }, nil, false, func(h hookHome) string { return h.codexRun }, review},
+		{"a Claude session by hand in a run's worktree prompts as usual", "claude", func(h hookHome) string { return h.claude }, nil, false, nil, ""},
+		{"a Claude session by hand in a Codex run's worktree prompts as usual", "claude", func(h hookHome) string { return h.codex }, nil, false, nil, ""},
+		{"a Codex session in a Claude run's worktree prompts as usual", "codex", func(h hookHome) string { return h.claude }, nil, false, nil, ""},
+		{"a gated run prompts as usual", "codex", func(h hookHome) string { return h.gated }, nil, false, nil, ""},
+		{"elsewhere nothing happens", "codex", func(h hookHome) string { return h.home }, nil, false, nil, ""},
+		{"elsewhere, the variables still deny", "claude", func(h hookHome) string { return h.home }, map[string]string{session.UnattendedVar: "1"}, true, nil, ""},
+		{"the variables win", "codex", func(h hookHome) string { return h.codex }, map[string]string{session.UnattendedVar: "1", session.RunDirVar: "@gatedRun"}, false, func(h hookHome) string { return h.gatedRun }, review},
+		{"a Claude reviewer in a Codex run is denied", "claude", func(h hookHome) string { return h.codex },
+			map[string]string{session.UnattendedVar: "1", session.HarnessVar: "codex", session.RunDirVar: "@codexRun"}, true, func(h hookHome) string { return h.codexRun }, `"decision":"deny"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHookHome(t)
-			code, out, stderr := h.run([]string{"hook", "permission"}, eventAt("PermissionRequest", tt.cwd(h)), tt.vars)
+			vars := map[string]string{}
+			for k, v := range tt.vars {
+				vars[k] = strings.NewReplacer("@codexRun", h.codexRun, "@gatedRun", h.gatedRun).Replace(v)
+			}
+			code, out, stderr := h.run([]string{"hook", "permission", "--harness", tt.flag}, eventAt("PermissionRequest", tt.cwd(h)), vars)
 			if code != 0 {
 				t.Fatalf("exit %d, stderr %q", code, stderr)
 			}
@@ -161,7 +176,7 @@ func seedLabel(t *testing.T, dir, record string) {
 			t.Fatal(err)
 		}
 	default:
-		if err := os.WriteFile(filepath.Join(dir, hostops.CodexLabelFile), []byte(record), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, codex.LabelFile), []byte(record), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -191,19 +206,19 @@ func TestStateHookStartsTheLabelForAJoinedThread(t *testing.T) {
 			seedLabel(t, h.codexRun, tt.record)
 			var vars map[string]string
 			if tt.vars {
-				vars = map[string]string{session.RunDirVar: h.codexRun, session.HarnessVar: "codex"}
+				vars = map[string]string{session.RunDirVar: h.codexRun}
 			}
 			var started [][]string
 			var e bytes.Buffer
 			env := Env{In: strings.NewReader(eventAt(tt.event, h.codex)), Out: &bytes.Buffer{}, Err: &e, Home: h.home,
 				Getenv: func(k string) string { return vars[k] }, Now: func() time.Time { return stateAt },
 				Detach: func(args ...string) error { started = append(started, args); return nil }}
-			if code := Run([]string{"hook", "state"}, env); code != 0 {
+			if code := Run([]string{"hook", "state", "--harness", "codex"}, env); code != 0 {
 				t.Fatalf("exit %d, stderr %q", code, e.String())
 			}
 			var want [][]string
 			if tt.detached {
-				want = [][]string{{"hook", "codex-label", h.codexRun, codexSession}}
+				want = [][]string{{"hook", "label", "--harness", "codex", h.codexRun, codexSession}}
 			}
 			if !reflect.DeepEqual(started, want) {
 				t.Errorf("started %v, want %v", started, want)
@@ -222,7 +237,7 @@ func TestStateHookReportsALabelItCannotStart(t *testing.T) {
 			var e bytes.Buffer
 			env := Env{In: strings.NewReader(eventAt("UserPromptSubmit", h.codex)), Out: &bytes.Buffer{}, Err: &e, Home: h.home,
 				Getenv: func(string) string { return "" }, Now: func() time.Time { return stateAt }, Detach: detach}
-			if code := Run([]string{"hook", "state"}, env); code != 0 || !strings.Contains(e.String(), "label the Codex thread") {
+			if code := Run([]string{"hook", "state", "--harness", "codex"}, env); code != 0 || !strings.Contains(e.String(), "label the Codex thread") {
 				t.Errorf("exit %d, stderr %q", code, e.String())
 			}
 			if st, ok := session.ReadHarnessState(h.codexRun); !ok || st.State != session.StateWorking {
@@ -232,17 +247,20 @@ func TestStateHookReportsALabelItCannotStart(t *testing.T) {
 	}
 }
 
-func TestCodexLabelHookRecordsItsAttempt(t *testing.T) {
+func TestLabelHookRecordsItsAttempt(t *testing.T) {
 	h := newHookHome(t)
 	// The home has no host config, so the attempt fails and is recorded.
-	code, _, stderr := h.run([]string{"hook", "codex-label", h.codexRun, codexSession}, "", nil)
-	if code != 1 || !strings.Contains(stderr, "engine hook codex-label:") {
+	code, _, stderr := h.run([]string{"hook", "label", "--harness", "codex", h.codexRun, codexSession}, "", nil)
+	if code != 1 || !strings.Contains(stderr, "engine hook label:") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
-	if data, err := os.ReadFile(filepath.Join(h.codexRun, hostops.CodexLabelFile)); err != nil || !strings.Contains(string(data), `"attempts": 1`) {
+	if data, err := os.ReadFile(filepath.Join(h.codexRun, codex.LabelFile)); err != nil || !strings.Contains(string(data), `"attempts": 1`) {
 		t.Errorf("record %s, %v", data, err)
 	}
-	if code, _, _ := h.run([]string{"hook", "codex-label", filepath.Join(h.home, "missing"), codexSession}, "", nil); code != 1 {
+	if code, _, _ := h.run([]string{"hook", "label", "--harness", "codex", filepath.Join(h.home, "missing"), codexSession}, "", nil); code != 1 {
 		t.Errorf("a run with no run.json: exit %d", code)
+	}
+	if code, _, stderr := h.run([]string{"hook", "label", "--harness", "codex", h.codexRun}, "", nil); code != 1 || !strings.Contains(stderr, "want <run-dir> <thread>") {
+		t.Errorf("one argument: exit %d, stderr %q", code, stderr)
 	}
 }

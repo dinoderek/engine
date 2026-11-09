@@ -52,3 +52,9 @@ func TestEnvReadsNothingWithoutItsParts(t *testing.T) {
 		t.Errorf("env: %q, %v", e.Var("X"), e.Time())
 	}
 }
+
+func TestPolicyDecisionsAreThePermissionLogs(t *testing.T) {
+	if harness.Deny.Decision() != "deny" || harness.LeaveToReview.Decision() != "left to auto-review" {
+		t.Errorf("decisions %q, %q", harness.Deny.Decision(), harness.LeaveToReview.Decision())
+	}
+}

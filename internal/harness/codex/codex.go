@@ -11,7 +11,9 @@
 //
 // Codex has no session list engine can ask, so a session's state comes from
 // the state file its hooks write, supplemented by the daemon's stored turns
-// (a usage-limit failure) and the account's rate limits.
+// (a usage-limit failure) and the account's rate limits. A joined session's
+// hooks run inside the daemon, without the launch's variables, so they find
+// their run by the event's cwd; the state hook then labels its thread.
 package codex
 
 import (
@@ -33,6 +35,9 @@ type Options struct {
 	// Turns reads the newest stored turn of each thread, without resuming
 	// it. Nil starts a short-lived app-server.
 	Turns func(ctx context.Context, bin, home string, ids []string) (map[string]json.RawMessage, error)
+	// Label titles a thread and files it under a project, through the
+	// daemon serving home. Nil uses `codex app-server proxy`.
+	Label func(ctx context.Context, bin, home string, req LabelRequest) error
 }
 
 // Adapter is the Codex adapter.
@@ -48,6 +53,9 @@ func New(env harness.Env, opts Options) Adapter {
 	}
 	if opts.Turns == nil {
 		opts.Turns = readTurns
+	}
+	if opts.Label == nil {
+		opts.Label = labelThroughDaemon
 	}
 	return Adapter{env: env, opts: opts}
 }

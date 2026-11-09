@@ -35,7 +35,7 @@ func TestLimitHookCommand(t *testing.T) {
 				}
 				return ""
 			}}
-			if code := Run([]string{"hook", "limit"}, env); code != tc.code {
+			if code := Run([]string{"hook", "limit", "--harness", "claude"}, env); code != tc.code {
 				t.Fatalf("exit %d: %s", code, errs.String())
 			}
 			if tc.code != 0 && !strings.Contains(errs.String(), "engine hook limit:") {
@@ -58,7 +58,7 @@ func TestLimitHookWritesMarkerAndTelemetry(t *testing.T) {
 		}
 		return ""
 	}}
-	if code := Run([]string{"hook", "limit"}, env); code != 0 {
+	if code := Run([]string{"hook", "limit", "--harness", "claude"}, env); code != 0 {
 		t.Fatalf("exit %d: %s", code, errs.String())
 	}
 	if l, ok := claude.ReadLimit(dir); !ok || l.ResetsAt != 2000 {

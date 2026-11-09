@@ -15,7 +15,7 @@ Two programs share one Go module:
   `internal/controlrun` and validate them with `internal/lint`.
   Other packages:
   `internal/version` (`engine version`), `internal/hook`
-  (harness hooks: `engine hook pre-tool-use`, `permission` and `state`),
+  (the core hooks every harness runs: the merge guard, permissions and state),
   `internal/start` (`engine start --check`: the preflight session on a host),
   `internal/hostops` (`engine host <op> --json`: the ops a host runs on
   itself for a caller), `internal/remote` (the client that reaches a host's
@@ -29,7 +29,7 @@ Two programs share one Go module:
   host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
   worktrees, the tmux session, windows and pane logs, the run record and the
   harness's state file. `internal/harness` is what engine asks of a harness:
-  the `Adapter` interface (launch, observe, setup, check, release). Each harness is an
+  the `Adapter` interface (launch, observe, hooks, setup, check, release). Each harness is an
   adapter package below it (`claude`, `codex`), and `internal/harness/registry`
   lists them. The commands build their adapters from the registry and hand
   them to `internal/hostops` and `internal/setup`, which see only the interface.
@@ -49,8 +49,9 @@ non-test imports. The reasons:
   of the product's reach.
 - **Each package may import only what its rule lists.** `cmd/engine` sees only
   `internal/cli`. Leaf packages (`internal/version`,
-  `internal/hook`, `internal/hosts`, `internal/session`,
-  `devtools/internal/repo`) import no first-party code; a command package
+  `internal/hosts`, `internal/session`,
+  `devtools/internal/repo`) import no first-party code, and `internal/hook`
+  only `internal/harness`; a command package
   such as `internal/start` composes them. Only the registry imports a
   concrete harness adapter. A new package adds its rule in the
   same PR.

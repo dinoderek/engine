@@ -5,22 +5,14 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 // DenyMessage is what an unattended session's agent is told when its
 // permission request is denied.
 const DenyMessage = "engine: this session is unattended, so the permission request was denied. " +
 	"Try a route that needs no new permission; if none works, follow the Permission hard stop in the build skill (hard-stops.md)."
-
-// permissionEvent is the part of a Claude Code or Codex PermissionRequest, or
-// Claude Code PermissionDenied, event that engine reads and logs.
-type permissionEvent struct {
-	Event     string          `json:"hook_event_name"`
-	ToolName  string          `json:"tool_name"`
-	ToolInput json.RawMessage `json:"tool_input"`
-	Mode      string          `json:"permission_mode"`
-	Reason    string          `json:"reason,omitempty"`
-}
 
 // Entry is one line of a run's permissions.jsonl.
 type Entry struct {
@@ -40,49 +32,38 @@ type Permission struct {
 	Log io.Writer
 	// Unattended is true when nobody watches the session.
 	Unattended bool
-	// Codex is true in a Codex session engine launched. Codex asks the hook
-	// before its auto-review, which decides without a person, so the hook
-	// leaves the request to it.
-	Codex bool
-	Now   time.Time
+	// Policy is what the harness's unattended requests get, and Deny writes
+	// its denial.
+	Policy harness.PermissionPolicy
+	Deny   func(w io.Writer, message string) error
+	Now    time.Time
 }
 
-// AutoReview is the logged decision on a Codex request the hook leaves to
-// auto-review.
-const AutoReview = "left to auto-review"
-
-// Handle reads a Claude Code or Codex PermissionRequest, or a Claude Code
-// PermissionDenied, event from in. An unattended Claude session's request is
-// denied: the decision goes to Out and the request to Log. An unattended
-// Codex session's request is only logged, and auto-review decides. In an
-// attended session it writes nothing, so the harness shows its prompt as
-// usual. A PermissionDenied event (auto mode refusing a call) is only logged.
-// It returns the process exit code.
-func (p Permission) Handle(in io.Reader) int {
-	var e permissionEvent
-	if err := json.NewDecoder(in).Decode(&e); err != nil {
-		fmt.Fprintln(p.Err, "engine hook: unreadable permission event:", err)
-		return 1
-	}
-	entry := Entry{Time: p.Now.UTC(), Event: e.Event, Tool: e.ToolName, Input: e.ToolInput, Mode: e.Mode, Reason: e.Reason}
-	switch e.Event {
-	case "PermissionRequest":
+// Handle acts on a permission request, or on the harness's own denial. An
+// unattended session's request gets the harness's policy: denied, with the
+// decision to Out, or left to the harness's own review; either way it is
+// logged. In an attended session it writes nothing, so the harness shows its
+// prompt as usual. A denial (auto mode refusing a call) is only logged. It
+// returns the process exit code.
+func (p Permission) Handle(e harness.Event) int {
+	entry := Entry{Time: p.Now.UTC(), Event: e.Name, Tool: e.Tool, Input: e.Input, Mode: e.Mode, Reason: e.Reason}
+	switch e.Kind {
+	case harness.PermissionRequested:
 		if !p.Unattended {
 			return 0
 		}
-		if p.Codex {
-			entry.Decision = AutoReview
+		entry.Decision = p.Policy.Decision()
+		if p.Policy != harness.Deny {
 			break
 		}
-		entry.Decision = "deny"
-		if err := writeDeny(p.Out); err != nil {
+		if err := p.Deny(p.Out, DenyMessage); err != nil {
 			fmt.Fprintln(p.Err, "engine hook:", err)
 			return 1
 		}
-	case "PermissionDenied":
+	case harness.PermissionDenied:
 		entry.Decision = "denied by auto mode"
 	default:
-		fmt.Fprintf(p.Err, "engine hook: %q is not a permission event\n", e.Event)
+		fmt.Fprintf(p.Err, "engine hook: %q is not a permission event\n", e.Name)
 		return 1
 	}
 	if p.Log != nil {
@@ -91,18 +72,4 @@ func (p Permission) Handle(in io.Reader) int {
 		}
 	}
 	return 0
-}
-
-func writeDeny(out io.Writer) error {
-	type decision struct {
-		Behavior string `json:"behavior"`
-		Message  string `json:"message"`
-	}
-	type specific struct {
-		Event    string   `json:"hookEventName"`
-		Decision decision `json:"decision"`
-	}
-	return json.NewEncoder(out).Encode(struct {
-		Output specific `json:"hookSpecificOutput"`
-	}{specific{"PermissionRequest", decision{"deny", DenyMessage}}})
 }

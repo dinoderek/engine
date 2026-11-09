@@ -6,7 +6,6 @@
 package hostops
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -53,9 +52,6 @@ type Deps struct {
 	// Harnesses are the harness adapters, built from the same Exec, Home,
 	// Getenv and Now.
 	Harnesses harness.Adapters
-	// CodexLabel titles a thread and files it under a project, through
-	// engine's daemon. Nil uses `codex app-server proxy`.
-	CodexLabel func(context.Context, string, string, CodexLabelRequest) error
 }
 
 // RefusedError is an op that refused before it changed anything.
