@@ -2,10 +2,12 @@ package setup
 
 import (
 	"bytes"
-	"fmt"
 	"io"
+	"slices"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/remote"
 )
 
@@ -16,8 +18,9 @@ type target struct {
 	// address is how ssh reaches the host; empty for this host.
 	address string
 	exec    remote.Exec
-	// acts is set for this host when it also gets steps that change it.
-	acts bool
+	// acts names the harnesses whose steps change this host when setup
+	// checks it.
+	acts []string
 }
 
 func (t target) remote() bool { return t.address != "" }
@@ -27,8 +30,8 @@ func (t target) label() string {
 	if t.remote() {
 		return t.name + " (" + t.address + ")"
 	}
-	if t.acts {
-		return t.name + " (this host; the Codex steps act)"
+	if len(t.acts) > 0 {
+		return t.name + " (this host; the " + strings.Join(t.acts, " and ") + " steps act)"
 	}
 	return t.name + " (this host, checked only)"
 }
@@ -41,40 +44,10 @@ func (t target) flag() string {
 	return ""
 }
 
-// result is a finished command.
-type result struct {
-	out, errOut string
-	code        int
-}
-
-// lines are the non-empty lines of the output.
-func (r result) lines() []string {
-	var lines []string
-	for _, l := range strings.Split(r.out, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			lines = append(lines, l)
-		}
-	}
-	return lines
-}
-
-// why is the first line the command said about its failure.
-func (r result) why() string {
-	text := strings.TrimSpace(r.errOut)
-	if text == "" {
-		text = strings.TrimSpace(r.out)
-	}
-	if text == "" {
-		return fmt.Sprintf("exit status %d", r.code)
-	}
-	first, _, _ := strings.Cut(text, "\n")
-	return first
-}
-
-// sh runs a shell command line on the target, with stdin when given. A host
+// Sh runs a shell command line on the target, with stdin when given. A host
 // that does not answer is an *remote.UnreachableError: nothing it would have
 // said is known, so no step may read it as an answer.
-func (t target) sh(command, stdin string) (result, error) {
+func (t target) Sh(command, stdin string) (harness.Result, error) {
 	var in io.Reader
 	if stdin != "" {
 		in = strings.NewReader(stdin)
@@ -88,11 +61,11 @@ func (t target) sh(command, stdin string) (result, error) {
 		code, err = t.exec(in, &out, &errOut, "sh", "-c", command)
 	}
 	if err != nil {
-		return result{}, err
+		return harness.Result{}, err
 	}
-	res := result{out: out.String(), errOut: errOut.String(), code: code}
+	res := harness.Result{Out: out.String(), ErrOut: errOut.String(), Code: code}
 	if t.remote() && code == sshExit {
-		return result{}, &remote.UnreachableError{Host: t.name, Address: t.address, Detail: res.why()}
+		return harness.Result{}, &remote.UnreachableError{Host: t.name, Address: t.address, Detail: res.Why()}
 	}
 	return res, nil
 }
@@ -111,4 +84,27 @@ func (t target) onHost(command string, tty bool) string {
 		flags = "-t "
 	}
 	return "ssh " + flags + t.address + " " + remote.ShellJoin([]string{command})
+}
+
+// stepTarget is the target as the adapters' steps see it, with what the
+// run has found so far.
+type stepTarget struct{ r *runner }
+
+func (s stepTarget) Sh(command, stdin string) (harness.Result, error) {
+	return s.r.t.Sh(command, stdin)
+}
+func (s stepTarget) OnHost(command string, tty bool) string { return s.r.t.onHost(command, tty) }
+func (s stepTarget) Remote() bool                           { return s.r.t.remote() }
+func (s stepTarget) Rerun() string                          { return s.r.rerun() }
+func (s stepTarget) Missing(tool string) bool               { return s.r.missing[tool] }
+func (s stepTarget) Plugin() string                         { return s.r.want.plugin }
+func (s stepTarget) Host() hosts.Host                       { return s.r.host }
+
+// Ref numbers the named steps as this run's report does.
+func (s stepTarget) Ref(names ...string) string {
+	numbers := make([]int, len(names))
+	for i, name := range names {
+		numbers[i] = slices.Index(s.r.names, name) + 1
+	}
+	return harness.Ref(numbers...)
 }

@@ -1,9 +1,10 @@
-package setup
+package codex
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -71,15 +72,15 @@ func TestInstalledCodexPlugin(t *testing.T) {
 func TestRemoteState(t *testing.T) {
 	cases := []struct {
 		name string
-		res  result
+		res  harness.Result
 		want string
 	}{
-		{"connected", result{out: `{"status":"connected"}`}, "connected"},
-		{"disabled", result{out: `{"status":"disabled"}`}, "disabled"},
-		{"errored, with the log line before it", result{errOut: "\x1b[31mERROR\x1b[0m ignoring\nError: Remote control is enabled on Dinos-MacBook-Pro.local but the connection is errored.\n", code: 1}, remoteErrored},
-		{"no JSON", result{out: "something else"}, "unreadable"},
-		{"JSON without a status", result{out: `{"other":1}`}, "unreadable"},
-		{"no output", result{code: 1}, "unreadable"},
+		{"connected", harness.Result{Out: `{"status":"connected"}`}, "connected"},
+		{"disabled", harness.Result{Out: `{"status":"disabled"}`}, "disabled"},
+		{"errored, with the log line before it", harness.Result{ErrOut: "\x1b[31mERROR\x1b[0m ignoring\nError: Remote control is enabled on Dinos-MacBook-Pro.local but the connection is errored.\n", Code: 1}, remoteErrored},
+		{"no JSON", harness.Result{Out: "something else"}, "unreadable"},
+		{"JSON without a status", harness.Result{Out: `{"other":1}`}, "unreadable"},
+		{"no output", harness.Result{Code: 1}, "unreadable"},
 	}
 	for _, c := range cases {
 		if got := remoteState(c.res); got != c.want {
@@ -92,12 +93,12 @@ func TestOperatorNotes(t *testing.T) {
 	ignored := "  user (/Users/me/.codex/config.toml): `features.rcmp_client` is ignored.\n  user (/Users/me/.codex/config.toml): `features.other` is ignored.\n"
 	cases := []struct {
 		name string
-		res  result
+		res  harness.Result
 		want string
 	}{
-		{"connected and clean", result{out: `{"status":"connected"}`}, ""},
-		{"connecting", result{out: `{"status":"connecting"}`}, "the operator's remote control is connecting"},
-		{"errored with ignored keys", result{errOut: ignored + "Error: Remote control is enabled on x but the connection is errored.", code: 1},
+		{"connected and clean", harness.Result{Out: `{"status":"connected"}`}, ""},
+		{"connecting", harness.Result{Out: `{"status":"connecting"}`}, "the operator's remote control is connecting"},
+		{"errored with ignored keys", harness.Result{ErrOut: ignored + "Error: Remote control is enabled on x but the connection is errored.", Code: 1},
 			"the operator's remote control is errored; features.rcmp_client is ignored in /Users/me/.codex/config.toml; features.other is ignored in /Users/me/.codex/config.toml"},
 	}
 	for _, c := range cases {

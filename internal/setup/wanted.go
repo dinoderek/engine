@@ -8,13 +8,14 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
 // engineRepo is where the caller's commit must be, for another host to
 // install it.
-const engineRepo = "dinoderek/engine"
+const engineRepo = harness.PluginRepo
 
 // configFile is a file of ~/.config/engine that setup copies or writes.
 type configFile struct{ name, content string }
@@ -54,17 +55,32 @@ func (r *runner) resolveWanted() (wanted, error) {
 	if w.files, err = r.configFiles(); err != nil {
 		return wanted{}, err
 	}
-	local := target{name: "this host", exec: r.d.Exec}
-	res, err := local.sh("claude plugin list --json", "")
+	version, err := r.callerPlugin()
 	if err != nil {
 		return wanted{}, err
 	}
-	version, found := userPlugin(res.out)
-	if !found {
-		return wanted{}, refuse("the %s plugin is not installed for the user on this host, so there is no version to bring %s to", pluginID, r.t.name)
+	if version == "" {
+		return wanted{}, refuse("engine's plugin is not installed for the user on this host, so there is no version to bring %s to", r.t.name)
 	}
 	w.plugin = version
 	return w, nil
+}
+
+// callerPlugin is the version of engine's plugin installed for the user on
+// this host: the first harness, in the registry's order, that has one.
+func (r *runner) callerPlugin() (string, error) {
+	if r.d.Harnesses == nil {
+		return "", nil
+	}
+	local := target{name: "this host", exec: r.d.Exec}
+	for _, name := range r.d.Harnesses.Names() {
+		a, _ := r.d.Harnesses.Get(name)
+		version, found, err := a.Setup().Plugin(local)
+		if err != nil || found {
+			return version, err
+		}
+	}
+	return "", nil
 }
 
 // configFiles are the files a host gets: hosts.toml, copied,
@@ -87,25 +103,25 @@ func (r *runner) configFiles() ([]configFile, error) {
 
 // copyConfig writes the files the host lacks or has different, each with mode
 // 600, and leaves the rest alone.
-func (r *runner) copyConfig() (outcome, error) {
+func (r *runner) copyConfig() (harness.Outcome, error) {
 	var wrote []string
 	for _, f := range r.want.files {
 		did, res, err := r.syncFile(f)
 		if err != nil {
-			return outcome{}, err
+			return harness.Outcome{}, err
 		}
-		if res.code != 0 {
+		if res.Code != 0 {
 			path := filepath.Join(hosts.ConfigDir(r.d.Home), f.name)
-			return open("write "+f.name+" failed: "+res.why(), "ssh "+r.t.address+" 'mkdir -p ~/.config/engine' && scp -p "+path+" "+r.t.address+":.config/engine/"+f.name), nil
+			return harness.Open("write "+f.name+" failed: "+res.Why(), "ssh "+r.t.address+" 'mkdir -p ~/.config/engine' && scp -p "+path+" "+r.t.address+":.config/engine/"+f.name), nil
 		}
 		if did {
 			wrote = append(wrote, f.name)
 		}
 	}
 	if len(wrote) == 0 {
-		return passed(""), nil
+		return harness.Passed(""), nil
 	}
-	return changed("wrote " + strings.Join(wrote, ", ")), nil
+	return harness.Changed("wrote " + strings.Join(wrote, ", ")), nil
 }
 
 // configDir is the host's config directory, as its shell writes it.
@@ -113,23 +129,23 @@ const configDir = `"$HOME/.config/engine"`
 
 // syncFile makes the file on the host equal to f with mode 600, and reports
 // whether it had to write. The result is the failed write, when it failed.
-func (r *runner) syncFile(f configFile) (bool, result, error) {
+func (r *runner) syncFile(f configFile) (bool, harness.Result, error) {
 	path := configDir + "/" + f.name
-	same, err := r.t.sh("cmp -s - "+path, f.content)
+	same, err := r.t.Sh("cmp -s - "+path, f.content)
 	if err != nil {
-		return false, result{}, err
+		return false, harness.Result{}, err
 	}
-	if same.code == 0 {
-		perm, err := r.t.sh("find "+path+" -maxdepth 0 -perm 600", "")
-		if err != nil || strings.TrimSpace(perm.out) != "" {
-			return false, result{}, err
+	if same.Code == 0 {
+		perm, err := r.t.Sh("find "+path+" -maxdepth 0 -perm 600", "")
+		if err != nil || strings.TrimSpace(perm.Out) != "" {
+			return false, harness.Result{}, err
 		}
-		res, err := r.t.sh("chmod 600 "+path, "")
-		return err == nil && res.code == 0, res, err
+		res, err := r.t.Sh("chmod 600 "+path, "")
+		return err == nil && res.Code == 0, res, err
 	}
 	tmp := path + ".tmp"
-	res, err := r.t.sh("umask 077 && mkdir -p "+configDir+" && cat > "+tmp+" && chmod 600 "+tmp+" && mv "+tmp+" "+path, f.content)
-	return err == nil && res.code == 0, res, err
+	res, err := r.t.Sh("umask 077 && mkdir -p "+configDir+" && cat > "+tmp+" && chmod 600 "+tmp+" && mv "+tmp+" "+path, f.content)
+	return err == nil && res.Code == 0, res, err
 }
 
 var (

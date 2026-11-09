@@ -25,6 +25,12 @@ type Fake struct {
 	TrustErr, ReleaseErr error
 	// Hooked is HookedState's answer.
 	Hooked bool
+	// SetupTools, PluginVersion and Failed are Tools', Plugin's and
+	// CheckFailed's answers; Steps are the setup steps.
+	SetupTools    []string
+	PluginVersion string
+	Failed        [2]string
+	Steps         []FakeStep
 
 	mu    sync.Mutex
 	calls []string
@@ -53,6 +59,8 @@ func (f *Fake) Observe(_ context.Context, _ hosts.Host, runs map[string]session.
 	f.mu.Unlock()
 	return f.Snapshot
 }
+
+func (f *Fake) Setup() harness.Setup { return fakeSetup{f} }
 
 func (f *Fake) CheckKickoff(marker string) string { return "fake check " + marker }
 
@@ -83,5 +91,38 @@ func (l fakeLauncher) Env(bool) string { return "export FAKE_HOME=/fake && " }
 func (l fakeLauncher) Args(s harness.Launch) string {
 	return " fake-args -- " + hosts.ShellWord(s.Kickoff)
 }
+
+// FakeStep is a setup step that records "setup <name>" and ends as Outcome,
+// or as Run says when set.
+type FakeStep struct {
+	Name    string
+	Outcome harness.Outcome
+	Acts    bool
+	Run     func(t harness.Target) (harness.Outcome, error)
+}
+
+type fakeSetup struct{ f *Fake }
+
+func (s fakeSetup) Tools() []string { return s.f.SetupTools }
+
+func (s fakeSetup) Plugin(harness.Shell) (string, bool, error) {
+	return s.f.PluginVersion, s.f.PluginVersion != "", nil
+}
+
+func (s fakeSetup) Steps(t harness.Target) []harness.Step {
+	var steps []harness.Step
+	for _, fs := range s.f.Steps {
+		steps = append(steps, harness.Step{Name: fs.Name, Acts: fs.Acts, Run: func() (harness.Outcome, error) {
+			s.f.record("setup", fs.Name)
+			if fs.Run != nil {
+				return fs.Run(t)
+			}
+			return fs.Outcome, nil
+		}})
+	}
+	return steps
+}
+
+func (s fakeSetup) CheckFailed(harness.Target) (string, string) { return s.f.Failed[0], s.f.Failed[1] }
 
 var _ harness.Adapter = (*Fake)(nil)

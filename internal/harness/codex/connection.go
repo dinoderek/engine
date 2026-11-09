@@ -1,4 +1,4 @@
-package hosts
+package codex
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 // CodexLogs is the log database in a Codex home. Its daemon logs every change
 // of its remote-control connection there, the only record of whether the
 // ChatGPT and Codex apps can see it.
-const CodexLogs = "logs_2.sqlite"
+const logsDB = "logs_2.sqlite"
 
 // codexRemoteTarget is the log target of the daemon's remote-control
 // connection to the apps.
@@ -30,7 +30,7 @@ const codexStartSlack = 30
 // time between reading the elapsed time and running the query, which may be
 // separate round trips over SSH; an earlier process with the same pid inside
 // that slack is the only record it could wrongly take.
-func CodexRemoteSQL(pid, elapsed int) string {
+func RemoteSQL(pid, elapsed int) string {
 	return fmt.Sprintf("select feedback_log_body as body from logs where target = '%s' and process_uuid like 'pid:%d:%%' "+
 		"and ts >= cast(strftime('%%s','now') as integer) - %d order by ts desc, ts_nanos desc, id desc limit 1;",
 		codexRemoteTarget, pid, elapsed+codexStartSlack)
@@ -40,7 +40,7 @@ func CodexRemoteSQL(pid, elapsed int) string {
 // empty when the daemon's newest record is a connection, else why the daemon
 // is not connected. No record means it never connected since it started. A
 // reply that cannot be read is unknown, not a disconnection.
-func CodexDisconnected(out string) (why string, known bool) {
+func disconnectedWhy(out string) (why string, known bool) {
 	if strings.TrimSpace(out) == "" {
 		return "no connection logged since the daemon started", true
 	}
@@ -66,7 +66,7 @@ func CodexDisconnected(out string) (why string, known bool) {
 // ParseElapsed reads the elapsed time ps prints for etime, [[dd-]hh:]mm:ss,
 // as seconds. It does not depend on the host's locale or time zone, as a
 // start time would.
-func ParseElapsed(s string) (int, error) {
+func parseElapsed(s string) (int, error) {
 	s = strings.TrimSpace(s)
 	days := 0
 	if d, rest, ok := strings.Cut(s, "-"); ok {

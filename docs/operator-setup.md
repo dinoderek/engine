@@ -66,6 +66,9 @@ engine's own Codex home; Go's own cache holds the toolchain download. For anythi
 command, and it exits 1 while any item is open. It refuses a build that is
 dirty or not on GitHub, and a name that is not a machine in `hosts.toml`.
 With no `--host` it checks this host, apart from the Codex steps, which act.
+A host gets only the steps of the harnesses it lists: the host's own steps
+first, then each harness's, then gh's sign-in and the preflight, which checks
+every harness the host lists, the default first.
 
 **Codex, on a host that lists it.** The Mac too. Setup checks that the pinned Codex runs and is signed in, then builds engine's own
 Codex home (`codex.md`, "Setup"), and never edits `~/.codex`. Starting engine's
@@ -119,8 +122,8 @@ then run `engine setup --host devbox`.
    `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
    prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
    "Names and addresses"), which goes in `hosts.toml` on the Mac.
-4. **Install the tools** `go`, `tmux`, `gh`, `git` and `claude` on the devbox,
-   and `sqlite3` if it runs Codex.
+4. **Install the tools** `go`, `tmux`, `gh` and `git` on the devbox,
+   `claude` if it runs Claude, and `sqlite3` if it runs Codex.
    `engine setup` lists what is missing and prints the `PATH` line for
    `~/.bashrc`, and the `sudo systemctl mask` line that stops the devbox
    suspending. Sign in once over SSH: `ssh -t <address> claude /login`.

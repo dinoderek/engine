@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/registry"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/setup"
 	"github.com/dinoderek/engine/internal/start"
@@ -40,6 +42,7 @@ func runSetup(args []string, env Env) int {
 	}
 	d := setup.Deps{
 		Home: env.Home, Getenv: env.Getenv, Exec: exec, GH: env.Run, Info: env.Build,
+		Harnesses: registry.New(harness.Env{Exec: env.Local, Home: env.Home, Getenv: env.Getenv, Now: env.Now}),
 		Check: func(harness string, out io.Writer) (bool, error) {
 			return start.Check(startDeps(env), host, harness, out)
 		},

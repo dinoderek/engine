@@ -29,6 +29,7 @@ func Contract(t *testing.T, build New) {
 	t.Run("release", func(t *testing.T) { checkRelease(t, build) })
 	t.Run("observe unknown", func(t *testing.T) { checkObserve(t, build) })
 	t.Run("check kickoff", func(t *testing.T) { checkKickoff(t, build) })
+	t.Run("setup", func(t *testing.T) { checkSetup(t, build) })
 }
 
 func env(t *testing.T, exec session.Runner) harness.Env {

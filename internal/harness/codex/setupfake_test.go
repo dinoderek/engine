@@ -1,33 +1,94 @@
-package setup
+package codex
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+	"testing"
+
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/harnesstest"
+	"github.com/dinoderek/engine/internal/hosts"
 )
 
-// codexHostsTOML lists codex on both hosts, so setup runs the Codex steps.
-var codexHostsTOML = strings.NewReplacer(
-	`harnesses = ["claude"]`, `harnesses = ["claude", "codex"]`,
-	`bin = { claude = "~/bin/claude" }`, `bin = { claude = "~/bin/claude", codex = "~/.local/bin/codex" }`,
-	`[host.mac]`, "[harness.codex]\nmax_sessions = 2\nlaunch = \"{bin} -m {model}\"\n"+
-		"tiers.deep     = { model = \"sol\", effort = \"high\" }\n"+
-		"tiers.standard = { model = \"sol\", effort = \"medium\" }\n"+
-		"tiers.light    = { model = \"luna\", effort = \"medium\" }\n\n[host.mac]",
-).Replace(hostsTOML)
+const (
+	callerPlugin    = "0.7.1"
+	pluginIDForTest = "engine@engine"
+	secret          = "ghp_secret_token"
+)
+
+// box is a host's shell as the Codex steps reach it: it records every
+// command, and the ones that changed something.
+type box struct {
+	codex     *codexState
+	mutations []string
+	commands  []string
+}
+
+func (b *box) mutate(cmd string) { b.mutations = append(b.mutations, cmd) }
+
+// sh answers one command line, as setup's target would.
+func (b *box) sh(cmd, stdin string) (harness.Result, error) {
+	b.commands = append(b.commands, cmd)
+	var out, errOut strings.Builder
+	code, ok := b.codex.answer(b, cmd, stdin, &out, &errOut)
+	if !ok {
+		return harness.Result{ErrOut: fmt.Sprintf("box: unexpected command %q", cmd), Code: 99}, nil
+	}
+	return harness.Result{Out: out.String(), ErrOut: errOut.String(), Code: code}, nil
+}
+
+// rig runs the Codex steps on a box, numbered as a setup of another host
+// that also runs Claude numbers them: the core's four steps and Claude's two
+// come first.
+type rig struct {
+	box *box
+	tgt *harnesstest.Target
+	out strings.Builder
+}
+
+// newCodexRig is a rig on the devbox, whose Codex the case decides.
+func newCodexRig(t *testing.T, codex *codexState) *rig {
+	t.Helper()
+	b := &box{codex: codex}
+	return &rig{box: b, tgt: &harnesstest.Target{
+		Shell: b.sh, Address: "dev@box", Version: callerPlugin,
+		Entry:  hosts.Host{Name: "box", Harnesses: []string{"claude", Name}, Bin: map[string]string{Name: "~/.local/bin/codex"}},
+		Before: []string{"tools", "engine", "config", "no suspend", "plugin", "sign-in"},
+	}}
+}
+
+// local makes the rig this host checking itself, whose setup has no config
+// step and no caller's plugin version.
+func (r *rig) local() {
+	r.tgt.Address, r.tgt.Version = "", ""
+	r.tgt.Before = []string{"tools", "engine", "no suspend", "plugin", "sign-in"}
+}
+
+// mustRun runs the steps and reports whether every one closed.
+func mustRun(t *testing.T, r *rig) bool {
+	t.Helper()
+	report, err := harnesstest.RunSteps(New(harness.Env{}, Options{}), r.tgt)
+	if err != nil {
+		t.Fatalf("setup failed: %v\n%s", err, report)
+	}
+	r.out.Reset()
+	r.out.WriteString(report)
+	return !strings.Contains(report, ": OPEN")
+}
 
 // codexState is a host's Codex: the pinned binary, the operator's login, and
 // what is in engine's Codex home. Its commands are the ones setup runs.
 type codexState struct {
 	home, userHome string
-	bin            string // where the binary runs; "" is nowhere
-	onPath         string // what `command -v codex` finds when bin is absent
-	operatorDaemon bool   // the operator's own daemon runs
-	userPlugin     string // version of engine's plugin in the operator's home; "" is none
-	signedIn       bool   // the operator's Codex
-	userAuth       bool   // the operator's auth.json is a file
-	operatorRC     result // `codex remote-control --json` in the operator's home
+	bin            string         // where the binary runs; "" is nowhere
+	onPath         string         // what `command -v codex` finds when bin is absent
+	operatorDaemon bool           // the operator's own daemon runs
+	userPlugin     string         // version of engine's plugin in the operator's home; "" is none
+	signedIn       bool           // the operator's Codex
+	userAuth       bool           // the operator's auth.json is a file
+	operatorRC     harness.Result // `codex remote-control --json` in the operator's home
 
 	config     *string // engine's config.toml; nil is none
 	authLink   string  // "", "FILE", or the link's target
@@ -61,7 +122,7 @@ func (c *codexState) engineHome() string { return c.home + "/.local/share/engine
 // settledCodex is a host with Codex fully set up.
 func settledCodex(home string) *codexState {
 	c := &codexState{home: home, userHome: home + "/.codex", bin: home + "/.local/bin/codex", signedIn: true, userAuth: true,
-		operatorRC: result{out: `{"status":"connected"}`}, plugin: callerPlugin, userPlugin: callerPlugin, operatorDaemon: true, daemonUp: true, rcOn: true}
+		operatorRC: harness.Result{Out: `{"status":"connected"}`}, plugin: callerPlugin, userPlugin: callerPlugin, operatorDaemon: true, daemonUp: true, rcOn: true}
 	c.instance = "123 Mon Nov 2 12:00:00 2026"
 	c.etime, c.log = "01:02:03", `[{"body":"connected to app-server remote control websocket server_name=box"}]`
 	c.environment = c.instance
@@ -143,7 +204,7 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 			return say("on\n")
 		}
 		return say("off\n")
-	case strings.HasPrefix(cmd, "unset "+sessionVars+" && "):
+	case strings.HasPrefix(cmd, "unset "+daemonDrops+" && "):
 		return c.start(b, cmd, errOut)
 	}
 	if args, found := strings.CutPrefix(cmd, "CODEX_HOME="+eh+" "+c.bin+" "); found {
@@ -196,9 +257,9 @@ func (c *codexState) operator(args string, out, errOut io.Writer) (int, bool) {
 		fmt.Fprintln(out, `{"status":"running"}`)
 		return 0, true
 	case "remote-control --json":
-		fmt.Fprint(out, c.operatorRC.out)
-		fmt.Fprint(errOut, c.operatorRC.errOut)
-		return c.operatorRC.code, true
+		fmt.Fprint(out, c.operatorRC.Out)
+		fmt.Fprint(errOut, c.operatorRC.ErrOut)
+		return c.operatorRC.Code, true
 	}
 	return 0, false
 }

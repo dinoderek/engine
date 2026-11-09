@@ -2,13 +2,13 @@ package setup
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/remote"
 )
 
@@ -28,9 +28,8 @@ func TestSetupBringsAStaleHostToTheCallersBuild(t *testing.T) {
 	}
 	out := r.out.String()
 	for _, want := range []string{
-		"1. tools: ok", "2. engine: changed (2a08a0c go1.27.3, was d8c1744 go1.27.2)", "3. plugin: changed (0.7.1, was 0.2.0)",
-		"4. config: changed (wrote host, hosts.toml)", "5. sign-in: ok (claude.ai)",
-		"6. no suspend: ok (masked)", "8. preflight: ok", "the check report", "box is set up",
+		"1. tools: ok", "2. engine: changed (2a08a0c go1.27.3, was d8c1744 go1.27.2)", "3. config: changed (wrote host, hosts.toml)",
+		"4. no suspend: ok (masked)", "5. plugin: ok", "6. sign-in: ok", "7. gh auth: ok", "8. preflight: ok", "the check report", "box is set up",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -99,22 +98,16 @@ func TestEachStepFailsOpenWithItsCommand(t *testing.T) {
 			"the engine on the PATH is d8c1744", "~/.bashrc.new"},
 		{"no engine at all and none installed", "2. engine: OPEN", func(r *rig) { r.box.rev, r.box.installTo = "", "-dirty" },
 			"not the one installed", "~/.bashrc.new"},
-		{"plugin update fails", "3. plugin: OPEN", func(r *rig) { r.box.plugin, r.box.pluginFail = "0.2.0", true },
-			"claude plugin marketplace update engine failed: plugin: marketplace unreachable", "ssh dev@box 'claude plugin marketplace update engine'"},
-		{"marketplace is older than the caller", "3. plugin: OPEN", func(r *rig) { r.box.plugin, r.box.pluginStuck = "0.2.0", "0.6.0" },
-			"the plugin is 0.6.0 there and 0.7.1 here", "claude plugin update engine@engine --scope user"},
-		{"write fails", "4. config: OPEN", func(r *rig) { r.box.writeFail, r.box.files = true, map[string]string{} },
+		{"write fails", "3. config: OPEN", func(r *rig) { r.box.writeFail, r.box.files = true, map[string]string{} },
 			"write host failed: cat: No space left on device", "ssh dev@box 'mkdir -p ~/.config/engine' && scp -p "},
-		{"signed in with an API key", "5. sign-in: OPEN", func(r *rig) { r.box.auth = `{"loggedIn":true,"authMethod":"api_key"}` },
-			"not signed in with claude.ai", "ssh -t dev@box 'claude /login'"},
-		{"signed out", "5. sign-in: OPEN", func(r *rig) { r.box.auth = "Not logged in" },
-			"not signed in with claude.ai", "ssh -t dev@box 'claude /login'"},
-		{"sleep not masked", "6. no suspend: OPEN", func(r *rig) { r.box.masked = 3 },
+		{"an adapter's step is open", "6. sign-in: OPEN", func(r *rig) { r.claude.Steps[1].Outcome = harness.Open("signed out", "sign in") },
+			"signed out", "6. sign-in: sign in"},
+		{"sleep not masked", "4. no suspend: OPEN", func(r *rig) { r.box.masked = 3 },
 			"the host can suspend", "ssh -t dev@box 'sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target'"},
-		{"no systemd", "6. no suspend: OPEN", func(r *rig) { r.box.noSystemd = true },
+		{"no systemd", "4. no suspend: OPEN", func(r *rig) { r.box.noSystemd = true },
 			"the host can suspend", "sudo systemctl mask"},
 		{"the check finds a prompt", "8. preflight: OPEN", func(r *rig) { r.check = func() (bool, error) { return false, nil } },
-			"an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'"},
+			"a claude session would stop", "8. preflight: fix claude"},
 		{"the check cannot run", "8. preflight: OPEN", func(r *rig) { r.check = func() (bool, error) { return false, errors.New("no protocol") } },
 			"no protocol", "engine setup --host box"},
 	}
@@ -147,39 +140,32 @@ func TestMissingToolsBlockTheStepsThatNeedThem(t *testing.T) {
 	r.box.missing = []string{"go", "claude"}
 	mustRun(t, r, "box")
 	out := r.out.String()
-	for _, want := range []string{"2. engine: OPEN (go is missing (step 1))", "3. plugin: OPEN (claude is missing", "5. sign-in: OPEN (claude is missing"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("lacks %q:\n%s", want, out)
-		}
+	if want := "2. engine: OPEN (go is missing (step 1))"; !strings.Contains(out, want) {
+		t.Errorf("lacks %q:\n%s", want, out)
 	}
 	for _, m := range r.box.mutations {
-		if strings.Contains(m, "go install") || strings.Contains(m, "claude plugin") {
+		if strings.Contains(m, "go install") {
 			t.Errorf("ran %q without its tool", m)
 		}
 	}
 }
 
-func TestPluginWithoutMarketplaceIsAddedThenInstalled(t *testing.T) {
+// The tools step asks for the core's tools and those of each harness the
+// host lists, and tells the adapters what it did not find.
+func TestTheToolsAreTheCoresAndTheHarnesses(t *testing.T) {
 	r := newRig(t)
-	r.box = settledBox(r.home)
-	r.box.plugin, r.box.marketplace = "", false
-	if !mustRun(t, r, "box") {
-		t.Fatalf("open:\n%s", r.out.String())
+	r.box.missing = []string{"claude"}
+	var saw bool
+	r.claude.Steps[0].Run = func(t harness.Target) (harness.Outcome, error) {
+		saw = t.Missing("claude") && !t.Missing("go")
+		return harness.Passed(""), nil
 	}
-	want := []string{"claude plugin marketplace add dinoderek/engine", "claude plugin install engine@engine --scope user"}
-	if fmt.Sprint(r.box.mutations) != fmt.Sprint(want) {
-		t.Errorf("changes %q, want %q", r.box.mutations, want)
-	}
-}
-
-func TestPluginWithMarketplaceIsRefreshedThenUpdated(t *testing.T) {
-	r := newRig(t)
-	r.box = settledBox(r.home)
-	r.box.plugin = "0.2.0"
 	mustRun(t, r, "box")
-	want := []string{"claude plugin marketplace update engine", "claude plugin update engine@engine --scope user"}
-	if fmt.Sprint(r.box.mutations) != fmt.Sprint(want) {
-		t.Errorf("changes %q, want %q", r.box.mutations, want)
+	if !strings.HasPrefix(r.box.commands[0], "for t in go tmux gh git claude; do") {
+		t.Errorf("tools command %q", r.box.commands[0])
+	}
+	if !saw {
+		t.Error("the adapter did not see claude missing")
 	}
 }
 
@@ -235,7 +221,7 @@ func TestRefusalsChangeNothing(t *testing.T) {
 		{"a different commit back", "box", func(r *rig) {
 			r.gh = func(string, []string, string, ...string) (string, error) { return "deadbeef", nil }
 		}, "is not on GitHub (dinoderek/engine); push it"},
-		{"no plugin here", "box", func(r *rig) { r.local.plugin = "" }, "plugin is not installed for the user on this host"},
+		{"no plugin here", "box", func(r *rig) { r.claude.PluginVersion = "" }, "plugin is not installed for the user on this host"},
 		{"no host config", "box", func(r *rig) {
 			_ = os.Remove(filepath.Join(r.home, ".config", "engine", "hosts.toml"))
 		}, "read host config"},
@@ -288,12 +274,12 @@ func TestLocalModeOnlyChecks(t *testing.T) {
 			t.Errorf("host %q reached out or changed: %q %q", host, r.ssh, r.local.mutations)
 		}
 		out := r.out.String()
-		for _, want := range []string{"1. tools: ok", "2. engine: ok", "3. plugin: ok (0.7.1)", "5. sign-in: ok", "6. no suspend: ok (not Linux)", "8. preflight: ok"} {
+		for _, want := range []string{"1. tools: ok", "2. engine: ok", "3. no suspend: ok (not Linux)", "4. plugin: ok", "5. sign-in: ok", "7. preflight: ok"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("host %q lacks %q:\n%s", host, want, out)
 			}
 		}
-		if strings.Contains(out, "4. config") {
+		if strings.Contains(out, ". config:") {
 			t.Errorf("a local check copies config:\n%s", out)
 		}
 		if _, err := os.Stat(filepath.Join(r.home, ".config", "engine", "hosts.toml")); err != nil {
@@ -314,9 +300,7 @@ func TestLocalModeNeedsNoPushedBuild(t *testing.T) {
 func TestLocalModeOpenItems(t *testing.T) {
 	r := newRig(t)
 	r.local.missing = []string{"gh"}
-	r.local.plugin = ""
 	r.local.rev = ""
-	r.local.auth = "Not logged in"
 	r.check = func() (bool, error) { t.Error("the check ran with items open"); return true, nil }
 	if mustRun(t, r, "") {
 		t.Fatal("closed")
@@ -325,8 +309,7 @@ func TestLocalModeOpenItems(t *testing.T) {
 	for _, want := range []string{
 		"1. tools: OPEN (missing: gh", "~/.zshenv.new",
 		"2. engine: OPEN (engine is not on the PATH)",
-		"3. plugin: OPEN", "claude plugin marketplace add dinoderek/engine && claude plugin install engine@engine --scope user",
-		"5. sign-in: OPEN", ": claude /login", "7. gh auth: OPEN (gh is missing (step 1))", "6 open item(s); run each command, then rerun engine setup:",
+		"6. gh auth: OPEN (gh is missing (step 1))", "4 open item(s); run each command, then rerun engine setup:",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)

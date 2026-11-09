@@ -23,7 +23,7 @@ internal/hostops	only	internal/harness,internal/hosts,internal/session,internal/
 internal/remote	only	internal/hostops,internal/session
 internal/start	only	internal/harness,internal/harness/registry,internal/hostops,internal/hosts,internal/remote,internal/session
 internal/lint	only	internal/control
-internal/setup	only	internal/hosts,internal/remote,internal/session,internal/version
+internal/setup	only	internal/harness,internal/hosts,internal/remote,internal/session,internal/version
 internal/control	only	-
 internal/reconcile	only	internal/control,internal/hostops
 internal/controlrun	only	internal/control,internal/hostops,internal/hosts,internal/lint,internal/reconcile,internal/remote,internal/session

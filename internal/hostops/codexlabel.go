@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -161,8 +160,12 @@ func sendCodexLabel(d Deps, req CodexLabelRequest) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), codexLabelTimeout)
 	defer cancel()
-	return send(ctx, bin, filepath.Join(d.Home, filepath.FromSlash(hosts.CodexHomeDir)), req)
+	return send(ctx, bin, filepath.Join(d.Home, filepath.FromSlash(engineCodexHome)), req)
 }
+
+// engineCodexHome is engine's own Codex home under the home, where the
+// daemon that labels a thread runs.
+const engineCodexHome = ".local/share/engine/codex"
 
 // labelCodexThread sets the title first, since thread/name/set is stable and
 // the project calls are experimental.

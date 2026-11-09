@@ -1,7 +1,6 @@
 package setup
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/harnesstest"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/version"
 )
@@ -47,6 +48,16 @@ capabilities = ["linux"]
 bin = { claude = "~/bin/claude" }
 `
 
+// codexHostsTOML lists codex on both hosts, so setup runs the Codex steps.
+var codexHostsTOML = strings.NewReplacer(
+	`harnesses = ["claude"]`, `harnesses = ["claude", "codex"]`,
+	`bin = { claude = "~/bin/claude" }`, `bin = { claude = "~/bin/claude", codex = "~/.local/bin/codex" }`,
+	`[host.mac]`, "[harness.codex]\nmax_sessions = 2\nlaunch = \"{bin} -m {model}\"\n"+
+		"tiers.deep     = { model = \"sol\", effort = \"high\" }\n"+
+		"tiers.standard = { model = \"sol\", effort = \"medium\" }\n"+
+		"tiers.light    = { model = \"luna\", effort = \"medium\" }\n\n[host.mac]",
+).Replace(hostsTOML)
+
 // callerHome is the Mac's home: host config, host file and token.
 func callerHome(t *testing.T) string { return callerHomeWith(t, hostsTOML) }
 
@@ -74,40 +85,33 @@ type box struct {
 	goVer       string   // Go that built it; "" is go1.27.2
 	installTo   string   // what go install leaves on the PATH; "" is the commit asked for
 	installFail bool
-	marketplace bool
-	plugin      string // version of the user's plugin; "" is not installed
-	pluginFail  bool
-	pluginStuck string // what the plugin update leaves, when set
 	files       map[string]string
 	badMode     map[string]bool
 	writeFail   bool
-	auth        string // claude auth status output
 	gh          string // gh auth status output; "" is signed in with a token in gh's config file
 	ghCode      int    // gh auth status exit code
 	os          string
 	noSystemd   bool
 	masked      int // sleep targets masked
 	down        bool
-	codex       *codexState // nil is a host without Codex
 
 	mutations []string
 	commands  []string
 	stdin     []string
 }
 
-// staleBox is the devbox as it was: old engine and plugin, no config, signed
-// in, Linux with every sleep target masked.
+// staleBox is the devbox as it was: an old engine, no config, Linux with
+// every sleep target masked.
 func staleBox() *box {
 	return &box{
-		rev: "d8c1744", marketplace: true, plugin: "0.2.0", files: map[string]string{}, badMode: map[string]bool{},
-		auth: `{"loggedIn":true,"authMethod":"claude.ai"}`, os: "Linux", masked: 4,
+		rev: "d8c1744", files: map[string]string{}, badMode: map[string]bool{}, os: "Linux", masked: 4,
 	}
 }
 
 // settled is staleBox after a setup: nothing left to do.
 func settledBox(home string) *box {
 	b := staleBox()
-	b.rev, b.goVer, b.plugin = callerRev[:7], callerGo, callerPlugin
+	b.rev, b.goVer = callerRev[:7], callerGo
 	for _, name := range []string{"hosts.toml"} {
 		data, _ := os.ReadFile(filepath.Join(home, ".config", "engine", name))
 		b.files[name] = string(data)
@@ -118,28 +122,10 @@ func settledBox(home string) *box {
 
 func (b *box) mutate(cmd string) { b.mutations = append(b.mutations, cmd) }
 
-func pluginList(version string) string {
-	if version == "" {
-		return "[]"
-	}
-	data, _ := json.Marshal([]map[string]string{
-		{"id": pluginIDForTest, "version": "0.3.2", "scope": "project"},
-		{"id": pluginIDForTest, "version": version, "scope": "user"},
-	})
-	return string(data)
-}
-
-const pluginIDForTest = "engine@engine"
-
 // answer is the host's reply to one command line.
 func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 	b.commands = append(b.commands, cmd)
 	say := func(format string, args ...any) int { fmt.Fprintf(out, format, args...); return 0 }
-	if b.codex != nil {
-		if code, ok := b.codex.answer(b, cmd, stdin, out, errOut); ok {
-			return code
-		}
-	}
 	switch {
 	case strings.HasPrefix(cmd, "for t in"):
 		return say("%s", strings.Join(b.missing, "\n"))
@@ -163,15 +149,6 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 		return say("engine v0.0.0 (%s, %s)\n", b.rev, goVer)
 	case strings.Contains(cmd, "go install"):
 		return b.goInstall(cmd, errOut)
-	case cmd == "claude plugin list --json":
-		return say("%s", pluginList(b.plugin))
-	case cmd == "claude plugin marketplace list --json":
-		if b.marketplace {
-			return say(`[{"name":"engine"}]`)
-		}
-		return say(`[{"name":"other"}]`)
-	case strings.HasPrefix(cmd, "claude plugin "):
-		return b.pluginCommand(cmd, errOut)
 	case strings.HasPrefix(cmd, "cmp -s - "):
 		return b.cmp(cmd, stdin)
 	case strings.HasPrefix(cmd, "find "):
@@ -182,8 +159,6 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 		return 0
 	case strings.HasPrefix(cmd, "umask 077"):
 		return b.write(cmd, stdin, errOut)
-	case cmd == "claude auth status":
-		return say("%s", b.auth)
 	case cmd == "gh auth status -h github.com":
 		return b.ghStatus(out, errOut)
 	case strings.HasPrefix(cmd, "uname -s") && b.noSystemd:
@@ -238,24 +213,6 @@ func goToolchain(cmd string) string {
 	return "go1.27.2"
 }
 
-func (b *box) pluginCommand(cmd string, errOut io.Writer) int {
-	b.mutate(cmd)
-	if b.pluginFail {
-		fmt.Fprint(errOut, "plugin: marketplace unreachable")
-		return 1
-	}
-	switch {
-	case strings.Contains(cmd, "marketplace"):
-		b.marketplace = true
-	default:
-		b.plugin = callerPlugin
-		if b.pluginStuck != "" {
-			b.plugin = b.pluginStuck
-		}
-	}
-	return 0
-}
-
 // fileOf is the name of the config file a command names.
 func fileOf(cmd string) string {
 	for _, name := range []string{"hosts.toml", "host"} {
@@ -295,27 +252,42 @@ func (b *box) write(cmd, stdin string, errOut io.Writer) int {
 
 // rig is a setup run against a box, with the Mac's own answers.
 type rig struct {
-	home    string
-	box     *box
-	local   *box // the Mac, which answers sh
-	ssh     []string
-	sh      []string
-	out     strings.Builder
-	checked []string
-	check   func() (bool, error)
-	// checkCodex is the check of the codex harness.
+	home  string
+	box   *box
+	local *box // the Mac, which answers sh
+	ssh   []string
+	sh    []string
+	out   strings.Builder
+	// checked are the harnesses checked, in order; check answers the
+	// default's check and checkCodex the codex harness's.
+	checked    []string
+	check      func() (bool, error)
 	checkCodex func() (bool, error)
 	gh         session.RunFunc
 	info       version.Info
 	goMod      string // go.mod at the caller's commit, as GitHub serves it
+	// claude and codex are the fake adapters, in the registry's order.
+	claude, codex *harnesstest.Fake
+}
+
+// fakeAdapter is an adapter called name whose setup steps all pass, and
+// whose failed check is open with its own fix.
+func fakeAdapter(name string, steps ...string) *harnesstest.Fake {
+	f := &harnesstest.Fake{Called: name, Failed: [2]string{"a " + name + " session would stop", "fix " + name}}
+	for _, s := range steps {
+		f.Steps = append(f.Steps, harnesstest.FakeStep{Name: s, Outcome: harness.Passed("")})
+	}
+	return f
 }
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
 	r := &rig{home: callerHome(t), box: staleBox(), info: version.Info{Revision: callerRev},
 		goMod: "module github.com/dinoderek/engine\n\ngo 1.27.0\n\ntoolchain " + callerGo + "\n"}
-	r.local = &box{plugin: callerPlugin, files: map[string]string{}, badMode: map[string]bool{},
-		auth: `{"loggedIn":true,"authMethod":"claude.ai"}`, os: "Darwin", rev: "2a08a0c"}
+	r.local = &box{files: map[string]string{}, badMode: map[string]bool{}, os: "Darwin", rev: "2a08a0c"}
+	r.claude = fakeAdapter("claude", "plugin", "sign-in")
+	r.claude.SetupTools, r.claude.PluginVersion = []string{"claude"}, callerPlugin
+	r.codex = fakeAdapter("codex", "codex", "codex sign-in", "codex home", "codex plugin", "codex daemon")
 	r.check = func() (bool, error) { return true, nil }
 	r.checkCodex = r.check
 	r.gh = func(_ string, env []string, name string, args ...string) (string, error) {
@@ -359,14 +331,13 @@ func (r *rig) deps() Deps {
 				return "/bin/zsh"
 			}
 			return ""
-		}, Exec: r.exec, GH: r.gh, Info: r.info,
-		Check: func(harness string, out io.Writer) (bool, error) {
+		}, Exec: r.exec, GH: r.gh, Info: r.info, Harnesses: harness.NewAdapters(r.claude, r.codex),
+		Check: func(name string, out io.Writer) (bool, error) {
 			fmt.Fprintln(out, "the check report")
-			if harness == "codex" {
-				r.checked = append(r.checked, "codex")
+			r.checked = append(r.checked, name)
+			if name == "codex" {
 				return r.checkCodex()
 			}
-			r.checked = append(r.checked, "checked")
 			return r.check()
 		},
 	}

@@ -12,7 +12,7 @@
 | `internal/reconcile/` | coordination decisions |
 | `internal/controlrun/` | server coordination and host observations |
 | `internal/controlcmd/` | server CLI and lifecycle |
-| `internal/hosts/` | host config: parsing, validation, slots, launch lines, Codex logs |
+| `internal/hosts/` | host config: parsing, validation, slots, launch lines |
 | `internal/hostops/` | `engine host <op> --json`: a host's own ops, and the preflight check |
 | `internal/remote/` | a host's ops client: `Local` in-process, `SSH` to another machine, with its tmux-over-SSH runner |
 | `internal/session/` | local clones, worktrees, tmux and run files |
