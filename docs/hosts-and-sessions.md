@@ -20,16 +20,14 @@ Every host is a machine and needs `address` and `ram_gb`; engine does not
 spawn cloud sessions.
 
 **Slots from memory.** `(ram_gb - reserve_gb) / gb_per_session`, rounded
-down, is how many sessions a machine runs at once; set the values at the top
-and override them per host. A host's `max_sessions` replaces the derived
-count. Only a live window with a run recorded under its name (an executor's or
+down, is a machine's concurrent sessions; set the values at the top and
+override them per host. `max_sessions` replaces the derived count. Only a live window with a run recorded under its name (an executor's or
 the planner's) takes a slot.
 
 **Heavy sessions.** A task is heavy when its card requires one of the
 top-level `heavy_capabilities`, such as a simulator or VM. A host's `max_heavy_sessions` caps them below its slots
 (a cap above the slots is refused); without it every slot may be heavy.
-`run.json` records whether a run is heavy, and `status` reports `heavy_slots`
-and `free_heavy_slots`.
+`status` reports `heavy_slots` and `free_heavy_slots`.
 
 **Capabilities** are declared per host: `macos`, `linux`, `ios` (iOS builds
 and the Simulator), `vm` and `docker`. A card's `requires` names them; a new
@@ -50,11 +48,18 @@ reserve_gb = 16         # also the operator's workstation
 max_heavy_sessions = 2  # at most 2 of its 4 sessions heavy
 capabilities = ["macos", "ios", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
+
+[host.devbox]           # 3 slots
+address = "<user>@<tailscale name>"
+harnesses = ["claude", "codex"]
+ram_gb = 32
+capabilities = ["linux", "vm", "docker"]
+bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 ```
 
-Each harness's launch line and tier models are in `claude.md` and
-`codex.md`. Each host pins every harness binary (`bin`); `{bin}` in the launch
-line expands to it, and engine never runs whichever comes first on `PATH`.
+Launch lines and tier models are in `claude.md` and `codex.md`. Each host
+pins every harness binary (`bin`), which `{bin}` in the launch line expands
+to; engine never uses whichever comes first on `PATH`.
 
 ## Placement
 
@@ -84,17 +89,16 @@ session, with its host, harness, run ID, tmux window, state and timestamps
 (`engine attempt list [<task-id>]`). `engine ps`, `engine attach` and the
 dashboard resolve a session through its current attempt.
 
-Every surface names a session `<repo>-<task>`, such as `boga3-412`: the tmux
-window, the remote-control name and part of the branch. It holds letters,
-digits, `_`, `.` and `-`, and does not start with `-`.
+A session is named `<repo>-<task>`, such as `boga3-412`, on every surface: the
+tmux window, the remote-control name and part of the branch. It holds letters,
+digits, `_`, `.` and `-`, and never starts with `-`.
 
 ## Starting a session
 
 The coordinator dispatches a session on the host placement picks
-(`coordinator.md`, "Dispatch and recovery"). It decides the model, effort and
-kickoff from the task's tier, then has the host run `control-spawn`
-(`coordinator.md`, "Reaching hosts"): it syncs engine's clone, then runs the
-steps below. Spawn refuses when the host file, `hosts.toml` or this host's entry is
+(`coordinator.md`). It decides the model, effort and kickoff from the task's
+tier, then has the host run `control-spawn`: it syncs engine's clone, then runs
+the steps below. Spawn refuses when the host file, `hosts.toml` or this host's entry is
 missing, the harness is unknown, not run on the host or not executable, or
 the window exists. Slots, capabilities and the harness cap are placement's
 alone. A host on another protocol fails, naming `engine setup --host <name>`
@@ -129,15 +133,15 @@ The host:
 **Preflight:** `engine start --check [--harness <name>] [--host <name>]`
 (Claude without `--harness`) runs `gh auth status` in the `engine` tmux server
 (`operator-setup.md`, "GitHub access"), then a hands-off light-tier session,
-`engine-check`, reads the skill and a file it wrote in `/tmp`, runs `gh` and
-`engine`, and closes its window. It exits 1, printing what it met, when gh
-failed or the session was denied, stalled or skipped a step.
+`engine-check`, reads the skill, writes and reads a file in `/tmp`, runs `gh`
+and `engine`, and closes. It exits 1, printing what it met, when gh failed or
+the session was denied, stalled or skipped a step.
 
 ## Seeing and reaching sessions
 
 | Where | How |
 | --- | --- |
-| Browser | The dashboard (`engine ui`, `control-server.md`), on loopback: on the host running it or through a tunnel. Its session view adds each attempt's host and observed state. |
+| Browser | The dashboard (`engine ui`, `control-server.md`), on loopback: on its host or through a tunnel. Its session view adds each attempt's host and observed state. |
 | Terminal | `engine ps [--json]` lists every task with its state and attempt. `engine attach <task-id>` runs `tmux attach` on its host, locally or over `ssh -t <address>`. |
 | Phone | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
 | Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT and Codex apps, when the session joined engine's remote-control daemon. For setup, load `claude.md` or `codex.md`, "Apps". |
@@ -149,8 +153,8 @@ session and its windows, and never edits `~/.tmux.conf` or global options. tmux 
 so engine targets windows by id (`@3`), not name. Windows stay after their
 command exits (`remain-on-exit`), so a dead session's last screen and exit
 stay readable. To type into a session, engine sends the text with `send-keys
--l`, then `Enter` as a separate call after a short delay: input boxes can
-swallow a newline that arrives with the text.
+-l`, then `Enter` after a short delay: input boxes can swallow a newline sent
+with the text.
 
 tmux survives a closed terminal, not a sleeping machine: a macOS host holds
 off sleep per window while on power; a Linux host should not suspend.
@@ -160,6 +164,6 @@ off sleep per window while on power; a Linux host should not suspend.
 - **Questions:** the executor asks with `engine ask`, which sets `needs-human`,
   and waits in the live session. Answer from any surface, the operator inbox
   included: the executor reads its updates when it resumes.
-- **End:** after cleanup an executor closes its own window.
+- **End:** after cleanup an executor closes its window.
 - **Crash:** the window died but the task is still `running`. The coordinator
   marks it `failed` or resumes it (`coordinator.md`), keeping the worktree.
