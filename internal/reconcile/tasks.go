@@ -96,32 +96,3 @@ func upstream(edges map[string][]string, from string) []string {
 	}
 	return out
 }
-
-// merges answers each task's pending merge request.
-func merges(v View) []Action {
-	var acts []Action
-	for _, t := range v.Tasks {
-		if a, ok := MergeStep(t); ok {
-			acts = append(acts, a)
-		}
-	}
-	return acts
-}
-
-// MergeStep is the Merge t's pending merge request calls for, if any. A
-// request waits while the task is at a hard stop or a failed merge waits
-// for the operator. One without the lock, or from a task not in-review,
-// is refused.
-func MergeStep(t Item) (Action, bool) {
-	if t.Merge == nil || t.State == "needs-human" || t.Question > 0 || t.MergeHeld {
-		return Action{}, false
-	}
-	a := Action{Kind: Merge, Item: t.ID, Attempt: t.Current.ID, Request: *t.Merge}
-	switch {
-	case !t.Locked:
-		a.Refuse = "The task does not hold the repository merge lock; take it, refresh the default branch, gate and request the merge again."
-	case t.State != "in-review":
-		a.Refuse = "The task is " + t.State + ", not in-review; set it in-review and request the merge again."
-	}
-	return a, true
-}

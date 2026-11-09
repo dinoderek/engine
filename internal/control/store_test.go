@@ -116,7 +116,7 @@ func TestStoreRefusesUnknownSchemaAndCorruption(t *testing.T) {
 	if _, err := Open(filepath.Join(t.TempDir(), "db"), func(context.Context, string, string) ([]byte, error) { return nil, errors.New("missing sqlite") }); err == nil {
 		t.Fatal("sqlite failure accepted")
 	}
-	for _, key := range []string{"unknown/x", "item/x", "attempt/x", "update/x", "auth/x", "receipt/x", "lock/x", "next"} {
+	for _, key := range []string{"unknown/x", "item/x", "attempt/x", "update/x", "auth/x", "receipt/x", "queue/x", "next"} {
 		st := emptyState()
 		if err := loadRecord(&st, key, []byte("invalid")); err == nil {
 			t.Fatalf("%s corruption accepted", key)

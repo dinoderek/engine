@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -139,7 +140,7 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 		}
 	}
 	out, err := SQLite(context.Background(), path, "PRAGMA user_version;")
-	if err != nil || !strings.Contains(string(out), `"user_version":2`) {
+	if err != nil || !strings.Contains(string(out), fmt.Sprintf(`"user_version":%d`, schemaVersion)) {
 		t.Fatalf("schema version: %s %v", out, err)
 	}
 }

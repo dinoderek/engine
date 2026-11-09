@@ -1,10 +1,10 @@
-> **Owns:** server deployment, records, API, credentials, the inbox, the dashboard and the session view. **Not here:** dispatch, recovery, merges and merge locks, host calls and session signals (`coordinator.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
+> **Owns:** server deployment, records, API, credentials, the inbox, the dashboard and the session view. **Not here:** dispatch, recovery, the merge queue, host calls and session signals (`coordinator.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
 
 # Control server
 
-`engine serve` owns plans, tasks, updates, execution attempts and merge locks,
-and runs the coordinator. GitHub supplies code, PRs and CI; task state and
-comms stay in the server. For dispatch, recovery, merges and locks, load
+`engine serve` owns plans, tasks, updates, execution attempts and merge queue
+entries, and runs the coordinator. GitHub supplies code, PRs and CI; task state and
+comms stay in the server. For dispatch, recovery and merges, load
 `coordinator.md`.
 
 ## Start
@@ -55,6 +55,7 @@ engine plan approve p2 --version 1
 engine run p2
 engine task list p2
 engine attempt list t3
+engine merge-queue r1
 ```
 
 Edits, approvals and workflow changes require the current `--version`. An
@@ -98,7 +99,7 @@ version is rejected.
 
 The operator credential is an owner-only regular file. Every dispatch creates
 a separate execution credential, scoped to that plan or task. Workers cannot
-approve, start coordination, read the operator inbox or recover locks.
+approve, start coordination or read the operator inbox.
 Ending an attempt revokes its credential. Credentials are hashed for lookup;
 dispatch receipts retain the token privately for interrupted dispatch recovery.
 

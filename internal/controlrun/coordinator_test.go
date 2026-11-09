@@ -202,28 +202,6 @@ func TestInterruptedBeforeDispatchReusesPersistedIdentity(t *testing.T) {
 	}
 }
 
-func TestDeadExecutionFailsAndKeepsItsMergeLock(t *testing.T) {
-	c, h, repo, _, task := setup(t)
-	pass(t, c)
-	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
-	current := st.Items[task.ID]
-	at := st.Attempts[current.Attempt]
-	_, err := c.Service.Execute(control.Actor{Name: "operator", Role: "operator"}, control.Request{Op: "lock-acquire", Attempt: at.ID, Key: "lock"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.status.Windows[0].Alive = false
-	if err = c.ConfirmEnded(at.ID); err != nil {
-		t.Fatal(err)
-	}
-	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
-	if st.Items[task.ID].State != "failed" || st.Attempts[at.ID].Reason != control.EndFailed || st.Locks[repo.ID].Attempt != at.ID {
-		t.Fatal("failure dropped ownership evidence")
-	}
-}
-
 func TestPlannerDispatchAndInvalidPlanBlock(t *testing.T) {
 	c, h, _, plan, task := setup(t)
 	if err := c.Service.Store.Transaction(func(st *control.State) error { delete(st.Items, task.ID); return nil }); err != nil {

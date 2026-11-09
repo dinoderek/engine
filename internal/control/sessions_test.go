@@ -130,7 +130,6 @@ func TestSessionViewResponseHoldsOnlyAllowlistedFields(t *testing.T) {
 	task := newTask(t, s, repo.ID, plan.ID)
 	approve(t, s, plan)
 	worker, claimed := dispatch(t, s, task)
-	lock := call(t, s, worker, Request{Op: "lock-acquire", Attempt: claimed.Attempt.ID}).Lock
 	call(t, s, worker, Request{Op: "ask", ID: task.ID, Body: "Question"})
 	s.Observe = func(string) Observation {
 		return Observation{State: "working", Seen: time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)}
@@ -139,7 +138,7 @@ func TestSessionViewResponseHoldsOnlyAllowlistedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{claimed.Credential, lock.Token, claimed.Attempt.RunID, "Agreed requirements", "## Outcome"} {
+	for _, secret := range []string{claimed.Credential, claimed.Attempt.RunID, "Agreed requirements", "## Outcome"} {
 		if strings.Contains(string(b), secret) {
 			t.Fatalf("session view exposed %q: %s", secret, b)
 		}

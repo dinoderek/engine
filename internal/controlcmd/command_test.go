@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -89,48 +88,6 @@ func TestCLIPlanTasksAndOperatorMessages(t *testing.T) {
 
 func itoa(n int) string { return fmt.Sprint(n) }
 
-func TestCLIWorkerLockAndGuard(t *testing.T) {
-	e, svc := environment(t)
-	repo := command(t, e, "repo", "add", "--title", "Demo", "--slug", "x/y", "--remote", "remote").Item
-	task := command(t, e, "task", "create", "--repo", repo.ID, "--title", "Standalone").Item
-	task = command(t, e, "task", "approve", task.ID, "--version", "1").Item
-	task = command(t, e, "run", task.ID).Item
-	at, err := svc.Dispatch(*task, "devbox", "claude", "dispatch")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	e.Getenv = func(k string) string {
-		switch k {
-		case "ENGINE_RUN_DIR":
-			return dir
-		case "ENGINE_ATTEMPT_ID":
-			return at.Attempt.ID
-		}
-		return ""
-	}
-	e.Client.Token = at.Credential
-	lock := command(t, e, "lock", "acquire").Lock
-	command(t, e, "lock", "check")
-	command(t, e, "lock", "release")
-	if code := Main([]string{"lock", "check"}, e); code != 1 {
-		t.Fatal("check accepted a released lock")
-	}
-	if err = os.WriteFile(filepath.Join(dir, "merge-lock.json"), []byte("invalid"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = Parse([]string{"lock", "check"}, e); err == nil {
-		t.Fatal("check read a corrupt lock")
-	}
-	path := filepath.Join(t.TempDir(), "lock-token")
-	if err = os.WriteFile(path, []byte(lock.Token), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = Parse([]string{"lock", "check", "--lock-token-file", path}, e); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestCLIMergeReadyRequestsTheCoordinatorsMerge(t *testing.T) {
 	e, svc := environment(t)
 	repo := command(t, e, "repo", "add", "--title", "Demo", "--slug", "x/y", "--remote", "remote").Item
@@ -150,21 +107,21 @@ func TestCLIMergeReadyRequestsTheCoordinatorsMerge(t *testing.T) {
 	pr := fmt.Sprintf("https://github.com/x/y/pull/%d", 7)
 	command(t, e, "task", "state", task.ID, "--version", itoa(at.Item.Version), "--state", "in-review", "--pr", pr)
 	args := []string{"task", "merge-ready", task.ID, "--pr", pr, "--head", head, "--method", "squash", "--verdict", "APPROVED"}
-	// Before any lock is taken, the server, not a missing lock file, says
-	// what the request and the check need.
-	for _, try := range []struct {
-		args []string
-		says string
-	}{{args, "take the repository merge lock"}, {[]string{"lock", "check"}, "merge lock ownership does not match"}} {
-		e.Err.(*bytes.Buffer).Reset()
-		if code := Main(try.args, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), try.says) {
-			t.Fatalf("%v without a lock: %d %s", try.args[:2], code, e.Err)
-		}
-	}
-	command(t, e, "lock", "acquire")
-	u := command(t, e, args...).Updates[0]
-	if u.Kind != "merge-request" || u.Merge == nil || *u.Merge != (control.MergeRequest{PR: pr, Head: head, Method: "squash", Verdict: "APPROVED"}) {
+	out := command(t, e, args...)
+	if u := out.Updates[0]; u.Kind != "merge-request" || u.Merge == nil || *u.Merge != (control.MergeRequest{PR: pr, Head: head, Method: "squash", Verdict: "APPROVED"}) {
 		t.Fatalf("update %+v", u)
+	}
+	queue := command(t, e, "merge-queue", repo.ID).Queue
+	if len(queue) != 1 || queue[0].Task != task.ID || queue[0].Head != head || queue[0].Phase != control.QueueWaiting {
+		t.Fatalf("merge-queue %+v", queue)
+	}
+	if shown := command(t, e, "task", "show", task.ID).Queue; len(shown) != 1 || shown[0].Seq != out.Updates[0].ID {
+		t.Fatalf("task show queue %+v", shown)
+	}
+	for _, removed := range [][]string{{"lock", "acquire"}, {"merge-queue"}} {
+		if _, err := Parse(removed, e); err == nil {
+			t.Fatalf("%v parsed", removed)
+		}
 	}
 	if code := Main(append(args[:len(args)-1], "CHANGES_REQUESTED"), e); code != 1 {
 		t.Fatal("an unapproved merge was requested")
@@ -190,7 +147,6 @@ func TestCLIParsingFilesAndFailures(t *testing.T) {
 		{"unknown"}, {"task"}, {"attempt", "bad"}, {"task", "bad"}, {"task", "show"},
 		{"reply", "bad", "text"}, {"reply"}, {"task", "show", "t1", "unexpected"},
 		{"task", "create", "--bad"}, {"task", "create", "--body-file", "/missing"},
-		{"lock", "check", "--lock-token-file", "/missing"},
 	} {
 		if _, err = Parse(args, e); err == nil {
 			t.Fatal(args)

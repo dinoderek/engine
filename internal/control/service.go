@@ -43,7 +43,7 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 		if err := authorizeExecution(st, a); err != nil {
 			return err
 		}
-		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "lock-check", "lock-show", "session-view"}, r.Op)
+		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view"}, r.Op)
 		if write && (r.Key == "" || len(r.Key) > 200) {
 			return problem(400, "a request key of 1–200 characters is required")
 		}
@@ -102,15 +102,27 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return s.reserve(st, a, r)
 	case "attempt-reconcile":
 		return s.endAttempt(st, a, r)
-	case "lock-acquire", "lock-release", "lock-check", "lock-recover", "lock-show":
-		return s.mergeLock(st, a, r)
 	case "merge-request":
 		return s.mergeRequest(st, a, r)
-	case "merge-outcome":
-		return s.mergeOutcome(st, a, r)
+	case "merge-queue":
+		return mergeQueue(st, a, r.ID)
 	default:
 		return Response{}, problem(400, "unknown operation %q", r.Op)
 	}
+}
+
+// get is one item, with its merge queue entry if it has one.
+func get(st *State, id string) (Response, error) {
+	item, ok := st.Items[id]
+	if !ok {
+		return Response{}, problem(404, "unknown item %s", id)
+	}
+	item = withStatus(st, item)
+	out := Response{Item: &item}
+	if e, queued := st.Queue[item.ID]; queued {
+		out.Queue = []QueueEntry{e}
+	}
+	return out, nil
 }
 
 func read(st *State, a Actor, r Request) (Response, error) {
@@ -118,12 +130,7 @@ func read(st *State, a Actor, r Request) (Response, error) {
 		return Response{}, problem(403, "item is outside this execution's read scope")
 	}
 	if r.Op == "get" {
-		item, ok := st.Items[r.ID]
-		if !ok {
-			return Response{}, problem(404, "unknown item %s", r.ID)
-		}
-		item = withStatus(st, item)
-		return Response{Item: &item}, nil
+		return get(st, r.ID)
 	}
 	out := Response{}
 	if r.Op == "attempts" {

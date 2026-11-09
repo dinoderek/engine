@@ -53,10 +53,7 @@ func record(st control.State, item control.Item) reconcile.Item {
 	}
 	if req, ok := control.PendingMerge(&st, item.ID); ok {
 		t.Merge = &req
-		_, t.MergeHeld = control.MergeFailures(&st, req.ID)
 	}
-	lock, ok := st.Locks[item.Repo]
-	t.Locked = ok && lock.Attempt == t.Current.ID
 	return t
 }
 
