@@ -69,7 +69,7 @@ repo's own merge and cleanup steps; the merge guard enforces it.
      merge guard refuses `gh pr merge` in a server session. Approval the repo
      or card requires is an `engine ask` before the request.
   5. **Wait by ending your turn**, never in a background job, polling loop
-     or `sleep`: the coordinator types its update into your window. Worked
+     or `sleep`: the coordinator types a pointer at its update into your window. Worked
      example: `engine task merge-ready t7 … --head 3f2c…` prints the
      request; you write "Merge requested for t7 at 3f2c…; waiting for the
      coordinator." and stop. Later, `Read the new task updates: engine

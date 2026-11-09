@@ -30,7 +30,7 @@ releases the ended one's session, once a read shows its window gone. A
 refused dispatch retries each pass, noticing once per attempt.
 
 The host serializes dispatches by run ID and returns an existing run on
-replay. It keeps isolated clones under
+replay. It uses the host's Git credentials, with isolated clones under
 `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin
 into an owner-only run file whose path the window command exports (joined
 Codex sessions receive it too); hooks recover their connection from the

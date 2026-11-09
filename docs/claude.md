@@ -79,7 +79,9 @@ session whose newest event is a `Stop`, from its own `sessionId` when both
 name one, is `working` with `background` set. A missing or unreadable file,
 or any other event, leaves it busy in a turn. A turn that a finished
 background job starts runs no hook until its first tool call; typing then
-is queued as the next prompt, not lost.
+is queued as the next prompt, not lost. A background subagent's tool calls
+also write `working`, so a session waiting on one reads as busy in a turn
+until it ends.
 
 ## Apps
 
