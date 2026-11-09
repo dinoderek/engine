@@ -24,8 +24,8 @@ A session start (`hosts-and-sessions.md`, "Starting a session") adds Claude-spec
 - It sets `projects.<worktree>.hasTrustDialogAccepted` in `~/.claude.json` (or
   `$CLAUDE_CONFIG_DIR`'s), so the trust dialog, whose default exits, never
   shows.
-- It adds `--settings` with a `statusLine` command, `engine hook statusline`,
-  replacing the operator’s status line in engine sessions. The hook prints
+- It adds `--settings` with a `statusLine` command, `engine hook statusline
+  --harness claude`, replacing the operator’s status line in engine sessions. The hook prints
   the session name and five-hour quota, recording changed subscription readings
   in the run directory (`telemetry.md`). Missing limits write nothing.
 - It adds `--add-dir <engine's plugin directory>` and a read-only rule for
@@ -40,21 +40,24 @@ or raises a hard stop.
 
 ## Hooks
 
-`engine hook state --harness claude` records whether the last turn ended
-("Session list"), only in a Claude run: a process another harness's session
-starts inherits that run's variables.
+Every hook line is `engine hook <entry> --harness claude`; a line without
+`--harness`, or with an entry Claude lacks, exits 1 and blocks nothing.
 
-`engine hook pre-tool-use` blocks Bash merges without
+`state` records whether the last turn ended ("Session list"), only in a run
+whose `run.json` names Claude: a process another harness's session starts
+inherits that run's variables.
+
+`pre-tool-use` blocks Bash merges without
 `--match-head-commit`, with `--auto` or `--admin`, or through the REST or
 GraphQL API. In an engine session it blocks every PR merge: the
 coordinator merges after `engine task merge-ready` (`coordinator.md`, "Merge queue").
 
-`engine hook permission` runs on `PermissionRequest` and `PermissionDenied`.
-With `ENGINE_UNATTENDED=1` it denies prompts, naming the Permission hard stop;
-otherwise Claude prompts. It records denials and auto-mode refusals
+`permission` runs on `PermissionRequest` and `PermissionDenied`.
+With `ENGINE_UNATTENDED=1` it denies prompts, naming the Permission hard stop,
+even in a Claude reviewer that a Codex run starts; otherwise Claude prompts. It records denials and auto-mode refusals
 in the run directory (`telemetry.md`).
 
-`engine hook limit` handles `StopFailure` errors `rate_limit|billing_error`,
+`limit`, Claude's own entry with `statusline`, handles `StopFailure` errors `rate_limit|billing_error`,
 writing `limit.json` and logging the full input. It takes `resets_at` from
 the event or its `error_details` object, else the session's `quota.json`:
 the latest reset among exhausted windows, else the five-hour reset.
@@ -74,7 +77,7 @@ a live, non-busy window `limited`, with `resets_at`; busy wins. An unavailable
 session list leaves state unknown.
 
 `busy` also covers a session whose turn has ended while a background job
-runs, and Claude Code takes typed input then. `engine hook state` tells the
+runs, and Claude Code takes typed input then. The `state` hook tells the
 two apart: it writes the run's `harness-state.json` on `UserPromptSubmit`,
 `PreToolUse` and `PostToolUse` (`working`) and `Stop` (`waiting`). A busy
 session whose newest event is a `Stop`, from its own `sessionId` when both

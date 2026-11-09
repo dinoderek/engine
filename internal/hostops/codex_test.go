@@ -11,7 +11,6 @@ import (
 
 	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/harness/codex"
-	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -180,7 +179,7 @@ func TestCheckCodexAutoReviewIsNoDenial(t *testing.T) {
 	f.act = func() {
 		runDir := filepath.Join(d.Home, ".local/share/engine/runs", checkRun)
 		write(t, filepath.Join(runDir, session.PermissionLog),
-			`{"event":"PermissionRequest","tool":"Bash","input":{"command":"tmux kill-window"},"decision":"`+hook.AutoReview+`"}`+"\n", 0o600)
+			`{"event":"PermissionRequest","tool":"Bash","input":{"command":"tmux kill-window"},"decision":"`+harness.LeaveToReview.Decision()+`"}`+"\n", 0o600)
 		write(t, filepath.Join(checkTmp, "engine-"+checkRun), "ok\ndone\n", 0o600)
 		writeCheckState(t, d, session.StateWorking)
 	}
@@ -190,7 +189,7 @@ func TestCheckCodexAutoReviewIsNoDenial(t *testing.T) {
 	}
 	var report bytes.Buffer
 	ReportCheck(&report, r)
-	for _, want := range []string{"ok   no permission request was denied", "auto-review decided", `Bash {"command":"tmux kill-window"}: ` + hook.AutoReview} {
+	for _, want := range []string{"ok   no permission request was denied", "auto-review decided", `Bash {"command":"tmux kill-window"}: ` + harness.LeaveToReview.Decision()} {
 		if !strings.Contains(report.String(), want) {
 			t.Errorf("report lacks %q:\n%s", want, report.String())
 		}

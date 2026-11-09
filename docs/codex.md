@@ -57,8 +57,8 @@ the kickoff, follow the launch line.
 ## Installing the skills
 
 `plugins/engine/.codex-plugin/plugin.json` points at the `skills/` tree the
-Claude plugin shares, and registers `engine hook state`, `engine hook
-permission` and `engine hook pre-tool-use` on their events. The repo's
+Claude plugin shares, and registers `engine hook <entry> --harness codex`
+for the `state`, `permission` and `pre-tool-use` entries on their events. The repo's
 `.agents/plugins/marketplace.json` lists it. `codex plugin marketplace add
 dinoderek/engine` then `codex plugin add engine@engine` install it. The two
 manifests carry one version: the versions lane fails when they differ.
@@ -87,14 +87,14 @@ The other settings are passed per session, with `-c`. The host's own
 
 ## Guards
 
-`engine hook pre-tool-use` and `engine hook permission` read Codex's events as
-they read Claude's (`claude.md`, "Hooks"): Codex's shell
+The `pre-tool-use` and `permission` hooks read Codex's events as they read
+Claude's (`claude.md`, "Hooks"): Codex's shell
 call is a `Bash` tool call with the same `tool_input.command`. The merge guard
 behaves the same.
 
 Codex sends `PermissionRequest` before auto-review, so a `deny` there would
-pre-empt the review. In an unattended Codex run (`ENGINE_UNATTENDED=1` and
-`ENGINE_HARNESS=codex`, or found as "Session signals" says), the permission hook
+pre-empt the review. In an unattended Codex run
+(`ENGINE_UNATTENDED=1`, or found as "Session signals" says), the permission hook
 only logs the request, as `left to auto-review`, and auto-review, which never
 prompts, decides.
 
@@ -110,9 +110,10 @@ end `ended`. A session that joined a remote-control daemon runs its hooks in
 the daemon's environment, which has no `ENGINE_RUN_DIR`, `ENGINE_HARNESS` or
 `ENGINE_UNATTENDED`. Without `ENGINE_RUN_DIR`, the state and permission hooks
 take the event's `cwd`, find the run whose `run.json` names the deepest
-worktree holding it (the newest, if several), and read the harness and mode
-from that record. Only a Codex run is taken: a Claude session always has its
-variables, and one opened by hand in a run's worktree is not that run's.
+worktree holding it (the newest, if several), and read the mode from that
+record. A Codex hook takes only a Codex run: a Claude session
+always has its variables, and one opened by hand in a run's worktree is not
+that run's.
 Outside any run's worktree the hook does nothing, and no hook ever fails a
 Codex turn. `status` reads the file for a window whose newest run is Codex's. A
 missing or unreadable file is unknown, never dead, and so is `ended` while the
@@ -233,7 +234,7 @@ Engine's daemon reads its own home's `config.toml` and `hooks.json`, apart
 from the operator's. It is named after the host: Codex has no override.
 Codex has no flag that names a session, so the kickoff's `rc=` is unused.
 From a joined task session's first prompt, the state hook starts `engine hook
-codex-label` in the background (hooks run inside the daemon), which calls
+label --harness codex <run-dir> <thread>` in the background (hooks run inside the daemon), which calls
 the daemon via `codex app-server proxy`: `thread/name/set` titles it
 `<plan> > <task>`, or the task alone, and experimental project
 calls file it under the repo's project, found by its `engine_repo` metadata.

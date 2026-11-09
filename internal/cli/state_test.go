@@ -25,7 +25,7 @@ func runStateHook(in string, vars map[string]string) (int, string) {
 	var errOut bytes.Buffer
 	env := Env{In: strings.NewReader(in), Out: &bytes.Buffer{}, Err: &errOut, Getenv: func(k string) string { return vars[k] },
 		Now: func() time.Time { return stateAt }}
-	return Run([]string{"hook", "state"}, env), errOut.String()
+	return Run([]string{"hook", "state", "--harness", "codex"}, env), errOut.String()
 }
 
 // Every state the hook writes is one the reader accepts, so a status that
@@ -90,27 +90,31 @@ func TestStateHookDoesNothingElsewhere(t *testing.T) {
 	}
 }
 
-// A plugin's state hook names its harness, and records only a run of that
-// harness: a Claude reviewer a Codex executor starts inherits the Codex
-// run's variables, and must not write its state.
+// A plugin's state hook names its harness, and records only a run whose
+// record names that harness: a Claude reviewer a Codex executor starts
+// inherits the Codex run's variables, and must not write its state. The
+// harness the environment names does not count.
 func TestStateHookRecordsOnlyItsOwnHarnessRun(t *testing.T) {
 	for _, tt := range []struct {
-		name, flag, run string
-		wrote           bool
+		name, flag, run, env string
+		wrote                bool
 	}{
-		{"its own harness's run", "claude", "claude", true},
-		{"another harness's run", "claude", "codex", false},
-		{"Codex in a Claude run", "codex", "claude", false},
-		{"a run that names no harness", "claude", "", true},
-		{"no harness named", "", "codex", true},
+		{"its own harness's run", "claude", "claude", "", true},
+		{"another harness's run", "claude", "codex", "", false},
+		{"Codex in a Claude run", "codex", "claude", "", false},
+		{"a run that names no harness", "claude", "", "", true},
+		{"a run with no record yet", "claude", "-", "", true},
+		{"the environment's harness is not read", "claude", "claude", "codex", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			args := []string{"hook", "state"}
-			if tt.flag != "" {
-				args = append(args, "--harness", tt.flag)
+			if tt.run != "-" {
+				if err := session.WriteRecord(dir, session.Record{Schema: session.RecordSchema, RunID: "r", Harness: tt.run, Spawned: stateAt}); err != nil {
+					t.Fatal(err)
+				}
 			}
-			vars := map[string]string{session.RunDirVar: dir, session.HarnessVar: tt.run}
+			args := []string{"hook", "state", "--harness", tt.flag}
+			vars := map[string]string{session.RunDirVar: dir, session.HarnessVar: tt.env}
 			var errOut bytes.Buffer
 			env := Env{In: strings.NewReader(recordedEvent(t, "Stop")), Out: &bytes.Buffer{}, Err: &errOut, Getenv: func(k string) string { return vars[k] },
 				Now: func() time.Time { return stateAt }}

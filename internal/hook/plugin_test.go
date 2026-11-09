@@ -8,6 +8,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/claude"
 )
 
 // hookGroups is a hooks table: event name to its matcher groups.
@@ -42,15 +45,55 @@ func readJSON(t *testing.T, path string, into any) {
 }
 
 // guards are cmds without the state hook, which each harness registers on
-// its own events.
+// its own events, and without the harness each names.
 func guards(cmds []string) []string {
 	var out []string
 	for _, c := range cmds {
-		if !strings.HasPrefix(c, "engine hook state") {
-			out = append(out, c)
+		if !strings.HasPrefix(c, "engine hook state ") {
+			out = append(out, strings.Fields(c)[2])
 		}
 	}
 	return out
+}
+
+// kindOf is what the harness's hooks make of an event called name.
+func kindOf(t *testing.T, hooks harness.Hooks, name string) harness.EventKind {
+	return parse(t, hooks, `{"hook_event_name":"`+name+`"}`).Kind
+}
+
+// Every command either plugin registers runs an entry of the harness it
+// names: a core entry or one of the adapter's own. So does the status line
+// the Claude launch sets.
+func TestPluginCommandsNameTheirHarnessAndAnEntryItHas(t *testing.T) {
+	var claudePlugin struct{ Hooks hookGroups }
+	readJSON(t, "../../plugins/engine/hooks/hooks.json", &claudePlugin)
+	var codexPlugin struct{ Hooks struct{ Hooks hookGroups } }
+	readJSON(t, "../../plugins/engine/.codex-plugin/plugin.json", &codexPlugin)
+	launch := claude.New(harness.Env{Getenv: func(string) string { return "" }}).Session("r").Args(harness.Launch{Kickoff: "k"})
+	_, settings, _ := strings.Cut(launch, `"command":"`)
+	statusLine, _, _ := strings.Cut(settings, `"`)
+	for name, tc := range map[string]struct {
+		groups hookGroups
+		hooks  harness.Hooks
+		extra  []string
+	}{"claude": {claudePlugin.Hooks, claudeHooks, []string{statusLine}}, "codex": {codexPlugin.Hooks.Hooks, codexHooks, nil}} {
+		cmds := tc.extra
+		for event := range tc.groups {
+			for _, c := range tc.groups.commands(event) {
+				cmds = append(cmds, c...)
+			}
+		}
+		for _, c := range cmds {
+			f := strings.Fields(c)
+			if len(f) != 5 || f[0] != "engine" || f[1] != "hook" || f[3] != "--harness" || f[4] != name {
+				t.Errorf("%s: %q is not engine hook <entry> --harness %s", name, c, name)
+				continue
+			}
+			if _, own := tc.hooks.Entries()[f[2]]; !own && !slices.Contains(harness.CoreEntries, f[2]) {
+				t.Errorf("%s: %q runs an entry %s has not got", name, c, name)
+			}
+		}
+	}
 }
 
 // The Codex plugin registers the same permission and merge-guard commands on
@@ -100,7 +143,7 @@ func TestCodexPluginRegistersStateHook(t *testing.T) {
 		t.Errorf("engine hook state is on %q, want %q", events, want)
 	}
 	for _, event := range want {
-		if stateFor(event, false) == "" {
+		if stateFor(kindOf(t, codexHooks, event), false) == "" {
 			t.Errorf("%s is registered but the state hook ignores it", event)
 		}
 	}
@@ -139,10 +182,10 @@ func TestClaudePluginRegistersLimitHook(t *testing.T) {
 		"Notification":     "quota_auto_resume_fired|quota_auto_resume_stale|quota_auto_resume_disabled",
 		"UserPromptSubmit": "",
 	} {
-		want := map[string][]string{matcher: {"engine hook limit"}}
+		want := map[string][]string{matcher: {"engine hook limit --harness claude"}}
 		got := plugin.Hooks.commands(event)
 		for m, cmds := range got {
-			got[m] = guards(cmds)
+			got[m] = slices.DeleteFunc(cmds, func(c string) bool { return strings.HasPrefix(c, "engine hook state ") })
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: got %v, want %v", event, got, want)
@@ -173,7 +216,7 @@ func TestClaudePluginRegistersStateHook(t *testing.T) {
 		t.Errorf("engine hook state is on %q, want %q", events, want)
 	}
 	for _, event := range want {
-		if stateFor(event, false) == "" {
+		if stateFor(kindOf(t, claudeHooks, event), false) == "" {
 			t.Errorf("%s is registered but the state hook ignores it", event)
 		}
 	}

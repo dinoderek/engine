@@ -1,4 +1,4 @@
-package hook
+package claude
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ func TestStatusline(t *testing.T) {
 				t.Fatal(err)
 			}
 			var out bytes.Buffer
-			if err := Statusline(strings.NewReader(`{"session_name":"other","rate_limits":`+tc.limits+`}`), &out, dir, time.Unix(1000, 0)); err != nil {
+			if err := statusline(strings.NewReader(`{"session_name":"other","rate_limits":`+tc.limits+`}`), &out, dir, time.Unix(1000, 0)); err != nil {
 				t.Fatal(err)
 			}
 			if out.String() != tc.line {
@@ -56,7 +56,7 @@ func TestStatuslineWritesOnlyChangedNumbersAndRenames(t *testing.T) {
 	input := `{"session_name":"test","rate_limits":{"five_hour":{"used_percentage":83,"resets_at":2000}}}`
 	run := func(in string, at int64) {
 		t.Helper()
-		if err := Statusline(strings.NewReader(in), io.Discard, dir, time.Unix(at, 0)); err != nil {
+		if err := statusline(strings.NewReader(in), io.Discard, dir, time.Unix(at, 0)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -101,15 +101,15 @@ func TestStatuslineWritesOnlyChangedNumbersAndRenames(t *testing.T) {
 }
 
 func TestStatuslineErrorsAndNoRun(t *testing.T) {
-	if err := Statusline(strings.NewReader(`{`), io.Discard, "", time.Time{}); err == nil {
+	if err := statusline(strings.NewReader(`{`), io.Discard, "", time.Time{}); err == nil {
 		t.Fatal("accepted malformed input")
 	}
 	var out bytes.Buffer
-	if err := Statusline(strings.NewReader(`{"session_name":"hand"}`), &out, "", time.Time{}); err != nil || out.String() != "hand\n" {
+	if err := statusline(strings.NewReader(`{"session_name":"hand"}`), &out, "", time.Time{}); err != nil || out.String() != "hand\n" {
 		t.Fatalf("%s, %v", out.String(), err)
 	}
 	input := `{"rate_limits":{"five_hour":{"used_percentage":1,"resets_at":2000}}}`
-	if err := Statusline(strings.NewReader(input), io.Discard, filepath.Join(t.TempDir(), "missing"), time.Unix(1000, 0)); err == nil {
+	if err := statusline(strings.NewReader(input), io.Discard, filepath.Join(t.TempDir(), "missing"), time.Unix(1000, 0)); err == nil {
 		t.Fatal("ignored write failure")
 	}
 }

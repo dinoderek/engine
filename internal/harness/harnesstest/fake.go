@@ -2,6 +2,9 @@ package harnesstest
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -25,9 +28,25 @@ type Fake struct {
 	TrustErr, ReleaseErr error
 	// Hooked is HookedState's answer.
 	Hooked bool
+	// Policy, Finds and Own are its hooks' Unattended, FindsRun and Entries.
+	Policy harness.PermissionPolicy
+	Finds  bool
+	Own    map[string]harness.Entry
+	// Detach, when Signalled is given an event of this kind, is the entry it
+	// starts in the background, with the run directory and the session ID.
+	Detach harness.EventKind
 
-	mu    sync.Mutex
-	calls []string
+	mu        sync.Mutex
+	calls     []string
+	signalled []harness.Event
+	runs      []harness.HookRun
+}
+
+// Signalled are the events Signalled got so far, and the run each was for.
+func (f *Fake) Signalled() ([]harness.Event, []harness.HookRun) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]harness.Event(nil), f.signalled...), append([]harness.HookRun(nil), f.runs...)
 }
 
 // Calls are the launcher calls so far, one "<op> <session> <arg>" each.
@@ -83,5 +102,47 @@ func (l fakeLauncher) Env(bool) string { return "export FAKE_HOME=/fake && " }
 func (l fakeLauncher) Args(s harness.Launch) string {
 	return " fake-args -- " + hosts.ShellWord(s.Kickoff)
 }
+
+func (f *Fake) Hooks() harness.Hooks { return fakeHooks{f} }
+
+// fakeHooks reads an event as {"kind": …, "name": …, "session_id": …,
+// "cwd": …, "command": …}, and denies with {"denied": <message>}.
+type fakeHooks struct{ f *Fake }
+
+func (h fakeHooks) Event(raw []byte) (harness.Event, error) {
+	var e struct {
+		Kind      harness.EventKind `json:"kind"`
+		Name      string            `json:"name"`
+		SessionID string            `json:"session_id"`
+		Cwd       string            `json:"cwd"`
+		Command   string            `json:"command"`
+	}
+	if err := json.Unmarshal(raw, &e); err != nil {
+		return harness.Event{}, err
+	}
+	return harness.Event{Kind: e.Kind, Name: e.Name, SessionID: e.SessionID, Cwd: e.Cwd, Command: e.Command}, nil
+}
+
+func (fakeHooks) Deny(w io.Writer, message string) error {
+	return json.NewEncoder(w).Encode(map[string]string{"denied": message})
+}
+
+func (h fakeHooks) Unattended() harness.PermissionPolicy { return h.f.Policy }
+
+func (h fakeHooks) FindsRun() bool { return h.f.Finds }
+
+func (h fakeHooks) Signalled(c harness.HookContext, ev harness.Event) {
+	h.f.mu.Lock()
+	h.f.signalled = append(h.f.signalled, ev)
+	h.f.runs = append(h.f.runs, c.Run)
+	h.f.mu.Unlock()
+	if h.f.Detach != "" && ev.Kind == h.f.Detach && c.Detach != nil {
+		if err := c.Detach("fake-entry", c.Run.Dir, ev.SessionID); err != nil {
+			fmt.Fprintln(c.Err, "fake detach:", err)
+		}
+	}
+}
+
+func (h fakeHooks) Entries() map[string]harness.Entry { return h.f.Own }
 
 var _ harness.Adapter = (*Fake)(nil)

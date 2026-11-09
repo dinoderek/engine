@@ -56,6 +56,8 @@ type Adapter interface {
 	// run of every live window that names this harness, by window name. It
 	// never fails: what it cannot read stays unknown, with the reason.
 	Observe(ctx context.Context, host hosts.Host, runs map[string]session.Run) Snapshot
+	// Hooks are the harness's hook events and replies, and its own entries.
+	Hooks() Hooks
 	// CheckKickoff is the preflight session's first message; marker is the
 	// file the session writes and reads back.
 	CheckKickoff(marker string) string

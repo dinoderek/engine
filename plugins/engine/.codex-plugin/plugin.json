@@ -1,6 +1,6 @@
 {
   "name": "engine",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Two skills, with a merge guard: build takes one task to a merged PR in any repo; engine holds the server roles, planner and executor.",
   "author": {
     "name": "dinoderek"
@@ -14,7 +14,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": "engine hook pre-tool-use"
+              "command": "engine hook pre-tool-use --harness codex"
             }
           ]
         }
@@ -24,7 +24,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": "engine hook permission"
+              "command": "engine hook permission --harness codex"
             },
             {
               "type": "command",

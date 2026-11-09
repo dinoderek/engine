@@ -1,4 +1,4 @@
-package hostops
+package codex
 
 import (
 	"context"
@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/session"
 )
 
-func TestCodexThreadTitle(t *testing.T) {
+func TestThreadTitle(t *testing.T) {
 	tests := []struct {
 		name string
 		rec  session.Record
@@ -25,7 +26,7 @@ func TestCodexThreadTitle(t *testing.T) {
 		{"an unparsable task stays as recorded", session.Record{Control: true, Repo: "o/engine", Task: "odd"}, "odd"},
 	}
 	for _, tt := range tests {
-		if got := CodexThreadTitle(tt.rec); got != tt.want {
+		if got := ThreadTitle(tt.rec); got != tt.want {
 			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
 		}
 	}
@@ -70,7 +71,7 @@ func (f *fakeDaemon) serve(t *testing.T, peer *wsPeer) {
 	}
 }
 
-func (f *fakeDaemon) exchange(t *testing.T, req CodexLabelRequest) error {
+func (f *fakeDaemon) exchange(t *testing.T, req LabelRequest) error {
 	t.Helper()
 	c, peer, err := newWSPair(t, "101 Switching Protocols", "")
 	if err != nil {
@@ -78,13 +79,13 @@ func (f *fakeDaemon) exchange(t *testing.T, req CodexLabelRequest) error {
 	}
 	done := make(chan struct{})
 	go func() { defer close(done); f.serve(t, peer) }()
-	err = exchangeCodexLabel(&codexRPC{c: c}, req)
+	err = exchangeLabel(&rpcClient{c: c}, req)
 	_ = peer.conn.Close()
 	<-done
 	return err
 }
 
-var labelReq = CodexLabelRequest{ThreadID: "th1", Title: "p12 > t138", Project: "engine", Repo: "o/engine", Root: "/clones/o/engine"}
+var labelReq = LabelRequest{ThreadID: "th1", Title: "p12 > t138", Project: "engine", Repo: "o/engine", Root: "/clones/o/engine"}
 
 func TestExchangeCodexLabel(t *testing.T) {
 	ours := `{"result":{"data":[{"id":"pOurs","metadata":{"engine_repo":"o/engine"}}],"nextCursor":null}}`
@@ -168,32 +169,66 @@ func TestExchangeCodexLabelFailsWhenTheDaemonHangsUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	go func() { _, _, _ = peer.recv(); peer.send(t, true, 0x8, nil) }()
-	if err := exchangeCodexLabel(&codexRPC{c: c}, labelReq); err == nil || !strings.Contains(err.Error(), "initialize") {
+	if err := exchangeLabel(&rpcClient{c: c}, labelReq); err == nil || !strings.Contains(err.Error(), "initialize") {
 		t.Errorf("err = %v, want an initialize error", err)
 	}
 }
 
-// labelDeps is a home with the host config, whose CodexLabel records each
+// labelHosts is a host config whose host mac runs Codex from ~/bin/codex.
+const labelHosts = `default_harness = "codex"
+gb_per_session = 8
+reserve_gb = 8
+
+[harness.codex]
+max_sessions = 2
+launch = "{bin} -m {model}"
+tiers.deep     = { model = "sol", effort = "high" }
+tiers.standard = { model = "sol", effort = "medium" }
+tiers.light    = { model = "luna", effort = "medium" }
+
+[host.mac]
+address = "me@mac"
+harnesses = ["codex"]
+ram_gb = 24
+bin = { codex = "~/bin/codex" }
+`
+
+func fixedNow() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }
+
+// labeller is the adapter's labelling in Home at Now, sending through send.
+type labeller struct {
+	Home string
+	Now  func() time.Time
+	send func(context.Context, string, string, LabelRequest) error
+}
+
+func (l labeller) LabelThread(runDir string, rec session.Record, threadID string) error {
+	return New(harness.Env{Home: l.Home, Now: l.Now}, Options{Label: l.send}).LabelThread(runDir, rec, threadID)
+}
+
+// labelDeps is a home with the host config, whose sender records each
 // request and returns err.
-func labelDeps(t *testing.T, err error) (Deps, *[]CodexLabelRequest, *[]string) {
+func labelDeps(t *testing.T, err error) (labeller, *[]LabelRequest, *[]string) {
 	t.Helper()
-	h := newHome(t, "mac")
-	var reqs []CodexLabelRequest
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, ".config", "engine", "hosts.toml"), labelHosts, 0o600)
+	write(t, filepath.Join(dir, ".config", "engine", "host"), "mac\n", 0o600)
+	var reqs []LabelRequest
 	var where []string
-	return Deps{Home: h.dir, Now: fixedNow, CodexLabel: func(_ context.Context, bin, home string, r CodexLabelRequest) error {
+	return labeller{Home: dir, Now: fixedNow, send: func(_ context.Context, bin, home string, r LabelRequest) error {
 		reqs = append(reqs, r)
 		where = append(where, bin, home)
 		return err
 	}}, &reqs, &where
 }
 
-func readLabel(t *testing.T, dir string) codexLabelRecord {
+func readLabel(t *testing.T, dir string) labelRecord {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, CodexLabelFile))
+	data, err := os.ReadFile(filepath.Join(dir, LabelFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var rec codexLabelRecord
+	var rec labelRecord
 	if err := json.Unmarshal(data, &rec); err != nil {
 		t.Fatal(err)
 	}
@@ -205,25 +240,25 @@ func TestLabelCodexThreadStopsOnceLabelled(t *testing.T) {
 	dir := t.TempDir()
 	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "138", Feature: "p12"}
 	for range 2 {
-		if err := LabelCodexThread(d, dir, rec, "th1"); err != nil {
+		if err := d.LabelThread(dir, rec, "th1"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want := CodexLabelRequest{ThreadID: "th1", Title: "p12 > t138", Project: "engine", Repo: "o/engine",
+	want := LabelRequest{ThreadID: "th1", Title: "p12 > t138", Project: "engine", Repo: "o/engine",
 		Root: filepath.Join(d.Home, filepath.FromSlash(session.ReposDir), "o", "engine")}
-	if !reflect.DeepEqual(*reqs, []CodexLabelRequest{want}) {
+	if !reflect.DeepEqual(*reqs, []LabelRequest{want}) {
 		t.Errorf("requests %+v, want one %+v", *reqs, want)
 	}
 	if bin, home := (*where)[0], (*where)[1]; bin != filepath.Join(d.Home, "bin", "codex") || home != filepath.Join(d.Home, ".local/share/engine/codex") {
 		t.Errorf("sent with %s in %s", bin, home)
 	}
-	if got := readLabel(t, dir); got.CodexLabelRequest != want || got.Error != "" || got.Attempts != 1 || !got.At.Equal(fixedNow()) {
+	if got := readLabel(t, dir); got.LabelRequest != want || got.Error != "" || got.Attempts != 1 || !got.At.Equal(fixedNow()) {
 		t.Errorf("record %+v", got)
 	}
-	if CodexLabelPending(dir, fixedNow().Add(time.Hour)) {
+	if LabelPending(dir, fixedNow().Add(time.Hour)) {
 		t.Error("a labelled run is still pending")
 	}
-	if _, err := os.Stat(filepath.Join(dir, codexLabelLock)); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, labelLock)); err == nil {
 		t.Error("the lock was left behind")
 	}
 }
@@ -234,29 +269,29 @@ func TestLabelCodexThreadRetriesAFailureAFewTimes(t *testing.T) {
 	rec := session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34", Feature: "p12"}
 	now := fixedNow()
 	d.Now = func() time.Time { return now }
-	for i := range codexLabelAttempts {
-		if !CodexLabelPending(dir, now) {
+	for i := range labelAttempts {
+		if !LabelPending(dir, now) {
 			t.Fatalf("attempt %d: not pending", i+1)
 		}
-		if err := LabelCodexThread(d, dir, rec, "th1"); err == nil || !strings.Contains(err.Error(), "daemon down") {
+		if err := d.LabelThread(dir, rec, "th1"); err == nil || !strings.Contains(err.Error(), "daemon down") {
 			t.Fatalf("attempt %d: err = %v", i+1, err)
 		}
 		// Too soon after a failure, nothing is tried.
-		now = now.Add(codexLabelRetry - time.Second)
-		if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || CodexLabelPending(dir, now) || len(*reqs) != i+1 {
+		now = now.Add(labelRetry - time.Second)
+		if err := d.LabelThread(dir, rec, "th1"); err != nil || LabelPending(dir, now) || len(*reqs) != i+1 {
 			t.Fatalf("attempt %d: retried too soon: err %v, %d requests", i+1, err, len(*reqs))
 		}
 		now = now.Add(time.Second)
 	}
-	if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || len(*reqs) != codexLabelAttempts {
-		t.Errorf("after the last attempt: err %v, %d requests, want %d", err, len(*reqs), codexLabelAttempts)
+	if err := d.LabelThread(dir, rec, "th1"); err != nil || len(*reqs) != labelAttempts {
+		t.Errorf("after the last attempt: err %v, %d requests, want %d", err, len(*reqs), labelAttempts)
 	}
 	got := readLabel(t, dir)
-	if got.Error != "daemon down" || got.Attempts != codexLabelAttempts || got.Title != "p12 > t34" ||
+	if got.Error != "daemon down" || got.Attempts != labelAttempts || got.Title != "p12 > t34" ||
 		got.Root != filepath.Join(d.Home, filepath.FromSlash(session.ControlReposDir), "o", "engine") {
 		t.Errorf("record %+v", got)
 	}
-	if CodexLabelPending(dir, now.Add(time.Hour)) {
+	if LabelPending(dir, now.Add(time.Hour)) {
 		t.Error("still pending after the last attempt")
 	}
 }
@@ -264,18 +299,18 @@ func TestLabelCodexThreadRetriesAFailureAFewTimes(t *testing.T) {
 func TestLabelCodexThreadLeavesAHeldLockAlone(t *testing.T) {
 	d, reqs, _ := labelDeps(t, nil)
 	dir := t.TempDir()
-	lock := filepath.Join(dir, codexLabelLock)
+	lock := filepath.Join(dir, labelLock)
 	write(t, lock, "", 0o644)
 	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "1"}
-	if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || len(*reqs) != 0 {
+	if err := d.LabelThread(dir, rec, "th1"); err != nil || len(*reqs) != 0 {
 		t.Fatalf("with a fresh lock: err %v, %d requests", err, len(*reqs))
 	}
 	// A lock older than any attempt's deadline is a dead attempt's.
-	old := fixedNow().Add(-codexLabelStale - time.Second)
+	old := fixedNow().Add(-labelStale - time.Second)
 	if err := os.Chtimes(lock, old, old); err != nil {
 		t.Fatal(err)
 	}
-	if err := LabelCodexThread(d, dir, rec, "th1"); err != nil || len(*reqs) != 1 {
+	if err := d.LabelThread(dir, rec, "th1"); err != nil || len(*reqs) != 1 {
 		t.Errorf("with a stale lock: err %v, %d requests", err, len(*reqs))
 	}
 }
@@ -283,17 +318,17 @@ func TestLabelCodexThreadLeavesAHeldLockAlone(t *testing.T) {
 func TestLabelCodexThreadFailsWithoutItsInputs(t *testing.T) {
 	tests := []struct {
 		name string
-		deps func(t *testing.T) Deps
+		deps func(t *testing.T) labeller
 		rec  session.Record
 		want string
 	}{
-		{"a bad repo", func(t *testing.T) Deps { d, _, _ := labelDeps(t, nil); return d }, session.Record{Repo: "bad"}, "owner/repo"},
-		{"no host config", func(t *testing.T) Deps { return Deps{Home: t.TempDir(), Now: fixedNow} }, session.Record{Repo: "o/engine", Task: "o/engine#" + "1"}, "hosts.toml"},
+		{"a bad repo", func(t *testing.T) labeller { d, _, _ := labelDeps(t, nil); return d }, session.Record{Repo: "bad"}, "owner/repo"},
+		{"no host config", func(t *testing.T) labeller { return labeller{Home: t.TempDir(), Now: fixedNow} }, session.Record{Repo: "o/engine", Task: "o/engine#" + "1"}, "hosts.toml"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
-			err := LabelCodexThread(tt.deps(t), dir, tt.rec, "th1")
+			err := tt.deps(t).LabelThread(dir, tt.rec, "th1")
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("err = %v, want %q", err, tt.want)
 			}
@@ -302,7 +337,7 @@ func TestLabelCodexThreadFailsWithoutItsInputs(t *testing.T) {
 			}
 		})
 	}
-	if err := LabelCodexThread(Deps{Now: fixedNow}, filepath.Join(t.TempDir(), "missing"), session.Record{}, "th1"); err == nil {
+	if err := (labeller{Now: fixedNow}).LabelThread(filepath.Join(t.TempDir(), "missing"), session.Record{}, "th1"); err == nil {
 		t.Error("a missing run directory did not fail")
 	}
 }
