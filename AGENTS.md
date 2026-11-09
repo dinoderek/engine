@@ -60,9 +60,9 @@ Read these at each session start:
 | --- | --- |
 | changes how agents plan, build or review | `plugins/engine/skills/build/SKILL.md`, `plugins/engine/skills/engine/SKILL.md` and their references |
 | changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
-| changes how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
-| changes server state, API, inbox, merge locks or `engine ui` | `docs/control-server.md` |
-| changes host config, placement or session access | `docs/hosts-and-sessions.md` |
+| changes dispatch, recovery, merges, merge locks, host ops or session signals | `docs/coordinator.md` |
+| changes server records, API, credentials, inbox or `engine ui` | `docs/control-server.md` |
+| changes host config, placement, attempts or session access | `docs/hosts-and-sessions.md` |
 | changes a Claude or Codex session | `docs/claude.md`, `docs/codex.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
 | sets up GitHub access, notifications, harness sign-in or a host | `docs/operator-setup.md` |
