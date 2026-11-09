@@ -62,7 +62,7 @@ func TestIdleSpells(t *testing.T) {
 // Releasing a session that only a background job keeps busy tells the
 // operator, once per attempt; releasing a waiting one does not.
 func TestReleaseNoticesARunningBackgroundJob(t *testing.T) {
-	acts := Decide(view(plan("executing"), with(task(2, "done"), background(StallWait)), with(task(3, "done"), waiting(StallWait))))
+	acts := Decide(view(plan("planned"), with(task(2, "done"), background(StallWait)), with(task(3, "done"), waiting(StallWait))))
 	if len(acts) != 3 {
 		t.Fatalf("actions:\n%s", shows(acts))
 	}

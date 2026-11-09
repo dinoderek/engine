@@ -124,7 +124,6 @@ func seedWorld(t *testing.T, s *controlStack) *world {
 	for _, plan := range []control.Item{w.rollout, w.hardening} {
 		sd.call(sd.op, control.Request{Op: "approve", ID: plan.ID, Version: plan.Version})
 		sd.state(sd.op, plan.ID, "planned")
-		sd.state(sd.op, plan.ID, "executing")
 	}
 
 	sd.run(w.schema, "devbox", "@9")

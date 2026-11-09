@@ -80,10 +80,7 @@ func stateChange(st *State, a Actor, item Item, want string) error {
 	}
 	allowed := map[string][]string{
 		"approved":    {"planned", "running", "failed"},
-		"planned":     {"executing", "verifying", "blocked", "done"},
-		"executing":   {"verifying", "blocked", "done"},
-		"verifying":   {"executing", "blocked", "done"},
-		"blocked":     {"executing", "verifying", "done"},
+		"planned":     {"done"},
 		"todo":        {"running", "failed"},
 		"running":     {"in-review", "needs-human", "failed", "done"},
 		"in-review":   {"running", "needs-human", "failed", "done"},

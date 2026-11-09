@@ -7,12 +7,12 @@
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
 - **Stateless.** Each pass derives everything from the server's records and
   each host's tmux sessions, `claude agents --json` and run directories.
-  A restarted server picks up the sessions still live.
+  A restarted server adopts live sessions.
 - **One pass** runs every 30 seconds and once at start. `internal/reconcile`
   decides from records and fresh host reads, merge queues first. A pass reads every
   host's `status` in parallel; the session view's observer reuses those reads
   (`control-server.md`, "Session view"). Stopping coordination leaves
-  sessions running.
+  sessions running. Plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -53,7 +53,7 @@ queues the task; a later request keeps the place.
 Passes run the queues first. The head, the first eligible entry in
 request order (in-review, coordinated, no unresolved question or
 unacknowledged hold), stays head until it merges, leaves or is demoted. Only
-the head merges, through its task host's `merge` op and `gh`; the server has
+the head merges, through its task host's `merge` op; the server has
 no GitHub credential. A merge marks the task done with its PR; the session
 keeps its window 10 minutes to report. A done task's session is released
 once idle 10 minutes; releasing one whose background job still runs is a
@@ -66,11 +66,11 @@ operator of the last two; merged elsewhere is done, and the operator told; pendi
 Every wait is bounded in `internal/reconcile/queue.go`. A head outstaying
 one (refresh, checks, mergeability, an unreachable host) goes to the back
 (`merge-demoted`, with an operator notice); repeated demotions drop it.
-Repeated `gh` failures hold it until the operator acknowledges it;
+Repeated `gh` failures hold it until the operator acknowledges;
 the next entry proceeds. Waiting PRs are read periodically, catching a red,
 closed or merged one early. Leaving in-review except for
 `needs-human` withdraws the entry (`merge-withdrawn`); a vanished task
-resumes in-review, keeping its entry. A lost merge result reads as merged later.
+resumes in-review, keeping its entry. A lost merge result reads as merged.
 
 ## Reaching hosts
 

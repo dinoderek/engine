@@ -1,13 +1,15 @@
 package control
 
 import (
+	"fmt"
 	"slices"
 	"time"
 )
 
-// schemaVersion is the control database's schema. Version 1 held repository
-// merge locks; version 2 holds the merge queue instead.
-const schemaVersion = 2
+// schemaVersion is the control database's schema. Version 2 stores only
+// prepare, approved, planned and done for a plan. Versions 1 and 2 held
+// repository merge locks; version 3 holds the merge queue instead.
+const schemaVersion = 3
 
 // legacyLock is the part of a version 1 lock record the migration reads.
 type legacyLock struct {
@@ -21,7 +23,8 @@ const LockRetired = "lock-retired"
 const retiredText = "Merge locks are retired: the coordinator's merge queue orders merges. Never run engine lock. " +
 	"Once your PR is in-review, reviewed and pushed, run engine task merge-ready and end your turn; a merge request you already made is queued."
 
-// migrate brings a version 1 database to version 2 in one transaction: each
+// migrate brings a version 1 or 2 database to version 3 in one
+// transaction: plans move to their stored states, each
 // unfinished task's unanswered merge request from its current attempt joins
 // the queue in request order, every lock record is deleted, and the executor
 // of every lock and every active task is told.
@@ -35,7 +38,7 @@ func (s *Store) migrate() error {
 		before["lock/"+l.Repo] = "legacy"
 	}
 	retire(&st, locks, time.Now().UTC())
-	return s.commit(before, flatten(st), "PRAGMA user_version=2;\n")
+	return s.commit(before, flatten(st), migratePlanStates+fmt.Sprintf("PRAGMA user_version=%d;\n", schemaVersion))
 }
 
 func retire(st *State, locks []legacyLock, now time.Time) {

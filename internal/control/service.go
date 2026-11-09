@@ -117,6 +117,7 @@ func get(st *State, id string) (Response, error) {
 	if !ok {
 		return Response{}, problem(404, "unknown item %s", id)
 	}
+	item = withStatus(st, item)
 	out := Response{Item: &item}
 	if e, queued := st.Queue[item.ID]; queued {
 		out.Queue = []QueueEntry{e}
@@ -154,7 +155,7 @@ func read(st *State, a Actor, r Request) (Response, error) {
 		if r.ID != "" && item.Repo != r.ID && item.Plan != r.ID {
 			continue
 		}
-		out.Items = append(out.Items, item)
+		out.Items = append(out.Items, withStatus(st, item))
 	}
 	sort.Slice(out.Items, func(i, j int) bool { return Number(out.Items[i].ID) < Number(out.Items[j].ID) })
 	return out, nil
@@ -182,7 +183,7 @@ func (s Service) create(st *State, a Actor, r Request) (Response, error) {
 	if strings.TrimSpace(item.Title) == "" {
 		return Response{}, problem(400, "title is required")
 	}
-	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" {
+	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" {
 		return Response{}, problem(400, "server-owned fields cannot be set on creation")
 	}
 	if err := validateCreation(st, a, item); err != nil {

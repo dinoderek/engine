@@ -58,15 +58,12 @@ engine attempt list t3
 engine merge-queue r1
 ```
 
-Dependencies, capabilities, harness and tier are
-structured fields, supplied with `--depends`, `--requires`, `--harness`
-and `--tier`.
-
 Edits, approvals and workflow changes require the current `--version`. An
 edit invalidates a plan's or standalone task's approval; an active
 execution, a plan's children included, prevents it. Run/stop commands persist
 coordination intent (`coordinator.md`).
 Retrying a failed task is an explicit operator state change.
+`get`, `list` and `plan-view` add a plan's derived, unstored `status` (`execution-protocol.md`, "States").
 
 `engine lint <plan-id>` checks a server plan's tasks before approval:
 Outcome and Tests sections, no cycle, one acceptance task, one owner per
@@ -97,7 +94,8 @@ launched.
 
 SQLite runs locally through its CLI, with SQL on stdin; one server owns a
 database. Each transaction updates current records, history and its request
-receipt together. The schema is versioned: an older one migrates on open, a newer one is rejected.
+receipt together. The schema is versioned: an older database migrates on open; an unknown
+version is rejected.
 
 The operator credential is an owner-only regular file. Every dispatch creates
 a separate execution credential, scoped to that plan or task. Workers cannot
@@ -143,7 +141,7 @@ operator credential, and the credential never reaches the browser. Any local
 user reaching the port reads with operator rights; run it only on a
 single-user machine. The page calls fixed same-origin routes:
 
-- `/api/plans`: repositories and plans, filtered by `repo`, `state` and a
+- `/api/plans`: repositories and plans, filtered by `repo`, `state` (the plan's status) and a
   case-insensitive `q` over plan ID, repository and title.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts, unfinished prerequisites, including other plans' tasks, and

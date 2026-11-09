@@ -10,7 +10,7 @@ func planView(st *State, a Actor, id string) (Response, error) {
 	if a.Role == "worker" && st.Attempts[a.Attempt].Item != id {
 		return Response{}, problem(403, "only the plan execution can read its full plan view")
 	}
-	out := Response{Items: []Item{item, st.Items[item.Repo]}}
+	out := Response{Items: []Item{withStatus(st, item), st.Items[item.Repo]}}
 	seen := map[string]bool{}
 	var pending []string
 	for _, t := range st.Items {

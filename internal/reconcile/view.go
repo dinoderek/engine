@@ -59,8 +59,8 @@ type Kind string
 const (
 	// Dispatch reserves an attempt and launches a planner or executor.
 	Dispatch Kind = "dispatch"
-	// SetState moves a plan through planned, executing, verifying, blocked
-	// and done.
+	// SetState moves a plan to planned or done; control.PlanStatus derives
+	// the rest.
 	SetState Kind = "state"
 	// EndAttempt ends an attempt whose window died: failed, or vanished when
 	// the server finds the task resumable.
