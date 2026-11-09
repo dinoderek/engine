@@ -65,4 +65,5 @@ Give the class, the question, your recommended answer, and the evidence.
 Then end your turn and wait. Reading, acknowledgement, a conversational reply
 or an automated `continue` grant nothing: only the operator's answer to the
 question does. When it comes, follow it and carry on. An engine server task
-raises the question with `engine ask` instead (the `engine` skill).
+raises the question with `engine ask` instead, on its plan when the root
+cause affects every task (the `engine` skill).

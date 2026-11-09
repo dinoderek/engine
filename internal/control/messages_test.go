@@ -25,7 +25,9 @@ func TestOperatorInboxAcknowledgementReplyAndResolution(t *testing.T) {
 	if len(call(t, s, op, Request{Op: "inbox"}).Updates) != 0 {
 		t.Fatal("resolved question remains open")
 	}
-	call(t, s, op, Request{Op: "state", ID: task.ID, Version: current.Version, State: "running"})
+	if got := call(t, s, op, Request{Op: "get", ID: task.ID}).Item.State; got != "running" {
+		t.Fatalf("resolution left the task %s, want running", got)
+	}
 	info := call(t, s, a, Request{Op: "say", Body: "Host maintenance", Recipient: "operator"}).Updates[0]
 	call(t, s, op, Request{Op: "ack", ReplyTo: info.ID})
 	if len(call(t, s, op, Request{Op: "inbox"}).Updates) != 0 {

@@ -70,7 +70,9 @@ type Update struct {
 	Recipient     string    `json:"recipient,omitempty"`
 	ReplyTo       int       `json:"reply_to,omitempty"`
 	RequiresReply bool      `json:"requires_reply,omitempty"`
-	Snapshot      *Item     `json:"snapshot,omitempty"`
+	// Task is the task whose session asked a plan question.
+	Task     string `json:"task,omitempty"`
+	Snapshot *Item  `json:"snapshot,omitempty"`
 	// Merge is a merge request's details; only merge-request updates carry it.
 	Merge *MergeRequest `json:"merge,omitempty"`
 }

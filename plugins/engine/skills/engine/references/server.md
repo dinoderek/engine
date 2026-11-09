@@ -17,8 +17,9 @@ session's environment supplies the endpoint, credential file and attempt ID
   state; plans use `engine plan state`.
 - `engine tell <id> <text>` posts a message on your task or its plan, and
   wakes the sessions waiting on it. `engine ask <id> <text>` asks the
-  operator; on a task, it moves the task to `needs-human`. `--operator` on `tell` sends
-  a message to the operator's inbox that asks for no answer.
+  operator, on your task or its plan, and holds your task in `needs-human`.
+  `--operator` on `tell` sends a message to the operator's inbox that asks
+  for no answer.
 
 ## Planner
 
@@ -110,19 +111,15 @@ bypass gates or the lock.
 The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
 
 - **Look in the server first:** `engine updates <task>` and, if the task
-  has a plan, `engine updates <plan>`. A plan `ruling` update, or a `resolved` one on your task or plan, that
-  decides the same root cause covers you: cite its sequence with
-  `engine tell <task>` and in the PR body, and carry on. A plan-level
-  question still open on the same root cause: cite its sequence with
-  `engine tell <task>`, end your turn, and wait to be woken by its ruling;
-  record both sequences in the PR body.
-  The coordinator may raise a stall notice meanwhile; that is expected.
+  has a plan, `engine updates <plan>`. A `resolved` update on either that
+  decides the same root cause covers you: cite its sequence in the PR body
+  and carry on. An open question on the plan already blocks your task's
+  state changes and merge; if it is your root cause, end your turn and wait,
+  and cite it in the PR body.
 - **Ask:** `engine ask <task> <question>`, then end your turn.
 - **Plan-level questions:** a gate red on the default branch, or a host tool
-  or sign-in that every task on that host needs, affects every task. Ask on
-  your task, saying the question is plan-level and asking the operator to
-  resolve it with `--plan <plan>`. Then, with the sequence the ask returned,
-  post `engine tell <plan> "Plan-level question <sequence>: <root cause>"`
-  so sibling tasks find it instead of asking again.
-- Only the operator's resolution and their restoring the task's state end
-  the stop; a plan resolution answers it for every task in the plan.
+  or sign-in that every task on that host needs, affects every task. Ask it
+  once on the plan: `engine ask <plan> <question>`. It holds your task and
+  blocks every task in the plan; its resolution answers them all.
+- Only the operator ends the stop. Resolving your task's last open question
+  restores its state and wakes you.

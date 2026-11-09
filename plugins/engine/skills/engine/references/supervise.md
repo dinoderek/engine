@@ -22,8 +22,8 @@ the intent; the server coordinates. Check every 10 minutes:
 - **Relay an answer** the operator gave you: `engine tell <task> <text>`, or
   once on the plan for several of its tasks, which wakes each waiting one.
   Answer an inbox question with `engine reply <sequence> <text>`. Leave
-  `engine resolve` and every state change, the operator's decisions, to the
-  operator unless they gave them to you.
+  `engine resolve`, which also restores the task's state, and every other
+  state change to the operator unless they gave them to you.
 - **Answer a stall** the coordinator raised, with `engine tell`, when the
   answer is not a hard stop: for example "your lock is free, carry on".
 - **Count rulings.** A task whose digest holds more than two `review`

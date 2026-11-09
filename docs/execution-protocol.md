@@ -58,7 +58,7 @@ tier. Telemetry records the tier and model of every run.
 - **Hard stops are the only interruptions, asked once.** Repeated questions
   usually share a root cause, such as one red gate on the default branch. An
   executor first looks for an answer or open question on the same root cause,
-  and a question that affects every task is resolved once for the plan.
+  and asks a question that affects every task once, on the plan.
 - **More than two `review` rulings on one task** mean Prepare under-specified
   the card.
 
@@ -67,7 +67,7 @@ tier. Telemetry records the tier and model of every run.
 | Entity | States |
 | --- | --- |
 | Plan | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`; `blocked` while any task is `needs-human`. |
-| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` during a hard stop; `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
+| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
 
 "Ready" is computed, never stored. The planner creates the plan and its
 tasks; you approve the plan. The executor sets `running`, `needs-human` and
