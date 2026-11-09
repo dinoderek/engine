@@ -130,8 +130,8 @@ claimed its task 5 minutes after it started is noticed once, and one that
 ended before claiming is restarted. A session that has waited 10 minutes
 while its task is open and not `needs-human` has stopped outside the
 protocol; the operator is notified once, naming the sign-in for a signed-out
-harness. A denial at most 10 minutes older than the wait makes the stall a Permission hard stop
-naming the tool, input and reason.
+harness. A denial at most 10 minutes older than the wait makes the stall a
+Permission hard stop naming the tool, input and reason.
 
 **Limit recovery.** Never resume `needs-human`; recheck the task's state
 before typing. Each check resumes an engine window still `limited`, or

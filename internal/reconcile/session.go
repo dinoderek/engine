@@ -92,8 +92,10 @@ func (s Session) Denied() bool {
 // not raise, naming the tool, its exact input and why.
 func WaitText(s Session, plain string) string {
 	if s.SignedOut {
-		return fmt.Sprintf("%s has waited for input for %s while %s. Sign it in there, then type continue in the window",
-			s.Name, StallWait, signedOutText(s.Host, s.Harness))
+		// Signed out, the session can do nothing else, so this outranks a
+		// denial.
+		return fmt.Sprintf("%s, while %s. Sign it in there, then type continue in the window",
+			strings.TrimSuffix(plain, ", outside a hard stop"), signedOutText(s.Host, s.Harness))
 	}
 	if !s.Denied() {
 		return plain
