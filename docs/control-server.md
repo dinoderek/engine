@@ -64,7 +64,7 @@ and `--tier`.
 Edits, approvals and workflow changes require the current `--version`. An
 edit invalidates a plan's or standalone task's approval; an active
 execution, a plan's children included, prevents it. Run/stop commands persist
-coordination intent; stopping coordination leaves existing sessions running.
+coordination intent (`coordinator.md`).
 Retrying a failed task is an explicit operator state change.
 
 `engine lint <plan-id>` checks a server plan's tasks before approval:

@@ -23,7 +23,7 @@ asks.
 ## State
 
 Built: the control server and its CLI with the one coordinator it runs
-(dispatch, recovery and merges across hosts), `engine start --check` (the
+(dispatch, recovery and merges across hosts), `engine version`, `engine start --check` (the
 preflight session), `engine host`, `engine ps`, `engine attach`, `engine tell`,
 `engine lint`, `engine run`, `engine ui` (a read-only local dashboard), the
 host config reader (`internal/hosts`), the `build` and `engine` skills and

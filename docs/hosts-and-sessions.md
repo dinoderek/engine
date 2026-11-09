@@ -29,9 +29,9 @@ top-level `heavy_capabilities`, such as a simulator or VM. A host's `max_heavy_s
 (a cap above the slots is refused); without it every slot may be heavy.
 `status` reports `heavy_slots` and `free_heavy_slots`.
 
-**Capabilities** are declared per host: `macos`, `linux`, `ios` (iOS builds
-and the Simulator), `vm` and `docker`. A card's `requires` names them; a new
-one is added here first.
+**Capabilities** are declared per host and named by a card's `requires`; the
+list is `hosts.Capabilities` in `internal/hosts/hosts.go`. `ios` means iOS
+builds and the Simulator.
 
 ```toml
 default_harness = "claude"

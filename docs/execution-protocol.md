@@ -12,7 +12,7 @@ executor is `build` with changes. This doc never restates a rule they hold.
 - **Hands-off when dispatched, stops by rule.** A dispatched executor decides
   open questions itself and stops only for a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program: its code
-  specifies a pass. Executors never merge; the coordinator merges the commit
+  specifies a pass. Engine executors never merge; the coordinator merges the commit
   that was reviewed and gated once its checks are green. The merge guard
   (`claude.md`, "Hooks"; `codex.md`, "Guards") blocks every merge in an engine
   session and any unpinned, auto or admin merge through `gh` elsewhere. A
