@@ -37,9 +37,10 @@ Work in batches of increasing detail. Never ask one question at a time.
    layer deeper.
 
 Stop when `## Questions` is empty. Then write the final text into the body
-(`engine plan edit <plan> --version <n> --title <text> --body-file <path>`),
-keep the doc link at the bottom, and tell the operator it is ready to
-approve. Executors read only the body.
+(`engine plan edit <plan> --version <n> --title <text> --body-file <path>`,
+or `engine task edit`), keep the doc link at the bottom, and tell the
+operator it is ready to approve. An edit replaces every field: resend any
+harness, tier or requires. Executors read only the body.
 
 Without the Claude Docs connector (for example in Codex), draft in the body
 itself: edit it on each batch and tell the operator what changed.
@@ -65,21 +66,22 @@ In the first batch, read the repo's gates and workflow rules (`AGENTS.md`,
 the lane registry and its docs, the PR template, any review procedure) and
 sort every rule that tells an agent to involve the operator:
 
-- **Compatible** (run `fast` on every change): executors follow it.
+- **Compatible** (run a named lane on every change): executors follow it.
 - **Blocks hands-off** (agree lanes with the operator; never merge unless
   asked): a question with two options, the operator changes the rule in the
   repo (a separate PR) or this plan overrides it. Recommend one.
 - **A real stop** (an open product fact needs its owner): it stays a hard
   stop; if the work needs the answer, ask it now.
 
-Check that every lane the work needs runs on some host, and record the
-capability with `--requires`; a lane no host can run is a question. Never
+Check that every lane the work needs runs on some host, and name the
+capability in the design for the cards' `--requires`; a lane no host can run
+is a question. Never
 invent an override the operator has not agreed.
 
 ## Budget headroom
 
-For each doc the work will update, put its word budget and current count
-(the repo's budget registry and doc check) in the design. A doc the work would push over budget is a question: a trim task
+For each doc the work will update, put its word budget (the repo's budget
+registry) and current count (its doc check, else `wc -w`) in the design. A doc the work would push over budget is a question: a trim task
 first, or a raise the operator agrees. Recommend the trim.
 
 ## Card
@@ -116,12 +118,8 @@ finds fields by them.
    touches. Reuse any card `engine task list <plan>` already shows.
 2. Draft every card. Add a final acceptance task that proves each objective
    end to end and depends on every other task.
-3. **Write in two passes.** Create every card with `engine task create
-   --repo <repo> --plan <plan> --title <text> --body-file <path>
-   [--requires …] [--harness …] [--tier …]`. Then add the dependencies with
-   versioned edits, now that every ID is known: `engine task edit <task>
-   --version <n> --depends <id>,<id>`. An edit replaces every field, so
-   resend the title, body file, requires, harness and tier too.
+3. **Write in two passes** (`server.md`, "Planner"): create every card,
+   then add dependencies and owner card IDs.
 4. **Lint** with `engine lint <plan>` (cycles, outcome and tests, shared
    open questions, the acceptance task) until it passes.
 5. A rule that blocks hands-off and that no override covers, or a budget

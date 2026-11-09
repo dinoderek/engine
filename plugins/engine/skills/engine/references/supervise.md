@@ -9,7 +9,8 @@ coordinator defect, so you record each one.
 The operator has approved the plan and run `engine run <plan>`, which records
 the intent; the server coordinates. Check every 10 minutes:
 
-- `engine ps`: each task's attempt, host and window;
+- `engine ps`: each task's state and attempt; `engine attempt list <task>`
+  for its host and window;
 - `engine inbox --operator`: open questions, notices and rulings digests;
 - `engine updates <plan>` and `engine updates <task>` for each task, from
   your read cursor.

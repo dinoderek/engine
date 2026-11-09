@@ -49,10 +49,10 @@ host. If unsure, it does not cover you.
 Give the class, the question, your recommended answer, and the evidence.
 
 - **A gate red on the default branch:** prove it first. Run the failing lane
-  on a clean checkout of the default branch at its current head, with none of
-  your changes. Then ask about the default branch, not your diff, quoting the
-  commit and the failing output, so one answer serves every task that hits
-  it.
+  in a scratch checkout of the default branch's current head (`git worktree
+  add --detach <scratch> origin/<default>`, removed afterwards). Then ask
+  about the default branch, not your diff, quoting the commit and the
+  failing output, so one answer serves every task that hits it.
 - **A `gh` sign-in, or another host tool, is broken:** name the host (its
   logical name in `~/.config/engine/host`) and the failing output, such as
   `gh auth status`, and point the operator at `engine setup --host <name>`,

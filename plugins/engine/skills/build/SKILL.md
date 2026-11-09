@@ -7,7 +7,9 @@ argument-hint: "[<task>] [gated | hands-off] | review"
 # Build
 
 You take one task from its card, issue or request to a PR merged on green.
-One task = one session = one worktree = one branch = one PR.
+Without a card, the request is the card, and its missing fields default to
+the repo's rules. One task = one session = one worktree = one branch = one
+PR.
 
 ## Modes
 
@@ -117,7 +119,8 @@ function to meet a lint target, or picking one of the options the card's
 Open list offers: the diff shows each, and a reviewer judges it there.
 
 **`low` notes are optional.** At most five one-line notes in the PR body,
-under a collapsed `<details><summary>Low-risk decisions</summary>`, and only
-for something a reviewer would otherwise ask about. No notes is the normal
+in the template's rulings section if it has one (in its format), else under a
+collapsed `<details><summary>Low-risk decisions</summary>`, and only for
+something a reviewer would otherwise ask about, or the repo asks to log. No notes is the normal
 case. Anything bigger than a note is either a hard stop or, in an engine
 server task, a `review` ruling (the `engine` skill).

@@ -1,6 +1,6 @@
 # Execution protocol
 
-> **Owns:** the principles, the phases at a glance, why the coordinator is a role, task and feature states and who moves them, the inbox, merge conflicts, why harnesses guard merges in code, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the ruling grades and the hard-stop list (the `build` and `engine` skills, `plugins/engine/skills/`), each harness's guards (`claude.md`, `codex.md`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, why the coordinator is a program, task and feature states and who moves them, the inbox, merge conflicts, why harnesses guard merges in code, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the ruling grades and the hard-stop list (the `build` and `engine` skills, `plugins/engine/skills/`), each harness's guards (`claude.md`, `codex.md`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 The skills are the single source for agent behaviour. `build` holds the
 loop that takes one task to a merged PR in any repo, its hard stops and its
@@ -32,8 +32,8 @@ agent does, change the skill.
 
 | Phase | Who | Skill mode | Ends when |
 | --- | --- | --- | --- |
-| 1. Prepare: requirements (the what) and design (the how) | You and a planner, in batches | `engine` `plan` | You label the issue `engine:approved`. |
-| 2. Plan: task issues with dependencies and a final acceptance task | A planner, alone | `engine` `server planner` | Plan lint passes. |
+| 1. Prepare: requirements (the what) and design (the how) | You and a planner, in batches | `engine` `plan` | You approve it (`engine plan approve`). |
+| 2. Plan: tasks with dependencies and a final acceptance task | A planner, alone | `engine` `server planner` | Plan lint passes and the plan is `planned`. |
 | 3. Execute: one task, from card to merged PR | One executor per task | `engine` `server executor`, or `build` | The PR merges on green. |
 
 Prepare carries more weight than in a human-gated flow. It is the only time
@@ -91,10 +91,9 @@ the tier and the model for every run, and the defaults are tuned from that.
   note in the PR body, or nothing.
 - **Rulings are written for you, not the code.** Each says what a user would
   notice and what the alternative was.
-- **Hard stops are the only interruptions, asked once.** The question
-  history showed the noise was repeats, not classes: the same red gate on the
-  default branch, or the same broken host sign-in, asked by task after task.
-  So an executor first looks for an answer or an open question on the same
+- **Hard stops are the only interruptions, asked once.** Most repeated
+  questions share a root cause, not a class: the same red gate on the default
+  branch, or the same broken host sign-in. So an executor first looks for an answer or an open question on the same
   root cause, and a question that affects every task is resolved once for the
   whole plan.
 - **More than two `review` rulings on one task** point to a card that

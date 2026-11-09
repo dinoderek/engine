@@ -24,29 +24,44 @@ session's environment supplies the endpoint, credential file and attempt ID
 
 Follow `plan.md`, "Breakdown". The coordinator started you on an approved
 plan; on a resumed attempt, reuse the cards `engine task list <plan>`
-already shows. Ask a blocking question with `engine ask <plan> <text>` and
-wait. When every card exists and `engine lint <plan>` passes, run
-`engine plan state <plan> --version <n> --state planned`, then end the
-session; when the kickoff names `tmux=`, close your window with
-`cd "$HOME" && tmux kill-window -t "$TMUX_PANE"`.
+already shows.
+
+- **Two passes.** Create every card with `engine task create --repo <repo>
+  --plan <plan> --title <text> --body-file <path> [--requires <cap>,…]
+  [--harness <name>] [--tier <tier>]`. Then, with every ID known, add the
+  dependencies and fill owner card IDs into **Decided**: `engine task edit
+  <task> --version <n> --depends <id>,<id>`. An edit replaces every field,
+  so resend the title, body file, requires, harness and tier.
+- **Ask** a blocking question with `engine ask <plan> <text>` and wait.
+- **Finish.** When `engine lint <plan>` passes, run `engine plan state
+  <plan> --version <n> --state planned`. Then end the session: inside tmux
+  (`$TMUX_PANE` set), close your window with `cd "$HOME" && tmux
+  kill-window -t "$TMUX_PANE"`.
 
 ## Executor
 
-Follow the `build` skill, hands-off, with these changes. The server claimed
-the task for this attempt and opened its worktree.
+Follow the `build` skill, hands-off, with these changes. They replace the
+repo's own merge and cleanup steps; the merge guard enforces it.
+
+- **Step 1.** The server claimed the task and opened its worktree: work
+  there, and create none.
 
 - **Step 2.** Also read the parent plan, `engine updates` for the task and
   the plan, and the card's and plan's `## Overrides`. Every dependency must be
   `done`; if not, it is a **Drift** hard stop.
 - **Updates are the inbox.** Read them before you change code, before the PR,
   before the merge request, and first thing when the session resumes.
-- **Step 8.** Omit issue-closing directives. Then set the task `in-review`
-  with its PR URL.
-- **Steps 7 and 10: the lock and the merge request.** You never merge.
-  1. `engine lock acquire` takes the repository's merge lock before the final
-     refresh. If it is held, wait and read updates.
-  2. Holding it: fetch, merge the default branch in if it moved, rerun the
-     gates and the review, and wait for CI green on that head.
+- **Step 8.** Omit issue-closing directives. Put `low` notes and the
+  digest in the repo template's rulings section if it has one. Then set the
+  task `in-review` with its PR URL.
+- **Step 10: the lock and the merge request.** You never merge. Once the PR
+  is `in-review` and CI is green:
+  1. `engine lock acquire` takes the repository's merge lock. If it is held,
+     try again every 5 minutes, reading updates between tries: nothing wakes
+     you when it frees.
+  2. Holding it, redo step 7: fetch; if the default branch moved, merge it
+     in, rerun the gates and the review, push, and wait for CI green on the
+     new head.
   3. Read updates once more. Send the rulings digest, if any (below).
   4. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
      <the repo's merge method> --verdict APPROVED`, then end your turn. The
@@ -96,14 +111,15 @@ The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
   <plan>`. A plan `ruling` update, or a `resolved` one on your task, that
   decides the same root cause covers you: cite its sequence with
   `engine tell <task>` and in the PR body, and carry on. A plan-level
-  question still open on the same root cause: say so with `engine tell
-  <task>`, end your turn, and wait to be woken by its ruling.
+  question still open on the same root cause: cite its sequence with
+  `engine tell <task>`, end your turn, and wait to be woken by its ruling.
+  The coordinator may raise a stall notice meanwhile; that is expected.
 - **Ask:** `engine ask <task> <question>`, then end your turn.
 - **Plan-level questions:** a gate red on the default branch, or a host tool
   or sign-in that every task on that host needs, affects every task. Ask on
-  your task, saying the question is plan-level and asking for
-  `engine resolve <sequence> <answer> --plan <plan>`. Then post `engine tell
-  <plan> "Plan-level question <sequence>: <root cause>"` so sibling tasks
-  find it instead of asking again.
+  your task, saying the question is plan-level and asking the operator to
+  resolve it with `--plan <plan>`. Then, with the sequence the ask returned,
+  post `engine tell <plan> "Plan-level question <sequence>: <root cause>"`
+  so sibling tasks find it instead of asking again.
 - Only the operator's resolution and their restoring the task's state end
   the stop; a plan resolution answers it for every task in the plan.
