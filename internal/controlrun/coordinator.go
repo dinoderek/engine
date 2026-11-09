@@ -95,7 +95,7 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	}
 	// Recovery may have launched or adopted a session after the first observation.
 	fleet := c.fleet(cfg, local)
-	st, v, acts, err := c.decide(id, fleet, cfg)
+	st, v, acts, err := c.decide(id, &fleet, cfg, local)
 	if err != nil {
 		return err
 	}
@@ -128,13 +128,14 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 
 // decide is the pass's decision for root id. Merges are applied first, and
 // when there were any the pass is decided again on the records they
-// changed: a merged task is done for the rest of the pass.
-func (c *Coordinator) decide(id string, fleet reconcile.Fleet, cfg *hosts.Config) (control.State, reconcile.View, []reconcile.Action, error) {
+// changed, and on hosts read again after them: a merged task is done for
+// the rest of the pass.
+func (c *Coordinator) decide(id string, fleet *reconcile.Fleet, cfg *hosts.Config, local hosts.Host) (control.State, reconcile.View, []reconcile.Action, error) {
 	st, err := c.Service.Store.Snapshot()
 	if err != nil || !st.Items[id].Coordinating {
 		return st, reconcile.View{}, nil, err
 	}
-	v := c.view(st, id, fleet)
+	v := c.view(st, id, *fleet)
 	acts := reconcile.Decide(v)
 	merging := false
 	for _, act := range acts {
@@ -149,10 +150,11 @@ func (c *Coordinator) decide(id string, fleet reconcile.Fleet, cfg *hosts.Config
 	if !merging {
 		return st, v, acts, nil
 	}
+	*fleet = c.fleet(cfg, local)
 	if st, err = c.Service.Store.Snapshot(); err != nil || !st.Items[id].Coordinating {
 		return st, reconcile.View{}, nil, err
 	}
-	v = c.view(st, id, fleet)
+	v = c.view(st, id, *fleet)
 	return st, v, reconcile.Decide(v), nil
 }
 
