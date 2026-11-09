@@ -163,6 +163,9 @@ func TestItemDetailRendersDescription(t *testing.T) {
 	if d.Plan != "p2" || len(d.Description) != 2 || d.Description[0].Type != "heading" {
 		t.Fatalf("detail = %+v", d)
 	}
+	if p := itemDetail(control.Item{ID: "p2", Kind: "plan", State: "planned", Status: "blocked"}); p.State != "blocked" {
+		t.Fatalf("plan detail state = %q, want its status", p.State)
+	}
 	b, _ := json.Marshal(itemDetail(control.Item{ID: "p2", Kind: "plan"}))
 	if !strings.Contains(string(b), `"description":[]`) {
 		t.Fatalf("no body encodes as %s, want an empty description list", b)

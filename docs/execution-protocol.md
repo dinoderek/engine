@@ -65,14 +65,14 @@ tier. Telemetry records the tier and model of every run.
 
 | Entity | States |
 | --- | --- |
-| Plan | `prepare` → `approved` (operator) → `planned` → `done`. Its status adds `blocked` while it needs the operator (an open plan question, a task `needs-human` or `failed`) and `executing` once a task has started. |
+| Plan | `prepare` → `approved` (operator) → `planned` → `done`. Its status adds `blocked` while the operator is needed (a plan question, a task `needs-human` or `failed`) and `executing` once a task starts. |
 | Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
 
-"Ready" and a plan's status are computed (`control.PlanStatus`), never
+"Ready" and plan status are computed (`control.PlanStatus`), never
 stored. The planner creates the plan and its tasks; you approve the plan. The
 planner, or the coordinator on passing lint, sets `planned`. The executor
 sets `running`, `needs-human` and `in-review`; the merge marks the task
-`done`. The coordinator sets plan `done` and `failed`.
+`done`. The coordinator sets a plan `done` and a task `failed`.
 
 ## The inbox
 
