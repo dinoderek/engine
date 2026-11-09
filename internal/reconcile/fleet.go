@@ -69,6 +69,17 @@ func Load(name string, harnesses, capabilities []string, st hostops.Status, err 
 
 func (h HostLoad) has(capability string) bool { return slices.Contains(h.Capabilities, capability) }
 
+// SignedOut reports whether the host's own check says harness is signed out
+// there. A session started with it would stop at its first prompt.
+func (h HostLoad) SignedOut(harness string) bool {
+	return h.Unreachable == "" && slices.Contains(h.Status.SignedOut, harness)
+}
+
+// signedOutText says a harness is signed out on a host, and where the fix is.
+func signedOutText(host, harness string) string {
+	return fmt.Sprintf("%s is signed out on %s (`engine setup --host %s` names the sign-in)", harness, host, host)
+}
+
 // free is how many slots the host has free now, and how many of them a heavy
 // task may take: none when it cannot be read.
 func (h HostLoad) free() slots {
@@ -195,6 +206,8 @@ func (f Fleet) fits(w Want, harness string) (fits []HostLoad, why string) {
 		switch {
 		case !slices.Contains(h.Harnesses, harness):
 			lacks = append(lacks, fmt.Sprintf("%s does not run %s", h.Name, harness))
+		case h.SignedOut(harness):
+			lacks = append(lacks, signedOutText(h.Name, harness))
 		case len(missing) > 0:
 			lacks = append(lacks, fmt.Sprintf("%s lacks %s", h.Name, strings.Join(missing, ", ")))
 		default:

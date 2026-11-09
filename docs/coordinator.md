@@ -5,11 +5,10 @@
 ## Shape
 
 - **Go, one binary (`engine`)** for macOS and Linux, the same on every host.
-  The coordinator runs inside `engine serve`; it is no agent and never edits
-  code.
+  It runs inside `engine serve`, is no agent and never edits code.
 - **Stateless.** Each pass derives everything from the server's records and
-  from each host's tmux sessions, `claude agents --json` and run directories.
-  A restarted server resumes and picks up the sessions still live.
+  each host's tmux sessions, `claude agents --json` and run directories.
+  A restarted server picks up the sessions still live.
 - **One pass** runs every 30 seconds and once at start. `internal/reconcile`
   decides from records and fresh host reads, merges first. A pass reads every
   host's `status` in parallel; the session view's observer reuses those reads
@@ -88,7 +87,7 @@ a machine in `hosts.toml` (`hosts-and-sessions.md`).
 | `control-spawn` | Syncs engine's isolated clone of the repo, then runs `spawn` with the run's credentials. |
 | `sync-repo` | Ensures engine's clone exists, fetches it, returns the default branch. |
 | `spawn` | Creates the worktree, trusts it for the harness, opens the tmux window, launches the harness with the caller's model, effort and kickoff (stdin), writes `run.json`. |
-| `status` | Lists the windows of session `engine` (alive, exit code, harness, state), `claude agents --json`, each session name's newest run, quota per harness, free slots and heavy slots, the last 20 screen lines of each window not working, and a waiting window's newest `permissions.jsonl` denial (`telemetry.md`). |
+| `status` | Lists the windows of session `engine` (alive, exit code, harness, state), `claude agents --json`, each session name's newest run, quota per harness, free slots and heavy slots, the last 20 screen lines of each window not working, a waiting window's newest `permissions.jsonl` denial (`telemetry.md`), and which harnesses their own CLI reports signed out. |
 | `collect` | Returns a run directory, its `run.json` and file list; nothing is uploaded. |
 | `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable and not behind its base. Already merged is done. |
 | `release` | Closes the session's window, deletes its Codex profile, removes its worktree unless the run failed or the worktree has changes; the branch stays. |
@@ -102,8 +101,8 @@ reply on another protocol, or not an engine's, tells the operator to run
 protocol from the refusal of the undefined op `protocol`, then streams `ssh
 <address> engine start --check` and keeps its exit code.
 
-**A failed call is unknown, never dead.** When a call fails or a host cannot
-be reached, nothing that host would have said is known: none of its sessions
+**A failed call is unknown, never dead.** When a call fails or a host is
+unreachable, nothing that host would have said is known: none of its sessions
 is marked dead, failed, stalled, restarted or reaped. Only a successful
 `status` that lacks a window shows it gone.
 
@@ -117,7 +116,7 @@ configuration (`operator-setup.md`).
 
 Agent state is never scraped from the pane. The task's state and questions
 come from the server's records. The session layer adds whether a session is
-alive and whether it waits for input:
+alive and waits for input:
 
 1. **The harness** gives each window of session `engine` a `state` (`working`,
    `waiting` or `limited`) from the probe of the harness its newest `run.json`
@@ -130,8 +129,8 @@ alive and whether it waits for input:
 claimed its task 5 minutes after it started is noticed once, and one that
 ended before claiming is restarted. A session that has waited 10 minutes
 while its task is open and not `needs-human` has stopped outside the
-protocol; the operator is notified once. A denial
-at most 10 minutes older than the wait makes the stall a Permission hard stop
+protocol; the operator is notified once, naming the sign-in for a signed-out
+harness. A denial at most 10 minutes older than the wait makes the stall a Permission hard stop
 naming the tool, input and reason.
 
 **Limit recovery.** Never resume `needs-human`; recheck the task's state

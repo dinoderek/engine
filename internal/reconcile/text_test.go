@@ -30,6 +30,12 @@ func TestActionTextsAndMarks(t *testing.T) {
 	}{
 		{"a wait after a denial is the Permission stop", view(plan("executing"), with(task(2, "running"), denied)),
 			[]string{"Permission hard stop", "Bash `gh pr merge 3` was denied"}, func(a Action) bool { return a.Stalled.Equal(denied.WaitingSince) && a.Attempt == "a2" }},
+		{"a wait while signed out names the sign-in", view(plan("executing"), with(task(2, "running"), signedOutWait())),
+			[]string{"demo-2 has waited for input for 10m0s while claude is signed out on devbox", "engine setup --host devbox", "type continue"}, nil},
+		{"a placement while signed out names the sign-in", withFleet(view(plan("executing"), task(2, "todo")), signedOut(fleet(2), "claude")),
+			[]string{"claude is signed out on devbox (`engine setup --host devbox` names the sign-in)"}, nil},
+		{"the planner sign-in notice says it waits", withFleet(view(plan("approved")), signedOut(fleet(2), "claude")),
+			[]string{"The planner waits: claude is signed out on devbox", "starts once the harness is signed in"}, nil},
 		{"a plain wait says how long", view(plan("executing"), with(task(2, "running"), waiting(StallWait))),
 			[]string{"demo-2 has waited for input for 10m0s, outside a hard stop"}, nil},
 		{"the claim wait says so", view(plan("executing"), with(task(2, "todo"), working())),
@@ -74,4 +80,12 @@ func TestAnOldDenialIsAPlainWait(t *testing.T) {
 	if WaitText(s, "plain") != "plain" {
 		t.Error(WaitText(s, "plain"))
 	}
+}
+
+// signedOutWait is a claude session waiting for input on a host that says
+// claude is signed out there.
+func signedOutWait() Session {
+	s := waiting(StallWait)
+	s.Harness, s.SignedOut = "claude", true
+	return s
 }

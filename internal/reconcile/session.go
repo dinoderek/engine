@@ -61,6 +61,10 @@ type Session struct {
 	// Denial is the newest entry of a waiting session's permission log,
 	// when that entry is a denial.
 	Denial *hostops.Denial
+	// Harness is what the session runs, and SignedOut is true when its host
+	// says that harness is signed out there.
+	Harness   string
+	SignedOut bool
 }
 
 // Flagged reports whether at, the session's start or the start of its
@@ -82,10 +86,15 @@ func (s Session) Denied() bool {
 	return s.Denial != nil && !s.WaitingSince.IsZero() && !s.Denial.At.Before(s.WaitingSince.Add(-DenialLead))
 }
 
-// WaitText is a waiting session's stall text: plain, unless the wait
-// follows a permission denial. Then it is the Permission hard stop the
-// session did not raise, naming the tool, its exact input and why.
+// WaitText is a waiting session's stall text: plain, unless its host says
+// its harness is signed out, which names the sign-in, or the wait follows a
+// permission denial. Then it is the Permission hard stop the session did
+// not raise, naming the tool, its exact input and why.
 func WaitText(s Session, plain string) string {
+	if s.SignedOut {
+		return fmt.Sprintf("%s has waited for input for %s while %s. Sign it in there, then type continue in the window",
+			s.Name, StallWait, signedOutText(s.Host, s.Harness))
+	}
 	if !s.Denied() {
 		return plain
 	}

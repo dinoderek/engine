@@ -150,8 +150,19 @@ func TestCLIMergeReadyRequestsTheCoordinatorsMerge(t *testing.T) {
 	head := strings.Repeat("a", 40)
 	pr := fmt.Sprintf("https://github.com/x/y/pull/%d", 7)
 	command(t, e, "task", "state", task.ID, "--version", itoa(at.Item.Version), "--state", "in-review", "--pr", pr)
-	command(t, e, "lock", "acquire")
 	args := []string{"task", "merge-ready", task.ID, "--pr", pr, "--head", head, "--method", "squash", "--verdict", "APPROVED"}
+	// Before any lock is taken, the server, not a missing lock file, says
+	// what the request and the check need.
+	for _, try := range []struct {
+		args []string
+		says string
+	}{{args, "take the repository merge lock"}, {[]string{"lock", "check"}, "merge lock ownership does not match"}} {
+		e.Err.(*bytes.Buffer).Reset()
+		if code := Main(try.args, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), try.says) {
+			t.Fatalf("%v without a lock: %d %s", try.args[:2], code, e.Err)
+		}
+	}
+	command(t, e, "lock", "acquire")
 	u := command(t, e, args...).Updates[0]
 	if u.Kind != "merge-request" || u.Merge == nil || *u.Merge != (control.MergeRequest{PR: pr, Head: head, Method: "squash", Verdict: "APPROVED"}) {
 		t.Fatalf("update %+v", u)

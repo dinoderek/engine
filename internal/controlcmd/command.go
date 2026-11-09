@@ -4,9 +4,11 @@ package controlcmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -223,6 +225,11 @@ func lockToken(r *control.Request, tokenFile string, e Env) error {
 			r.Token = token
 		} else if dir := e.Getenv("ENGINE_RUN_DIR"); dir != "" {
 			b, readErr := os.ReadFile(filepath.Join(dir, "merge-lock.json"))
+			if errors.Is(readErr, fs.ErrNotExist) {
+				// No lock was taken here: the server says what the
+				// request needs.
+				return nil
+			}
 			if readErr != nil {
 				return readErr
 			}
