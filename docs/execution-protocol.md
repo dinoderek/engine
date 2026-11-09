@@ -4,7 +4,7 @@
 
 Two skills hold agent behaviour. `build` takes one task to a merged PR in any
 repo, outside the engine process, and holds the hard-stop classes and the
-reviewer. `engine` holds the server roles (planner, executor, supervisor); its
+reviewer. `engine` holds the server roles (planner, executor); its
 executor is `build` with changes. This doc never restates a rule they hold.
 
 ## Principles
@@ -39,9 +39,8 @@ change the rule or override it for the feature. A plan's approval covers its
 tasks; a standalone task carries its own.
 
 The executor reviews its own work with a fresh reviewer at `deep`, requests
-the merge, and the coordinator makes it. The supervisor finds the
-coordinator's gaps: it acts only through `engine` commands and records every
-gap it fills, so each becomes a coordinator fix.
+the merge, and the coordinator makes it. The operator watches the run
+(`operator-setup.md`, "Watching a run").
 
 Cards and roles name a tier (`deep`, `standard`, `light`), never a model. Host
 config maps each tier to a model and effort per harness
@@ -84,9 +83,8 @@ Attaching is the interactive channel.
 ## Merge conflicts
 
 There is no file ownership: parallelism comes only from dependencies, and an
-executor resolves conflicts by merging the default branch. Telemetry counts
-conflict merges per run. Each merge moves the default branch and forces a
-re-gate of every other open PR, so each repository has one merge lock
-(`coordinator.md`, "Merges and merge locks"): its holder merges the default
-branch, gates and requests its merge while the others wait before their last
-gate run.
+executor resolves conflicts by merging the default branch. Each merge moves
+the default branch and forces a re-gate of every other open PR, so each
+repository has one merge lock (`coordinator.md`, "Merges and merge locks"):
+its holder merges the default branch, gates and requests its merge while the
+others wait before their last gate run.

@@ -1,6 +1,6 @@
 # Operator setup
 
-> **Owns:** the one-time setup an operator does by hand: GitHub access, notifications, harnesses and remote access. **Not here:** how the coordinator reaches hosts (`coordinator.md`), host config (`hosts-and-sessions.md`).
+> **Owns:** what an operator does by hand: the one-time setup (GitHub access, notifications, harnesses, remote access) and watching a run. **Not here:** how the coordinator reaches hosts (`coordinator.md`), host config (`hosts-and-sessions.md`).
 
 ## GitHub access
 
@@ -129,3 +129,30 @@ then run `engine setup --host devbox`.
 
 - Confirm the host's `gh` and Git access to the repo.
 - Enable the `engine` plugin in its `.claude/settings.json`.
+
+## Watching a run
+
+Once you approve a plan and run `engine run <plan>`, the coordinator inside
+`engine serve` runs it to `done`; nobody else watches it. Check in when you
+like:
+
+- `engine ps`: each task's state and attempt; `engine attempt list <task>`
+  gives its host and window, and `engine attach` opens it.
+- `engine inbox --operator`: hard stops, notices and rulings digests. Answer a
+  question with `engine reply <sequence> <text>`, settle it with
+  `engine resolve` (which also restores the task's state), or answer a
+  waiting task with `engine tell <task> <text>` (once on the plan wakes each
+  waiting task in it).
+- `engine updates <plan>` and `engine updates <task>`, from your read cursor
+  (`--after <sequence>`).
+- `engine ui`: the same reads in a browser (`control-server.md`,
+  "Dashboard").
+
+A task with many `review` rulings had a weak card (`execution-protocol.md`,
+"Rulings and hard stops"): raise it at the next Prepare.
+
+**Engine bugs.** When the coordinator misses something (a stall it never
+raised, a merge it never made, a state that is wrong), file an issue on
+`dinoderek/engine` with the evidence: the task's `engine updates`, the state
+`engine ps` showed and when, and what you did instead. Work around it only
+through `engine` commands; never restart `engine serve` to clear it.

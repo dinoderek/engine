@@ -35,9 +35,6 @@ Two programs share one Go module:
   runner) and `checks` (the lanes that are not one external command) →
   `baseline` and `repo` (git, go and file helpers).
 
-The telemetry collector is designed.
-If you are building one, load its doc from the index in `AGENTS.md`.
-
 ## Layers and import rules
 
 `scripts/import-rules.tsv` is the source; the `imports` lane enforces it on
