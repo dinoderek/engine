@@ -9,7 +9,7 @@ labels: []
 <!-- Add the task as a sub-issue of its feature, and set its blockers with
 "blocked by": the dependencies live there, not in this body. The heading names
 are exact: the coordinator and plan lint find fields by them. Field meanings:
-the engine skill, references/plan-sources.md. -->
+the engine skill, references/plan.md ("Card"). -->
 
 ## Outcome
 
@@ -21,7 +21,7 @@ the engine skill, references/plan-sources.md. -->
 
 ## Open
 
-<!-- Questions the executor decides, graded by undo cost. "None" if none. -->
+<!-- Questions the executor decides. "None" if none. -->
 
 ## Tests
 

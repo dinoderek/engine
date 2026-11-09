@@ -12,7 +12,7 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// Decide works out one pass: the coordinate reference's steps, in order. It
+// Decide works out one pass, its steps in order. It
 // reads only v and changes nothing.
 func Decide(v View) []Action {
 	f := v.Feature
@@ -49,7 +49,7 @@ func Decide(v View) []Action {
 	return acts
 }
 
-// planStep is the coordinate reference's step 2: start the planner, then
+// planStep is the pass's planning step: start the planner, then
 // lint its plan. Until the feature is planned, it is the whole pass.
 func planStep(v View) ([]Action, bool) {
 	f := v.Feature

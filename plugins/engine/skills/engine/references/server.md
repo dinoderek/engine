@@ -1,89 +1,128 @@
-# Server plan source and execution
+# Server roles
 
-Use this reference for a server planner or executor kickoff. All task state,
-claims, messages and locks live in the engine server. The session's environment
-supplies its endpoint, credential file and attempt ID. Ordinary gh supplies
-code, PRs and CI with the operator's GitHub login.
+The server roles' mechanics: reading and writing the server, the planner's
+writes, the executor's changes to `build`, rulings, and hard stops. The
+session's environment supplies the endpoint, credential file and attempt ID
+(`ENGINE_SERVER_URL`, `ENGINE_SERVER_TOKEN_FILE`, `ENGINE_ATTEMPT_ID`).
 
 ## Read and write
 
-- Read `engine plan show <id>`, `engine task show <id>` and
-  `engine updates <id> --after <sequence>`. Follow a task's parent plan and
-  owning repository too.
-- Read the target repo's entrypoint and always-load docs. Repo rules win.
-- Plan/task bodies are the agreed requirements/design and task card. Structured
-  dependencies, capabilities, harness and tier are in the JSON fields.
-- Every write supports `--request-key`. Retain it when retrying uncertain
-  delivery. Updates return monotonic sequences; keep a read cursor.
-- `engine task state <id> --version <current> --state <state> --pr <url>`
-  changes state. Read the current version before changing it. Plans use the
-  same state command.
-- Use `engine tell <task> <text>` to message another task. Record rulings
-  and outcomes as updates, and include them in the PR body.
-- `engine ask <task> <question>` creates an explicit operator question and
-  stops the task. For every hard stop from the rulings reference, first read
-  `engine updates <task>` and `engine updates <plan>`. An operator `resolved`
-  or `ruling` update that decides this same question, at this scope, covers
-  it: record your ruling with `engine tell <task>`, citing its sequence,
-  repeat it in the PR body and carry on. Never stretch an earlier decision to a different question or
-  scope; if unsure, it does not cover it. Otherwise ask and wait. Reading,
-  acknowledgement and a conversational reply grant no approval. The operator
-  resolves the question, with `--plan <plan>` when the decision holds for the
-  whole plan, and explicitly restores task state.
-- A waiting task session is woken for new messages on its task, and for
-  messages and rulings on its parent plan.
+- `engine plan show <id>`, `engine task show <id>`, `engine task list <plan>`
+  and `engine updates <id> [--after <sequence>]`. Output is JSON. Updates
+  carry monotonic sequences; keep a read cursor. Follow a task to its plan
+  and repository.
+- A body is the agreed text: a plan's requirements and design, or a task's
+  card. Dependencies, capabilities, harness and tier are JSON fields.
+- `engine task state <id> --version <n> --state <state> [--pr <url>]` changes
+  state; plans use `engine plan state`.
+- `engine tell <id> <text>` posts a message on your task or its plan, and
+  wakes the sessions waiting on it. `engine ask <id> <text>` asks the
+  operator; on a task, it moves the task to `needs-human`. `--operator` on `tell` sends
+  a message to the operator's inbox that asks for no answer.
 
 ## Planner
 
-1. Read the approved plan and `engine task list <plan>`. Reuse existing
-   cards on a resumed attempt.
-2. Break work into one card per PR, with a final acceptance task depending
-   on all the others. Create cards with `engine task create --repo <repo>
-   --plan <plan> --title <text> --body-file <path>`; its body has Outcome,
-   Decided, Open, Tests, Docs to update, Gates and Overrides sections.
-3. Add structured dependencies with `--depends <id>,<id>`, capabilities
-   with `--requires`, and optional `--harness` and `--tier`. Create cards
-   before adding their dependency edges through versioned edits.
-4. Every open question has one owner. Requirements and hard-stop questions
-   go to the operator as updates, never into hidden assumptions.
-5. Once every card is present, set the plan planned with its current version.
-   Close the planner's own tmux window. The coordinator lints before dispatching.
+Follow `plan.md`, "Breakdown". The coordinator started you on an approved
+plan; on a resumed attempt, reuse the cards `engine task list <plan>`
+already shows.
+
+- **Two passes.** Create every card with `engine task create --repo <repo>
+  --plan <plan> --title <text> --body-file <path> [--requires <cap>,…]
+  [--harness <name>] [--tier <tier>]`. Then, with every ID known, add the
+  dependencies and fill owner card IDs into **Decided**: `engine task edit
+  <task> --version <n> --depends <id>,<id>`. An edit replaces every field,
+  so resend the title, body file, requires, harness and tier.
+- **Ask** a blocking question with `engine ask <plan> <text>` and wait.
+- **Finish.** When `engine lint <plan>` passes, run `engine plan state
+  <plan> --version <n> --state planned`. Then end the session: inside tmux
+  (`$TMUX_PANE` set), close your window with `cd "$HOME" && tmux
+  kill-window -t "$TMUX_PANE"`.
 
 ## Executor
 
-The server has claimed the task for this attempt and opened its worktree.
+Follow the `build` skill, hands-off, with these changes. They replace the
+repo's own merge and cleanup steps; the merge guard enforces it.
 
-1. Read the card, parent plan, updates and repository rules. Verify all
-   dependencies are done. Make decisions within scope; grade rulings with
-   the rulings reference.
-2. Implement with the repo's tests and docs. Read updates before making
-   changes, opening a PR and entering the final merge sequence, and whenever
-   the session resumes.
-3. Run every required gate. Have a fresh reviewer review against the remote
-   default branch, with the repo entrypoint as checklist. Fix real findings,
-   rerun gates and obtain a fresh review. Record truthful harness/model
-   attribution and evidence.
-4. Open a normal PR with gh. Set the task in-review and record its PR URL.
-   Omit GitHub issue-closing directives: the server owns task completion.
-5. Take the repository merge lock with `engine lock acquire` before the
-   final default-branch update and gate run. If occupied, wait and read
-   updates. Hold it through review and green CI.
-6. **You never merge; the coordinator does.** With every check green on the
-   reviewed and gated head, read updates once more, then run
-   `engine task merge-ready <task> --pr <url> --head <full-sha> --method
-   <the repo's merge method> --verdict APPROVED` and end your turn. The pre-tool hook
-   refuses any `gh pr merge` here. Approval the repo or card requires is an
-   `engine ask` before the request.
-7. The coordinator wakes you with an update. `merged`: the task is done and
-   the lock is freed; record the outcome as an update and stop. Retain the
-   worktree until the coordinator releases the finished session; dirty
-   worktrees are kept. `merge-refused`: act on its reason (merge the default
-   branch in, fix, re-gate, review again) and request again; keep the lock
-   for a clean default-branch merge, release it while fixing anything else. Any other notice
-   about the merge: wait; never merge yourself.
-8. Keep the lock while a merge request is pending. Release it when waiting
-   for an operator, fixing a finding, or closing the PR unmerged. After reacquiring it, refresh the default branch
-   and repeat the final gates/review/check validation.
+- **Step 1.** The server claimed the task and opened its worktree: work
+  there, and create none.
 
-A server outage blocks the merge request; retain local output and wait.
-Never bypass gates or the lock to finish during an outage.
+- **Step 2.** Also read the parent plan, if any, `engine updates` for the
+  task and the plan, and the card's and plan's `## Overrides`. Every dependency must be
+  `done`; if not, it is a **Drift** hard stop.
+- **Updates are the inbox.** Read them before you change code, before the PR,
+  before the merge request, and first thing when the session resumes.
+- **Step 8.** Omit issue-closing directives. Put `low` notes and the
+  digest in the repo template's rulings section if it has one. Then set the
+  task `in-review` with its PR URL.
+- **Step 10: the lock and the merge request.** You never merge. Once the PR
+  is `in-review` and CI is green:
+  1. `engine lock acquire` takes the repository's merge lock. If it is held,
+     try again every 5 minutes, reading updates between tries: nothing wakes
+     you when it frees.
+  2. Holding it, redo step 7: fetch; if the default branch moved, merge it
+     in, rerun the gates and the review, push, and wait for CI green on the
+     new head.
+  3. Read updates once more. Send the rulings digest, if any (below),
+     once: a repeated request does not resend it.
+  4. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
+     <the repo's merge method> --verdict APPROVED`, then end your turn. The
+     merge guard refuses `gh pr merge` in a server session. Approval the repo
+     or card requires is an `engine ask` before the request.
+  5. The coordinator wakes you with an update. `merged`: the task is `done`
+     and the lock freed; record the outcome with `engine tell <task>` and
+     stop, keeping the worktree for the coordinator to release.
+     `merge-refused`: act on its reason, then request again. Keep the lock
+     for a clean default-branch merge; release it (`engine lock release`)
+     while you fix anything else. Any other merge notice: wait.
+  6. Release the lock while you wait for the operator or close the PR
+     unmerged. After taking it again, redo item 2.
+- **Step 11.** Leave cleanup to the coordinator.
+
+A server outage blocks the merge request: keep your work and wait. Never
+bypass gates or the lock.
+
+## Rulings
+
+1. **Rulings never ask.** A ruling records a decision already made; carry
+   on. Only a hard stop asks and waits.
+2. **One grade reaches the operator: `review`.** Only if undoing it after
+   merge needs another PR *and* it touches persisted data, a surface other
+   people use, or a shape another task builds on, within what the design
+   covers; a contract change it does not cover is a hard stop. Anything
+   else is not a ruling: the `build` skill's "Decisions" shows what is not.
+3. **`low` notes** follow `build`: optional, at most five, PR body only.
+4. **One digest per task.** Send every `review` ruling at once, just before
+   the merge request: `engine tell <task> --operator <digest>`. Do not wait
+   for it to be read. Repeat it in the PR body. Each ruling:
+
+   ```text
+   Ruling (risk: review): <decision>
+   User notices: <what a user would see, in product terms, or nothing>
+   Alternative: <the option you did not take>
+   If wrong: <what undoing it costs and touches>
+   ```
+
+5. **Many rulings mean a weak card.** With more than two, the digest's first
+   line says so, as a signal for Prepare.
+
+## Hard stops
+
+The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
+
+- **Look in the server first:** `engine updates <task>` and, if the task
+  has a plan, `engine updates <plan>`. A plan `ruling` update, or a `resolved` one on your task or plan, that
+  decides the same root cause covers you: cite its sequence with
+  `engine tell <task>` and in the PR body, and carry on. A plan-level
+  question still open on the same root cause: cite its sequence with
+  `engine tell <task>`, end your turn, and wait to be woken by its ruling;
+  record both sequences in the PR body.
+  The coordinator may raise a stall notice meanwhile; that is expected.
+- **Ask:** `engine ask <task> <question>`, then end your turn.
+- **Plan-level questions:** a gate red on the default branch, or a host tool
+  or sign-in that every task on that host needs, affects every task. Ask on
+  your task, saying the question is plan-level and asking the operator to
+  resolve it with `--plan <plan>`. Then, with the sequence the ask returned,
+  post `engine tell <plan> "Plan-level question <sequence>: <root cause>"`
+  so sibling tasks find it instead of asking again.
+- Only the operator's resolution and their restoring the task's state end
+  the stop; a plan resolution answers it for every task in the plan.

@@ -56,7 +56,7 @@ func TestAWaitAfterADenialIsAPermissionStop(t *testing.T) {
 				}
 				return
 			}
-			for _, want := range []string{"Permission hard stop", "Bash `gh pr merge 77 -R o/r --merge --match-head-commit ca44dd5`",
+			for _, want := range []string{"Permission hard stop (hard-stops.md)", "Bash `gh pr merge 77 -R o/r --merge --match-head-commit ca44dd5`",
 				"denied by auto mode: [Merge Without Review]", "permission rule"} {
 				if !strings.Contains(got, want) {
 					t.Errorf("text %q lacks %q", got, want)

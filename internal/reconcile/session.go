@@ -94,7 +94,7 @@ func WaitText(s Session, plain string) string {
 	if d.Reason != "" {
 		why += ": " + d.Reason
 	}
-	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (rulings.md): "+
+	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (hard-stops.md): "+
 		"%s %s was %s. Allow it with a permission rule in the session, or do it by hand, then tell the session to carry on",
 		s.Name, StallWait, d.Tool, deniedInput(d.Input), why)
 }

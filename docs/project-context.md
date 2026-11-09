@@ -1,6 +1,6 @@
 # Project context guideline
 
-> **Owns:** what a repo must provide so executors can run hands-off, and the rules the seed prompt applies. **Not here:** what the executor does (the `engine` skill, `plugins/engine/skills/engine/`), the protocol's phases and states (`execution-protocol.md`).
+> **Owns:** what a repo must provide so executors can run hands-off, and the rules the seed prompt applies. **Not here:** what the executor does (the `build` skill, `plugins/engine/skills/build/`), the protocol's phases and states (`execution-protocol.md`).
 
 The guideline is language-neutral. It names outcomes and registries, and the
 seed prompt picks the tools for each stack. Lineage: Gnocchi is the core
