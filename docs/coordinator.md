@@ -13,7 +13,7 @@
   decides from records and fresh host reads, merges first. A pass reads every
   host's `status` in parallel; the session view's observer reuses those reads
   (`control-server.md`, "Session view"). Stopping coordination leaves
-  existing sessions running.
+  sessions running.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -30,8 +30,8 @@ releases the ended one's session, once a read shows its window gone. A
 refused dispatch retries each pass, noticing once per attempt.
 
 The host serializes dispatches by run ID and returns an existing run on
-replay. It uses ordinary Git credentials and identity, with isolated clones
-under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin
+replay. It uses the host's Git credentials and identity, with isolated clones under
+`~/.local/share/engine/control-repos`. Credentials travel over SSH stdin
 into an owner-only run file whose path the window command exports (joined
 Codex sessions receive it too); hooks recover their connection from the
 worktree's server-session record. Credential and lock-token files are never
@@ -62,7 +62,9 @@ operator approval comes first.
 Each pass the coordinator answers the newest request with the `merge` op of
 the task's host and that host's `gh`; the server has no GitHub credential. A
 merge marks the task done with its PR and frees the lock in one transaction;
-the session keeps its window 10 minutes to report. An op refusal or a missing
+the session keeps its window 10 minutes to report. A done task's session is
+released once idle 10 minutes; releasing one whose background job still runs
+is a notice. An op refusal or a missing
 lock is a `merge-refused` update that wakes the executor. Pending checks wait
 and are never a stall. A failed `gh` call notifies the operator and waits for
 their acknowledgement.
@@ -87,7 +89,7 @@ a machine in `hosts.toml` (`hosts-and-sessions.md`).
 | `control-spawn` | Syncs engine's isolated clone of the repo, then runs `spawn` with the run's credentials. |
 | `sync-repo` | Ensures engine's clone exists, fetches it, returns the default branch. |
 | `spawn` | Creates the worktree, trusts it for the harness, opens the tmux window, launches the harness with the caller's model, effort and kickoff (stdin), writes `run.json`. |
-| `status` | Lists the windows of session `engine` (alive, exit code, harness, state), `claude agents --json`, each session name's newest run, quota per harness, free slots and heavy slots, the last 20 screen lines of each window not working, a waiting window's newest `permissions.jsonl` denial (`telemetry.md`), and which harnesses their own CLI reports signed out. |
+| `status` | Lists each window of session `engine` (alive, exit code, harness, state, background, the last 20 screen lines unless working, a waiting window's newest `permissions.jsonl` denial (`telemetry.md`)), `claude agents --json`, each session name's newest run, quota per harness, free and heavy slots, and the harnesses signed out by their own CLI. |
 | `collect` | Returns a run directory, its `run.json` and file list; nothing is uploaded. |
 | `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable and not behind its base. Already merged is done. |
 | `release` | Closes the session's window, deletes its Codex profile, removes its worktree unless the run failed or the worktree has changes; the branch stays. |
@@ -97,14 +99,12 @@ a machine in `hosts.toml` (`hosts-and-sessions.md`).
 not its own. A failure is `{"error": …, "refused": true|false}`; `refused`
 means the op changed nothing. Over SSH, exit 255 is an unreachable host. A
 reply on another protocol, or not an engine's, tells the operator to run
-`engine setup --host <name>`. `engine start --check --host <name>` reads the
-protocol from the refusal of the undefined op `protocol`, then streams `ssh
-<address> engine start --check` and keeps its exit code.
+`engine setup --host <name>`.
 
-**A failed call is unknown, never dead.** When a call fails or a host is
-unreachable, nothing that host would have said is known: none of its sessions
-is marked dead, failed, stalled, restarted or reaped. Only a successful
-`status` that lacks a window shows it gone.
+**A failed call is unknown, never dead.** Nothing a failed call or
+unreachable host would have said is known: none of its sessions is marked
+dead, failed, stalled, restarted or reaped. Only a successful `status`
+lacking a window shows it gone.
 
 Each host keeps engine's clone at `~/.local/share/engine/repos/<owner>/<repo>`.
 An SSH host needs
@@ -114,9 +114,9 @@ configuration (`operator-setup.md`).
 
 ## Session signals
 
-Agent state is never scraped from the pane. The task's state and questions
-come from the server's records. The session layer adds whether a session is
-alive and waits for input:
+Agent state is never scraped from the pane; the task's state and questions
+are server records. The session layer adds whether a session is alive
+and takes input:
 
 1. **The harness** gives each window of session `engine` a `state` (`working`,
    `waiting` or `limited`) from the probe of the harness its newest `run.json`
@@ -125,22 +125,25 @@ alive and waits for input:
 2. **tmux.** A window that exists with its command not exited is alive; a dead
    window is dead whatever the harness says.
 
-**Stalls.** Limited sessions never stall. A dispatched session that has not
+A session is **idle** when `waiting`, or `working` with `background` set
+(`claude.md`, "Session list"): only a background job runs, so typing cuts
+into no turn. Only idle sessions get wake-up pointers.
+
+**Stalls.** Limited and background-only sessions never stall. A dispatched session that has not
 claimed its task 5 minutes after it started is noticed once, and one that
-ended before claiming is restarted. A session that has waited 10 minutes
-while its task is open and not `needs-human` has stopped outside the
-protocol; the operator is notified once, naming the sign-in for a signed-out
+ended before claiming is restarted. A session waiting 10 minutes
+on an open task with no hard stop or question has
+stopped outside the protocol; the operator is notified once, naming the sign-in for a signed-out
 harness. A denial at most 10 minutes older than the wait makes the stall a
 Permission hard stop naming the tool, input and reason.
 
 **Limit recovery.** Never resume `needs-human`; recheck the task's state
-before typing. Each check resumes an engine window still `limited`, or
-`waiting` with a positive limit `resets_at`, once the reset plus 2 minutes has
-passed, by typing literal `continue` then Enter. Working, unknown and dead
-sessions are left alone, as are unknown resets. The attempt is noted before
-typing, so a failed Enter never duplicates text; a later reset permits
-another. Waiting with a limit reset also clears the stall timer.
+before typing. Each check types literal `continue` then Enter into a window
+still `limited`, or `waiting` with a positive limit `resets_at`, once the
+reset plus 2 minutes has passed; other sessions and unknown resets are left
+alone. The attempt is noted first, so a failed Enter never duplicates text.
+Waiting with a limit reset also clears the stall timer.
 
 Still `limited` 10 minutes after the attempt, or a reset over 24 hours away
 (no typing), gives one notice per reset and session. Recovery covers
-executors and the plan's planner.
+executors and planners.

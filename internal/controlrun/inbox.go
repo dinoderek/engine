@@ -8,15 +8,16 @@ import (
 	"github.com/dinoderek/engine/internal/reconcile"
 )
 
-// wakeMessages points each waiting session at the updates it has not been
-// woken for. A session at a hard stop is left alone.
+// wakeMessages points each idle session at the updates it has not been
+// woken for: one waiting for input, or one only a background job keeps
+// busy. A session busy in a turn, limited, or at a hard stop is left alone.
 func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
 	if c.Wake == nil {
 		return nil
 	}
 	for _, t := range v.Sessions() {
 		sess := *t.Session
-		if !sess.Live || !sess.Waiting || sess.Limited || sess.Unknown || t.State == "needs-human" || t.Question > 0 {
+		if !t.Wakeable() {
 			continue
 		}
 		at := t.Current
@@ -47,8 +48,8 @@ func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
 }
 
 // pendingMessage is the newest update a session has not been woken for: a
-// message on its own item, or a message or ruling on its task's plan that
-// is addressed to the plan's sessions rather than the operator. A session's
+// message on its own item, or a message or resolution on its task's plan
+// that is addressed to the plan's sessions rather than the operator. A session's
 // own updates and the coordinator's notices never wake it.
 func pendingMessage(st control.State, item control.Item, at control.Attempt) int {
 	last := 0
@@ -64,7 +65,7 @@ func pendingMessage(st control.State, item control.Item, at control.Attempt) int
 }
 
 var itemWakeKinds = []string{"say", "reply", "resolved", control.MergeMerged, control.MergeRefused}
-var planWakeKinds = []string{"say", "resolved", "ruling"}
+var planWakeKinds = []string{"say", "resolved"}
 
 func planWake(item control.Item, u control.Update) bool {
 	return item.Kind == "task" && item.Plan != "" && u.Item == item.Plan &&

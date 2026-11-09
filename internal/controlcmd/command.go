@@ -43,7 +43,7 @@ const Usage = "engine serve\n" +
 	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
 	"engine ps\nengine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
-	"engine reply|ack|resolve <sequence> [<text>]\nengine resolve <sequence> <text> --plan <plan-id>\n" +
+	"engine reply|ack|resolve <sequence> [<text>]\n" +
 	"engine lock acquire|check|release [--attempt <id>] [--lock-token-file <path>]\n" +
 	"engine lock recover <repo-id> --attempt <id> --lock-token-file <path> --body <evidence>\n" +
 	"engine attempt list [<task-id>]\n" +

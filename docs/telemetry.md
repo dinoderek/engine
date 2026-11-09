@@ -37,8 +37,9 @@ when a prompt or automatic resume fires. `limits.jsonl` retains each stop
 with those fields and its complete hook `input`, including error details,
 for inspection after the marker clears.
 
-`harness-state.json` retains Codex session and optional turn IDs with each
-hook state, so a newer prompt cannot inherit an older failed turn. Stored
+`harness-state.json` retains the harness's session ID, and Codex's optional
+turn ID, with each hook state, so a newer Codex prompt cannot inherit an
+older failed turn. Stored
 failed-turn input is read through app-server; it is not a limit hook event.
 
 `codex-label.json` records the attempts to label a joined Codex thread: the

@@ -55,7 +55,9 @@ engine@engine`. Setup prints these when the plugin is missing there.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
-config, and ends with `engine start --check --host <name>`. The engine is built
+config, and ends with `engine start --check --host <name>`, which reads the
+host's protocol from the refusal of the undefined op `protocol`, then streams
+`ssh <address> engine start --check` and keeps its exit code. The engine is built
 with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
 from GitHub, and counts as current only on that commit and that Go. It changes
 only engine's own files (`~/.config/engine/`, `~/.local/bin/engine`,
@@ -138,8 +140,9 @@ like:
   gives its host and window, and `engine attach` opens it.
 - `engine inbox --operator`: hard stops, notices and rulings digests. Answer a
   question with `engine reply <sequence> <text>`, settle it with
-  `engine resolve`, or answer a waiting task with `engine tell <task> <text>`
-  (once on the plan wakes each waiting task in it).
+  `engine resolve` (which also restores the task's state), or answer a
+  waiting task with `engine tell <task> <text>` (once on the plan wakes each
+  waiting task in it).
 - `engine updates <plan>` and `engine updates <task>`, from your read cursor
   (`--after <sequence>`).
 - `engine ui`: the same reads in a browser (`control-server.md`,
