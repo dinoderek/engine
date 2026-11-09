@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -28,7 +29,13 @@ const codexLabelAttempts = 3
 
 // codexLabelStale is how old a lock is when its holder must have died: an
 // attempt ends within its deadline.
-const codexLabelStale = 30 * codexQuotaTimeout
+const codexLabelStale = 30 * codexLabelTimeout
+
+// codexLabelTimeout is how long one attempt may take.
+const codexLabelTimeout = 3 * time.Second
+
+// codexHarness is the harness whose threads are labelled.
+const codexHarness = "codex"
 
 // CodexLabelRequest is how a joined Codex thread is shown in the apps: its
 // title, and the project it is filed under.
@@ -144,7 +151,7 @@ func sendCodexLabel(d Deps, req CodexLabelRequest) error {
 	if err != nil {
 		return err
 	}
-	bin, err := host.BinPath(Codex, d.Home)
+	bin, err := host.BinPath(codexHarness, d.Home)
 	if err != nil {
 		return err
 	}
@@ -152,9 +159,9 @@ func sendCodexLabel(d Deps, req CodexLabelRequest) error {
 	if send == nil {
 		send = labelCodexThread
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), codexQuotaTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), codexLabelTimeout)
 	defer cancel()
-	return send(ctx, bin, (codex{d: d}).engineHome(), req)
+	return send(ctx, bin, filepath.Join(d.Home, filepath.FromSlash(hosts.CodexHomeDir)), req)
 }
 
 // labelCodexThread sets the title first, since thread/name/set is stable and

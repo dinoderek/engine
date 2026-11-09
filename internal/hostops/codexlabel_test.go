@@ -214,7 +214,7 @@ func TestLabelCodexThreadStopsOnceLabelled(t *testing.T) {
 	if !reflect.DeepEqual(*reqs, []CodexLabelRequest{want}) {
 		t.Errorf("requests %+v, want one %+v", *reqs, want)
 	}
-	if bin, home := (*where)[0], (*where)[1]; bin != filepath.Join(d.Home, "bin", "codex") || home != (codex{d: d}).engineHome() {
+	if bin, home := (*where)[0], (*where)[1]; bin != filepath.Join(d.Home, "bin", "codex") || home != filepath.Join(d.Home, ".local/share/engine/codex") {
 		t.Errorf("sent with %s in %s", bin, home)
 	}
 	if got := readLabel(t, dir); got.CodexLabelRequest != want || got.Error != "" || got.Attempts != 1 || !got.At.Equal(fixedNow()) {

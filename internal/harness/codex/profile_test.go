@@ -1,4 +1,4 @@
-package session
+package codex
 
 import (
 	"os"
@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-func TestCodexHome(t *testing.T) {
-	if got := CodexHome(func(string) string { return "" }, "/home/me"); got != "/home/me/.codex" {
+func TestHome(t *testing.T) {
+	if got := Home(func(string) string { return "" }, "/home/me"); got != "/home/me/.codex" {
 		t.Errorf("default: %s", got)
 	}
-	if got := CodexHome(func(k string) string { return map[string]string{"CODEX_HOME": "/cx"}[k] }, "/home/me"); got != "/cx" {
+	if got := Home(func(k string) string { return map[string]string{"CODEX_HOME": "/cx"}[k] }, "/home/me"); got != "/cx" {
 		t.Errorf("CODEX_HOME: %s", got)
 	}
 }
@@ -19,7 +19,7 @@ func TestCodexHome(t *testing.T) {
 // The profile trusts the folder and its resolved path, makes the clone a
 // writable root, is readable by its owner only, and goes again with nothing
 // left.
-func TestCodexProfile(t *testing.T) {
+func TestProfile(t *testing.T) {
 	root := t.TempDir()
 	real := filepath.Join(root, "real")
 	if err := os.MkdirAll(real, 0o755); err != nil {
@@ -30,10 +30,10 @@ func TestCodexProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := filepath.Join(root, "codex")
-	if err := WriteCodexProfile(home, CodexProfile("r-7"), link, "/c/o/r"); err != nil {
+	if err := WriteProfile(home, Profile("r-7"), link, "/c/o/r"); err != nil {
 		t.Fatal(err)
 	}
-	path := CodexProfilePath(home, "engine-r-7")
+	path := ProfilePath(home, "engine-r-7")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -50,10 +50,10 @@ func TestCodexProfile(t *testing.T) {
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("mode %v, %v", info.Mode(), err)
 	}
-	if removed, err := RemoveCodexProfile(home, "engine-r-7"); !removed || err != nil {
+	if removed, err := RemoveProfile(home, "engine-r-7"); !removed || err != nil {
 		t.Errorf("remove: %v, %v", removed, err)
 	}
-	if removed, err := RemoveCodexProfile(home, "engine-r-7"); removed || err != nil {
+	if removed, err := RemoveProfile(home, "engine-r-7"); removed || err != nil {
 		t.Errorf("remove again: %v, %v", removed, err)
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
@@ -62,7 +62,7 @@ func TestCodexProfile(t *testing.T) {
 }
 
 func TestCodexProfileRefusesABadName(t *testing.T) {
-	if err := WriteCodexProfile(t.TempDir(), "../x", "/w", "/c"); err == nil || !strings.Contains(err.Error(), `codex profile "../x"`) {
+	if err := WriteProfile(t.TempDir(), "../x", "/w", "/c"); err == nil || !strings.Contains(err.Error(), `codex profile "../x"`) {
 		t.Errorf("got %v", err)
 	}
 }

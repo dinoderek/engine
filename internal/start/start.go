@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/registry"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/remote"
@@ -25,14 +27,14 @@ type Deps struct {
 	Probe session.RunFunc
 	Tmux  *session.Tmux
 	Home  string
-	// Getenv reads CLAUDE_CONFIG_DIR.
+	// Getenv reads the caller's environment.
 	Getenv func(string) string
 	Now    func() time.Time
 	// BaseURL is where repos are cloned from; GitHub when empty.
 	BaseURL string
 	// Sleep waits between the check's polls; nil is time.Sleep.
 	Sleep func(time.Duration)
-	// Exec runs the host's own CLIs, such as claude agents.
+	// Exec runs the host's own CLIs, such as the harness binaries.
 	Exec session.Runner
 	// Client is the host the session starts on, for tests; nil is this host,
 	// in process, through the fields above, or the named one over SSH.
@@ -57,6 +59,7 @@ func (d Deps) HostClient(host hosts.Host, remoteHost bool) remote.Client {
 	return remote.Local{Deps: hostops.Deps{
 		Run: d.Run, Probe: d.Probe, Exec: d.Exec, Tmux: d.Tmux, Home: d.Home, Getenv: d.Getenv, Now: d.Now, BaseURL: d.BaseURL, Sleep: d.Sleep,
 		JoinRemote: true,
+		Harnesses:  registry.New(harness.Env{Exec: d.Exec, Home: d.Home, Getenv: d.Getenv, Now: d.Now}),
 	}}
 }
 
@@ -82,7 +85,7 @@ func refuse(format string, args ...any) error {
 	return &RefusedError{Reason: fmt.Sprintf(format, args...)}
 }
 
-// Check runs the preflight check of harness (Claude when empty) on host,
+// Check runs the preflight check of harness (the default when empty) on host,
 // which is this one when empty, prints its report, and reports whether an
 // unattended session there would run without a prompt.
 func Check(d Deps, host, harness string, out io.Writer) (bool, error) {

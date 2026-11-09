@@ -20,16 +20,16 @@ const Usage = `usage: engine host <op> --json
 ops, each printing one JSON object:
   sync-repo --repo <owner/repo>      sync engine's clone of a repo
   spawn --repo <owner/repo> --task <n> --mode hands-off|gated --model <m>
-        --effort <e> --run-id <id> [--harness claude|codex] [--tier <t>]
+        --effort <e> --run-id <id> [--harness <name>] [--tier <t>]
         [--feature <owner/repo#n>] [--heavy]
                                      launch a session; the kickoff is on stdin
-  status                             windows, Claude sessions, newest runs, free
-                                     slots and free heavy slots
+  status                             windows and their sessions' states, newest
+                                     runs, quota, free slots and free heavy slots
   collect --run-id <id>              a run directory and its run.json
   release --name <repo>-<task> [--failed]
                                      close a session's window, remove its
                                      worktree, kept when --failed, and delete
-                                     its Codex profile
+                                     the harness's files for it
   merge --repo <owner/repo> --pr <n> --head <sha> --method squash|merge|rebase [--check]
                                      merge a green PR pinned to its reviewed
                                      head, with this host's gh; --check only

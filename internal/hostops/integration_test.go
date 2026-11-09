@@ -132,7 +132,7 @@ func TestRealSpawnStatusRelease(t *testing.T) {
 	if w := s.Windows[1]; w.Name != "r-8" || w.ExitCode == nil || *w.ExitCode != 3 || !strings.Contains(w.Screen, "dying") {
 		t.Errorf("the dead window %+v", w)
 	}
-	if s.Windows[0].Name != "r-7" || !s.Windows[0].Alive || s.FreeSlots != 1 || s.AgentsError != "" || len(s.Runs) != 2 || s.Runs[0].Record.Tmux != "engine:"+spawned[7].Window {
+	if s.Windows[0].Name != "r-7" || !s.Windows[0].Alive || s.FreeSlots != 1 || len(s.HarnessErrors) != 0 || len(s.Runs) != 2 || s.Runs[0].Record.Tmux != "engine:"+spawned[7].Window {
 		t.Errorf("status %+v", s)
 	}
 

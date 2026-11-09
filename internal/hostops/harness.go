@@ -1,99 +1,33 @@
 package hostops
 
 import (
-	"fmt"
 	"path/filepath"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// The harnesses the ops launch. A request that names none launches Claude.
-const (
-	Claude = "claude"
-	Codex  = "codex"
-)
+// defaultAdapters builds the adapters of Deps that carry none. The commands
+// always pass theirs; tests set this to the registry's.
+var defaultAdapters func(Deps) harness.Adapters
 
-// tmpReads lets a Claude executor read back what it or its tests wrote to
-// /tmp, such as screenshots, without a prompt. macOS resolves /tmp to
-// /private/tmp.
-var tmpReads = []string{"Read(//tmp/**)", "Read(//private/tmp/**)"}
-
-// harness is every step of a launch that differs between harnesses: whether
-// the session joins a remote-control daemon, how its folder is trusted, where
-// the harness keeps its config, and what follows the host's launch line.
-type harness interface {
-	// Name is the harness's name in hosts.toml and run.json.
-	Name() string
-	// Join decides, through the harness binary bin, whether a session
-	// launched with the expanded launch line joins the host's remote-control
-	// daemon. It only reads. When the session starts without, warning says
-	// why; a joined session the apps cannot see yet is warned too.
-	Join(run session.Runner, bin, line string) (joined bool, warning string)
-	// Trust makes dir, a folder in clone, trusted for the session, so no
-	// trust prompt blocks its start.
-	Trust(dir, clone string, joined bool) error
-	// Untrust undoes what Trust left for dir that belongs to this session
-	// alone. An empty dir undoes only what needs no folder.
-	Untrust(dir string) error
-	// Env is the shell that exports the harness's config location, ending
-	// in " && ": the tmux server's environment may differ from the caller's.
-	Env(joined bool) string
-	// Args follow the launch line, ending in the kickoff.
-	Args(l launch) string
+// adapters are the harness adapters the ops launch and observe.
+func (d Deps) adapters() harness.Adapters {
+	if d.Harnesses == nil && defaultAdapters != nil {
+		return defaultAdapters(d)
+	}
+	return d.Harnesses
 }
 
-// harnessFor returns the harness called name, or Claude when name is empty,
-// for the session called sessionName.
-func harnessFor(d Deps, name, sessionName string) (harness, error) {
-	switch name {
-	case "", Claude:
-		return claude{d}, nil
-	case Codex:
-		return codex{d: d, profile: session.CodexProfile(sessionName)}, nil
+// adapterFor returns the adapter called name, or the default when name is
+// empty.
+func adapterFor(d Deps, name string) (harness.Adapter, error) {
+	a, err := harness.Lookup(d.adapters(), name)
+	if err != nil {
+		return nil, refuse("%v", err)
 	}
-	return nil, refuse("unknown harness %q: want %s or %s", name, Claude, Codex)
-}
-
-// claude trusts the folder in Claude Code's state file. Its file tools ask
-// before reading outside the worktree, which would stop an unattended
-// executor, so it adds the engine plugin's directory with --add-dir and allows
-// reads in /tmp with --allowedTools. /tmp only gets a read rule: Claude loads
-// skills from every --add-dir directory, and anyone on the host can write to
-// /tmp. The kickoff comes last, after --, because both options take every
-// argument up to the next option.
-type claude struct{ d Deps }
-
-func (claude) Name() string { return Claude }
-
-// Join is false: Claude's launch line names the session for Remote Control.
-func (claude) Join(session.Runner, string, string) (bool, string) { return false, "" }
-
-func (c claude) Trust(dir, _ string, _ bool) error {
-	if err := session.TrustFolder(session.ClaudeConfig(c.d.Getenv, c.d.Home), dir); err != nil {
-		return fmt.Errorf("trust %s for Claude Code: %w", dir, err)
-	}
-	return nil
-}
-
-// Untrust leaves the folder trusted: the trust is a key in a file Claude
-// Code shares with every session.
-func (claude) Untrust(string) error { return nil }
-
-func (c claude) Env(bool) string {
-	if dir := c.d.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		return "export CLAUDE_CONFIG_DIR=" + hosts.ShellWord(dir) + " && "
-	}
-	return "unset CLAUDE_CONFIG_DIR && "
-}
-
-func (c claude) Args(l launch) string {
-	args := " --add-dir " + hosts.ShellWord(session.PluginDir(c.d.Getenv, c.d.Home)) + " --allowedTools"
-	for _, rule := range tmpReads {
-		args += " " + hosts.ShellWord(rule)
-	}
-	args += " --settings " + hosts.ShellWord(`{"statusLine":{"type":"command","command":"engine hook statusline"}}`)
-	return args + " -- " + hosts.ShellWord(l.kickoff)
+	return a, nil
 }
 
 // launch is what a window runs: the expanded launch line, the session's
@@ -105,19 +39,28 @@ type launch struct {
 	control                          *ControlRequest
 }
 
-func launchCommand(d Deps, h harness, l launch) string {
+// harnessLaunch is l as the adapter takes it.
+func (l launch) harnessLaunch() harness.Launch {
+	out := harness.Launch{Line: l.line, Dir: l.dir, RunDir: l.runDir, Kickoff: l.kickoff, Unattended: l.mode == HandsOff, Joined: l.joined}
+	if l.control != nil {
+		out.ServerURL, out.TokenFile, out.Attempt = l.control.URL, filepath.Join(l.runDir, "server-token"), l.control.Attempt
+	}
+	return out
+}
+
+func launchCommand(name string, h harness.Launcher, l launch) string {
 	script := ""
 	if l.control != nil {
 		script = "export ENGINE_SERVER_URL=" + hosts.ShellWord(l.control.URL) + " ENGINE_SERVER_TOKEN_FILE=" + hosts.ShellWord(filepath.Join(l.runDir, "server-token")) + " ENGINE_ATTEMPT_ID=" + hosts.ShellWord(l.control.Attempt) + " && "
 	}
 	// The hooks log to the run directory and, unattended, deny or log.
 	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(l.runDir) + " && "
-	script += "export " + session.HarnessVar + "=" + h.Name() + " && "
+	script += "export " + session.HarnessVar + "=" + name + " && "
 	if l.mode == HandsOff {
 		script += "export " + session.UnattendedVar + "=1 && "
 	} else {
 		script += "unset " + session.UnattendedVar + " && "
 	}
-	script += h.Env(l.joined) + "exec " + l.line + h.Args(l)
+	script += h.Env(l.joined) + "exec " + l.line + h.Args(l.harnessLaunch())
 	return "exec /bin/sh -c " + hosts.ShellWord(script)
 }

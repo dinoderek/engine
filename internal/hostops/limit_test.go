@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/harness/claude"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -31,7 +32,7 @@ func TestClaudeLimitStatus(t *testing.T) {
 				body = `{"since":1000,"resets_at":2000,"error":"rate_limit"}`
 			}
 			if body != "" {
-				write(t, filepath.Join(dir, session.LimitFile), body, 0o600)
+				write(t, filepath.Join(dir, claude.LimitFile), body, 0o600)
 			}
 			line := "@1 %1 0 r-1"
 			if tc.dead {

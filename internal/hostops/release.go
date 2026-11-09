@@ -18,13 +18,12 @@ type Released struct {
 	WorktreeKept bool   `json:"worktree_kept"`
 	// Note says what went wrong without failing the release: why a worktree
 	// was kept when the run had not failed, a run.json it could not read, or
-	// Codex trust it could not remove.
+	// a harness's files it could not remove.
 	Note string `json:"note,omitempty"`
 }
 
-// Release closes the session's window if it is still open, deletes engine's
-// Codex profile for it and its folder's trust in engine's Codex config.toml,
-// and removes the worktree of its newest run, unless
+// Release closes the session's window if it is still open, deletes what each
+// harness adapter wrote for this session alone, and removes the worktree of its newest run, unless
 // the run failed: a failed run's worktree is kept for the operator. Removal
 // is git's plain `worktree remove`, which keeps a worktree with uncommitted
 // changes, and the branch always stays.
@@ -47,9 +46,9 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 		r.WindowClosed = true
 	}
 	run, ok, err := session.LatestRun(d.Home, name)
-	// Codex's trust goes whatever the harness: a spawn that failed before
-	// run.json was written may have left its profile.
-	if uerr := (codex{d: d, profile: session.CodexProfile(name)}).Untrust(run.Record.Worktree); uerr != nil {
+	// Every adapter releases the session, whatever the run's harness: a
+	// spawn that failed before run.json was written may have left files.
+	if uerr := releaseAll(d, name, run.Record.Worktree); uerr != nil {
 		r.Note = uerr.Error()
 	}
 	// An unreadable run.json fails the release only when no run of this
@@ -88,4 +87,19 @@ func removeWorktree(d Deps, rec session.Record) error {
 	}
 	_, err = d.Run(clone, nil, "git", "worktree", "remove", rec.Worktree)
 	return err
+}
+
+// releaseAll has every adapter release the session called name, whose
+// newest run's worktree is dir.
+func releaseAll(d Deps, name, dir string) error {
+	a := d.adapters()
+	if a == nil {
+		return nil
+	}
+	var errs []error
+	for _, n := range a.Names() {
+		h, _ := a.Get(n)
+		errs = append(errs, h.Session(name).Release(dir))
+	}
+	return errors.Join(errs...)
 }

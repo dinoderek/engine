@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/codex"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -74,8 +76,8 @@ func TestControlDispatchJSONAndJoinedEnvironment(t *testing.T) {
 	if _, err := ControlSpawn(Deps{}, ControlRequest{}); err == nil {
 		t.Fatal("incomplete dispatch")
 	}
-	l := launch{runDir: "/tmp/run", mode: HandsOff, control: &ControlRequest{URL: "http://server", Attempt: "a1"}}
-	vars := sessionVars(l)
+	l := launch{runDir: "/tmp/run", mode: HandsOff, joined: true, control: &ControlRequest{URL: "http://server", Attempt: "a1"}}
+	vars := codex.New(harness.Env{}, codex.Options{}).Session("r-1").Args(l.harnessLaunch())
 	if !strings.Contains(vars, "ENGINE_SERVER_TOKEN_FILE") || !strings.Contains(vars, "ENGINE_ATTEMPT_ID") {
 		t.Fatal(vars)
 	}

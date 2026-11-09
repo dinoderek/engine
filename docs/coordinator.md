@@ -6,7 +6,7 @@
 
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
 - **Stateless.** Each pass derives everything from the server's records and
-  each host's tmux sessions, `claude agents --json` and run directories.
+  each host's tmux sessions, harness observations and run directories.
   A restarted server adopts live sessions.
 - **One pass** runs every 30 seconds and once at start. `internal/reconcile`
   decides from records and fresh host reads, merge queues first. A pass reads every
@@ -87,10 +87,10 @@ a machine in `hosts.toml` (`hosts-and-sessions.md`).
 | `control-spawn` | Syncs engine's isolated clone of the repo, then runs `spawn` with the run's credentials. |
 | `sync-repo` | Ensures engine's clone exists, fetches it, returns the default branch. |
 | `spawn` | Creates the worktree, trusts it for the harness, opens the tmux window, launches the harness with the caller's model, effort and kickoff (stdin), writes `run.json`. |
-| `status` | Lists each window of session `engine` (alive, exit code, harness, state, background, the last 20 screen lines unless working, a waiting window's newest `permissions.jsonl` denial (`telemetry.md`)), `claude agents --json`, each session name's newest run, quota per harness, free and heavy slots, and the harnesses signed out by their own CLI. |
+| `status` | Lists each window of session `engine` (alive, exit code, harness, state, background, the last 20 screen lines unless working, a waiting window's newest `permissions.jsonl` denial (`telemetry.md`)), each session name's newest run, quota per harness, free and heavy slots, the harnesses signed out by their own CLI, and `harness_errors`. |
 | `collect` | Returns a run directory, its `run.json` and file list; nothing is uploaded. |
 | `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base; replies with a code. `--check` only judges. Already merged is done. |
-| `release` | Closes the session's window, deletes its Codex profile, removes its worktree unless the run failed or the worktree has changes; the branch stays. |
+| `release` | Closes the session's window, deletes each harness's files for it, removes its worktree unless the run failed or the worktree has changes; the branch stays. |
 
 **The envelope.** Every reply, a failure too, carries `protocol` (an integer),
 `engine` (the build) and `host`. A failure is `{"error": …, "refused":

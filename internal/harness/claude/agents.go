@@ -1,12 +1,10 @@
-// This file reads what the harness and git say about the sessions running on
-// this host: Claude Code's list of live sessions, and the checkout a session
-// works in. Engine never scrapes a pane for either.
-
-package session
+package claude
 
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/dinoderek/engine/internal/session"
 )
 
 // Agent statuses that Claude Code reports for a live session.
@@ -33,7 +31,7 @@ type Agent struct {
 
 // ListAgents runs `<bin> agents --json` and returns the live sessions on this
 // host, whether or not they run in tmux.
-func ListAgents(run Runner, bin string) ([]Agent, error) {
+func ListAgents(run session.Runner, bin string) ([]Agent, error) {
 	out, err := run(bin, "agents", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("%s agents: %w", bin, err)
@@ -43,4 +41,17 @@ func ListAgents(run Runner, bin string) ([]Agent, error) {
 		return nil, fmt.Errorf("%s agents --json: unreadable output: %w", bin, err)
 	}
 	return agents, nil
+}
+
+// AgentState is the state of a live Claude Code session: busy is working;
+// waiting and idle are waiting, because only a prompt moves the session on.
+// A status a newer Claude Code adds is unknown.
+func AgentState(a Agent) string {
+	switch a.Status {
+	case AgentBusy:
+		return session.StateWorking
+	case AgentWaiting, AgentIdle:
+		return session.StateWaiting
+	}
+	return ""
 }

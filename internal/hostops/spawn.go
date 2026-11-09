@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -58,8 +59,9 @@ type spawn struct {
 	runDir string
 	cfg    *hosts.Config
 	host   hosts.Host
-	h      harness
-	bin    string // the harness binary
+	h      harness.Adapter
+	l      harness.Launcher // the session's launch
+	bin    string           // the harness binary
 }
 
 // Spawn creates the task's worktree in engine's clone, which sync-repo has
@@ -99,7 +101,7 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 		return Spawned{}, fmt.Errorf("%w; %s", err, left)
 	}
 	joined, joinWarning := s.join(d, line)
-	if err := s.h.Trust(wt.Path, clone.Path, joined); err != nil {
+	if err := s.l.Trust(wt.Path, clone.Path, joined); err != nil {
 		return Spawned{}, fmt.Errorf("%w; %s", err, left)
 	}
 	log := filepath.Join(s.runDir, session.PaneLog)
@@ -107,7 +109,7 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	// it is there before the session starts; the window is added once open.
 	if joined {
 		if err := session.WriteRecord(s.runDir, s.record(wt, "", log, d)); err != nil {
-			return Spawned{}, errors.Join(fmt.Errorf("write run.json: %w; %s", err, left), s.h.Untrust(wt.Path))
+			return Spawned{}, errors.Join(fmt.Errorf("write run.json: %w; %s", err, left), s.l.Release(wt.Path))
 		}
 	}
 	if s.control != nil {
@@ -115,10 +117,10 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 			return Spawned{}, err
 		}
 	}
-	command := launchCommand(d, s.h, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined, control: s.control})
+	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined, control: s.control})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
-		if uerr := s.h.Untrust(wt.Path); uerr != nil {
+		if uerr := s.l.Release(wt.Path); uerr != nil {
 			left += "; " + uerr.Error()
 		}
 		_ = os.Remove(filepath.Join(s.runDir, session.RecordFile))
@@ -146,7 +148,7 @@ func (s spawn) join(d Deps, line string) (bool, string) {
 	if !d.JoinRemote {
 		return false, ""
 	}
-	return s.h.Join(d.Exec, s.bin, line)
+	return s.l.Join(s.bin, line)
 }
 
 // checkSpawn runs spawn's refusals. It only reads files and tmux's window
@@ -157,9 +159,10 @@ func checkSpawn(d Deps, r SpawnRequest) (spawn, error) {
 		return spawn{}, err
 	}
 	var err error
-	if s.h, err = harnessFor(d, s.Harness, s.name); err != nil {
+	if s.h, err = adapterFor(d, s.Harness); err != nil {
 		return spawn{}, err
 	}
+	s.l = s.h.Session(s.name)
 	if s.cfg, s.host, err = openHost(d.Home); err != nil {
 		return spawn{}, err
 	}

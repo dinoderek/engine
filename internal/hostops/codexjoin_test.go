@@ -362,25 +362,6 @@ func TestCodexJoinedTrustIsRemoved(t *testing.T) {
 	}
 }
 
-// Only the daemon's own program counts as running with remote control on,
-// not a shell or awk that names the path.
-func TestRemoteControlOn(t *testing.T) {
-	home := "/h/.local/share/engine/codex"
-	cases := map[string]bool{
-		home + "/packages/app-server-daemon/current/bin/codex app-server --remote-control --listen unix://": true,
-		home + "/packages/app-server-daemon/current/bin/codex app-server --listen unix://":                  false,
-		"awk -v p=" + home + "/packages/ / --remote-control/":                                               false,
-		"/bin/sh -c " + home + "/packages/x --remote-control":                                               false,
-		"/h/.codex/packages/app-server-daemon/current/bin/codex app-server --remote-control":                false,
-		"": false,
-	}
-	for ps, want := range cases {
-		if got := remoteControlOn("/bin/zsh\n"+ps+"\n", home); got != want {
-			t.Errorf("remoteControlOn(%q) = %v, want %v", ps, got, want)
-		}
-	}
-}
-
 // The check joins as a spawn would: engine's config.toml trusts its folder
 // while it runs, and its run.json names that folder, which a joined
 // session's hooks find their run by.
@@ -462,21 +443,5 @@ func TestSpawnCodexDoesNotJoinUnrecordedEnvironment(t *testing.T) {
 		if err != nil || !strings.Contains(got.Warning, "host environment refresh") || strings.Contains(tm.command, "--remote unix://") {
 			t.Fatalf("%+v, %v, %s", got, err, tm.command)
 		}
-	}
-}
-
-func TestDaemonEnvironmentRejectsUnreadableOrAmbiguousProcess(t *testing.T) {
-	h := newHome(t, "mac")
-	h.engineCodex(t)
-	c := codex{d: Deps{Home: h.dir}}
-	d := connected(h.dir)
-	d.instanceErr = errors.New("ps failed")
-	if _, got := c.daemonEnvironment(d.run); !strings.Contains(got, "cannot identify") {
-		t.Fatal(got)
-	}
-	d.instanceErr = nil
-	d.instance += "\n" + d.instance
-	if _, got := c.daemonEnvironment(d.run); !strings.Contains(got, "ambiguous") {
-		t.Fatal(got)
 	}
 }

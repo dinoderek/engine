@@ -9,6 +9,10 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
+// codexHarness is the harness whose joined sessions' hooks find their run by
+// its folder.
+const codexHarness = "codex"
+
 // hookRun is the run a harness hook acts for: where its files go, the harness
 // and whether nobody watches the session.
 type hookRun struct {
@@ -44,7 +48,7 @@ func findHookRun(env Env) (hookRun, io.Reader) {
 		Cwd string `json:"cwd"`
 	}
 	if json.Unmarshal(event, &e) == nil {
-		if dir, rec, ok := session.FindRun(env.Home, e.Cwd); ok && rec.Harness == hostops.Codex {
+		if dir, rec, ok := session.FindRun(env.Home, e.Cwd); ok && rec.Harness == codexHarness {
 			run.dir, run.joined, run.repo = dir, true, rec.Repo
 			if run.harness == "" {
 				run.harness = rec.Harness

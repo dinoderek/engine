@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/controlcmd"
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/registry"
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/remote"
@@ -168,14 +170,15 @@ func runHost(args []string, env Env) int {
 
 // hostDeps is what this host's ops run with.
 func hostDeps(env Env) hostops.Deps {
-	return hostops.Deps{Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now, JoinRemote: true}
+	return hostops.Deps{Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now, JoinRemote: true,
+		Harnesses: registry.New(harness.Env{Exec: env.Local, Home: env.Home, Getenv: env.Getenv, Now: env.Now})}
 }
 
 // permissionHook runs the permission hook, logging to the run directory of
 // the session's run, when there is one.
 func permissionHook(env Env) int {
 	run, in := findHookRun(env)
-	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: run.unattended, Codex: run.harness == hostops.Codex, Now: env.Now()}
+	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: run.unattended, Codex: run.harness == codexHarness, Now: env.Now()}
 	if run.dir != "" {
 		f, err := os.OpenFile(filepath.Join(run.dir, session.PermissionLog), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {

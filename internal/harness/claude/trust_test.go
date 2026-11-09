@@ -1,4 +1,4 @@
-package session
+package claude
 
 import (
 	"encoding/json"
@@ -7,15 +7,17 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dinoderek/engine/internal/session"
 )
 
-func TestClaudeConfig(t *testing.T) {
+func TestConfig(t *testing.T) {
 	none := func(string) string { return "" }
-	if got := ClaudeConfig(none, "/home/me"); got != "/home/me/.claude.json" {
+	if got := Config(none, "/home/me"); got != "/home/me/.claude.json" {
 		t.Errorf("default: %s", got)
 	}
 	dir := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": "/cfg"}[k] }
-	if got := ClaudeConfig(dir, "/home/me"); got != "/cfg/.claude.json" {
+	if got := Config(dir, "/home/me"); got != "/cfg/.claude.json" {
 		t.Errorf("CLAUDE_CONFIG_DIR: %s", got)
 	}
 }
@@ -34,7 +36,7 @@ func TestPluginDir(t *testing.T) {
 // A renamed marketplace would point --add-dir at a missing directory, which
 // Claude accepts silently, so the name is pinned to the marketplace file.
 func TestMarketplaceMatchesItsFile(t *testing.T) {
-	data, err := os.ReadFile("../../.claude-plugin/marketplace.json")
+	data, err := os.ReadFile("../../../.claude-plugin/marketplace.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +45,7 @@ func TestMarketplaceMatchesItsFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.Name != Marketplace {
-		t.Errorf("marketplace.json names %q; session.Marketplace is %q", m.Name, Marketplace)
+		t.Errorf("marketplace.json names %q; claude.Marketplace is %q", m.Name, Marketplace)
 	}
 }
 
@@ -204,17 +206,26 @@ func TestTrustFolderFollowsASymlinkedFile(t *testing.T) {
 	}
 }
 
+// editAttempts is how often session.EditFile tries before it gives up.
+const editAttempts = 3
+
 // writerFor is a stamp check that sees another writer change the file the
-// first n times engine is about to rename it.
-func writerFor(n int) func(string) (fileStamp, error) {
-	return func(path string) (fileStamp, error) {
-		st, err := stamp(path)
+// first n times engine is about to rename it: it reads a missing file's
+// stamp instead, which differs from any file's.
+func writerFor(t *testing.T, n int) func(string) (session.Stamp, error) {
+	other := filepath.Join(t.TempDir(), "missing")
+	return func(path string) (session.Stamp, error) {
 		if n > 0 {
 			n--
-			st.size++
+			return session.FileStamp(other)
 		}
-		return st, err
+		return session.FileStamp(path)
 	}
+}
+
+func readFile(path string) string {
+	data, _ := os.ReadFile(path)
+	return string(data)
 }
 
 func TestTrustFolderRetriesWhenTheFileChanges(t *testing.T) {
@@ -223,7 +234,7 @@ func TestTrustFolderRetriesWhenTheFileChanges(t *testing.T) {
 	if err := os.WriteFile(config, []byte(`{"a": 1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := trustFolder(config, dir, writerFor(trustAttempts-1)); err != nil {
+	if err := trustFolder(config, dir, writerFor(t, editAttempts-1)); err != nil {
 		t.Fatal(err)
 	}
 	if !trusted(t, config, dir) {
@@ -238,7 +249,7 @@ func TestTrustFolderGivesUpOnABusyFile(t *testing.T) {
 	if err := os.WriteFile(config, []byte(orig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err := trustFolder(config, dir, writerFor(trustAttempts))
+	err := trustFolder(config, dir, writerFor(t, editAttempts))
 	if err == nil || !strings.Contains(err.Error(), "kept changing") {
 		t.Errorf("err = %v", err)
 	}

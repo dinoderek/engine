@@ -50,7 +50,7 @@ func TestEveryReplyCarriesTheEnvelope(t *testing.T) {
 		}
 	}
 	_, reply, _ := call(t, d, "", "status", "--json")
-	for _, key := range []string{"slots", "free_slots", "windows", "agents", "runs"} {
+	for _, key := range []string{"slots", "free_slots", "windows", "runs"} {
 		if _, ok := reply[key]; !ok {
 			t.Errorf("status lacks %s: %v", key, reply)
 		}

@@ -63,13 +63,3 @@ func TestWriteHarnessStateFailsWithoutItsRunDirectory(t *testing.T) {
 		t.Error("wrote a state file into a missing run directory")
 	}
 }
-
-func TestAgentState(t *testing.T) {
-	for status, want := range map[string]string{
-		AgentBusy: StateWorking, AgentWaiting: StateWaiting, AgentIdle: StateWaiting, "unheard-of": "", "": "",
-	} {
-		if got := AgentState(Agent{Status: status}); got != want {
-			t.Errorf("%q: got %q, want %q", status, got, want)
-		}
-	}
-}
