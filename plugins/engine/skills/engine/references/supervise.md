@@ -13,7 +13,8 @@ the intent; the server coordinates. Check every 10 minutes:
   for its host and window;
 - `engine inbox --operator`: open questions, notices and rulings digests;
 - `engine updates <plan>` and `engine updates <task>` for each task, from
-  your read cursor.
+  your read cursor;
+- `engine merge-queue <repo>`: the order merges wait in.
 
 `engine ui` is the operator's own view. The plan ends at `done`.
 
@@ -25,7 +26,7 @@ the intent; the server coordinates. Check every 10 minutes:
   `engine resolve` and every state change, the operator's decisions, to the
   operator unless they gave them to you.
 - **Answer a stall** the coordinator raised, with `engine tell`, when the
-  answer is not a hard stop: for example "your lock is free, carry on".
+  answer is not a hard stop: for example "the plan ruling covers your question, carry on".
 - **Count rulings.** A task whose digest holds more than two `review`
   rulings had a weak card; note it for the next Prepare.
 

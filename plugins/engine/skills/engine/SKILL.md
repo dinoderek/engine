@@ -11,7 +11,7 @@ and the *how* (Prepare). A planner splits the approved plan into tasks. The
 coordinator inside `engine serve` runs each task in its own session through
 to a merged PR. The operator is pulled in only by a hard stop.
 
-Every plan, task, claim, message, ruling and merge lock lives in the engine
+Every plan, task, claim, message, ruling and merge request lives in the engine
 server, read and written with the `engine` CLI. GitHub holds only code, PRs
 and CI. Never record plan state in issues, labels or repo files.
 

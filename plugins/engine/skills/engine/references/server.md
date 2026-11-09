@@ -54,32 +54,31 @@ repo's own merge and cleanup steps; the merge guard enforces it.
 - **Step 8.** Omit issue-closing directives. Put `low` notes and the
   digest in the repo template's rulings section if it has one. Then set the
   task `in-review` with its PR URL.
-- **Step 10: the lock and the merge request.** You never merge. Once the PR
-  is `in-review` and CI is green:
-  1. `engine lock acquire` takes the repository's merge lock. If it is held,
-     try again every 5 minutes, reading updates between tries: nothing wakes
-     you when it frees.
-  2. Holding it, redo step 7: fetch; if the default branch moved, merge it
-     in, rerun the gates and the review, push, and wait for CI green on the
-     new head.
-  3. Read updates once more. Send the rulings digest, if any (below),
-     once: a repeated request does not resend it.
-  4. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
+- **Step 10: the merge request.** You never merge, and never wait for a
+  lock: the coordinator's merge queue orders merges. Once the PR is
+  `in-review`, reviewed and pushed:
+  1. Read updates once more. Send the rulings digest, if any (below),
+     once: a repeated request does not resend it. Approval the repo or card
+     requires is an `engine ask` before the request.
+  2. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
      <the repo's merge method> --verdict APPROVED`, then end your turn. The
-     merge guard refuses `gh pr merge` in a server session. Approval the repo
-     or card requires is an `engine ask` before the request.
-  5. The coordinator wakes you with an update. `merged`: the task is `done`
-     and the lock freed; record the outcome with `engine tell <task>` and
-     stop, keeping the worktree for the coordinator to release.
-     `merge-refused`: act on its reason, then request again. Keep the lock
-     for a clean default-branch merge; release it (`engine lock release`)
-     while you fix anything else. Any other merge notice: wait.
-  6. Release the lock while you wait for the operator or close the PR
-     unmerged. After taking it again, redo item 2.
-- **Step 11.** Leave cleanup to the coordinator.
+     merge guard refuses `gh pr merge` in a server session. The coordinator
+     waits for CI.
+  3. The coordinator wakes you with an update on the task:
+     - `merged`: the task is `done`; record the outcome with `engine tell
+       <task>` and stop, keeping the worktree for the coordinator to release.
+     - `merge-turn`: your turn. Redo step 7 (fetch, merge the default
+       branch in, rerun the gates and the review, push), then request again
+       for the new head, within the time it names.
+     - `merge-refused`: act on its reason (a red check, a closed PR, a
+       branch rule to ask about), then request again.
+     - `merge-demoted` or `merge-withdrawn`: read why; a demoted request
+       stays queued.
+  4. To rework the PR, set the task `running`: it leaves the queue. When
+     the session resumes, `engine task show <task>` shows its queue entry.
 
 A server outage blocks the merge request: keep your work and wait. Never
-bypass gates or the lock.
+bypass gates or the queue.
 
 ## Rulings
 

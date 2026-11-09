@@ -86,7 +86,6 @@ Attaching is the interactive channel.
 There is no file ownership: parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run. Each merge moves the default branch and forces a
-re-gate of every other open PR, so each repository has one merge lock
-(`coordinator.md`, "Merges and merge locks"): its holder merges the default
-branch, gates and requests its merge while the others wait before their last
-gate run.
+re-gate of every other open PR, so each repository has one merge queue
+(`coordinator.md`, "Merge queue"): only its head refreshes from the default
+branch, gates and is merged, while the others wait their turn.

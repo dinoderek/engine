@@ -1,10 +1,10 @@
-> **Owns:** server deployment, records, API, credentials, the inbox, the dashboard and the session view. **Not here:** dispatch, recovery, merges and merge locks, host calls and session signals (`coordinator.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
+> **Owns:** server deployment, records, API, credentials, the inbox, the dashboard and the session view. **Not here:** dispatch, recovery, the merge queue, host calls and session signals (`coordinator.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
 
 # Control server
 
-`engine serve` owns plans, tasks, updates, execution attempts and merge locks,
-and runs the coordinator. GitHub supplies code, PRs and CI; task state and
-comms stay in the server. For dispatch, recovery, merges and locks, load
+`engine serve` owns plans, tasks, updates, execution attempts and merge queue
+entries, and runs the coordinator. GitHub supplies code, PRs and CI; task state and
+comms stay in the server. For dispatch, recovery and merges, load
 `coordinator.md`.
 
 ## Start
@@ -55,6 +55,7 @@ engine plan approve p2 --version 1
 engine run p2
 engine task list p2
 engine attempt list t3
+engine merge-queue r1
 ```
 
 Dependencies, capabilities, harness and tier are
@@ -96,11 +97,11 @@ launched.
 
 SQLite runs locally through its CLI, with SQL on stdin; one server owns a
 database. Each transaction updates current records, history and its request
-receipt together. The schema is versioned; unknown versions are rejected.
+receipt together. The schema is versioned: an older one migrates on open, a newer one is rejected.
 
 The operator credential is an owner-only regular file. Every dispatch creates
 a separate execution credential, scoped to that plan or task. Workers cannot
-approve, start coordination, read the operator inbox or recover locks.
+approve, start coordination or read the operator inbox.
 Ending an attempt revokes its credential. Credentials are hashed for lookup;
 dispatch receipts retain the token privately for interrupted dispatch recovery.
 
@@ -124,7 +125,7 @@ needs-human. Acknowledgements and replies leave it unresolved. Resolution record
 state change resumes the task. On a task's question, `--plan` also
 posts the decision as a plan `ruling`. The server never answers a question from a
 ruling. Unresolved questions block completion and
-merge checks.
+merges.
 An unresolved plan question also blocks planner handoff, child dispatch,
 child merges and automatic quota resume until the operator resolves it.
 
