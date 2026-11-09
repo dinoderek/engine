@@ -82,6 +82,15 @@ func TestDaemonInstanceIdentifiesOnlyItsOwnProcess(t *testing.T) {
 	if again := read(); again != got {
 		t.Fatalf("unstable instance %q, %q", got, again)
 	}
+	// Codex's daemon updater runs beside the daemon from the same packages,
+	// as does a daemon subcommand without remote control.
+	startProcess(t, program, "app-server daemon pid-update-loop")
+	awaitPs(t, program+" app-server daemon pid-update-loop")
+	startProcess(t, program, "app-server --listen unix://")
+	awaitPs(t, program+" app-server --listen unix://")
+	if again := read(); again != got {
+		t.Fatalf("the updater or a daemon without remote control changed the instance: %q, want %q", again, got)
+	}
 	second := filepath.Join(home, "packages", "second", "bin", "codex")
 	startProcess(t, second, "app-server --remote-control")
 	// Wait for the second process to appear before checking ambiguous identity.

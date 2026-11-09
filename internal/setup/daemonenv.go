@@ -10,8 +10,11 @@ import (
 
 // daemonInstanceCommand identifies one remote-control daemon by PID and start
 // time. A saved environment receipt cannot validate a replacement process.
+// It takes the process a spawn joins: run from the home's packages with a
+// --remote-control argument. Codex's daemon updater, `app-server daemon
+// pid-update-loop` from the same packages, lives beside it and is not it.
 func daemonInstanceCommand(home string) string {
-	return fmt.Sprintf(`ps -ww -eo pid=,lstart=,args= | awk -v p=%s 'index($7, p) == 1 && / app-server( |$)/ { count++; instance = $1 " " $2 " " $3 " " $4 " " $5 " " $6 } END { if (count == 1) print instance }'`, hosts.ShellWord(home+"/packages/"))
+	return fmt.Sprintf(`ps -ww -eo pid=,lstart=,args= | awk -v p=%s 'index($7, p) == 1 { for (i = 8; i <= NF; i++) if ($i == "--remote-control") { count++; instance = $1 " " $2 " " $3 " " $4 " " $5 " " $6; break } } END { if (count == 1) print instance }'`, hosts.ShellWord(home+"/packages/"))
 }
 
 func (r *runner) daemonInstance() (string, error) {
