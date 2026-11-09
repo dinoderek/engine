@@ -56,6 +56,9 @@ func flagged(s Session) Session { s.StallNoted = s.WaitingSince; return s }
 // signedOut is f with its first host reporting harnesses signed out.
 func signedOut(f Fleet, harnesses ...string) Fleet { f.Hosts[0].Status.SignedOut = harnesses; return f }
 
+// unreachable is f with its first host's status unreadable.
+func unreachable(f Fleet) Fleet { f.Hosts[0].Unreachable = "ssh: connect timed out"; return f }
+
 // bothHarnesses is fleet(free) with devbox running claude and codex alike.
 func bothHarnesses(free int) Fleet {
 	f := fleet(free)
@@ -85,6 +88,7 @@ func TestDecide(t *testing.T) {
 			[]string{"dispatch t2 devbox codex false"}},
 		{"a task whose only harness is signed out is a notice", withFleet(view(plan("executing"), task(2, "todo")), signedOut(fleet(2), "claude")),
 			[]string{"notice t2 placement/3"}},
+		{"an unreachable host is never read as signed out", withFleet(view(plan("executing"), task(2, "todo")), unreachable(signedOut(fleet(2), "claude"))), nil},
 		{"another harness signed out changes nothing", withFleet(view(plan("executing"), task(2, "todo")), signedOut(fleet(2), "codex")),
 			[]string{"dispatch t2 devbox claude false"}},
 		{"an unknown session is not dispatched", view(plan("executing"), with(task(2, "todo"), Session{Unknown: true})), nil},

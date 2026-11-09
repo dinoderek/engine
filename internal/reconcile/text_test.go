@@ -34,8 +34,9 @@ func TestActionTextsAndMarks(t *testing.T) {
 			[]string{"demo-2 has waited for input for 10m0s, while claude is signed out on devbox", "engine setup --host devbox", "type continue"}, nil},
 		{"a planner waiting while signed out keeps its name", view(with(plan("approved"), signedOutWait())),
 			[]string{"the planner demo-1 has waited for input for 10m0s, while claude is signed out on devbox"}, nil},
-		{"signed out outranks a denial", view(plan("executing"), with(task(2, "running"), deniedAndSignedOut())),
-			[]string{"while claude is signed out on devbox"}, func(a Action) bool { return !strings.Contains(a.Text, "Permission hard stop") }},
+		{"a signed-out wait leads with the sign-in and names the denial", view(plan("executing"), with(task(2, "running"), deniedAndSignedOut())),
+			[]string{"while claude is signed out on devbox", "It also follows a denied permission request, the Permission hard stop (hard-stops.md): Bash `gh pr merge 3` was denied"},
+			func(a Action) bool { return strings.Index(a.Text, "signed out") < strings.Index(a.Text, "Permission") }},
 		{"a placement while signed out names the sign-in", withFleet(view(plan("executing"), task(2, "todo")), signedOut(fleet(2), "claude")),
 			[]string{"claude is signed out on devbox (`engine setup --host devbox` names the sign-in)"}, nil},
 		{"the planner sign-in notice says it waits", withFleet(view(plan("approved")), signedOut(fleet(2), "claude")),
@@ -97,6 +98,6 @@ func signedOutWait() Session {
 // deniedAndSignedOut is a signed-out wait that also follows a denial.
 func deniedAndSignedOut() Session {
 	s := signedOutWait()
-	s.Denial = &hostops.Denial{At: s.WaitingSince, Tool: "Bash", Decision: "denied"}
+	s.Denial = &hostops.Denial{At: s.WaitingSince, Tool: "Bash", Input: json.RawMessage(`{"command":"gh pr merge 3"}`), Decision: "denied"}
 	return s
 }

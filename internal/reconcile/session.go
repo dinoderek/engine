@@ -89,25 +89,32 @@ func (s Session) Denied() bool {
 // WaitText is a waiting session's stall text: plain, unless its host says
 // its harness is signed out, which names the sign-in, or the wait follows a
 // permission denial. Then it is the Permission hard stop the session did
-// not raise, naming the tool, its exact input and why.
+// not raise, naming the tool, its exact input and why. A signed-out wait
+// leads with the sign-in and names the denial too.
 func WaitText(s Session, plain string) string {
-	if s.SignedOut {
-		// Signed out, the session can do nothing else, so this outranks a
-		// denial.
-		return fmt.Sprintf("%s, while %s. Sign it in there, then type continue in the window",
-			strings.TrimSuffix(plain, ", outside a hard stop"), signedOutText(s.Host, s.Harness))
+	denial := ""
+	if s.Denied() {
+		d := s.Denial
+		why := d.Decision
+		if d.Reason != "" {
+			why += ": " + d.Reason
+		}
+		denial = fmt.Sprintf("%s %s was %s", d.Tool, deniedInput(d.Input), why)
 	}
-	if !s.Denied() {
+	if s.SignedOut {
+		text := fmt.Sprintf("%s, while %s. Sign it in there, then type continue in the window",
+			strings.TrimSuffix(plain, ", outside a hard stop"), signedOutText(s.Host, s.Harness))
+		if denial != "" {
+			text += ". It also follows a denied permission request, the Permission hard stop (hard-stops.md): " + denial
+		}
+		return text
+	}
+	if denial == "" {
 		return plain
 	}
-	d := s.Denial
-	why := d.Decision
-	if d.Reason != "" {
-		why += ": " + d.Reason
-	}
 	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (hard-stops.md): "+
-		"%s %s was %s. Allow it with a permission rule in the session, or do it by hand, then tell the session to carry on",
-		s.Name, StallWait, d.Tool, deniedInput(d.Input), why)
+		"%s. Allow it with a permission rule in the session, or do it by hand, then tell the session to carry on",
+		s.Name, StallWait, denial)
 }
 
 // deniedInput is a denied tool's input quoted for a comment: a shell

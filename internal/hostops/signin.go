@@ -23,9 +23,9 @@ func (s *Status) readSignIns(d Deps, host hosts.Host) {
 		}
 	}
 	if host.Runs(Codex) {
-		// Engine's Codex home, which joined sessions use. Setup links the
-		// operator's login into it, so an embedded session, in the host's
-		// own home, shares the same sign-in.
+		// Engine's Codex home: joined sessions use it, and setup checks its
+		// sign-in. An embedded session runs in the host's own home, whose
+		// sign-in may differ when engine's home keeps a login of its own.
 		if bin, err := host.BinPath(Codex, d.Home); err == nil && codexSignedOut(d.Exec("env", "CODEX_HOME="+(codex{d: d}).engineHome(), bin, "login", "status")) {
 			s.SignedOut = append(s.SignedOut, Codex)
 		}

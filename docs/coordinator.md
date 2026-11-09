@@ -5,7 +5,7 @@
 ## Shape
 
 - **Go, one binary (`engine`)** for macOS and Linux, the same on every host.
-  It runs inside `engine serve`, is no agent and never edits code.
+  The coordinator, inside `engine serve`, is no agent and never edits code.
 - **Stateless.** Each pass derives everything from the server's records and
   each host's tmux sessions, `claude agents --json` and run directories.
   A restarted server picks up the sessions still live.
