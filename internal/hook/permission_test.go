@@ -30,7 +30,7 @@ func TestPermissionDeniesAnUnattendedRequest(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("decision %q: %v", out.String(), err)
 	}
-	if got.Output.Event != "PermissionRequest" || got.Output.Decision.Behavior != "deny" || !strings.Contains(got.Output.Decision.Message, "Permission hard stop") {
+	if got.Output.Event != "PermissionRequest" || got.Output.Decision.Behavior != "deny" || !strings.Contains(got.Output.Decision.Message, "Permission hard stop in the build skill (hard-stops.md)") {
 		t.Errorf("decision %+v", got)
 	}
 	var entry Entry

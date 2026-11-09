@@ -14,7 +14,7 @@ asks.
 | --- | --- |
 | Execution protocol | The phases, roles and state machine from requirements to merged feature. |
 | Coordinator | The reconcile core runs in `engine serve` or the GitHub-mode CLI, spawning sessions on local or SSH hosts. No LLM. |
-| Skill | `engine`: what agents do when they plan, execute (hands-off or gated) and review. It ships from this repo as a Claude Code and Codex plugin. |
+| Skills | `build`: one task to a merged PR in any repo, and its reviewer. `engine`: the server planner, executor and supervisor. One Claude Code and Codex plugin ships both. |
 | Control server | Plans, tasks, execution attempts, updates, operator inbox and repository merge locks. CLI access through an authenticated private API. |
 | Hosts | Each machine's harnesses, session slots and capabilities, and how to reach every session. |
 | Telemetry | Raw run data in a standard format, stored off-machine. |
@@ -25,7 +25,7 @@ asks.
 Built: the control server and its CLI, `engine version`,
 `engine labels sync`, `engine start` (one Claude session on
 this machine, or another one over SSH), `engine host` (its ops), `engine ps`, `engine attach`, `engine tell`, `engine lint`, `engine run` (across hosts), `engine ui` (a read-only local dashboard), the host config reader
-(`internal/hosts`), the `engine` skill and its merge guard (a Claude Code
+(`internal/hosts`), the `build` and `engine` skills and their merge guard (a Claude Code
 plugin this repo publishes), and the repo's own tooling: `./dev` and its
 quality gates.
 engine is the first worked example of the project context guideline's core.

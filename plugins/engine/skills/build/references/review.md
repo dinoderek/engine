@@ -1,6 +1,6 @@
 # Review
 
-An executor spawned you to review its task. You did not write the diff. Read
+A builder spawned you to review its task. You did not write the diff. Read
 it cold.
 
 ## Inputs
@@ -18,17 +18,20 @@ it cold.
 3. **Correctness.** Bugs, edge cases, error handling, and anything the
    change breaks elsewhere.
 4. **Repo rules.** Everything in `AGENTS.md`: structure, naming, gates,
-   dependencies, docs discipline. Only the card's and feature's
+   dependencies, docs discipline. Only the card's and its plan's
    `## Overrides` set a rule aside.
 5. **Docs.** The owning docs are updated, and say how things are now, with no
    history.
 6. **Plans never cited.** No issue number, plan path or task ID in code, tests
    or docs.
-7. **Rulings.** Each decision in the PR draft is graded by what undoing it
-   costs (`low`, `med` or `high`). Flag a grade that is too low.
+7. **Rulings.** `low` notes are at most five, one line each. In an engine
+   server task, a decision whose undo needs another PR and touches persisted
+   data, a surface others use, or a shape another task builds on is a
+   `review` ruling; flag one recorded as a note or not at all, and flag
+   rulings that are really naming, structure or test layer.
 8. **Hard stops.** Flag anything in the diff that should have stopped for the
-   operator: product, data, security, contract, a loosened gate, or anything
-   outward or costly.
+   operator (the classes in `hard-stops.md`): product, data, security,
+   contract, a loosened gate, or anything outward or costly.
 
 ## Report
 

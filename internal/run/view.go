@@ -1,9 +1,7 @@
 // Package run is engine run: the coordinator's reconcile loop for one
 // feature, or one task, on this host. Each pass reads the tracker and the
 // host into a View, Decide works out what to do, and Apply does it. The pass
-// follows the engine skill's coordinate reference
-// (plugins/engine/skills/engine/references/coordinate.md): the skill is the
-// spec, and this package follows it.
+// is specified by this package's code alone.
 package run
 
 import (

@@ -13,7 +13,7 @@ import (
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// Decide works out one pass: the coordinate reference's steps, in order. It
+// Decide works out one pass, its steps in order. It
 // reads only v and changes nothing.
 func Decide(v View) []Action {
 	f := v.Feature
@@ -50,7 +50,7 @@ func Decide(v View) []Action {
 	return acts
 }
 
-// planStep is the coordinate reference's step 2: start the planner, then
+// planStep is the pass's planning step: start the planner, then
 // lint its plan. Until the feature is planned, it is the whole pass.
 func planStep(v View) ([]Action, bool) {
 	f := v.Feature
@@ -146,7 +146,7 @@ func waitText(s Session, plain string) string {
 	if d.Reason != "" {
 		why += ": " + d.Reason
 	}
-	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (rulings.md): "+
+	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (hard-stops.md): "+
 		"%s %s was %s. Allow it with a permission rule in the session, or do it by hand, then tell the session to carry on",
 		s.Name, StallWait, d.Tool, deniedInput(d.Input), why)
 }
