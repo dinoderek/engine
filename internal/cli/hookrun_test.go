@@ -32,7 +32,7 @@ func newHookHome(t *testing.T) hookHome {
 			t.Fatal(err)
 		}
 		runDir = filepath.Join(h.home, filepath.FromSlash(session.RunsDir), id+"-20261026T000000Z")
-		rec := session.Record{Schema: session.RecordSchema, RunID: id, Harness: harness, Mode: mode, Worktree: worktree, Spawned: stateAt}
+		rec := session.Record{Schema: session.RecordSchema, RunID: id, Repo: "o/" + id, Harness: harness, Mode: mode, Worktree: worktree, Spawned: stateAt}
 		if err := session.WriteRecord(runDir, rec); err != nil {
 			t.Fatal(err)
 		}
@@ -144,6 +144,29 @@ func TestPermissionHookFindsItsRunByCwd(t *testing.T) {
 	}
 }
 
+// seedLabel prepares the run in dir: "check" removes its repo, as a
+// preflight check's run has none, and any other non-empty record is written
+// as its codex-label.json.
+func seedLabel(t *testing.T, dir, record string) {
+	t.Helper()
+	switch record {
+	case "":
+	case "check":
+		rec, err := session.ReadRecord(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec.Repo = ""
+		if err := session.WriteRecord(dir, rec); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		if err := os.WriteFile(filepath.Join(dir, hostops.CodexLabelFile), []byte(record), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestStateHookStartsTheLabelForAJoinedThread(t *testing.T) {
 	tests := []struct {
 		name, event string
@@ -160,15 +183,12 @@ func TestStateHookStartsTheLabelForAJoinedThread(t *testing.T) {
 		{"a failure with attempts left", "Stop", false, `{"attempts":1,"error":"x"}`, true},
 		{"a failure too recent to retry", "Stop", false, `{"attempts":1,"error":"x","at":"` + stateAt.Add(-time.Second).Format(time.RFC3339) + `"}`, false},
 		{"no attempts left", "Stop", false, `{"attempts":3,"error":"x"}`, false},
+		{"a check run, which names no repo", "UserPromptSubmit", false, "check", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHookHome(t)
-			if tt.record != "" {
-				if err := os.WriteFile(filepath.Join(h.codexRun, hostops.CodexLabelFile), []byte(tt.record), 0o644); err != nil {
-					t.Fatal(err)
-				}
-			}
+			seedLabel(t, h.codexRun, tt.record)
 			var vars map[string]string
 			if tt.vars {
 				vars = map[string]string{session.RunDirVar: h.codexRun, session.HarnessVar: "codex"}
@@ -214,7 +234,7 @@ func TestStateHookReportsALabelItCannotStart(t *testing.T) {
 
 func TestCodexLabelHookRecordsItsAttempt(t *testing.T) {
 	h := newHookHome(t)
-	// The run names no repo, so the attempt fails and is recorded.
+	// The home has no host config, so the attempt fails and is recorded.
 	code, _, stderr := h.run([]string{"hook", "codex-label", h.codexRun, codexSession}, "", nil)
 	if code != 1 || !strings.Contains(stderr, "engine hook codex-label:") {
 		t.Errorf("exit %d, stderr %q", code, stderr)

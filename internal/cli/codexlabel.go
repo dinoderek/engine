@@ -18,11 +18,12 @@ import (
 var labelEvents = map[string]bool{"UserPromptSubmit": true, "PostToolUse": true, "Stop": true}
 
 // labelCodexThread starts `engine hook codex-label` in the background for a
-// joined Codex session whose thread is not yet labelled. The hook runs inside
+// joined Codex task session whose thread is not yet labelled; a preflight
+// check's run names no repo, and has no title or project to set. The hook runs inside
 // the daemon it would call, so it never waits for the daemon itself. A failure
 // to start is reported, and the session carries on.
 func labelCodexThread(env Env, run hookRun, sig hook.Signal) {
-	if !run.joined || !labelEvents[sig.Event] || sig.SessionID == "" || !hostops.CodexLabelPending(run.dir, env.Now()) {
+	if !run.joined || run.repo == "" || !labelEvents[sig.Event] || sig.SessionID == "" || !hostops.CodexLabelPending(run.dir, env.Now()) {
 		return
 	}
 	detach := env.Detach
