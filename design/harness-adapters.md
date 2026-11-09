@@ -243,7 +243,7 @@ type Step struct {
 | `hook/limit.go`, `hook/statusline.go` | `harness/claude/limit.go`, `statusline.go` (Claude entries) |
 | `hook/hook.go` (merge guard), `shell.go`, `ismerge.go` | stay: core. Reads `Event.Command` |
 | `session/trust.go` (`ClaudeConfig`, `TrustFolder`, `PluginDir`) | `harness/claude/trust.go`. The atomic file helpers it shares with Codex trust (`replaceFile`, `stamp`) stay in `session` as exported helpers |
-| `session/agents.go` (`ListAgents`, `Agent`), `state.go` `AgentState` | `harness/claude/agents.go`; `session.Agent` → `harness.LiveSession` |
+| `session/agents.go` (`ListAgents`, `Agent`), `state.go` `AgentState` | `harness/claude/agents.go`, internal to its `Observe` |
 | `session/limit.go` (`limit.json`) | `harness/claude`; `StateLimited` stays in `session/state.go` |
 | `session/quota.go` | `Quota`, `QuotaWindow`, `MergeQuota` stay (neutral, used by reconcile); `ReadQuota` (scans `quota.json`, written by Claude's statusline) → `harness/claude` |
 | `session/codex.go`, `codextrust.go` | `harness/codex/profile.go`, `trust.go`; `TOMLString` stays in session if anything neutral uses it, else moves |
