@@ -8,10 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dinoderek/engine/internal/control"
 	"strings"
 	"testing"
-
-	"github.com/dinoderek/engine/internal/control"
 )
 
 func TestLintServerPlan(t *testing.T) {
