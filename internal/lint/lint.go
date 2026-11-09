@@ -1,6 +1,6 @@
 // Package lint checks a plan before its tasks run: the rules in the engine
-// skill's plan reference (references/plan.md, "Breakdown"). It reads a
-// GitHub tracker.Feature, or a server plan's tasks, and never writes.
+// skill's plan reference (references/plan.md, "Breakdown"). It reads a server
+// plan's tasks and never writes.
 package lint
 
 import (
@@ -8,13 +8,12 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
-// required are the card sections every task must have. Requires may be
-// empty or say "none"; the others must say something.
-var required = []section{{"Outcome", true}, {"Tests", true}, {"Requires", false}}
+// serverSections are the sections a server task's body must have, and say
+// something in. Its requirements, harness and tier are structured fields, not
+// sections.
+var serverSections = []section{{"Outcome", true}, {"Tests", true}}
 
 // section is a heading a task's body must have, and whether it must say
 // something.
@@ -45,35 +44,6 @@ type task struct {
 	deps []string
 }
 
-// Lint returns every rule f's plan breaks, in task order; none means it
-// passes.
-func Lint(f tracker.Feature) []Problem {
-	if len(f.Tasks) == 0 {
-		return []Problem{{Text: "the feature has no tasks"}}
-	}
-	cards := slices.Clone(f.Tasks)
-	slices.SortStableFunc(cards, func(a, b tracker.Card) int {
-		if c := strings.Compare(a.Ref.Repo, b.Ref.Repo); c != 0 {
-			return c
-		}
-		return a.Ref.Number - b.Ref.Number
-	})
-	tasks := make([]task, len(cards))
-	var problems []Problem
-	for i, c := range cards {
-		tasks[i] = task{name: c.Ref.String(), body: c.Body}
-		for _, b := range c.BlockedBy {
-			tasks[i].deps = append(tasks[i].deps, b.Ref.String())
-		}
-		problems = append(problems, sectionProblems(tasks[i], required)...)
-		if _, _, err := tracker.ParseHarnessTier(c.Body); err != nil {
-			problems = append(problems, Problem{tasks[i].name, err.Error()})
-		}
-	}
-	problems = append(problems, keyProblems(cards)...)
-	return append(problems, planProblems(tasks)...)
-}
-
 // planProblems are the rules across tasks: no cycle, one acceptance task,
 // and one owner per open question.
 func planProblems(tasks []task) []Problem {
@@ -86,33 +56,13 @@ func planProblems(tasks []task) []Problem {
 func sectionProblems(t task, sections []section) []Problem {
 	var problems []Problem
 	for _, r := range sections {
-		text, ok := tracker.Section(t.body, r.Heading)
+		text, ok := Section(t.body, r.Heading)
 		switch {
 		case !ok:
 			problems = append(problems, Problem{t.name, "no ## " + r.Heading + " section"})
 		case r.Nonempty && text == "":
 			problems = append(problems, Problem{t.name, "an empty ## " + r.Heading + " section"})
 		}
-	}
-	return problems
-}
-
-// keyProblems finds two cards with one card key: a rerun planner would skip
-// the second.
-func keyProblems(cards []tracker.Card) []Problem {
-	first := map[string]tracker.Ref{}
-	var problems []Problem
-	for _, c := range cards {
-		key := tracker.CardKey(c.Body)
-		if key == "" {
-			problems = append(problems, Problem{c.Ref.String(), "no <!-- engine:card <key> --> marker"})
-			continue
-		}
-		if prev, ok := first[key]; ok {
-			problems = append(problems, Problem{c.Ref.String(), fmt.Sprintf("card key %q is also on %s", key, prev)})
-			continue
-		}
-		first[key] = c.Ref
 	}
 	return problems
 }
@@ -193,7 +143,7 @@ func sharedQuestions(tasks []task) []Problem {
 	owner := map[string]string{}
 	var problems []Problem
 	for _, t := range tasks {
-		text, _ := tracker.Section(t.body, "Open")
+		text, _ := Section(t.body, "Open")
 		for _, q := range questions(text) {
 			prev, ok := owner[q]
 			switch {

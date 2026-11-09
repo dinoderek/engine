@@ -2,7 +2,6 @@ package session
 
 import (
 	"errors"
-	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -57,99 +56,6 @@ func TestListAgentsFailures(t *testing.T) {
 		bad := func(string, ...string) (string, error) { return out, nil }
 		if _, err := ListAgents(bad, "claude"); err == nil || !strings.Contains(err.Error(), "unreadable output") {
 			t.Errorf("output %q: %v", out, err)
-		}
-	}
-}
-
-func TestProbeCheckout(t *testing.T) {
-	var ran []string
-	run := func(name string, args ...string) (string, error) {
-		ran = append(ran, name+" "+strings.Join(args, " "))
-		if args[2] == "rev-parse" {
-			return "task/a-1\n", nil
-		}
-		return "git@github.com:o/r.git\n", nil
-	}
-	got, err := ProbeCheckout(run, "/work/a")
-	if err != nil || got != (Checkout{Branch: "task/a-1", Remote: "git@github.com:o/r.git"}) {
-		t.Errorf("got %+v, %v", got, err)
-	}
-	want := []string{"git -C /work/a rev-parse --abbrev-ref HEAD", "git -C /work/a remote get-url origin"}
-	if !reflect.DeepEqual(ran, want) {
-		t.Errorf("ran %q", ran)
-	}
-}
-
-func TestProbeCheckoutDetachedHead(t *testing.T) {
-	run := func(_ string, args ...string) (string, error) {
-		if args[2] == "rev-parse" {
-			return "HEAD\n", nil
-		}
-		return "https://github.com/o/r\n", nil
-	}
-	if got, err := ProbeCheckout(run, "/w"); err != nil || got.Branch != "" {
-		t.Errorf("got %+v, %v", got, err)
-	}
-}
-
-func TestProbeCheckoutFailures(t *testing.T) {
-	notRepo := &ExitError{Command: "git", Code: 128, Stderr: "fatal: not a git repository"}
-	for name, failAt := range map[string]string{"not a checkout": "rev-parse", "no origin": "remote"} {
-		run := func(_ string, args ...string) (string, error) {
-			if args[2] == failAt {
-				return "", notRepo
-			}
-			return "x\n", nil
-		}
-		var exit *ExitError
-		if _, err := ProbeCheckout(run, "/w"); !errors.As(err, &exit) {
-			t.Errorf("%s: got %v", name, err)
-		}
-	}
-}
-
-func TestProbeCheckoutInARealRepo(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is not installed")
-	}
-	dir := t.TempDir()
-	for _, args := range [][]string{
-		{"init", "-q", "-b", "task/real-1"},
-		{"remote", "add", "origin", "https://github.com/o/r.git"},
-		{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"},
-	} {
-		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	got, err := ProbeCheckout(Exec, dir)
-	if err != nil || got.Branch != "task/real-1" || !got.IsRepo("o/r") {
-		t.Fatalf("got %+v, %v", got, err)
-	}
-	var exit *ExitError
-	if _, err := ProbeCheckout(Exec, t.TempDir()); !errors.As(err, &exit) {
-		t.Errorf("a directory outside a checkout: %v", err)
-	}
-}
-
-func TestCheckoutIsRepo(t *testing.T) {
-	cases := []struct {
-		remote string
-		want   bool
-	}{
-		{"https://github.com/o/r", true},
-		{"https://github.com/o/r.git", true},
-		{"https://github.com/o/r/", true},
-		{"git@github.com:o/r.git", true},
-		{"ssh://git@github.com/O/R.git", true},
-		{"https://github.com/o/rr", false},
-		{"https://github.com/oo/r", false},
-		{"https://github.com/p/q", false},
-		{"", false},
-	}
-	for _, tc := range cases {
-		if got := (Checkout{Remote: tc.remote}).IsRepo("o/r"); got != tc.want {
-			t.Errorf("%q: got %v, want %v", tc.remote, got, tc.want)
 		}
 	}
 }

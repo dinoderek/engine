@@ -128,6 +128,4 @@ then run `engine setup --host devbox`.
 ## Each target repo
 
 - Confirm the host's `gh` and Git access to the repo.
-- Run `engine labels sync <owner/repo>` once, and again whenever the label set
-  in `internal/tracker` changes. It never deletes a label.
 - Enable the `engine` plugin in its `.claude/settings.json`.

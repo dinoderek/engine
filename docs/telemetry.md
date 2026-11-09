@@ -10,7 +10,7 @@ Store raw data in standard formats in object storage for repeatable analysis.
 | --- | --- | --- |
 | Metrics, logs, events (tokens, cost, tool calls, API latency) | OpenTelemetry, as OTLP JSON lines | Both CLIs export OTel natively: Claude Code via `CLAUDE_CODE_ENABLE_TELEMETRY` and `OTEL_*` env vars, Codex via `[otel]` in its config |
 | Transcripts | The harness's native JSONL, stored as-is (no standard exists) | `~/.claude/projects/…`, `~/.codex/sessions/…` |
-| Run record | `run.json`, the engine's own index for the run | `engine start`, then the coordinator |
+| Run record | `run.json`, the engine's own index for the run | The host's `spawn`, then the coordinator |
 | Gate output | `.test-ai-results/` copied as-is | The worktree |
 
 ## Run record

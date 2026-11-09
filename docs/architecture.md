@@ -14,21 +14,13 @@ Two programs share one Go module:
   and daemon lifecycle. The CLI and coordinator read a plan's tasks through
   `internal/controlrun` and validate them with `internal/lint`.
   Other packages:
-  `internal/version` (`engine version`), `internal/tracker` (the GitHub
-  tracker adapter, through `gh`: `engine labels sync`, and reads
-  of a task issue and of the claim comments on every claimed task, and
-  posting a comment),
-  `internal/hook`
-  (harness hooks: `engine hook pre-tool-use`, `permission` and `state`), `internal/attach`
-  (`engine attach`: a task's claim, then its tmux window), `internal/ps`
-  (`engine ps --github`: the state of each claimed task), `internal/start`
-  (`engine start`: checks a task, then has its host launch the session),
+  `internal/version` (`engine version`), `internal/hook`
+  (harness hooks: `engine hook pre-tool-use`, `permission` and `state`),
+  `internal/start` (`engine start --check`: the preflight session on a host),
   `internal/hostops` (`engine host <op> --json`: the ops a host runs on
   itself for a caller), `internal/remote` (the client that reaches a host's
-  ops: `Local` calls them in-process, `SSH` over `ssh`), `internal/tell`
-  (`engine tell`: comments on a task and points its session at it),
-  `internal/lint` (`engine lint`: a plan's rules), `internal/run`
-  (`engine run`: the GitHub-mode loop), `internal/ui`
+  ops: `Local` calls them in-process, `SSH` over `ssh`),
+  `internal/lint` (`engine lint`: a plan's rules), `internal/ui`
   (`engine ui`: the loopback dashboard, which holds the operator credential and
   forwards only fixed control reads). The commands
   share `internal/hosts`, the host config: it parses `hosts.toml` with an
@@ -56,7 +48,7 @@ non-test imports. The reasons:
   from `devtools/`. Go's `internal/` rule also keeps `devtools/internal/` out
   of the product's reach.
 - **Each package may import only what its rule lists.** `cmd/engine` sees only
-  `internal/cli`. Leaf packages (`internal/version`, `internal/tracker`,
+  `internal/cli`. Leaf packages (`internal/version`,
   `internal/hook`, `internal/hosts`, `internal/session`,
   `devtools/internal/repo`) import no first-party code; a command package
   such as `internal/start` composes them. A new package adds its rule in the
@@ -74,7 +66,8 @@ non-test imports. The reasons:
   observations.** The server persists intent and execution identities.
   Coordinators never edit code; the server's coordinator merges its tasks.
   For server changes, load
-  `control-server.md`; for GitHub-mode changes, load `coordinator.md`.
+  `control-server.md`; for host reach and session signals, load
+  `coordinator.md`.
 - **The reconcile core has no CLI assumptions.** `internal/reconcile` reads
   only its View. `internal/cli` stays a thin dispatcher.
 - **Tooling is Go too.** The repo has one toolchain. A lane is either one

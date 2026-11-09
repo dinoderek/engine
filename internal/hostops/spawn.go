@@ -9,7 +9,6 @@ import (
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // SpawnRequest is what the caller decided for a session: the task, the
@@ -202,7 +201,7 @@ func (s *spawn) checkRequest(home string) error {
 		}
 	}
 	if s.Feature != "" && s.control == nil {
-		if _, err := tracker.ParseRef(s.Feature); err != nil {
+		if _, err := session.ParseRef(s.Feature); err != nil {
 			problems = append(problems, "feature: "+err.Error())
 		}
 	}
@@ -224,7 +223,7 @@ func (s spawn) record(wt session.Worktree, window, log string, d Deps) session.R
 	return session.Record{
 		Control: s.control != nil,
 		Schema:  session.RecordSchema, RunID: s.RunID, Repo: s.repo.String(),
-		Task: tracker.Ref{Repo: s.repo.String(), Number: s.Task}.String(), Feature: s.Feature,
+		Task: session.Ref{Repo: s.repo.String(), Number: s.Task}.String(), Feature: s.Feature,
 		Host: s.host.Name, Harness: s.h.Name(), Tier: s.Tier, Model: s.Model, Effort: s.Effort,
 		Mode: s.Mode, Heavy: s.Heavy, Name: s.name, Tmux: session.Name + ":" + window,
 		Branch: wt.Branch, Worktree: wt.Path, PaneLog: log, Spawned: d.Now().UTC(),

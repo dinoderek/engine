@@ -14,7 +14,7 @@ import (
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/tracker"
+	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/version"
 )
 
@@ -26,7 +26,7 @@ type Deps struct {
 	// Exec runs ssh, and sh for this host's own checks.
 	Exec remote.Exec
 	// GH runs gh, to confirm the caller's commit is on GitHub.
-	GH tracker.Runner
+	GH session.RunFunc
 	// Info is the caller's own build.
 	Info version.Info
 	// Check runs `engine start --check` for the harness ("" is the default

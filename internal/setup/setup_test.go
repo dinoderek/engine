@@ -228,10 +228,12 @@ func TestRefusalsChangeNothing(t *testing.T) {
 		}, "modified working tree"},
 		{"a tagged build", "box", func(r *rig) { r.info.Revision, r.info.Version = "", "v1.2.3" }, "has no commit"},
 		{"gh cannot say", "box", func(r *rig) {
-			r.gh = func([]string, string, ...string) (string, error) { return "", errors.New("gh: Not Found (HTTP 404)") }
+			r.gh = func(string, []string, string, ...string) (string, error) {
+				return "", errors.New("gh: Not Found (HTTP 404)")
+			}
 		}, "could not confirm commit " + callerRev + " is on GitHub (dinoderek/engine): gh: Not Found (HTTP 404)"},
 		{"a different commit back", "box", func(r *rig) {
-			r.gh = func([]string, string, ...string) (string, error) { return "deadbeef", nil }
+			r.gh = func(string, []string, string, ...string) (string, error) { return "deadbeef", nil }
 		}, "is not on GitHub (dinoderek/engine); push it"},
 		{"no plugin here", "box", func(r *rig) { r.local.plugin = "" }, "plugin is not installed for the user on this host"},
 		{"no host config", "box", func(r *rig) {
@@ -303,7 +305,7 @@ func TestLocalModeOnlyChecks(t *testing.T) {
 func TestLocalModeNeedsNoPushedBuild(t *testing.T) {
 	r := newRig(t)
 	r.info.Modified = true
-	r.gh = func([]string, string, ...string) (string, error) { return "", errors.New("must not be called") }
+	r.gh = func(string, []string, string, ...string) (string, error) { return "", errors.New("must not be called") }
 	if !mustRun(t, r, "") {
 		t.Errorf("a dirty build checking itself failed:\n%s", r.out.String())
 	}
@@ -387,11 +389,11 @@ func TestAToolchainThatCannotBeReadLeavesTheEngineOpen(t *testing.T) {
 		{"not a Go release", func(r *rig) { r.goMod = "module x\n\ntoolchain local\n" }, "is not a Go release"},
 		{"GitHub cannot serve go.mod", func(r *rig) {
 			gh := r.gh
-			r.gh = func(env []string, name string, args ...string) (string, error) {
+			r.gh = func(_ string, env []string, name string, args ...string) (string, error) {
 				if strings.Contains(strings.Join(args, " "), "go.mod") {
 					return "", errors.New("gh: Not Found (HTTP 404)")
 				}
-				return gh(env, name, args...)
+				return gh("", env, name, args...)
 			}
 		}, "could not read go.mod at 2a08a0c (dinoderek/engine): gh: Not Found (HTTP 404)"},
 	}

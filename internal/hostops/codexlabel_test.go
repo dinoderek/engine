@@ -20,12 +20,9 @@ func TestCodexThreadTitle(t *testing.T) {
 		rec  session.Record
 		want string
 	}{
-		{"a GitHub task in a feature", session.Record{Repo: "o/engine", Task: "o/engine#" + "138", Feature: "o/engine#" + "125"}, "#" + "125 > #" + "138"},
-		{"a feature in another repo", session.Record{Repo: "o/app", Task: "o/app#" + "7", Feature: "o/plans#" + "3"}, "plans#" + "3 > #" + "7"},
-		{"a standalone task", session.Record{Repo: "o/engine", Task: "o/engine#" + "138"}, "#" + "138"},
 		{"a server task in a plan", session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34", Feature: "p12"}, "p12 > t34"},
 		{"a server task in no plan", session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34"}, "t34"},
-		{"an unparsable task stays as recorded", session.Record{Repo: "o/engine", Task: "odd"}, "odd"},
+		{"an unparsable task stays as recorded", session.Record{Control: true, Repo: "o/engine", Task: "odd"}, "odd"},
 	}
 	for _, tt := range tests {
 		if got := CodexThreadTitle(tt.rec); got != tt.want {
@@ -87,7 +84,7 @@ func (f *fakeDaemon) exchange(t *testing.T, req CodexLabelRequest) error {
 	return err
 }
 
-var labelReq = CodexLabelRequest{ThreadID: "th1", Title: "#" + "125 > #" + "138", Project: "engine", Repo: "o/engine", Root: "/clones/o/engine"}
+var labelReq = CodexLabelRequest{ThreadID: "th1", Title: "p12 > t138", Project: "engine", Repo: "o/engine", Root: "/clones/o/engine"}
 
 func TestExchangeCodexLabel(t *testing.T) {
 	ours := `{"result":{"data":[{"id":"pOurs","metadata":{"engine_repo":"o/engine"}}],"nextCursor":null}}`
@@ -130,7 +127,7 @@ func TestExchangeCodexLabel(t *testing.T) {
 			if f.params[0]["capabilities"].(map[string]any)["experimentalApi"] != true {
 				t.Error("initialize does not ask for the experimental API")
 			}
-			if len(f.params) > 2 && (f.params[2]["threadId"] != "th1" || f.params[2]["name"] != "#"+"125 > #"+"138") {
+			if len(f.params) > 2 && (f.params[2]["threadId"] != "th1" || f.params[2]["name"] != "p12 > t138") {
 				t.Errorf("thread/name/set params %v", f.params[2])
 			}
 			last := f.params[len(f.params)-1]
@@ -206,13 +203,13 @@ func readLabel(t *testing.T, dir string) codexLabelRecord {
 func TestLabelCodexThreadStopsOnceLabelled(t *testing.T) {
 	d, reqs, where := labelDeps(t, nil)
 	dir := t.TempDir()
-	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "138", Feature: "o/engine#" + "125"}
+	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "138", Feature: "p12"}
 	for range 2 {
 		if err := LabelCodexThread(d, dir, rec, "th1"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want := CodexLabelRequest{ThreadID: "th1", Title: "#" + "125 > #" + "138", Project: "engine", Repo: "o/engine",
+	want := CodexLabelRequest{ThreadID: "th1", Title: "p12 > t138", Project: "engine", Repo: "o/engine",
 		Root: filepath.Join(d.Home, filepath.FromSlash(session.ReposDir), "o", "engine")}
 	if !reflect.DeepEqual(*reqs, []CodexLabelRequest{want}) {
 		t.Errorf("requests %+v, want one %+v", *reqs, want)

@@ -7,7 +7,6 @@ package session
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // Agent statuses that Claude Code reports for a live session.
@@ -41,38 +40,4 @@ func ListAgents(run Runner, bin string) ([]Agent, error) {
 		return nil, fmt.Errorf("%s agents --json: unreadable output: %w", bin, err)
 	}
 	return agents, nil
-}
-
-// Checkout is the git checkout a directory is in.
-type Checkout struct {
-	// Branch is the branch checked out; empty on a detached HEAD.
-	Branch string
-	// Remote is the URL of origin.
-	Remote string
-}
-
-// ProbeCheckout reads the branch and the origin URL of the checkout that dir
-// is in. An error means dir is not in a git checkout, or has no origin.
-func ProbeCheckout(run Runner, dir string) (Checkout, error) {
-	branch, err := run("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil {
-		return Checkout{}, err
-	}
-	remote, err := run("git", "-C", dir, "remote", "get-url", "origin")
-	if err != nil {
-		return Checkout{}, err
-	}
-	branch = strings.TrimSpace(branch)
-	if branch == "HEAD" {
-		branch = ""
-	}
-	return Checkout{Branch: branch, Remote: strings.TrimSpace(remote)}, nil
-}
-
-// IsRepo reports whether the checkout's origin is the GitHub repository
-// owner/name, however the URL is written (https, scp-style or ssh).
-func (c Checkout) IsRepo(repo string) bool {
-	url := strings.ToLower(strings.TrimSuffix(strings.TrimSuffix(c.Remote, "/"), ".git"))
-	repo = strings.ToLower(repo)
-	return strings.HasSuffix(url, "/"+repo) || strings.HasSuffix(url, ":"+repo)
 }

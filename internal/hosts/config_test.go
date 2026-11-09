@@ -50,7 +50,7 @@ func TestDocExample(t *testing.T) {
 		t.Errorf("hosts: %v", got)
 	}
 	mac := c.Hosts["mac"]
-	if mac.RAMGB != 48 || mac.ReserveGB != 16 || mac.GBPerSession != 8 || !mac.Has("ios") || mac.Has("linux") || !mac.Runs("codex") {
+	if mac.RAMGB != 48 || mac.ReserveGB != 16 || mac.GBPerSession != 8 || !mac.Runs("codex") {
 		t.Errorf("mac: %+v", mac)
 	}
 	if mac.Bin["claude"] != "~/.local/bin/claude" || mac.Bin["codex"] != "~/.local/bin/codex" || mac.Address != "<user>@<tailscale name>" {

@@ -19,7 +19,7 @@ tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
 
 ## Starting
 
-`engine start` (`hosts-and-sessions.md`, "Starting a session") adds Claude-specific setup:
+A session start (`hosts-and-sessions.md`, "Starting a session") adds Claude-specific setup:
 
 - It sets `projects.<worktree>.hasTrustDialogAccepted` in `~/.claude.json` (or
   `$CLAUDE_CONFIG_DIR`'s), so the trust dialog, whose default exits, never
@@ -42,7 +42,7 @@ or raises a hard stop.
 
 `engine hook pre-tool-use` blocks Bash merges without
 `--match-head-commit`, with `--auto` or `--admin`, or through the REST or
-GraphQL API. In a server session it blocks every PR merge: the
+GraphQL API. In an engine session it blocks every PR merge: the
 coordinator merges after `engine task merge-ready` (`control-server.md`).
 
 `engine hook permission` runs on `PermissionRequest` and `PermissionDenied`.
@@ -67,9 +67,8 @@ working; `waiting` and `idle` are waiting for input, because only a prompt
 moves the session on. For a window whose newest run is Claude's, `status`
 takes the state of the session of the window's name. A limit marker makes
 a live, non-busy window `limited`, with `resets_at`; busy wins. An unavailable
-session list leaves state unknown. `engine ps --github` finds one
-started by hand by its name (`<repo>-<task>`), then, on its own host only, by
-its worktree (its branch, in the claim's repo).
+session list leaves state unknown. A session started by hand is found by its
+name (`<repo>-<task>`).
 
 ## Apps
 

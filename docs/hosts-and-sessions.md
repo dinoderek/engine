@@ -15,7 +15,7 @@ it on one host; `engine setup --host <name>` copies it to another. Each host als
 one line, in `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, a logical
-name such as `mac` or `devbox`, never a hostname or an IP. It is what claims
+name such as `mac` or `devbox`, never a hostname or an IP. It is what attempts
 and every surface show. Its `address` is how other hosts reach it over plain
 SSH, `<user>@<tailscale name>`, passed to `ssh` as is, so it needs no
 `~/.ssh/config` entry. The address stays in this file and is never posted
@@ -99,14 +99,14 @@ then the fewest capabilities, then the lowest name:
 For each unpinned card, `harness_ratio` scores positive-weight harnesses by
 `(live sessions across hosts + 1) / weight`. Lowest wins; ties prefer
 `default_harness`, then name. If no host fits, try the next harness. Counts
-include pinned cards and unclaimed live starts. Zero
+include pinned cards and every live session. Zero
 weights exclude unpinned starts. No ratio: `default_harness`.
 Unknown harnesses and all-zero ratios are refused.
 
-An unplaced task stays ready, logged each pass. If none could take it with
-all slots free, comment once. The planner starts locally at `deep` on the
-feature's harness, else `default_harness`. For host calls,
-load `coordinator.md`.
+An unplaced task stays ready, noticed each pass. If none could take it with
+all slots free, the coordinator notifies the operator once. The planner
+starts at `deep` on the plan's harness, else `default_harness`. For host
+calls, load `coordinator.md`.
 
 ## Naming
 
@@ -115,21 +115,22 @@ Every surface uses one name per session, `<repo>-<task>`, such as
 branch. It holds letters, digits, `_`, `.` and `-`, and does not start with
 `-`: tmux treats anything else as special.
 
-## Starting a session: `engine start`
+## Starting a session
 
-`engine start <owner/repo#n> [--harness <name>] [--tier deep|standard|light] [--mode hands-off|gated] [--host <name>]`
-launches a session from any directory, and returns once it is up.
-`--mode` defaults to `hands-off`; `--harness` and `--tier` replace the card's. With no
-`--host` the session runs on this machine; `--host` names another machine in
-`hosts.toml` and starts it there over SSH.
+The coordinator dispatches a task's session on the host placement picks
+(`control-server.md`, "Dispatch and recovery"). It decides the model, effort
+and kickoff from the task's tier, then has the host run its own `sync-repo`
+and `spawn` ops (`coordinator.md`, "Reaching hosts"), in-process for this
+host, over SSH for another. The host's `spawn` refuses when the host file,
+`hosts.toml` or this host's entry is missing; the harness is unknown or not
+run on the host, or its binary is not executable; its window exists; or no
+slot is free, or no heavy slot for a heavy task. The coordinator itself
+refuses a host that lacks a capability in the task's `requires`. An
+unreachable host is an error, not a refusal. A host on another protocol is
+refused, naming `engine setup --host <name>` (`operator-setup.md`). A
+harness's cap across hosts is placement's alone.
 
-It first refuses, changing nothing, when: the host file,
-`hosts.toml` or this host's entry is missing; the task is closed, has a task
-state label or an open blocker, or is standalone without `engine:approved`;
-the harness (`--harness`, else the card's, else the default) is unknown (as a
-misspelt tier is) or not run on the host, or its binary is not executable;
-the host lacks a capability in the card's `## Requires`, even when named; its
-window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
+The host:
 
 1. syncs engine's clone using normal Git configuration, clearing matching
    engine-generated local credential and identity overrides; clones it over
@@ -138,7 +139,7 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    `worktree create` when it provides one (`project-context.md`,
    "Worktrees"), else `git worktree add` from the default branch, refusing
    a branch on `origin`, or a local one with commits (one without is
-   remade). A server dispatch marked a resume opens on `origin`'s branch
+   remade). A dispatch marked a resume opens on `origin`'s branch
    instead, at its tip, refusing a local branch with commits `origin` lacks.
    A worktree left there is adopted, fast-forwarded, when clean with no
    commits `origin` lacks, else refused;
@@ -146,31 +147,17 @@ window exists; or no slot is free, or no heavy slot for a heavy task. Then it:
    start (`claude.md` and `codex.md`, "Starting");
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree,
    so the repo's `AGENTS.md` loads;
-5. runs the host's launch line at the card's tier (default `standard`), with
+5. runs the host's launch line at the task's tier (default `standard`), with
    the flags the harness adds at start (the same sections). Then `--` and
-   the kickoff, the session's first message: `Execute <owner/repo#n> with the
-   engine executor, <mode> mode. Reviewer model: <deep model>. run=<run-id>
-   tmux=engine:<name> rc=<name>` (`rc=none` for Codex, which has no Remote
-   Control session). `/bin/sh` exports `ENGINE_RUN_DIR` (the run directory),
-   `ENGINE_HARNESS` (the harness), and `ENGINE_UNATTENDED=1` in hands-off
-   mode. A Codex session joined to remote control gets the `ENGINE_*`
-   variables on its command line instead (`codex.md`, "Starting");
+   the kickoff, the session's first message, which names the engine skill's
+   server executor or planner mode, the task or plan, the execution and the
+   reviewer model. `/bin/sh` exports `ENGINE_RUN_DIR` (the run directory),
+   `ENGINE_HARNESS` (the harness), the server's URL, credential file and the
+   attempt, and `ENGINE_UNATTENDED=1` in hands-off mode. A Codex session
+   joined to remote control gets the `ENGINE_*` variables on its command line
+   instead (`codex.md`, "Starting");
 6. writes `run.json` (`telemetry.md`; a Codex session joined to remote
-   control gets it before step 4, since its hooks find their run by it) and
-   prints how to attach.
-
-The checks run in `engine start`, which also picks the model, effort and
-kickoff. Steps 1 to 6, bar the attach hint, are the host's own
-`sync-repo` and `spawn` ops (`coordinator.md`, "Reaching hosts"), which
-`engine start` calls in-process, or over SSH with `--host`.
-The executor claims the task; its claim check stops a racing second start.
-With `--host`, the caller makes the task, harness, tier and `requires`
-refusals, and reads the window and free slots, heavy ones too, from the
-host's `status`; the host's own `spawn` refuses anything else, such as a
-missing harness binary.
-An unreachable host is an error, not a refusal. A host on another protocol
-is refused, naming `engine setup --host <name>` (`operator-setup.md`). A
-harness's cap across hosts is placement's alone: `engine start` ignores it.
+   control gets it before step 4, since its hooks find their run by it).
 
 **Preflight:** `engine start --check [--harness <name>] [--host <name>]` (Claude
 without `--harness`) runs `gh auth status` in the `engine` tmux server
@@ -181,29 +168,20 @@ failed or the session was denied, stalled or skipped a step. A Codex check
 also needs the hooks to have written its state file (`codex.md`).
 
 **Other ways to start:** a session started any other way runs the same
-executor, creates its own worktree, and is reachable only where it was
-started.
-
-## The claim comment is the registry
-
-The executor's claim comment on the task issue records where and how its
-session runs. `internal/tracker` owns its format.
-
-Everything that lists sessions reads these comments, so a task started by
-hand and one started by the coordinator look the same.
+skill, creates its own worktree, and is reachable only where it was started.
 
 ## Seeing sessions
 
 | Where | How |
 | --- | --- |
-| Phone or browser | Saved GitHub searches on `engine:running`, `engine:needs-human` and `engine:ruling-review` |
-| Terminal | `engine ps --github [--json]`: every claimed task, with its host, harness, state (`working`, `waiting`, `limited`, `needs-human`, `in-review`, `running` or `dead`) and age. Limited rows show their reset time; JSON carries `resets_at` in epoch seconds. `--json` prints an object with `quota` and `sessions`. Quota lines above the table show each harness’s newest reading across responding hosts; expired windows read 0%. Each claim is settled from the `status` of the host it names, this one's read in process, one call per configured host, in parallel; if the call fails the row keeps its label state with liveness `null` and `ps` warns. The signals are in `coordinator.md`. |
+| Phone or browser | The dashboard (`engine ui`, `control-server.md`) |
+| Terminal | `engine ps [--json]`: every server task, with its state and attempt. The dashboard's session view adds each attempt's host and observed state (`working`, `waiting`, `limited`, `live`, `exited` or `unknown`). The signals are in `coordinator.md`. |
 
 ## Connecting to a session
 
 | From | How |
 | --- | --- |
-| Any terminal | `engine attach <repo>-<task>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. |
+| Any terminal | `engine attach <task-id>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. |
 | Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
 | Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT and Codex apps, when the session joined engine's remote-control daemon (`codex.md`, "Apps"). |
 
@@ -219,7 +197,7 @@ so engine targets the windows it opens by id (`@3`), not by name. Windows stay a
 
 When engine has to type into a session, it sends the text with `send-keys -l`,
 then `Enter` as a separate call after a short delay. Input boxes can swallow a
-newline that arrives with the text. `engine tell` does this over SSH for a session on another host.
+newline that arrives with the text. The coordinator does this over SSH for a session on another host.
 
 ## Keeping hosts awake
 
@@ -228,10 +206,12 @@ host holds off sleep per window, while on power. A Linux host should not suspend
 
 ## Lifecycle
 
-- **Questions:** the executor sets `needs-human` and waits in the live session.
-  Answer from any surface. A comment on the task's issue also works, because
-  the executor reads its inbox when it resumes.
+- **Questions:** the executor asks with `engine ask`, which sets `needs-human`,
+  and waits in the live session. Answer from any surface. A reply in the
+  operator inbox also works, because the executor reads its updates when it
+  resumes.
 - **End:** after cleanup, a hands-off executor closes its own window; a gated
   one leaves it for the operator.
-- **Crash:** the window has died but the task is still `running`. `engine ps --github`
-  shows it dead; a running coordinator marks it `failed`, keeping the worktree.
+- **Crash:** the window has died but the task is still `running`. The
+  coordinator marks it `failed` (or resumes it, `control-server.md`),
+  keeping the worktree.

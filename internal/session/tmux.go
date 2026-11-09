@@ -176,22 +176,6 @@ func (t *Tmux) HasSession() (bool, error) {
 	return err == nil, err
 }
 
-// LiveWindow reports whether the session has a window with both id and
-// name whose command is still running: a window id reused by another
-// session's window, or a window whose command exited, is not it.
-func (t *Tmux) LiveWindow(id, name string) (bool, error) {
-	windows, err := t.Windows()
-	if err != nil {
-		return false, err
-	}
-	for _, w := range windows {
-		if w.ID == id && w.Name == name && !w.Dead {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // Windows lists the session's windows, none when the session does not exist.
 func (t *Tmux) Windows() ([]WindowInfo, error) {
 	ok, err := t.HasSession()

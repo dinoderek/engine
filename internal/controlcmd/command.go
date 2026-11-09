@@ -289,8 +289,6 @@ func operation(args []string) (control.Request, []string, error) {
 	case "ps":
 		r.Op = "list"
 		r.State = "task"
-	case "start":
-		r.Op = "run"
 	case "run", "updates", "ask", "inbox", "reply", "ack", "resolve":
 		r.Op = head
 	default:

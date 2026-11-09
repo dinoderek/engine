@@ -6,13 +6,8 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 )
 
-// serverSections are the sections a server task's body must have. Its
-// requirements, harness and tier are structured fields, not sections.
-var serverSections = required[:2]
-
 // Items returns every rule a server plan's tasks break, in task order;
-// none means it passes. Dependencies are structured and IDs are unique, so
-// the card-key and "blocked by" rules do not apply.
+// none means it passes.
 func Items(items []control.Item) []Problem {
 	if len(items) == 0 {
 		return []Problem{{Text: "the feature has no tasks"}}

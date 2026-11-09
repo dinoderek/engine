@@ -1,4 +1,4 @@
-> **Owns:** server deployment, records, API, credentials, inbox, coordination recovery, repository merges and merge locks. **Not here:** host configuration (`hosts-and-sessions.md`), GitHub-mode coordination (`coordinator.md`), executor practices (the engine skill).
+> **Owns:** server deployment, records, API, credentials, inbox, coordination recovery, repository merges and merge locks. **Not here:** host configuration (`hosts-and-sessions.md`), how the coordinator reaches hosts and reads session signals (`coordinator.md`), executor practices (the engine skill).
 
 # Control server
 
@@ -41,9 +41,8 @@ and never overwrite a file. Test restores in an isolated database first.
 IDs belong to engine: repositories, plans, tasks and attempts have separate
 prefixes and globally unique numeric parts. A plan is a feature-level
 requirements/design document. Standalone tasks have no parent plan.
-`engine ps` lists server tasks. Use `engine ps --github`
-for GitHub claims. `engine help` lists server command groups; the source
-of the flags is `internal/controlcmd/command.go`.
+`engine ps` lists server tasks. `engine help` lists server command groups; the
+source of the flags is `internal/controlcmd/command.go`.
 
 ```sh
 engine repo add --title Demo --slug owner/demo --remote git@github.com:owner/demo.git
@@ -256,8 +255,7 @@ GitHub credential. A merge marks the task done with its PR and frees the
 lock in one transaction; the session keeps its window 10 minutes to report.
 An op refusal or a missing lock is a `merge-refused` update that wakes the
 executor. Pending checks wait and are never a stall. A failed `gh` call
-notifies the operator and waits for their acknowledgement. GitHub-mode
-`engine run` leaves merges to executors.
+notifies the operator and waits for their acknowledgement.
 
 After checking the host and PR outcome, the operator can inspect
 `engine lock show <repo-id>` and use `engine lock recover` with the current
