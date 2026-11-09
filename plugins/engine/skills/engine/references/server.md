@@ -94,7 +94,7 @@ bypass gates or the lock.
    for it to be read. Repeat it in the PR body. Each ruling:
 
    ```text
-   Ruling: <decision>
+   Ruling (risk: review): <decision>
    User notices: <what a user would see, in product terms, or nothing>
    Alternative: <the option you did not take>
    If wrong: <what undoing it costs and touches>
@@ -108,11 +108,12 @@ bypass gates or the lock.
 The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
 
 - **Look in the server first:** `engine updates <task>` and `engine updates
-  <plan>`. A plan `ruling` update, or a `resolved` one on your task, that
+  <plan>`. A plan `ruling` update, or a `resolved` one on your task or plan, that
   decides the same root cause covers you: cite its sequence with
   `engine tell <task>` and in the PR body, and carry on. A plan-level
   question still open on the same root cause: cite its sequence with
-  `engine tell <task>`, end your turn, and wait to be woken by its ruling.
+  `engine tell <task>`, end your turn, and wait to be woken by its ruling;
+  record both sequences in the PR body.
   The coordinator may raise a stall notice meanwhile; that is expected.
 - **Ask:** `engine ask <task> <question>`, then end your turn.
 - **Plan-level questions:** a gate red on the default branch, or a host tool

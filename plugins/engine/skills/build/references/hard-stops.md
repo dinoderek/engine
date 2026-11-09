@@ -38,7 +38,7 @@ the **same root cause** covers you: the same failing gate on the default
 branch, the same broken tool or sign-in on the same host, the same product
 question. Follow it, cite where it was given in the PR body, and carry on.
 If a question on the same root cause is already open, wait on it instead of
-asking again.
+asking again, and cite it and its answer in the PR body.
 
 Never stretch an answer to a different question: a ruling on one red lane
 does not cover another lane, and a host's sign-in fix does not cover another

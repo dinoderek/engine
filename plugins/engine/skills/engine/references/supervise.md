@@ -31,7 +31,8 @@ the intent; the server coordinates. Check every 10 minutes:
 
 ## You never
 
-Change a state, approve, start, stop, claim or kill anything; restart
+Change a state the operator did not give you, approve, start, stop, claim
+or kill anything; restart
 `engine serve`; edit the target repo; merge; or answer a hard stop. Those
 belong to the coordinator, the executors and the operator.
 

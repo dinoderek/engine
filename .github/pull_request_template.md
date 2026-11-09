@@ -15,12 +15,12 @@
 
 ## Rulings
 
-<!-- Decisions made for this PR, each as:
-Ruling (risk: low|med|high): <decision>
-Why: <reason>
+<!-- At most five one-line `low` notes, and any `review` rulings, each as:
+Ruling (risk: low|review): <decision>
+User notices: <what a user would see, or nothing>   (review only)
+Alternative: <the option not taken>                 (review only)
 If wrong: <what it costs to undo, what it touches>
-plus a last line `Decided by: operator` when the operator made it.
-"None" if none. -->
+Cite any operator answer this task followed. "None" if none. -->
 
 ## Review
 

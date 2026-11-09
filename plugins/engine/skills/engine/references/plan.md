@@ -75,14 +75,14 @@ sort every rule that tells an agent to involve the operator:
 
 Check that every lane the work needs runs on some host, and name the
 capability in the design for the cards' `--requires`; a lane no host can run
-is a question. Never
-invent an override the operator has not agreed.
+is a question. Never invent an override the operator has not agreed.
 
 ## Budget headroom
 
 For each doc the work will update, put its word budget (the repo's budget
-registry) and current count (its doc check, else `wc -w`) in the design. A doc the work would push over budget is a question: a trim task
-first, or a raise the operator agrees. Recommend the trim.
+registry) and current count (its doc check, else `wc -w`) in the design. A
+doc the work would push over budget is a question: a trim task first, or a
+raise the operator agrees. Recommend the trim.
 
 ## Card
 

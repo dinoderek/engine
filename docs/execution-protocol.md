@@ -66,7 +66,7 @@ server plan it requests the merge and the coordinator makes it
 
 The coordinator is a program, with no agent mode: its code is the spec for
 a reconcile pass. Outside engine, `build` needs no coordinator: you start
-the session and approve its merge.
+the session and, in gated mode, approve its merge.
 
 The supervisor mode exists to find the coordinator's gaps. It acts only
 through `engine` commands and records every gap it fills, so each one becomes
