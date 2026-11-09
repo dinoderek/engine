@@ -103,7 +103,7 @@ include pinned cards and every live session. Zero
 weights exclude unpinned starts. No ratio: `default_harness`.
 Unknown harnesses and all-zero ratios are refused.
 
-An unplaced task stays ready, noticed each pass. If none could take it with
+An unplaced task stays ready and waits. If no host could take it even with
 all slots free, the coordinator notifies the operator once. The planner
 starts at `deep` on the plan's harness, else `default_harness`. For host
 calls, load `coordinator.md`.
@@ -124,9 +124,10 @@ op (`coordinator.md`, "Reaching hosts"), in-process for this host, over SSH
 for another: it syncs engine's clone, then runs the steps below. The host's
 spawn refuses when the host file,
 `hosts.toml` or this host's entry is missing; the harness is unknown or not
-run on the host, or its binary is not executable; its window exists; or no
-slot is free, or no heavy slot for a heavy task. The coordinator itself
-refuses a host that lacks a capability in the task's `requires`. An
+run on the host, or its binary is not executable; or its window exists.
+Placement, not spawn, keeps to the slots: it picks only a host whose `status`
+shows a free slot, and a free heavy slot for a heavy task, and a host that
+lacks a capability in the task's `requires` takes none. An
 unreachable host is an error, not a refusal. A host on another protocol is
 refused, naming `engine setup --host <name>` (`operator-setup.md`). A
 harness's cap across hosts is placement's alone.
@@ -175,7 +176,7 @@ skill, creates its own worktree, and is reachable only where it was started.
 
 | Where | How |
 | --- | --- |
-| Phone or browser | The dashboard (`engine ui`, `control-server.md`) |
+| Browser | The dashboard (`engine ui`, `control-server.md`), on loopback, so on the host running it or through a tunnel |
 | Terminal | `engine ps [--json]`: every server task, with its state and attempt. The dashboard's session view adds each attempt's host and observed state (`working`, `waiting`, `limited`, `live`, `exited` or `unknown`). The signals are in `coordinator.md`. |
 
 ## Connecting to a session

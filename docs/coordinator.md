@@ -97,10 +97,7 @@ whether it is waiting for input. Three sources:
 The session check reads only `state`, from the `status` of the host an
 attempt names, this host's too. An attempt in engine's tmux session is alive
 while its window's command runs, and dead once the window is gone or its
-command exited. A session started by hand is alive only when the reply's
-harness list shows it (`claude.md`, "Session list"); otherwise its liveness,
-like a failed call's, is unknown. A session in `needs-human` or `in-review`
-keeps that state while alive.
+command exited.
 
 **Stalls.** Limited sessions never stall. A dispatched session that has not
 claimed its task 5 minutes after it started is noticed once, and one that

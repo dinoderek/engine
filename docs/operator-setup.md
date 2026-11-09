@@ -39,7 +39,7 @@ open while gh fails there or, on macOS, keeps its token in the keychain.
 **The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
 `sqlite3` on a Codex host, `codex.md` "Apps"), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
-name, one line, as claims post it: `hosts-and-sessions.md`, "Hosts") and
+name, one line, as attempts and every surface show it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
 plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
