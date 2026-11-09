@@ -100,12 +100,20 @@ func (c *Coordinator) now() time.Time {
 }
 
 // release closes a finished session's window and worktree on its host, and
-// ends its attempt.
+// ends its attempt. A release with a Key tells the operator, once.
 func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
-	if _, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false); err != nil || a.Attempt == "" {
+	if _, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false); err != nil {
 		return err
 	}
-	return c.Service.SetAttempt(a.Attempt, "ended", "")
+	if a.Attempt != "" {
+		if err := c.Service.SetAttempt(a.Attempt, "ended", ""); err != nil {
+			return err
+		}
+	}
+	if a.Key == "" {
+		return nil
+	}
+	return c.notice(a.Item, a.Key, a.Text)
 }
 
 // stop clears root's coordination intent. Completed and failed intent stays

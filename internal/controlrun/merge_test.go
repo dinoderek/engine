@@ -223,7 +223,10 @@ func TestCoordinatorHoldsAFailedMergeUntilTheOperatorAcknowledges(t *testing.T) 
 	}
 }
 
-func TestStandaloneSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
+// standaloneMergeRequest is a standalone task, dispatched to a host whose
+// merges succeed, that holds the lock and has requested its merge.
+func standaloneMergeRequest(t *testing.T) (*Coordinator, *merger, control.Item, control.Attempt) {
+	t.Helper()
 	c, h, repo, _, _ := setup(t)
 	if err := c.Service.Store.Transaction(func(st *control.State) error {
 		for id, item := range st.Items {
@@ -261,10 +264,15 @@ func TestStandaloneSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 		PR: reviewedPR, Head: reviewedHead, Method: "squash", Verdict: "APPROVED"}}); err != nil {
 		t.Fatal(err)
 	}
+	return c, m, task, at
+}
+
+func TestStandaloneSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
+	c, m, task, at := standaloneMergeRequest(t)
 	m.status.Windows[0].State = "waiting"
 	c.Wake = func(reconcile.Session, string) error { return nil }
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ := c.Service.Store.Snapshot()
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, windows %v, attempt %s: the window closed as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
 	}

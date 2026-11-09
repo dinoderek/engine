@@ -52,6 +52,14 @@ func waiting(d time.Duration) Session {
 	return s
 }
 
+// background is a live session that only a background job has kept busy
+// since d before t0: its last turn ended then.
+func background(d time.Duration) Session {
+	s := working()
+	s.Background, s.WaitingSince = true, t0.Add(-d)
+	return s
+}
+
 func view(root Item, tasks ...Item) View {
 	if root.Kind == "task" {
 		tasks = []Item{root}

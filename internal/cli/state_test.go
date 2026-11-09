@@ -70,7 +70,7 @@ func TestStateHookDoesNothingElsewhere(t *testing.T) {
 	}{
 		"outside an engine run":        {recordedEvent(t, "Stop"), nil, 0, ""},
 		"an unattended denial":         {recordedEvent(t, "PermissionRequest"), map[string]string{session.RunDirVar: dir, session.UnattendedVar: "1"}, 0, ""},
-		"an event that says nothing":   {recordedEvent(t, "PreToolUse"), map[string]string{session.RunDirVar: dir}, 0, ""},
+		"an event that says nothing":   {recordedEvent(t, "Notification"), map[string]string{session.RunDirVar: dir}, 0, ""},
 		"an unreadable event":          {"not json", map[string]string{session.RunDirVar: dir}, 1, "unreadable state event"},
 		"a run directory that is gone": {recordedEvent(t, "Stop"), map[string]string{session.RunDirVar: filepath.Join(dir, "gone")}, 1, "record the session state"},
 	}

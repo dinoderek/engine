@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"testing"
 )
@@ -39,6 +40,18 @@ func readJSON(t *testing.T, path string, into any) {
 	}
 }
 
+// guards are cmds without the state hook, which each harness registers on
+// its own events.
+func guards(cmds []string) []string {
+	var out []string
+	for _, c := range cmds {
+		if c != "engine hook state" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // The Codex plugin registers the same permission and merge-guard commands on
 // the same events as the Claude plugin, so the two harnesses are guarded alike.
 func TestCodexPluginGuardsMatchClaude(t *testing.T) {
@@ -54,14 +67,8 @@ func TestCodexPluginGuardsMatchClaude(t *testing.T) {
 		want := claude.Hooks.commands(event)
 		got := codex.Hooks.Hooks.commands(event)
 		for matcher, cmds := range want {
-			var guards []string
-			for _, c := range got[matcher] {
-				if c != "engine hook state" {
-					guards = append(guards, c)
-				}
-			}
-			if !reflect.DeepEqual(guards, cmds) {
-				t.Errorf("%s[%q]: Codex runs %q, Claude runs %q", event, matcher, guards, cmds)
+			if g, w := guards(got[matcher]), guards(cmds); !reflect.DeepEqual(g, w) {
+				t.Errorf("%s[%q]: Codex runs %q, Claude runs %q", event, matcher, g, w)
 			}
 		}
 	}
@@ -132,8 +139,41 @@ func TestClaudePluginRegistersLimitHook(t *testing.T) {
 		"UserPromptSubmit": "",
 	} {
 		want := map[string][]string{matcher: {"engine hook limit"}}
-		if got := plugin.Hooks.commands(event); !reflect.DeepEqual(got, want) {
+		got := plugin.Hooks.commands(event)
+		for m, cmds := range got {
+			got[m] = guards(cmds)
+		}
+		if !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: got %v, want %v", event, got, want)
+		}
+	}
+}
+
+// The Claude plugin runs the state hook on exactly the events that tell
+// whether a turn has ended: Stop ends it, and a prompt or a tool call is in
+// one. Claude Code's session list says the rest.
+func TestClaudePluginRegistersStateHook(t *testing.T) {
+	var plugin struct{ Hooks hookGroups }
+	readJSON(t, "../../plugins/engine/hooks/hooks.json", &plugin)
+	var events []string
+	for event := range plugin.Hooks {
+		for matcher, cmds := range plugin.Hooks.commands(event) {
+			if slices.Contains(cmds, "engine hook state") {
+				events = append(events, event)
+				if matcher != "" {
+					t.Errorf("%s: the state hook runs only for %q, want every tool", event, matcher)
+				}
+			}
+		}
+	}
+	sort.Strings(events)
+	want := []string{"PostToolUse", "PreToolUse", "Stop", "UserPromptSubmit"}
+	if !reflect.DeepEqual(events, want) {
+		t.Errorf("engine hook state is on %q, want %q", events, want)
+	}
+	for _, event := range want {
+		if stateFor(event, false) == "" {
+			t.Errorf("%s is registered but the state hook ignores it", event)
 		}
 	}
 }

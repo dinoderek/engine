@@ -1,5 +1,5 @@
 {
-  "description": "engine's merge guard: blocks gh pr merge without --match-head-commit, auto-merge, --admin, and merges through the API; in server sessions, blocks every PR merge. In unattended sessions, denies and logs permission requests.",
+  "description": "engine's merge guard: blocks gh pr merge without --match-head-commit, auto-merge, --admin, and merges through the API; in server sessions, blocks every PR merge. In unattended sessions, denies and logs permission requests. In engine sessions, records whether the last turn has ended.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,6 +8,14 @@
           {
             "type": "command",
             "command": "engine hook pre-tool-use"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "engine hook state"
           }
         ]
       }
@@ -60,6 +68,30 @@
           {
             "type": "command",
             "command": "engine hook limit"
+          },
+          {
+            "type": "command",
+            "command": "engine hook state"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "engine hook state"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "engine hook state"
           }
         ]
       }

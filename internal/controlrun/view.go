@@ -101,6 +101,7 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 			s.Live = w.Alive
 			s.DeadWindow = !w.Alive
 			s.Waiting = w.Alive && w.State == session.StateWaiting
+			s.Background = w.Alive && w.State == session.StateWorking && w.Background
 			s.Limited = w.Alive && w.State == session.StateLimited
 			s.ResetsAt = w.ResetsAt
 			s.Screen = w.Screen
@@ -136,11 +137,12 @@ func coordinating(st *control.State, item control.Item) bool {
 	return item.Coordinating || item.Plan != "" && st.Items[item.Plan].Coordinating
 }
 
-// kept is at with one pass's observation of its session applied. A window
+// kept is at with one pass's observation of its session applied: the start
+// of an idle spell, a limit reset, and when it was seen live. A window
 // is recorded as seen live only while coordination runs, so a pass that
 // overlaps a stop never dates the sighting after it.
 func kept(at control.Attempt, sess reconcile.Session, now time.Time, coordinating bool) control.Attempt {
-	if sess.Waiting && !sess.Limited && sess.ResetsAt == 0 {
+	if sess.Idle() && sess.ResetsAt == 0 {
 		if at.WaitingSince.IsZero() {
 			at.WaitingSince = now
 		}
