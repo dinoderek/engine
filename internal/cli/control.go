@@ -78,4 +78,4 @@ func preToolUse(e Env) int {
 
 // serverMergeRefusal tells a server executor how its PR merges instead.
 const serverMergeRefusal = "a server session never merges: the coordinator merges on the task's host. " +
-	"Run engine task merge-ready <task> --pr <url> --head <reviewed-sha> --method <squash|merge|rebase> --verdict APPROVED, then wait for the merge queue's update"
+	"Run engine task merge-ready <task> --pr <url> --head <reviewed-sha> --method <squash|merge|rebase> --verdict APPROVED, then end your turn: the merge queue wakes you with its update"

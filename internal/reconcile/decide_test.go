@@ -21,6 +21,8 @@ func requesting(t Item) Item {
 	return t
 }
 
+func question(t Item, id int) Item { t.Question = id; return t }
+
 func ended(t Item) Item { t.Current.State = "ended"; return t }
 
 func vanished(t Item, question int) Item {
@@ -120,7 +122,10 @@ func TestDecide(t *testing.T) {
 		{"a flagged wait is not flagged again", view(plan("executing"), with(task(2, "running"), flagged(waiting(StallWait)))), nil},
 		{"a short wait is not flagged", view(plan("executing"), with(task(2, "running"), waiting(StallWait-time.Second))), nil},
 		{"a wait at a hard stop is not flagged", view(plan("executing"), with(task(2, "needs-human"), waiting(StallWait))), []string{"state p1 blocked"}},
+		{"a wait on an open question is not flagged", view(plan("executing"), question(with(task(2, "running"), waiting(StallWait)), 5)), nil},
 		{"a wait on the coordinator's merge is not flagged", view(plan("executing"), requesting(with(task(2, "in-review"), waiting(StallWait)))), nil},
+		{"a short wait after a long background spell is not flagged", view(plan("executing"), with(task(2, "running"), afterBackground(time.Minute, 2*StallWait))), nil},
+		{"a session busy only in a background job is not flagged", view(plan("executing"), with(task(2, "running"), background(StallWait))), nil},
 		{"a running task never waits for its claim: the server claims at dispatch", view(plan("executing"), with(task(2, "running"), working())), nil},
 		{"a live session of an unheld task is flagged after the claim wait", view(plan("executing"), with(task(2, "todo"), working())),
 			[]string{fmt.Sprintf("notice t2 stall/a2/%d", spawned)}},
@@ -138,6 +143,10 @@ func TestDecide(t *testing.T) {
 		// Release.
 		{"a done task's waiting session is released", view(plan("executing"), with(task(2, "done"), waiting(StallWait)), task(3, "todo")),
 			[]string{"release t2 a2", "dispatch t3 devbox claude false"}},
+		{"a done task's session busy only in a background job is released", view(plan("executing"), with(task(2, "done"), background(StallWait)), task(3, "todo")),
+			[]string{"release t2 a2", "dispatch t3 devbox claude false"}},
+		{"a done task's session busy in a turn is left alone", view(plan("executing"), with(task(2, "done"), working()), task(3, "todo")),
+			[]string{"dispatch t3 devbox claude false"}},
 		{"a just-merged task keeps its window to report", view(plan("executing"), mergedAt(with(task(2, "done"), waiting(StallWait)), 5*time.Minute), task(3, "todo")),
 			[]string{"dispatch t3 devbox claude false"}},
 
@@ -150,6 +159,7 @@ func TestDecide(t *testing.T) {
 		{"a done plan with no session left stops", view(plan("done"), ended(with(task(2, "done"), gone()))), []string{"stop p1"}},
 		{"a done plan waits for a working session", view(plan("done"), with(task(2, "done"), working())), nil},
 		{"a done plan releases a waiting session, then stops", view(plan("done"), with(task(2, "done"), waiting(time.Minute))), []string{"release t2 a2", "stop p1"}},
+		{"a done plan releases a session busy only in a background job", view(plan("done"), with(task(2, "done"), background(time.Minute))), []string{"release t2 a2", "stop p1"}},
 		{"a done plan waits for an unknown session", view(plan("done"), with(task(2, "done"), Session{Unknown: true})), nil},
 		{"a done standalone task keeps a just-merged window", view(mergedAt(with(task(5, "done"), waiting(time.Minute)), time.Minute)), nil},
 	} {

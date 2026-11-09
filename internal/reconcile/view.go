@@ -98,7 +98,8 @@ type Action struct {
 	// State is the plan state a SetState sets. Key, when set, is a notice
 	// with Text sent once the state is set.
 	State string
-	// Key dedupes a Notice: one notice per item and key.
+	// Key dedupes a Notice, or the notice a Release sends: one notice per
+	// item and key.
 	Key string
 	// Stalled is the session start, or the wait, a stall Notice flags.
 	Stalled time.Time
@@ -139,6 +140,13 @@ func (t Item) claimed() bool { return slices.Contains(claimStates, t.state()) }
 
 // taken reports whether the task may not start: it is held, or failed.
 func (t Item) taken() bool { return t.claimed() || t.state() == "failed" }
+
+// Wakeable reports whether a pointer at new updates may be typed into the
+// item's session: the session is idle, so typing cuts into no turn, and the
+// item is at no hard stop.
+func (t Item) Wakeable() bool {
+	return t.Session != nil && t.Session.Idle() && t.State != "needs-human" && t.Question == 0
+}
 
 // observed returns the item's session, or a zero one that is neither live
 // nor unknown.

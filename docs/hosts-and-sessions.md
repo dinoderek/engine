@@ -162,8 +162,8 @@ off sleep per window while on power; a Linux host should not suspend.
 ## Lifecycle
 
 - **Questions:** the executor asks with `engine ask`, which sets `needs-human`,
-  and waits in the live session. Answer from any surface, the operator inbox
-  included: the executor reads its updates when it resumes.
+  and waits in the live session. Answer from any surface; resolution restores
+  the state and wakes it to read its updates.
 - **End:** after cleanup an executor closes its window.
 - **Crash:** the window died but the task is still `running`. The coordinator
   marks it `failed` or resumes it (`coordinator.md`), keeping the worktree.

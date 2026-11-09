@@ -41,7 +41,7 @@ const Usage = "engine serve\n" +
 	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
 	"engine ps\nengine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
-	"engine reply|ack|resolve <sequence> [<text>]\nengine resolve <sequence> <text> --plan <plan-id>\n" +
+	"engine reply|ack|resolve <sequence> [<text>]\n" +
 	"engine merge-queue <repo-id>\n" +
 	"engine attempt list [<task-id>]\n" +
 	"All writes accept --request-key <key>; edits require --version. Output is JSON.\n"

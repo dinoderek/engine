@@ -1,9 +1,9 @@
 # Project context guideline
 
-> **Owns:** what a repo must provide so executors can run hands-off, and the rules the seed prompt applies. **Not here:** what the executor does (the `build` skill, `plugins/engine/skills/build/`), the protocol's phases and states (`execution-protocol.md`).
+> **Owns:** what a repo must provide so executors can run hands-off. **Not here:** what the executor does (the `build` skill, `plugins/engine/skills/build/`), the protocol's phases and states (`execution-protocol.md`).
 
-The guideline is language-neutral. It names outcomes and registries, and the
-seed prompt picks the tools for each stack.
+The guideline is language-neutral. It names outcomes and registries; each
+repo picks the tools for its stack.
 
 ## Core (every repo)
 
@@ -151,11 +151,3 @@ usage and does nothing else: engine reads it. Docs cite verbs, not commands.
 | Design system | The repo has a UI | A catalog of **which component to reach for**, never its props: the component file and its tests are the spec. The check fails when a component folder is missing from the catalog. Tokens are the only source of colour, spacing and type, and a lint ratchet bans literals. |
 | Isolated environments | The repo has stateful infrastructure (DBs, ports, simulators) | A slot lease per worktree, with derived ports. Commands that need the lease refuse to run without it. |
 | Test-directory READMEs | Test layers have local conventions | Read a directory's README before editing its tests. |
-
-## Seed prompt
-
-- **New repo:** interview the operator (stack, deploy target, stateful
-  infrastructure, UI, product decisions); generate the core plus the modules
-  that apply, with the docs check, lanes, CI and dependency bots; open one PR.
-- **Retrofit:** audit an existing repo against this guideline and report the
-  gaps as a plan with tasks, ready for the protocol.

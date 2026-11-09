@@ -17,8 +17,9 @@ session's environment supplies the endpoint, credential file and attempt ID
   state; plans use `engine plan state`.
 - `engine tell <id> <text>` posts a message on your task or its plan, and
   wakes the sessions waiting on it. `engine ask <id> <text>` asks the
-  operator; on a task, it moves the task to `needs-human`. `--operator` on `tell` sends
-  a message to the operator's inbox that asks for no answer.
+  operator, on your task or its plan, and holds your task in `needs-human`.
+  `--operator` on `tell` sends a message to the operator's inbox that asks
+  for no answer.
 
 ## Planner
 
@@ -64,7 +65,14 @@ repo's own merge and cleanup steps; the merge guard enforces it.
      <the repo's merge method> --verdict APPROVED`, then end your turn. The
      merge guard refuses `gh pr merge` in a server session. The coordinator
      waits for CI.
-  3. The coordinator wakes you with an update on the task:
+  3. **Wait by ending your turn**, never in a background job, polling loop
+     or `sleep`: the coordinator types a pointer at its update into your window. Worked
+     example: `engine task merge-ready t7 … --head 3f2c…` prints the
+     request; you write "Merge requested for t7 at 3f2c…; waiting for the
+     coordinator." and stop. Later, `Read the new task updates: engine
+     updates t7 --after 512` arrives as your next prompt: run it, and act on
+     the update it shows.
+  4. The updates on the task:
      - `merged`: the task is `done`; record the outcome with `engine tell
        <task>` and stop, keeping the worktree for the coordinator to release.
      - `merge-turn`: your turn. Redo step 7 (fetch, merge the default
@@ -74,8 +82,9 @@ repo's own merge and cleanup steps; the merge guard enforces it.
        branch rule to ask about), then request again.
      - `merge-demoted` or `merge-withdrawn`: read why; a demoted request
        stays queued.
-  4. To rework the PR, set the task `running`: it leaves the queue. When
+  5. To rework the PR, set the task `running`: it leaves the queue. When
      the session resumes, `engine task show <task>` shows its queue entry.
+- **Step 11.** Leave cleanup to the coordinator.
 
 A server outage blocks the merge request: keep your work and wait. Never
 bypass gates or the queue.
@@ -109,19 +118,15 @@ bypass gates or the queue.
 The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
 
 - **Look in the server first:** `engine updates <task>` and, if the task
-  has a plan, `engine updates <plan>`. A plan `ruling` update, or a `resolved` one on your task or plan, that
-  decides the same root cause covers you: cite its sequence with
-  `engine tell <task>` and in the PR body, and carry on. A plan-level
-  question still open on the same root cause: cite its sequence with
-  `engine tell <task>`, end your turn, and wait to be woken by its ruling;
-  record both sequences in the PR body.
-  The coordinator may raise a stall notice meanwhile; that is expected.
+  has a plan, `engine updates <plan>`. A `resolved` update on either that
+  decides the same root cause covers you: cite its sequence in the PR body
+  and carry on. An open question on the plan already blocks your task's
+  state changes and merge; if it is your root cause, end your turn and wait,
+  and cite it in the PR body.
 - **Ask:** `engine ask <task> <question>`, then end your turn.
 - **Plan-level questions:** a gate red on the default branch, or a host tool
-  or sign-in that every task on that host needs, affects every task. Ask on
-  your task, saying the question is plan-level and asking the operator to
-  resolve it with `--plan <plan>`. Then, with the sequence the ask returned,
-  post `engine tell <plan> "Plan-level question <sequence>: <root cause>"`
-  so sibling tasks find it instead of asking again.
-- Only the operator's resolution and their restoring the task's state end
-  the stop; a plan resolution answers it for every task in the plan.
+  or sign-in that every task on that host needs, affects every task. Ask it
+  once on the plan: `engine ask <plan> <question>`. It holds your task and
+  blocks every task in the plan; its resolution answers them all.
+- Only the operator ends the stop. Resolving your task's last open question
+  restores its state and wakes you.

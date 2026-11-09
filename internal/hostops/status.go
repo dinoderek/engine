@@ -60,6 +60,9 @@ type Window struct {
 	State   string `json:"state,omitempty"`
 	// WaitingFor says what a waiting session needs, when its harness says.
 	WaitingFor string `json:"waiting_for,omitempty"`
+	// Background is true for a working session whose last turn has ended:
+	// only a background job keeps it busy, and it takes typed input.
+	Background bool `json:"background,omitempty"`
 	// ResetsAt is the usage limit reset, in epoch seconds, or zero if unknown.
 	ResetsAt int64 `json:"resets_at,omitempty"`
 	// Screen is the last ScreenLines lines of a window whose session is not
@@ -166,6 +169,7 @@ func (s *Status) probe(w *Window, r session.Run) {
 				if w.State == session.StateWaiting {
 					w.WaitingFor = a.WaitingFor
 				}
+				w.Background = w.State == session.StateWorking && turnEnded(r.Dir, a.SessionID)
 				break
 			}
 		}
@@ -175,4 +179,17 @@ func (s *Status) probe(w *Window, r session.Run) {
 	case Codex:
 		s.probeCodex(w, r)
 	}
+}
+
+// turnEnded reports whether a Claude session that Claude Code lists as busy
+// has ended its last turn: the newest hook event in its run's state file is
+// a Stop, from the same session when both name one. Claude Code stays busy
+// while a background job runs after the turn. A missing or unreadable file
+// is not known to have ended, so the session counts as busy in a turn.
+func turnEnded(dir, sessionID string) bool {
+	st, ok := session.ReadHarnessState(dir)
+	if !ok || st.Event != "Stop" || st.State != session.StateWaiting {
+		return false
+	}
+	return st.SessionID == "" || sessionID == "" || st.SessionID == sessionID
 }

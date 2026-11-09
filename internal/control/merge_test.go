@@ -75,9 +75,7 @@ func TestMergeRequestNeedsInReviewAndNoQuestion(t *testing.T) {
 	question := call(t, s, a, Request{Op: "ask", ID: task.ID, Body: "Approve the merge?"}).Updates[0]
 	reject(t, s, a, ready(task.ID, good()), 409)
 	call(t, s, op, Request{Op: "resolve", ReplyTo: question.ID, Body: "Approved"})
-	current := call(t, s, op, Request{Op: "get", ID: task.ID}).Item
-	call(t, s, op, Request{Op: "state", ID: task.ID, Version: current.Version, State: "in-review"})
-	out := call(t, s, a, ready(task.ID, good()))
+	out := call(t, s, a, ready(task.ID, good())) // resolving restored in-review
 	if u := out.Updates[0]; u.Kind != "merge-request" || u.Merge == nil || u.Merge.Head != head || !strings.Contains(u.Body, "squash") {
 		t.Fatalf("request %+v", u)
 	}

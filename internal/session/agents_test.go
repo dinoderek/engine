@@ -28,8 +28,8 @@ func TestListAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Agent{
-		{PID: 58375, CWD: "/work/a", Name: "a-7", Status: AgentIdle},
-		{PID: 50701, CWD: "/work/b", Name: "b-9", Status: AgentBusy},
+		{PID: 58375, CWD: "/work/a", Name: "a-7", SessionID: "11111111-1111-4111-8111-111111111111", Status: AgentIdle},
+		{PID: 50701, CWD: "/work/b", Name: "b-9", SessionID: "22222222-2222-4222-8222-222222222222", Status: AgentBusy},
 		{PID: 5, CWD: "/work/c", Name: "c-1", Status: AgentWaiting, WaitingFor: "approval"},
 	}
 	if !reflect.DeepEqual(got, want) {
