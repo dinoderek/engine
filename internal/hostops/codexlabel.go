@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/session"
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // CodexLabelFile, in a run directory, records the attempts to label the
@@ -73,29 +72,17 @@ func CodexLabelPending(runDir string, now time.Time) bool {
 const codexProjectKey = "engine_repo"
 
 // CodexThreadTitle is the title of a task's thread: "<plan> > <task>", or the
-// task alone when it belongs to no plan. A server run names them by their
-// server IDs (p12, t34); a GitHub run by their issue numbers, with the repo
-// only when the plan's differs from the task's.
+// task alone when it belongs to no plan. Runs name them by their server IDs
+// (p12, t34).
 func CodexThreadTitle(rec session.Record) string {
-	task, plan := rec.Task, rec.Feature
-	if t, err := tracker.ParseRef(rec.Task); err == nil {
-		task = "#" + strconv.Itoa(t.Number)
-		if rec.Control {
-			task = "t" + strconv.Itoa(t.Number)
-		}
+	task := rec.Task
+	if t, err := session.ParseRef(rec.Task); err == nil {
+		task = "t" + strconv.Itoa(t.Number)
 	}
-	if f, err := tracker.ParseRef(plan); err == nil && !rec.Control {
-		plan = "#" + strconv.Itoa(f.Number)
-		if f.Repo != rec.Repo {
-			if r, err := session.ParseRepo(f.Repo); err == nil {
-				plan = r.Name + plan
-			}
-		}
-	}
-	if plan == "" {
+	if rec.Feature == "" {
 		return task
 	}
-	return plan + " > " + task
+	return rec.Feature + " > " + task
 }
 
 // LabelCodexThread titles a joined Codex run's thread and files it under its

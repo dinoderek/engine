@@ -126,7 +126,7 @@ func TestLocal(t *testing.T) {
 	if _, err := c.Local("laptop"); err == nil || !strings.Contains(err.Error(), `host "laptop" is not in hosts.toml (hosts: mac)`) {
 		t.Errorf("Local(laptop): %v", err)
 	}
-	if h := c.Hosts["mac"]; !h.Has("macos") || h.Has("ios") || !h.Runs("claude") || h.Runs("codex") {
+	if h := c.Hosts["mac"]; !h.Runs("claude") || h.Runs("codex") {
 		t.Errorf("capabilities or harnesses: %+v", h)
 	}
 }

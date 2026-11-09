@@ -17,12 +17,12 @@ agent does, change the skill.
 - **Enforce in code, not prompts.** The coordinator's pass is specified only
   by its code. Merging is a scripted check of the
   reviewed head commit against green checks. In Claude Code and in Codex, the
-  merge guard (`claude.md`, "Hooks"; `codex.md`, "Guards") blocks an unpinned,
-  auto or admin merge through `gh`.
+  merge guard (`claude.md`, "Hooks"; `codex.md`, "Guards") blocks every merge
+  in an engine session, and an unpinned, auto or admin merge through `gh`
+  elsewhere.
 - **One task = one session = one worktree = one PR.**
-- **One plan source per feature:** the engine server, GitHub, or an in-repo
-  plan. For server state, inbox and repository merge locks, load
-  `control-server.md`. Each coordinator reads only its chosen source.
+- **One plan source:** the engine server. For server state, inbox and
+  repository merge locks, load `control-server.md`.
 - **Plans are never cited** in code or docs. Commit messages and PR bodies
   may.
 - **Durable decisions graduate** into the repo's owning doc, in the PR that
@@ -46,21 +46,15 @@ such as agreeing lanes or approving merges. The planner reads them in the
 repo itself, and you either change the rule or override it for the feature.
 Target repos need no engine-specific wording.
 
-A task issue uses the template `.github/ISSUE_TEMPLATE/engine-task.md`, one
-section per card field. Dependencies have no section: they are the issue's
-"blocked by" list.
-
-The executor reviews its own work with a fresh reviewer (`build`'s `review` mode). In
-GitHub mode it merges itself once every check is green, with
-`--match-head-commit` pinned to the commit that was reviewed and gated. With a
-server plan it requests the merge and the coordinator makes it
-(`control-server.md`).
+The executor reviews its own work with a fresh reviewer (`build`'s `review` mode). It
+requests the merge and the coordinator makes it, pinned to the commit that was
+reviewed and gated (`control-server.md`).
 
 **Executing a task:**
 
 - **Modes:** hands-off, or gated for a run you approve step by step.
-- **Starters:** `engine start`, the coordinator, or you by hand. The steps
-  are the same whichever starts it.
+- **Starters:** the coordinator, or you by hand. The steps are the same
+  whichever starts it.
 
 ## Run modes
 
@@ -101,33 +95,27 @@ the tier and the model for every run, and the defaults are tuned from that.
 
 ## States
 
-All labels use the `engine:` prefix. `engine labels sync <owner/repo>`
-creates or updates them all; the set is `internal/tracker`.
-
 | Entity | States |
 | --- | --- |
-| Feature | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`. `blocked` while any task is `needs-human`. |
-| Task | `todo` → `running` → `in-review` (PR open) → closed by merge, with no state label. `needs-human` replaces `running` or `in-review` during a hard stop. `failed` when the session dies. `todo` is the absence of a state label, never a label. A standalone task starts at `prepare` → `approved`. |
+| Plan | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`. `blocked` while any task is `needs-human`. |
+| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` during a hard stop. `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
 
-"Ready" is computed, never stored. The planner sets `feature` and `prepare`.
-You set `approved` and clear `ruling-review`. The executor sets `running`,
-`needs-human`, `in-review`, `merging` and `ruling-review`, and clears
-`in-review` and `merging` once the merge closes the task.
-The coordinator owns the other feature labels and `failed`, and clears a
-dead holder's `merging`.
+"Ready" is computed, never stored. The planner creates the plan and its
+tasks. You approve the plan. The executor sets `running`, `needs-human` and
+`in-review`; the merge marks the task `done`. The coordinator owns the other
+plan states and `failed`.
 
-Feature status at a glance: the feature issue's state label and its sub-issue
-progress.
+Plan status at a glance: the plan's state and its tasks' states.
 
 ## The inbox
 
-A task's inbox is the comment thread on its issue. It is the asynchronous
-channel to a running session:
+A task's inbox is its updates in the server, the asynchronous channel to a
+running session:
 
-- **Operator to session**, from anywhere GitHub works: answer a hard stop,
-  add a small instruction, or say "stop, the design changed".
+- **Operator to session**, from anywhere the server is reachable: answer a
+  hard stop, add a small instruction, or say "stop, the design changed".
 - **Session to session:** when one task's outcome changes another task that is
-  already running, the first comments on the second's issue.
+  already running, the first sends it a message (`engine tell`).
 
 Attaching to the session is the interactive channel. The skill says when an
 executor reads the inbox.
@@ -139,10 +127,10 @@ executor resolves conflicts by merging the default branch. Telemetry counts
 conflict merges per run, so this can be revisited on evidence.
 
 **One merge at a time.** The server has one atomic merge lock per repository,
-covering every feature and standalone task. In GitHub mode, each sibling merge moves the default branch and
-forces a re-gate on every other open PR. So a feature has one merge lock,
-the `engine:merging` label: its holder merges the default branch, gates and
-merges, while the others wait before their last gate run.
+covering every plan and standalone task. Each merge moves the default branch
+and forces a re-gate on every other open PR, so the lock's holder merges the
+default branch, gates and requests its merge, while the others wait before
+their last gate run.
 
 ## Harness guards
 

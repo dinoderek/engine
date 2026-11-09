@@ -39,7 +39,7 @@ func runSetup(args []string, env Env) int {
 		exec = remote.ExecCommand
 	}
 	d := setup.Deps{
-		Home: env.Home, Getenv: env.Getenv, Exec: exec, GH: env.Exec, Info: env.Build,
+		Home: env.Home, Getenv: env.Getenv, Exec: exec, GH: env.Run, Info: env.Build,
 		Check: func(harness string, out io.Writer) (bool, error) {
 			return start.Check(startDeps(env), host, harness, out)
 		},

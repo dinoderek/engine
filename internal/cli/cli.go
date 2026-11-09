@@ -10,15 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dinoderek/engine/internal/attach"
 	"github.com/dinoderek/engine/internal/controlcmd"
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hostops"
-	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
-	"github.com/dinoderek/engine/internal/tell"
-	"github.com/dinoderek/engine/internal/tracker"
 	"github.com/dinoderek/engine/internal/ui"
 	"github.com/dinoderek/engine/internal/version"
 )
@@ -33,7 +29,6 @@ commands:
   lock, attempt             repository merge locks and execution attempts
   ui [--listen <addr>]      serve the read-only dashboard on loopback (127.0.0.1:7332)
   version                   print the engine version
-  labels sync <owner/repo>  create or update the engine: labels in a repo
   hook pre-tool-use         the merge guard, for Claude Code and Codex: reads the event on stdin
   hook permission           log permission requests in unattended sessions, and deny
                             Claude Code's (Codex's auto-review decides its own)
@@ -41,18 +36,12 @@ commands:
   hook limit                record or clear a Claude usage limit
   hook state                record a Codex session's state from its hook event
   hook codex-label <run-dir> <thread>  title a joined Codex thread and file it under its repo's project
-  ps [--github] [--json]    list server tasks or GitHub claims
-  attach <repo>-<task>      attach to a task's tmux window, here or over SSH
-  tell <repo>-<task> <text> comment on a task's issue and point its session at it;
-                            a lone - reads the text from stdin
-  run <owner/repo#n>        coordinate a feature, or one task, on this host until
-                            it is done
-  lint <owner/repo#n|pN>    check a feature's plan: card sections, keys, cycles,
-                            the acceptance task and shared open questions
-  start <owner/repo#n> [--harness <name>] [--tier deep|standard|light]
-        [--mode hands-off|gated] [--host <name>]
-                            launch an executor session for a task, on this machine
-                            or on another one from hosts.toml
+  ps [--json]               list server tasks
+  attach <task>             attach to a task's tmux window, here or over SSH
+  tell <task> <text>        message a task; a lone - reads the text from stdin
+  run <plan|task>           run a plan, or one task, on the server: p<n> or t<n>
+  lint <plan>               check a plan: task sections, cycles, the acceptance
+                            task and shared open questions
   start --check [--harness <name>] [--host <name>]
                             launch a throwaway session to find prompts that would
                             stop an unattended one
@@ -68,8 +57,7 @@ type Env struct {
 	In     io.Reader
 	Out    io.Writer
 	Err    io.Writer
-	Exec   tracker.Runner
-	Stream tracker.Streamer
+	Stream Streamer
 	// Local runs the host's own CLIs (tmux, claude, git) and returns their
 	// standard output.
 	Local session.Runner
@@ -92,7 +80,7 @@ type Env struct {
 func System() Env {
 	home, _ := os.UserHomeDir()
 	return Env{
-		In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec,
+		In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Stream: StreamExec,
 		Local: session.Exec, Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now, Build: version.Current(),
 		Detach: detachSelf,
 	}
@@ -111,26 +99,13 @@ func Run(args []string, env Env) int {
 	case "version":
 		fmt.Fprintln(env.Out, version.Current())
 		return 0
-	case "labels":
-		if len(args) != 3 || args[1] != "sync" {
-			fmt.Fprint(env.Err, "usage: engine labels sync <owner/repo>\n")
-			return 2
-		}
-		return syncLabels(args[2], env)
 	case "hook":
 		return runHook(args[1:], env)
-	case "ps":
-		return runPs(args[1:], env)
-	case "attach":
-		return runAttach(args[1:], env)
 	case "start":
 		return runStart(args[1:], env)
-	case "tell":
-		return runTell(args[1:], env)
-	case "lint":
-		return runLint(args[1:], env)
-	case "run":
-		return runRun(args[1:], env, time.Sleep)
+	case "ps", "attach", "tell", "run", "lint":
+		fmt.Fprint(env.Err, removedUsage[args[0]])
+		return 2
 	case "host":
 		return runHost(args[1:], env)
 	case "setup":
@@ -180,78 +155,6 @@ func runHook(args []string, env Env) int {
 	}
 	fmt.Fprintf(env.Err, "engine hook: unknown hook %q; update engine (go install ./cmd/engine)\n", strings.Join(args, " "))
 	return 1
-}
-
-// runAttach connects this terminal to a task's tmux window. On success it
-// replaces this process, so it returns only on failure.
-func runAttach(args []string, env Env) int {
-	if len(args) != 1 {
-		fmt.Fprint(env.Err, "usage: engine attach <repo>-<task>\n")
-		return 2
-	}
-	if err := attach.Attach(args[0], attach.System(env.Exec, env.Getenv, env.Home)); err != nil {
-		fmt.Fprintln(env.Err, "engine attach:", err)
-		return 1
-	}
-	return 0
-}
-
-// runTell comments on a task and types a pointer into its window. A failure
-// after the comment landed still prints the comment's address.
-func runTell(args []string, env Env) int {
-	if len(args) < 2 {
-		fmt.Fprint(env.Err, "usage: engine tell <repo>-<task> <text...|->\n")
-		return 2
-	}
-	text, err := tell.Text(args[1:], env.In)
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine tell:", err)
-		return 2
-	}
-	told, err := tell.Tell(args[0], text, tell.Deps{Gh: env.Exec, Tmux: env.Tmux, Run: env.Local, Getenv: env.Getenv, Home: env.Home, Client: startDeps(env).HostClient})
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine tell:", err)
-		return 1
-	}
-	fmt.Fprintf(env.Out, "commented on %s: %s\ntyped a pointer into %s on %s\n", told.Task, told.URL, told.Window, told.Host)
-	return 0
-}
-
-// runLint lints a feature's plan and exits 1 when it breaks a rule.
-func runLint(args []string, env Env) int {
-	if len(args) != 1 {
-		fmt.Fprint(env.Err, "usage: engine lint <owner/repo#n|pN>\n")
-		return 2
-	}
-	ref, err := tracker.ParseRef(args[0])
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine lint:", err)
-		return 2
-	}
-	f, err := tracker.ReadFeature(env.Exec, ref)
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine lint:", err)
-		return 1
-	}
-	problems := lint.Lint(f)
-	for _, p := range problems {
-		fmt.Fprintln(env.Out, p)
-	}
-	if len(problems) > 0 {
-		fmt.Fprintf(env.Out, "%s: %d problem(s)\n", ref, len(problems))
-		return 1
-	}
-	fmt.Fprintf(env.Out, "%s: the plan passes, %d tasks\n", ref, len(f.Tasks))
-	return 0
-}
-
-func syncLabels(repo string, env Env) int {
-	err := tracker.SyncLabels(env.Exec, repo, env.Out)
-	if err != nil {
-		fmt.Fprintln(env.Err, "engine labels sync:", err)
-		return 1
-	}
-	return 0
 }
 
 // runHost runs one of this host's ops for a caller, which may be on another

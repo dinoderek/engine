@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
 )
 
 // Run is one run directory and its run.json.
@@ -76,35 +74,4 @@ func latestRuns(home, pattern string) (map[string]Run, error) {
 		latest[rec.Name] = Run{Dir: filepath.Dir(path), Record: rec}
 	}
 	return latest, errors.Join(bad...)
-}
-
-// ReadNote returns the time a note holds, and whether it is there. A note
-// is a file in a coordinator's note directory holding an RFC 3339 time.
-func ReadNote(dir, note string) (time.Time, bool, error) {
-	data, err := os.ReadFile(filepath.Join(dir, note))
-	if errors.Is(err, os.ErrNotExist) {
-		return time.Time{}, false, nil
-	}
-	if err != nil {
-		return time.Time{}, false, err
-	}
-	t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(data)))
-	return t, err == nil, err
-}
-
-// WriteNote sets a note to at, making dir if it is not there yet.
-func WriteNote(dir, note string, at time.Time) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, note), []byte(at.UTC().Format(time.RFC3339)+"\n"), 0o644)
-}
-
-// ClearNote removes a note; a missing one is not an error.
-func ClearNote(dir, note string) error {
-	err := os.Remove(filepath.Join(dir, note))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	return err
 }

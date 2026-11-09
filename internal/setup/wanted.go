@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/dinoderek/engine/internal/hosts"
-	"github.com/dinoderek/engine/internal/tracker"
+	"github.com/dinoderek/engine/internal/session"
 )
 
 // engineRepo is where the caller's commit must be, for another host to
@@ -42,7 +42,7 @@ func (r *runner) resolveWanted() (wanted, error) {
 	case info.Dirty():
 		return wanted{}, refuse("this engine was built from a modified working tree; build it from a pushed commit")
 	}
-	out, err := r.d.GH(nil, "gh", "api", "repos/"+engineRepo+"/commits/"+commit, "--jq", ".sha")
+	out, err := r.d.GH("", nil, "gh", "api", "repos/"+engineRepo+"/commits/"+commit, "--jq", ".sha")
 	switch {
 	case err != nil:
 		return wanted{}, refuse("could not confirm commit %s is on GitHub (%s): %v", commit, engineRepo, err)
@@ -141,8 +141,8 @@ var (
 
 // readToolchain is the Go that go.mod's toolchain line names at the commit,
 // read from GitHub, which has already confirmed the commit.
-func readToolchain(gh tracker.Runner, commit string) (string, error) {
-	out, err := gh(nil, "gh", "api", "-H", "Accept: application/vnd.github.raw",
+func readToolchain(gh session.RunFunc, commit string) (string, error) {
+	out, err := gh("", nil, "gh", "api", "-H", "Accept: application/vnd.github.raw",
 		"repos/"+engineRepo+"/contents/go.mod?ref="+commit)
 	if err != nil {
 		return "", fmt.Errorf("could not read go.mod at %s (%s): %w", commit[:shortRev], engineRepo, err)

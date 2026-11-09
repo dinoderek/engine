@@ -4,104 +4,45 @@
 
 ## Shape
 
-For server coordination, storage, dispatch recovery and the operator inbox,
-load `control-server.md`. This document describes GitHub-mode coordination.
+For storage, dispatch recovery, merges and the operator inbox, load
+`control-server.md`.
 
 - **Go, one binary (`engine`)** for macOS and Linux. The same binary runs on
   every host.
-- **Stateless.** Each pass derives everything from the tracker (issues, labels,
-  comments, PRs) and from each host's tmux sessions, `claude agents --json`
-  and run directories. Run
-  the same command again and it resumes, picking up the sessions that are
-  still live.
-- **Never edits code.** In GitHub mode executors merge; in server mode the
-  coordinator does (`control-server.md`).
+- **Stateless.** Each pass derives everything from the server's records and
+  from each host's tmux sessions, `claude agents --json` and run directories.
+  A restarted server resumes, picking up the sessions that are still live.
+- **Never edits code.** It merges a task's PR on the task's host
+  (`control-server.md`).
 
-## V1: `engine run`
+Passes run every 30 seconds, and once at start. A pass reads every host's
+`status`, parallel calls, and reads sessions from those replies.
+The session view's observer reuses those reads and refreshes the stale ones
+(`control-server.md`, "Session view"). Designed, not built: a pass on each
+webhook event (`gh webhook forward` to a localhost endpoint).
 
-`engine run <owner/repo#n>` drives harness
-sessions through `engine start`, on whichever host placement picks
-(`hosts-and-sessions.md`, "Placement"). It stays alive until the work is done,
-you stop it, or the machine goes down, and logs one timestamped line per
-action. It exits 1 when the run ends short of done: a feature that is not
-approved, a lone task that failed, or GitHub refusing the host's gh sign-in
-(HTTP 401, or a 403 for a suspended account or SSO). That stops at once with
-gh's message and the remedy (`gh auth status`, `gh auth login`), as `engine
-ps --github` does; any other failed read, rate limits included, is retried at
-the next check.
-
-| Issue | Behaviour |
-| --- | --- |
-| Feature (`engine:approved`) | Drives the whole feature to `done`. It plans first if there are no tasks, then runs tasks as they become ready. |
-| Task | Runs only that task. It refuses to start while any blocker is open. |
-
-`--harness-ratio claude=4,codex=1` replaces the config ratio for this run.
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
-"Placement".
-
-**The reconcile loop.** Each pass reads state, works out what to do, and does
-it. Its code, `internal/run`, is the spec for a pass.
-
-Passes run every 5 minutes. Between passes, a session check runs every 60
-seconds. It reads every host's `status`, parallel calls, and
-never GitHub, and starts a pass early when a session has started, ended,
-become known or unknown, changed state or limit reset, or has
-waited long enough to stall or resume from a limit. A pass reads sessions and fleet quota from those replies, keeping the newest observation per harness; expired windows read 0%. Designed, not built: a pass on each webhook event
-(`gh webhook forward` to a localhost endpoint), and coalescing events that
-arrive mid-pass.
-
-The coordinator's notes live in `<repo>-<n>-coordinator` beside its own
-host's run directories, whichever host a session runs on: the host it last
-started each session on, `waiting-since` (written the first time it sees a
-session waiting, cleared when the session works again; "Session signals"),
-`limit-reset-<spawned>` (observed reset, retained until working),
-`resumed-for=<resets_at>` (attempt time),
-`limit-far=<resets_at>` and `limit-stuck=<resets_at>` (alert times),
-the stall it last reported, and having reported a failing lint or a task no
-host can take. The first note written makes the directory. A coordinator
-restarted on another host has none of them, so its stall timers start
-again. Resume and limit-alert notes survive restarts on the same host; notes
-older than a session start are ignored.
-
-At done, `engine run` posts the summary and closes the feature (a lone task
-has neither), then re-reads the work and every host's sessions each minute.
-It releases each hands-off window of a closed task as soon as the session is
-waiting, with no 10-minute wait, and exits when none is left, after 15
-minutes, or, logging it, when GitHub refuses the sign-in. Gated windows are never closed.
-
-The coordinator never claims tasks; executors claim their own. To avoid
-starting a task twice in the gap between spawning it and its claim landing, it
-skips any task whose session is still alive, on any host that answers.
-
-For changes to lint, load
+"Placement". For changes to lint, load
 `plugins/engine/skills/engine/references/plan.md`.
 
 ## Reaching hosts
 
 A host does its own work through `engine host <op> --json`: one job, one
 JSON object on stdout, and exit 0, or 1 for a failure. The caller makes
-every decision that reads the tracker, and picks the model, the effort and
-the kickoff, and passes them in. The host does what touches its own disk,
-and tmux, and reads `hosts.toml` only for its own launch line,
-harness binary and slots. `engine start` calls its own host's
-ops in-process, and another machine's as `ssh -o BatchMode=yes -o
-ConnectTimeout=10 <address> engine host <op> --json` (`engine start --host`,
-and `status` for `engine ps --github`). `engine tell` has no op: it types the pointer
-with `tmux send-keys` over the same ssh options, and exits 1, keeping its
-comment, when the window is missing or the host is unreachable. An unclaimed
-session is found by its newest run in the hosts' `status`; tell posts
-nothing unless its task is open, not `engine:needs-human`, and its window
-is live. `engine run`
-reads every host's `status` for placement, and starts a session elsewhere as
-`engine start --host` does. Its session check reads the same `status`
-replies. It reaps a finished window, and clears an ended session before
-starting its task again, with the session's host's `release`. The
-coordinator refuses to run
-unless the name in `~/.config/engine/host` is a machine in `hosts.toml`. If
-you are changing host names or addresses, load `hosts-and-sessions.md`.
+every decision, and picks the model, the effort and the kickoff, and passes
+them in. The host does what touches its own disk, and tmux, and reads
+`hosts.toml` only for its own launch line, harness binary and slots. The
+coordinator calls its own host's ops in-process, and another machine's as
+`ssh -o BatchMode=yes -o ConnectTimeout=10 <address> engine host <op> --json`.
+It reads every host's `status` for placement and its session check, reaps a
+finished window, and clears an ended session before starting its task again,
+with the session's host's `release`. It refuses to run unless the name in
+`~/.config/engine/host` is a machine in `hosts.toml`. If you are changing
+host names or addresses, load `hosts-and-sessions.md`.
 
 | Op | Does |
 | --- | --- |
+| `control-spawn` | What the coordinator calls: syncs engine's isolated clone of the repo, then runs `spawn` with the run's credentials (`control-server.md`, "Dispatch and recovery"). |
 | `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it for the harness the caller names (Claude by default), opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
 | `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (Claude’s newest run observation and a live Codex reading), free slots and free heavy slots, the last 20 screen lines of each window whose session is not working, and a waiting window's newest `permissions.jsonl` denial (`telemetry.md`). |
@@ -125,11 +66,9 @@ of the op `protocol`, which no engine defines, then streams
 **A failed call is unknown, never dead.** When a call fails or a host cannot
 be reached, everything that host would have said is unknown: none of its
 sessions is marked dead, failed or reaped for it. Only a successful
-`status` that lacks a window shows the window gone. `engine run` looks for a
-session on the host its claim names, else the host it last started it on;
-while that host cannot be read, the session is neither stalled, restarted
-nor reaped, and the run logs the outage once, then once when the host answers
-again.
+`status` that lacks a window shows the window gone. The coordinator looks for
+a session on the host its attempt names; while that host cannot be read, the
+session is neither stalled, restarted nor reaped.
 
 - **Repos.** Each host keeps engine's own clone at
   `~/.local/share/engine/repos/<owner>/<repo>`, which acts as the main
@@ -140,11 +79,12 @@ again.
 
 ## Session signals
 
-Agent state is never scraped from the pane. The task's state comes from its
-labels; the session layer adds only whether a session is alive and whether it
-is waiting for input. Three sources:
+Agent state is never scraped from the pane. The task's state comes from the
+server's records; the session layer adds only whether a session is alive and
+whether it is waiting for input. Three sources:
 
-1. **Tracker labels** set by the executor (`needs-human`, `in-review`).
+1. **Server records**: the task's state and open questions, set by the
+   executor (`needs-human`, `in-review`).
 2. **The harness**, for "waiting for input". `status` gives each window of
    session `engine` a `harness` and a `state`, `working`, `waiting` or `limited`, from
    the probe of the harness its newest `run.json` names, as each harness doc
@@ -153,50 +93,34 @@ is waiting for input. Three sources:
 3. **tmux.** If the window exists and its command has not exited, the
    session is alive. A dead window is dead whatever its harness says.
 
-`engine ps --github` and `engine run`'s session check read only `state`, from the
-`status` of the host a claim names, this host's too. A claim in engine's tmux
-session is alive while its window's command runs, and dead once the window
-is gone or its command exited. A session started by hand is alive only when
-the reply's harness list shows it (`claude.md`, "Session list"); otherwise
-its liveness, like a failed call's, is unknown. A session in
-`needs-human` or `in-review` keeps that state while alive.
+The session check reads only `state`, from the `status` of the host an
+attempt names, this host's too. An attempt in engine's tmux session is alive
+while its window's command runs, and dead once the window is gone or its
+command exited.
 
-**Stalls.** Limited sessions never stall, including before claiming. Their
-`waiting-since` is cleared; a later ordinary wait starts a fresh timer.
-Claude limit markers carry `resets_at`; busy wins over a marker. An
-unclaimed window the coordinator opened stalls after
-`ClaimWait` (`internal/run`); one that ended before claiming is reported once, then restarted. A session whose
-`waiting-since` is 10 minutes old while its task is open and not
-`needs-human` has stopped outside the protocol, as on a question asked in
-the session. The coordinator @mentions you on the task's issue with the
-last screen `status` sent, once per session start or wait. A denial at most 10 minutes older than
-`waiting-since` makes the stall a Permission hard stop, naming the tool,
-input and reason.
+**Stalls.** Limited sessions never stall. A dispatched session that has not
+claimed its task 5 minutes after it started is noticed once, and one that
+ended before claiming is restarted. A session that has waited for 10
+minutes while its task is open and not `needs-human` has stopped outside the
+protocol, as on a question asked in the session. The coordinator notifies the
+operator once per session start or wait.
+A denial at most 10 minutes older than the wait makes the stall a Permission
+hard stop, naming the tool, input and reason.
 
-**Limit recovery.** Never resume `needs-human`; recheck labels before typing.
-Each session check resumes an engine window still `limited`,
+**Limit recovery.** Never resume `needs-human`; recheck the task's state
+before typing. Each session check resumes an engine window still `limited`,
 or `waiting` with a positive limit `resets_at`, once the reset plus 2 minutes
-has passed. It types literal `continue`, then Enter, as `engine tell` does;
-working, unknown and dead sessions are left alone.
-Observed resets outlive quota expiry; unknown resets are never resumed.
-The attempt is noted before typing, so Enter failing never duplicates
-text. A later reset permits another attempt.
+has passed. It types literal `continue`, then Enter; working, unknown and
+dead sessions are left alone. Observed resets outlive quota expiry; unknown
+resets are never resumed. The attempt is noted before typing, so Enter
+failing never duplicates text. A later reset permits another attempt.
 Waiting with a limit reset also clears the ordinary stall timer.
 
-Still `limited` 10 minutes after the attempt: one @mention with the last
-screen. A reset over 24 hours away: one @mention at once, and no typing.
-Both alerts are once per reset and session. Recovery covers
-unclaimed engine windows and the feature’s planner.
+Still `limited` 10 minutes after the attempt: one notice. A reset over 24 hours away: one notice at once, and no typing. Both
+alerts are once per reset and session. Recovery covers the executors and the
+plan's planner.
 
-## GitHub access and notifications
+## GitHub access
 
 The coordinator and sessions use each host's working `gh` installation and
-normal Git configuration. Hosts participating in one GitHub plan must use
-the same GitHub account. For host setup, load `operator-setup.md`.
-Engine reads the authenticated account with `gh api user` and accepts claim
-comments only from that account, compared without case sensitivity. The
-newest matching claim wins; other authors are ignored.
-
-Hard stops @mention the operator. GitHub does not notify an account about its
-own activity, so check the task thread or attach to the session for those
-updates. Server plans use the operator inbox (`control-server.md`).
+normal Git configuration. For host setup, load `operator-setup.md`.

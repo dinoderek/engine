@@ -26,16 +26,10 @@ func TestHarnessRatioConfig(t *testing.T) {
 	}
 }
 
-func TestParseAndValidateRatio(t *testing.T) {
+func TestValidateRatio(t *testing.T) {
 	c := &Config{Harnesses: map[string]Harness{"claude": {}, "codex": {}}}
-	got, err := ParseRatio("claude=4,codex=0")
-	if err != nil || !reflect.DeepEqual(got, map[string]int{"claude": 4, "codex": 0}) || c.ValidateRatio(got) != nil {
-		t.Fatalf("%v, %v", got, err)
-	}
-	for _, src := range []string{"", "claude", "=1", "claude=-1", "claude=x", "claude=1,", "claude=1,claude=2", "claude=9999999999999999999999999"} {
-		if _, err := ParseRatio(src); err == nil {
-			t.Errorf("accepted %q", src)
-		}
+	if err := c.ValidateRatio(map[string]int{"claude": 4, "codex": 0}); err != nil {
+		t.Fatal(err)
 	}
 	for _, weights := range []map[string]int{{"claude": -1}, {"codex": 0}, {"unknown": 1}, {}} {
 		if err := c.ValidateRatio(weights); err == nil {

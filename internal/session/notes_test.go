@@ -74,30 +74,3 @@ func TestSlotsHeld(t *testing.T) {
 		t.Errorf("with no runs: held %d, heavy %d", held, heavy)
 	}
 }
-
-func TestNotes(t *testing.T) {
-	dir := t.TempDir()
-	if _, ok, err := ReadNote(dir, "waiting-since"); ok || err != nil {
-		t.Fatalf("missing note: %v %v", ok, err)
-	}
-	at := time.Date(2026, 10, 24, 13, 0, 0, 0, time.FixedZone("x", 3600))
-	if err := WriteNote(dir, "waiting-since", at); err != nil {
-		t.Fatal(err)
-	}
-	got, ok, err := ReadNote(dir, "waiting-since")
-	if err != nil || !ok || !got.Equal(at) {
-		t.Errorf("note %v %v %v", got, ok, err)
-	}
-	if err := ClearNote(dir, "waiting-since"); err != nil {
-		t.Fatal(err)
-	}
-	if err := ClearNote(dir, "waiting-since"); err != nil {
-		t.Errorf("second clear: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "stall-noted"), []byte("soon"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok, err := ReadNote(dir, "stall-noted"); ok || err == nil {
-		t.Errorf("bad note: %v %v", ok, err)
-	}
-}

@@ -23,7 +23,7 @@ type hookRun struct {
 }
 
 // findHookRun reads a hook event from env.In and works out its run. With
-// ENGINE_RUN_DIR set it takes the run from the environment engine start
+// ENGINE_RUN_DIR set it takes the run from the environment the host's spawn
 // exported. Without it, which is how a Codex session that joined a daemon
 // sees things, it finds the run whose worktree holds the event's cwd and reads
 // the harness and mode from that run's record, but only a Codex run: a Claude

@@ -5,9 +5,8 @@
 ## Launch
 
 A host lists `codex` in its `harnesses` and pins its `bin` (`hosts-and-sessions.md`).
-`engine start --harness codex`, or a card whose Harness is `codex`, launches
-it, and `engine start --check --harness codex` checks it
-(`hosts-and-sessions.md`, "Starting a session").
+A task whose harness is `codex` launches it, and `engine start --check
+--harness codex` checks it (`hosts-and-sessions.md`, "Starting a session").
 The harness's launch line and tiers:
 
 ```toml

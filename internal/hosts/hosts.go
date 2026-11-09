@@ -95,9 +95,6 @@ func (h Host) HeavySlots() int {
 	return h.Slots()
 }
 
-// Has reports whether the host declares the capability.
-func (h Host) Has(capability string) bool { return slices.Contains(h.Capabilities, capability) }
-
 // Runs reports whether the host runs the harness.
 func (h Host) Runs(harness string) bool { return slices.Contains(h.Harnesses, harness) }
 

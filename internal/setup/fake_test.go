@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/version"
 )
 
@@ -304,7 +305,7 @@ type rig struct {
 	check   func() (bool, error)
 	// checkCodex is the check of the codex harness.
 	checkCodex func() (bool, error)
-	gh         func(env []string, name string, args ...string) (string, error)
+	gh         session.RunFunc
 	info       version.Info
 	goMod      string // go.mod at the caller's commit, as GitHub serves it
 }
@@ -317,7 +318,7 @@ func newRig(t *testing.T) *rig {
 		auth: `{"loggedIn":true,"authMethod":"claude.ai"}`, os: "Darwin", rev: "2a08a0c"}
 	r.check = func() (bool, error) { return true, nil }
 	r.checkCodex = r.check
-	r.gh = func(env []string, name string, args ...string) (string, error) {
+	r.gh = func(_ string, env []string, name string, args ...string) (string, error) {
 		if len(env) != 0 {
 			return "", fmt.Errorf("gh got env %v", env)
 		}

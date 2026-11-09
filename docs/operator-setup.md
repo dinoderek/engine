@@ -1,6 +1,6 @@
 # Operator setup
 
-> **Owns:** the one-time setup an operator does by hand: GitHub access, notifications, harnesses and remote access. **Not here:** GitHub coordination (`coordinator.md`), host config (`hosts-and-sessions.md`).
+> **Owns:** the one-time setup an operator does by hand: GitHub access, notifications, harnesses and remote access. **Not here:** how the coordinator reaches hosts (`coordinator.md`), host config (`hosts-and-sessions.md`).
 
 ## GitHub access
 
@@ -27,19 +27,17 @@ open while gh fails there or, on macOS, keeps its token in the keychain.
 
 ## Notifications
 
-1. **Phone:** GitHub Mobile, signed in as you, with push on for
-   "Participating" and "@mentions".
-2. **Repos:** watch each target repo, using Custom → Issues and Pull requests.
-3. **Engine's side:** engine assigns you to every feature issue it drives, so
-   you count as participating. Hard stops @mention you; GitHub does not
-   notify you about activity from your own account. Read the task thread or attach to the session for it.
+1. **Hard stops and notices** reach the operator inbox: read it with
+   `engine inbox --operator` or in the dashboard (`control-server.md`).
+2. **Pull requests:** to hear about PRs and CI, run GitHub Mobile signed in as
+   you, and watch each target repo, using Custom → Pull requests.
 
 ## Each host
 
 **The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
 `sqlite3` on a Codex host, `codex.md` "Apps"), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
-name, one line, as claims post it: `hosts-and-sessions.md`, "Hosts") and
+name, one line, as attempts and every surface show it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
 plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
@@ -128,6 +126,4 @@ then run `engine setup --host devbox`.
 ## Each target repo
 
 - Confirm the host's `gh` and Git access to the repo.
-- Run `engine labels sync <owner/repo>` once, and again whenever the label set
-  in `internal/tracker` changes. It never deletes a label.
 - Enable the `engine` plugin in its `.claude/settings.json`.

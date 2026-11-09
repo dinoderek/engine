@@ -6,33 +6,22 @@ import (
 
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/start"
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
-const startUsage = "usage: engine start <owner/repo#n> [--harness <name>] [--tier deep|standard|light] [--mode hands-off|gated] [--host <name>]\n       engine start --check [--harness <name>] [--host <name>]\n"
+const startUsage = "usage: engine start --check [--harness <name>] [--host <name>]\n       (to run a task: engine run <task-id>)\n"
 
-// startArgs are engine start's arguments: a task to start, or a check.
-type startArgs struct {
-	start.Options
-	Check bool
-}
+// checkArgs are engine start --check's arguments.
+type checkArgs struct{ Harness, Host string }
 
-// runStart parses engine start's arguments, in any order, and starts the
-// task's session, or runs the preflight check.
+// runStart runs the preflight check, the only thing engine start does: a
+// task runs through the server, with engine run.
 func runStart(args []string, env Env) int {
-	a, err := parseStart(args)
+	a, err := parseCheck(args)
 	if err != nil {
 		fmt.Fprintf(env.Err, "engine start: %v\n%s", err, startUsage)
 		return 2
 	}
-	if a.Check {
-		return runCheck(a.Host, a.Harness, env)
-	}
-	if err := start.Run(a.Options, startDeps(env), env.Out); err != nil {
-		fmt.Fprintln(env.Err, "engine start:", err)
-		return 1
-	}
-	return 0
+	return runCheck(a.Host, a.Harness, env)
 }
 
 // runCheck runs the preflight check of harness (Claude when empty), on host,
@@ -55,24 +44,23 @@ func checkCode(ok bool) int {
 	return 1
 }
 
-// startDeps is what engine start, and engine run's starts, launch with.
+// startDeps is what the preflight check launches with.
 func startDeps(env Env) start.Deps {
-	return start.Deps{GH: env.Exec, Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Exec: env.Local, Tmux: env.Tmux, SSH: env.SSH, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
+	return start.Deps{Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Exec: env.Local, Tmux: env.Tmux, SSH: env.SSH, Home: env.Home, Getenv: env.Getenv, Now: env.Now}
 }
 
-// parseStart reads the task and the --harness, --tier, --mode, --host and
-// --check flags, as `--flag value` or `--flag=value`, in any order. A check
-// takes only --harness and --host.
-func parseStart(args []string) (startArgs, error) {
-	var a startArgs
-	var ref string
+// parseCheck reads --check and the --harness and --host flags, as `--flag
+// value` or `--flag=value`, in any order. --check is required.
+func parseCheck(args []string) (checkArgs, error) {
+	var a checkArgs
+	var check bool
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		name, value, inline := strings.Cut(arg, "=")
-		dst := map[string]*string{"--harness": &a.Harness, "--tier": &a.Tier, "--mode": &a.Mode, "--host": &a.Host}[name]
+		dst := map[string]*string{"--harness": &a.Harness, "--host": &a.Host}[name]
 		switch {
 		case arg == "--check":
-			a.Check = true
+			check = true
 		case dst != nil && inline && value != "":
 			*dst = value
 		case dst != nil && !inline && i+1 < len(args) && args[i+1] != "":
@@ -82,22 +70,12 @@ func parseStart(args []string) (startArgs, error) {
 			return a, fmt.Errorf("%s needs a value", arg)
 		case strings.HasPrefix(arg, "-"):
 			return a, fmt.Errorf("unknown flag %s", arg)
-		case ref != "":
-			return a, fmt.Errorf("one task at a time, got %s and %s", ref, arg)
 		default:
-			ref = arg
+			return a, fmt.Errorf("takes no task, got %s", arg)
 		}
 	}
-	if a.Check {
-		if ref != "" || a.Tier != "" || a.Mode != "" {
-			return a, fmt.Errorf("--check takes no task, --tier or --mode")
-		}
-		return a, nil
+	if !check {
+		return a, fmt.Errorf("only --check is left")
 	}
-	if ref == "" {
-		return a, fmt.Errorf("no task")
-	}
-	r, err := tracker.ParseRef(ref)
-	a.Ref = r
-	return a, err
+	return a, nil
 }

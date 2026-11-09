@@ -4,46 +4,30 @@ import (
 	"bytes"
 	"strings"
 	"testing"
-
-	"github.com/dinoderek/engine/internal/start"
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
-func TestParseStart(t *testing.T) {
-	task := tracker.Ref{Repo: "o/r", Number: 7}
+func TestParseCheck(t *testing.T) {
 	cases := []struct {
 		name string
 		args []string
-		want startArgs
+		want checkArgs
 		err  string
 	}{
-		{"task only", []string{task.String()}, startArgs{Options: start.Options{Ref: task}}, ""},
-		{"flags after", []string{task.String(), "--tier", "deep", "--mode", "gated"}, startArgs{Options: start.Options{Ref: task, Tier: "deep", Mode: "gated"}}, ""},
-		{"flags before, with =", []string{"--mode=gated", "--tier=light", task.String()}, startArgs{Options: start.Options{Ref: task, Tier: "light", Mode: "gated"}}, ""},
-		{"no task", []string{"--tier", "deep"}, startArgs{}, "no task"},
-		{"two tasks", []string{task.String(), task.String()}, startArgs{}, "one task at a time"},
-		{"flag without a value", []string{task.String(), "--tier"}, startArgs{}, "--tier needs a value"},
-		{"empty value with =", []string{task.String(), "--mode="}, startArgs{}, "--mode= needs a value"},
-		{"empty value", []string{task.String(), "--tier", ""}, startArgs{}, "--tier needs a value"},
-		{"unknown flag", []string{task.String(), "--model", "x"}, startArgs{}, "unknown flag --model"},
-		{"host", []string{task.String(), "--host", "devbox"}, startArgs{Options: start.Options{Ref: task, Host: "devbox"}}, ""},
-		{"host with =", []string{"--host=devbox", task.String(), "--tier", "deep"}, startArgs{Options: start.Options{Ref: task, Host: "devbox", Tier: "deep"}}, ""},
-		{"host without a value", []string{task.String(), "--host"}, startArgs{}, "--host needs a value"},
-		{"harness", []string{task.String(), "--harness", "codex"}, startArgs{Options: start.Options{Ref: task, Harness: "codex"}}, ""},
-		{"harness with =", []string{"--harness=claude", task.String(), "--tier", "deep"}, startArgs{Options: start.Options{Ref: task, Harness: "claude", Tier: "deep"}}, ""},
-		{"harness without a value", []string{task.String(), "--harness"}, startArgs{}, "--harness needs a value"},
-		{"check", []string{"--check"}, startArgs{Check: true}, ""},
-		{"check of a harness", []string{"--check", "--harness", "codex"}, startArgs{Options: start.Options{Harness: "codex"}, Check: true}, ""},
-		{"check of a harness on a host", []string{"--harness=codex", "--check", "--host", "devbox"}, startArgs{Options: start.Options{Harness: "codex", Host: "devbox"}, Check: true}, ""},
-		{"check on a host", []string{"--check", "--host", "devbox"}, startArgs{Options: start.Options{Host: "devbox"}, Check: true}, ""},
-		{"host before check", []string{"--host=devbox", "--check"}, startArgs{Options: start.Options{Host: "devbox"}, Check: true}, ""},
-		{"check with a task", []string{"--check", task.String()}, startArgs{}, "--check takes no task"},
-		{"check with a tier", []string{"--check", "--tier", "deep"}, startArgs{}, "--check takes no task, --tier or --mode"},
-		{"check with a mode", []string{"--mode=gated", "--check"}, startArgs{}, "--check takes no task"},
-		{"bad task", []string{"o/r"}, startArgs{}, "want owner/repo#n"},
+		{"check", []string{"--check"}, checkArgs{}, ""},
+		{"of a harness", []string{"--check", "--harness", "codex"}, checkArgs{Harness: "codex"}, ""},
+		{"of a harness on a host", []string{"--harness=codex", "--check", "--host", "devbox"}, checkArgs{Harness: "codex", Host: "devbox"}, ""},
+		{"on a host", []string{"--check", "--host", "devbox"}, checkArgs{Host: "devbox"}, ""},
+		{"host before check", []string{"--host=devbox", "--check"}, checkArgs{Host: "devbox"}, ""},
+		{"no --check", []string{"--host", "devbox"}, checkArgs{}, "only --check is left"},
+		{"a task", []string{"--check", "t7"}, checkArgs{}, "takes no task, got t7"},
+		{"a tier", []string{"--check", "--tier", "deep"}, checkArgs{}, "unknown flag --tier"},
+		{"a mode", []string{"--mode=gated", "--check"}, checkArgs{}, "unknown flag --mode=gated"},
+		{"flag without a value", []string{"--check", "--harness"}, checkArgs{}, "--harness needs a value"},
+		{"empty value with =", []string{"--check", "--host="}, checkArgs{}, "--host= needs a value"},
+		{"empty value", []string{"--check", "--host", ""}, checkArgs{}, "--host needs a value"},
 	}
 	for _, c := range cases {
-		got, err := parseStart(c.args)
+		got, err := parseCheck(c.args)
 		if c.err != "" {
 			if err == nil || !strings.Contains(err.Error(), c.err) {
 				t.Errorf("%s: err %v, want %q", c.name, err, c.err)
@@ -67,27 +51,20 @@ func TestCheckCode(t *testing.T) {
 
 func TestStartCommandLine(t *testing.T) {
 	none := func(string) string { return "" }
-	task := tracker.Ref{Repo: "o/r", Number: 1}.String()
 	cases := []struct {
 		name   string
 		args   []string
 		code   int
 		stderr string
 	}{
-		{"usage", []string{"start"}, 2, "usage: engine start <owner/repo#n>"},
-		{"refusal", []string{"start", task, "--mode", "yolo"}, 1, `engine start: unknown mode "yolo": want hands-off or gated; nothing was changed`},
-		{"no host config", []string{"start", task}, 1, "engine start: read host config"},
 		{"usage names --check", []string{"start"}, 2, "engine start --check [--harness <name>] [--host <name>]"},
-		{"usage names --harness", []string{"start", task, "--bogus"}, 2, "[--harness <name>]"},
-		{"--harness parses, then the host config is checked", []string{"start", task, "--harness", "codex"}, 1, "engine start: read host config"},
-		{"--harness needs a value", []string{"start", task, "--harness"}, 2, "--harness needs a value"},
-		{"check --harness parses, then the host config is checked", []string{"start", "--check", "--harness", "codex", "--host", "devbox"}, 1, "engine start --check: read host config"},
-		{"check --harness codex, no host config", []string{"start", "--check", "--harness=codex"}, 1, "engine start --check: read host config"},
-		{"usage names --host", []string{"start", task, "--bogus"}, 2, "[--host <name>]"},
-		{"--host parses, then the host config is checked", []string{"start", task, "--host", "nowhere"}, 1, "engine start: read host config"},
-		{"check with a task", []string{"start", "--check", task}, 2, "--check takes no task"},
-		{"check on a host, no host config", []string{"start", "--check", "--host", "devbox"}, 1, "engine start --check: read host config"},
-		{"check, no host config", []string{"start", "--check"}, 1, "engine start --check: read host config"},
+		{"usage names the server form", []string{"start", "t7"}, 2, "engine run <task-id>"},
+		{"a bad flag", []string{"start", "--check", "--bogus"}, 2, "unknown flag --bogus"},
+		{"--harness needs a value", []string{"start", "--check", "--harness"}, 2, "--harness needs a value"},
+		{"--harness parses, then the host config is checked", []string{"start", "--check", "--harness", "codex", "--host", "devbox"}, 1, "engine start --check: read host config"},
+		{"--harness=codex, no host config", []string{"start", "--check", "--harness=codex"}, 1, "engine start --check: read host config"},
+		{"on a host, no host config", []string{"start", "--check", "--host", "devbox"}, 1, "engine start --check: read host config"},
+		{"no host config", []string{"start", "--check"}, 1, "engine start --check: read host config"},
 	}
 	for _, c := range cases {
 		var out, errOut bytes.Buffer

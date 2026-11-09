@@ -11,11 +11,10 @@ import (
 
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
-	"github.com/dinoderek/engine/internal/tracker"
 )
 
 // ref is issue n of o/r, as owner/repo#n.
-func ref(n int) string { return tracker.Ref{Repo: "o/r", Number: n}.String() }
+func ref(n int) string { return session.Ref{Repo: "o/r", Number: n}.String() }
 
 // request is a spawn that would launch: task 7 of o/r, hands-off.
 func request() SpawnRequest {
