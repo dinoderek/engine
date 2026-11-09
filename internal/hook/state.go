@@ -14,15 +14,16 @@ type Signal struct {
 	TurnID    string
 }
 
-// stateEvent is the part of a Codex hook event that the state hook reads.
+// stateEvent is the part of a hook event that the state hook reads.
 type stateEvent struct {
 	Event     string `json:"hook_event_name"`
 	SessionID string `json:"session_id"`
 	TurnID    string `json:"turn_id"`
 }
 
-// State turns Codex's session events into the session's state. Its state
-// names are the ones the state file takes.
+// State turns a session's hook events into its state: all of it for Codex,
+// and for Claude whether its last turn has ended. Its state names are the
+// ones the state file takes.
 type State struct {
 	Err io.Writer
 	// Unattended is true when nobody watches the session: auto-review decides
@@ -32,12 +33,13 @@ type State struct {
 	Write func(Signal) error
 }
 
-// Handle reads a Codex hook event from in and records the session's state: a
+// Handle reads a hook event from in and records the session's state: a
 // session start, stop, interrupt or attended permission request leaves it
-// waiting, a submitted prompt or a finished tool call makes it working (the
-// call after a permission request is what puts a session back to work), and a
-// session end makes it ended. Any other event changes nothing. An event it cannot read or record
-// gives exit 1, which blocks nothing: a hook never fails a Codex turn.
+// waiting, a submitted prompt, a tool call about to run or a finished one
+// makes it working (the call after a permission request is what puts a
+// session back to work), and a session end makes it ended. Any other event
+// changes nothing. An event it cannot read or record gives exit 1, which
+// blocks nothing: a hook never fails a turn.
 func (s State) Handle(in io.Reader) int {
 	var e stateEvent
 	if err := json.NewDecoder(in).Decode(&e); err != nil {
@@ -55,11 +57,11 @@ func (s State) Handle(in io.Reader) int {
 	return 0
 }
 
-// stateFor is the state a Codex event puts the session in, or "" when the
-// event says nothing about it.
+// stateFor is the state an event puts the session in, or "" when the event
+// says nothing about it.
 func stateFor(event string, unattended bool) string {
 	switch event {
-	case "UserPromptSubmit", "PostToolUse":
+	case "UserPromptSubmit", "PreToolUse", "PostToolUse":
 		return "working"
 	case "SessionStart", "Stop", "Interrupt":
 		return "waiting"

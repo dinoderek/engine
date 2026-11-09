@@ -129,7 +129,7 @@ state changes, planner handoff, child dispatch and automatic quota resume.
 
 Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
-on resolution. Waiting, unrestricted sessions get wake-up pointers for
+on resolution. Idle, unrestricted sessions get wake-up pointers for
 others' messages on their item; tasks also for others' plan messages and
 resolutions, except coordinator notices and those to the operator. Messages
 persist when wake-up fails.

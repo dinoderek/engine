@@ -176,17 +176,29 @@ func stalls(v View) []Action {
 	return acts
 }
 
-// reaps releases a done task's session once it has waited StallWait, and
-// once a merged one has had time to report.
+// reaps releases a done task's session once it has been idle StallWait,
+// and once a merged one has had time to report.
 func reaps(v View) []Action {
 	var acts []Action
 	for _, t := range v.Tasks {
 		s := t.Session
-		if s != nil && !t.open() && s.Waited(v.Now, StallWait) && !reporting(v, t) {
-			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: *s, Text: "its task is done"})
+		if s != nil && !t.open() && s.IdleFor(v.Now, StallWait) && !reporting(v, t) {
+			acts = append(acts, release(t, "its task is done"))
 		}
 	}
 	return acts
+}
+
+// release closes t's session. One that only a background job keeps busy
+// is closed with that job still running, so the operator is told.
+func release(t Item, why string) Action {
+	s := *t.Session
+	a := Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: s, Text: why}
+	if s.Background {
+		a.Key = "released/" + t.Current.ID
+		a.Text = fmt.Sprintf("%s was released, with a background job still running, because %s", s.Name, why)
+	}
+	return a
 }
 
 // reporting reports whether t was merged too recently for its session to
@@ -195,9 +207,9 @@ func reporting(v View, t Item) bool {
 	return !t.MergedAt.IsZero() && v.Now.Sub(t.MergedAt) < ReportWindow
 }
 
-// cleanup, once the root is done, releases every session that is waiting
-// or gone, and stops coordinating when none is left working, unknown, or
-// reporting a merge.
+// cleanup, once the root is done, releases every session that is idle or
+// gone, and stops coordinating when none is left busy in a turn, limited,
+// unknown, or reporting a merge.
 func cleanup(v View) []Action {
 	var acts []Action
 	pending := false
@@ -205,10 +217,10 @@ func cleanup(v View) []Action {
 		s := *t.Session
 		switch {
 		case t.Current.State == "ended":
-		case s.Unknown || s.Live && !s.Waiting || reporting(v, t):
+		case s.Unknown || s.Live && !s.Idle() || reporting(v, t):
 			pending = true
 		default:
-			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: s, Text: "the work is done"})
+			acts = append(acts, release(t, "the work is done"))
 		}
 	}
 	if !pending {
