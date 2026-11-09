@@ -82,8 +82,9 @@ repo's own merge and cleanup steps; the merge guard enforces it.
        branch rule to ask about), then request again.
      - `merge-demoted` or `merge-withdrawn`: read why; a demoted request
        stays queued.
-  5. To rework the PR, set the task `running`: it leaves the queue. When
-     the session resumes, `engine task show <task>` shows its queue entry.
+  5. To rework the PR, set the task `running`: it leaves the queue. A resumed
+     session finds its task still in-review; `engine task show <task>` shows
+     its queue entry.
 - **Step 11.** Leave cleanup to the coordinator.
 
 A server outage blocks the merge request: keep your work and wait. Never

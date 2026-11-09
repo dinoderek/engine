@@ -69,8 +69,8 @@ one (refresh, checks, mergeability, an unreachable host) goes to the back
 Repeated `gh` failures hold it until the operator acknowledges it;
 the next entry proceeds. Waiting PRs are read periodically, catching a red,
 closed or merged one early. Leaving in-review except for
-`needs-human` withdraws the entry (`merge-withdrawn`); a vanished session's
-entry stays. A lost merge result reads as merged later.
+`needs-human` withdraws the entry (`merge-withdrawn`); a vanished task
+resumes in-review, keeping its entry. A lost merge result reads as merged later.
 
 ## Reaching hosts
 

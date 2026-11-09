@@ -158,3 +158,63 @@ func acknowledge(t *testing.T, c *Coordinator, u control.Update) {
 		t.Fatal(err)
 	}
 }
+
+// A merge that lands while the executor withdraws the task is still
+// recorded, and the operator is told of the race.
+func TestAMergeRacingAWithdrawalIsRecorded(t *testing.T) {
+	c, m, task, worker := requested(t, nil)
+	m.reply = func(r hostops.MergeRequest) (hostops.Merged, error) {
+		if !r.Check {
+			st, _ := c.Service.Store.Snapshot()
+			if _, err := c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "running", Key: control.Secret()}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return hostops.Merged{Outcome: hostops.MergeDone, Code: hostops.CodeMerged, Reason: "merged at " + reviewedHead}, nil
+	}
+	if err := c.queues(c.Config); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := c.Service.Store.Snapshot()
+	if st.Items[task.ID].State != "done" || st.Items[task.ID].PR != reviewedPR || len(operatorNotices(t, c, task.ID)) != 1 {
+		t.Fatalf("task %+v, notices %d", st.Items[task.ID], len(operatorNotices(t, c, task.ID)))
+	}
+}
+
+// A head whose session vanishes during its turn is resumed in-review, and
+// its turn's bound still demotes it.
+func TestAResumedHeadKeepsItsTurnsBound(t *testing.T) {
+	c, m, task, _ := requested(t, reply(hostops.CodeBehind, "main moved"))
+	pass(t, c) // its turn; the window was seen live
+	m.status.Windows = nil
+	pass(t, c) // vanished
+	pass(t, c) // resumed
+	st, _ := c.Service.Store.Snapshot()
+	if at := st.Attempts[st.Items[task.ID].Attempt]; at.State == "ended" || st.Items[task.ID].State != "in-review" || st.Queue[task.ID].Phase != control.QueueRefresh {
+		t.Fatalf("after the resume: task %s, attempt %+v, entry %+v", st.Items[task.ID].State, at, st.Queue[task.ID])
+	}
+	later(c, reconcile.TurnWait)
+	pass(t, c)
+	if e, _ := entry(t, c, task.ID); e.Demotions != 1 {
+		t.Fatalf("entry %+v", e)
+	}
+}
+
+func TestAHostMissingFromTheConfigHoldsTheHead(t *testing.T) {
+	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged"))
+	if err := c.Service.Store.Transaction(func(st *control.State) error {
+		at := st.Attempts[st.Items[task.ID].Attempt]
+		at.Host = "gone"
+		st.Attempts[at.ID] = at
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.queues(c.Config); err != nil {
+		t.Fatal(err)
+	}
+	notices := operatorNotices(t, c, task.ID)
+	if e, _ := entry(t, c, task.ID); len(notices) != 1 || !strings.Contains(notices[0].Body, "hosts.toml") || e.Held != notices[0].ID || len(m.requests) != 0 {
+		t.Fatalf("entry %+v, notices %+v", e, notices)
+	}
+}

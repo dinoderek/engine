@@ -66,6 +66,9 @@ type Probe struct {
 	Unreachable bool
 	// Err is the failed call's error.
 	Err string
+	// Missing is true when the task's host is not in the host config: no
+	// call was made.
+	Missing bool
 }
 
 // DecideQueue is one pass over a repository's queue. It keeps the head, or
@@ -162,6 +165,12 @@ func Answer(now time.Time, q QueueItem, p Probe) []Action {
 	to := q.QueueEntry
 	to.FailSince, to.Failures = time.Time{}, 0
 	switch {
+	case p.Missing:
+		held := unheaded(q.QueueEntry)
+		held.Reason = "held: host " + q.Host + " is not in hosts.toml"
+		return []Action{step(q, control.QueueStep{To: &held, Hold: true, Notice: fmt.Sprintf(
+			"Cannot merge %s: its task's host %q is not in hosts.toml. Fix the host config, then acknowledge this message to put it back in the merge queue.",
+			q.PR, q.Host)})}
 	case p.Unreachable:
 		to.Failures = q.Failures
 		if q.FailSince.IsZero() {
@@ -198,7 +207,9 @@ func answerHead(now time.Time, q QueueItem, to control.QueueEntry, r hostops.Mer
 	switch r.Code {
 	case hostops.CodeMerged, hostops.CodeMergedElsewhere:
 		return []Action{merged(q, r)}
-	case hostops.CodePendingChecks:
+	case hostops.CodePendingChecks, "":
+		// An empty code is a reply the queue cannot read: it waits no longer
+		// than pending checks do.
 		since := q.HeadAt
 		if q.Request.At.After(since) {
 			since = q.Request.At
@@ -221,21 +232,29 @@ func answerHead(now time.Time, q QueueItem, to control.QueueEntry, r hostops.Mer
 		return []Action{step(q, control.QueueStep{To: &to, Kind: control.MergeTurn, Text: fmt.Sprintf(
 			"Your turn in the merge queue: %s. Merge the default branch in, rerun the gates and the fresh review, push, then run engine task merge-ready for the new head within %s.",
 			r.Reason, TurnWait)})}
-	case "", hostops.CodeReady:
+	case hostops.CodeReady:
 		return healthy()
 	}
 	return []Action{refused(q, r)}
 }
 
-// answerProbe is the step for what a waiting entry's read reported: only an
-// outcome that ends the entry is acted on before its turn.
+// answerProbe is the step for what a waiting entry's read reported: an
+// outcome that ends the entry is acted on before its turn, and a moved head
+// is told once, so the executor requests again before its turn.
 func answerProbe(now time.Time, q QueueItem, p Probe) []Action {
 	to := q.QueueEntry
 	to.ProbedAt = now
-	if p.Unreachable || p.Err != "" {
+	if p.Unreachable || p.Err != "" || p.Missing {
 		return []Action{step(q, control.QueueStep{To: &to})}
 	}
 	switch p.Reply.Code {
+	case hostops.CodeHeadMoved:
+		if q.Reason == p.Reply.Reason {
+			break
+		}
+		to.Reason = p.Reply.Reason
+		return []Action{step(q, control.QueueStep{To: &to, Kind: "say", Text: "Your queued merge request is stale: " + p.Reply.Reason +
+			". Request the merge again for the new head once it is gated and reviewed; the entry keeps its place."})}
 	case hostops.CodeMerged, hostops.CodeMergedElsewhere:
 		return []Action{merged(q, p.Reply)}
 	case hostops.CodeRed, hostops.CodeClosed, hostops.CodeBlocked, hostops.CodeInvalid:

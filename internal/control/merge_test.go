@@ -215,8 +215,15 @@ func TestAVanishedTaskKeepsItsPlace(t *testing.T) {
 		t.Fatal(at, err)
 	}
 	st := mustSnapshot(t, s)
-	if u, ok := PendingMerge(&st, task.ID); !ok || u.Merge.Head != head {
+	before, ok := st.Queue[task.ID]
+	if u, pending := PendingMerge(&st, task.ID); !ok || !pending || u.Merge.Head != head {
 		t.Fatal("a vanished task left the queue")
+	}
+	// Its resume keeps it in-review, so its entry keeps its turn's bound.
+	_, resumed := dispatch(t, s, task)
+	st = mustSnapshot(t, s)
+	if resumed.Item.State != "in-review" || st.Queue[task.ID] != before {
+		t.Fatalf("resumed task %s, entry %+v", resumed.Item.State, st.Queue[task.ID])
 	}
 }
 

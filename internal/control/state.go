@@ -155,7 +155,9 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	st.Attempts[id] = at
 	item.Attempt = id
 	item.Version++
-	if item.Kind == "task" {
+	// A resume of a task in the merge queue stays in-review, keeping its
+	// place and its turn's bound; any other task starts running.
+	if _, queued := st.Queue[item.ID]; item.Kind == "task" && (!queued || item.State != "in-review") {
 		item.State = "running"
 	}
 	st.Items[item.ID] = item

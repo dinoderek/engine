@@ -89,9 +89,11 @@ func TestMergeHandsBackOrWaits(t *testing.T) {
 		"review required":   {ghFake{view: gated("BLOCKED", "REVIEW_REQUIRED")}, MergeRefused, CodeBlocked, "REVIEW_REQUIRED"},
 		"changes requested": {ghFake{view: gated("CLEAN", "CHANGES_REQUESTED")}, MergeRefused, CodeBlocked, "CHANGES_REQUESTED"},
 		"protected":         {ghFake{view: gated("BLOCKED", "")}, MergeRefused, CodeBlocked, "BLOCKED"},
-		"policy on merge":   {ghFake{view: gated("CLEAN", "APPROVED"), behind: "0", fail: map[string]error{"pr merge": policyErr}}, MergeRefused, CodeBlocked, "Base branch policy"},
-		"main moved":        {ghFake{view: view("OPEN", reviewed, "MERGEABLE", green), behind: "3"}, MergeRefused, CodeBehind, "main moved"},
-		"no CI":             {ghFake{view: view("OPEN", reviewed, "MERGEABLE", ""), behind: "0"}, MergeDone, CodeMerged, "merged at"},
+		"checks not yet registered": {ghFake{view: `{"state":"OPEN","headRefOid":"` + reviewed + `","baseRefName":"main","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED"}`},
+			MergePending, CodePendingChecks, "no check has reported"},
+		"policy on merge": {ghFake{view: gated("CLEAN", "APPROVED"), behind: "0", fail: map[string]error{"pr merge": policyErr}}, MergeRefused, CodeBlocked, "Base branch policy"},
+		"main moved":      {ghFake{view: view("OPEN", reviewed, "MERGEABLE", green), behind: "3"}, MergeRefused, CodeBehind, "main moved"},
+		"no CI":           {ghFake{view: view("OPEN", reviewed, "MERGEABLE", ""), behind: "0"}, MergeDone, CodeMerged, "merged at"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			g := c.g

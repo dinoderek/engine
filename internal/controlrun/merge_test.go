@@ -53,6 +53,9 @@ func (m *merger) merges() []hostops.MergeRequest {
 func requested(t *testing.T, reply func(hostops.MergeRequest) (hostops.Merged, error)) (*Coordinator, *merger, control.Item, control.Actor) {
 	t.Helper()
 	c, h, _, _, task := setup(t)
+	if reply == nil {
+		reply = func(hostops.MergeRequest) (hostops.Merged, error) { return hostops.Merged{}, nil }
+	}
 	m := &merger{host: h, reply: reply}
 	c.Client = func(hosts.Host) remote.Client { return m }
 	pass(t, c)

@@ -186,6 +186,32 @@ func (s Service) QueueStep(q QueueStep) (bool, error) {
 	return applied, err
 }
 
+// RecordMerged completes task id, whose PR merged while its queue entry
+// changed during the merge call: a request, rework or withdrawal raced the
+// merge. The task is done with the PR, its entry ends, and the operator is
+// told so the race is seen.
+func (s Service) RecordMerged(id, pr, body string) error {
+	return s.Store.Transaction(func(st *State) error {
+		item, ok := st.Items[id]
+		if !ok || item.State == "done" {
+			return nil
+		}
+		a, now := Actor{Name: "coordinator", Role: "coordinator"}, s.now()
+		item.State, item.PR = "done", pr
+		item.Version++
+		st.Items[id] = item
+		req := 0
+		if e, queued := st.Queue[id]; queued {
+			req = e.Request
+			delete(st.Queue, id)
+		}
+		st.update(a, Request{ID: id, ReplyTo: req}, MergeMerged, body, now)
+		st.update(a, Request{ID: id, ReplyTo: req, Recipient: "operator"}, "say",
+			fmt.Sprintf("%s merged while its merge queue entry was changing (%s); the task is done. Check that the merged commit is the one you expect.", pr, body), now)
+		return nil
+	})
+}
+
 // QueueHeld reports whether e waits for the operator to acknowledge the
 // notice that held it.
 func QueueHeld(st *State, e QueueEntry) bool {

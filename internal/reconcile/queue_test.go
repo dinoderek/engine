@@ -48,8 +48,9 @@ func turned(q QueueItem, d time.Duration) QueueItem {
 	q.Phase, q.TurnAt = control.QueueRefresh, t0.Add(-d)
 	return q
 }
-func demoted(q QueueItem, n int) QueueItem    { q.Demotions = n; return q }
-func inState(q QueueItem, s string) QueueItem { q.State = s; return q }
+func demoted(q QueueItem, n int) QueueItem      { q.Demotions = n; return q }
+func inState(q QueueItem, s string) QueueItem   { q.State = s; return q }
+func told(q QueueItem, reason string) QueueItem { q.Reason = reason; return q }
 
 func TestDecideQueue(t *testing.T) {
 	waitingQ, check := control.QueueWaiting, control.QueueCheck
@@ -129,6 +130,11 @@ func TestAnswerRoutesEveryMergeOutcome(t *testing.T) {
 		{"a gh failure is counted", head, Probe{Err: "gh: auth"}, "queue t2 check"},
 		{"repeated gh failures hold it for the operator", failing, Probe{Err: "gh: auth"}, "queue t2 queued notice hold"},
 		{"a good reply clears the failures", recovered, said(hostops.CodePendingChecks, "running"), "queue t2 check"},
+		{"a missing host holds it for the operator", head, Probe{Missing: true}, "queue t2 queued notice hold"},
+		{"an unreadable reply waits like pending checks", head, Probe{}, ""},
+		{"an unreadable reply is bounded too", demotedAt(head, ChecksWait), Probe{}, "queue t2 queued merge-demoted notice demote"},
+		{"a probe tells a moved head once", queued(3, 3, waitingQ), said(hostops.CodeHeadMoved, "head is b"), "queue t3 queued say"},
+		{"a probe does not repeat it", told(queued(3, 3, waitingQ), "head is b"), said(hostops.CodeHeadMoved, "head is b"), "queue t3 queued"},
 		{"a probe finds a merged PR", queued(3, 3, waitingQ), said(hostops.CodeMerged, "merged"), "queue t3 end merged done"},
 		{"a probe finds a red PR", queued(3, 3, waitingQ), said(hostops.CodeRed, "check test"), "queue t3 end merge-refused"},
 		{"a probe of a ready PR records the read", queued(3, 3, waitingQ), said(hostops.CodeReady, "ok"), "queue t3 queued"},

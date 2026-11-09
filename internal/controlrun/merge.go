@@ -2,7 +2,6 @@ package controlrun
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 
 	"github.com/dinoderek/engine/internal/control"
@@ -106,6 +105,10 @@ func (c *Coordinator) call(repo string, a reconcile.Action, cfg *hosts.Config) e
 	}
 	i := slices.IndexFunc(v.Entries, func(q reconcile.QueueItem) bool { return q.Task == a.Item })
 	if i < 0 || v.Entries[i].QueueEntry != a.Entry {
+		// A merge that landed while the entry changed is still recorded.
+		if p.Reply.Code == hostops.CodeMerged {
+			return c.Service.RecordMerged(a.Item, a.Entry.PR, "Merged "+a.Entry.PR+": "+p.Reply.Reason)
+		}
 		return nil
 	}
 	if p.Reply.Code == hostops.CodeMerged {
@@ -120,7 +123,7 @@ func (c *Coordinator) call(repo string, a reconcile.Action, cfg *hosts.Config) e
 func (c *Coordinator) probe(st control.State, a reconcile.Action, cfg *hosts.Config) reconcile.Probe {
 	host, ok := cfg.Hosts[a.Host]
 	if !ok {
-		return reconcile.Probe{Err: fmt.Sprintf("host %q is not in hosts.toml", a.Host)}
+		return reconcile.Probe{Missing: true}
 	}
 	method := "squash"
 	if a.Request.Merge != nil {

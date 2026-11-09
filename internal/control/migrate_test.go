@@ -67,3 +67,14 @@ func TestMigrationTellsTheLockHolderEvenWhenIdle(t *testing.T) {
 		t.Fatalf("updates %+v", st.Updates)
 	}
 }
+
+func TestMigrationQueuesOnlyUnfinishedTasks(t *testing.T) {
+	st := emptyState()
+	st.Items["t1"] = Item{ID: "t1", Kind: "task", State: "failed", Attempt: "a2"}
+	st.Attempts["a2"] = Attempt{ID: "a2", Item: "t1", State: "ended"}
+	st.Updates = []Update{{ID: 1, Item: "t1", Author: "a2", Kind: "merge-request", Merge: &MergeRequest{PR: "p", Head: head}}}
+	retire(&st, nil, time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC))
+	if len(st.Queue) != 0 {
+		t.Fatalf("a failed task was queued: %+v", st.Queue)
+	}
+}

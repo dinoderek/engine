@@ -22,9 +22,9 @@ const retiredText = "Merge locks are retired: the coordinator's merge queue orde
 	"Once your PR is in-review, reviewed and pushed, run engine task merge-ready and end your turn; a merge request you already made is queued."
 
 // migrate brings a version 1 database to version 2 in one transaction: each
-// task's unanswered merge request from its current attempt joins the queue
-// in request order, every lock record is deleted, and the executor of every
-// lock and every active task is told.
+// unfinished task's unanswered merge request from its current attempt joins
+// the queue in request order, every lock record is deleted, and the executor
+// of every lock and every active task is told.
 func (s *Store) migrate() error {
 	st, locks, err := s.load()
 	if err != nil {
@@ -41,7 +41,7 @@ func (s *Store) migrate() error {
 func retire(st *State, locks []legacyLock, now time.Time) {
 	coordinator := Actor{Name: "coordinator", Role: "coordinator"}
 	for _, item := range st.Items {
-		if item.Kind != "task" {
+		if item.Kind != "task" || !slices.Contains([]string{"running", "in-review", "needs-human"}, item.State) {
 			continue
 		}
 		if u, ok := legacyRequest(st, item); ok {

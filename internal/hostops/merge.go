@@ -153,7 +153,11 @@ func judge(p prState, head string) (Merged, bool) {
 	if slices.Contains([]string{"REVIEW_REQUIRED", "CHANGES_REQUESTED"}, p.ReviewDecision) {
 		return Merged{MergeRefused, CodeBlocked, "a branch rule blocks the merge: review decision " + p.ReviewDecision}, true
 	}
-	if p.MergeState == "BLOCKED" {
+	switch {
+	case p.MergeState == "BLOCKED" && len(p.Checks) == 0:
+		// Required checks that have not registered yet block it too.
+		return Merged{MergePending, CodePendingChecks, "the PR is blocked and no check has reported yet"}, true
+	case p.MergeState == "BLOCKED":
 		return Merged{MergeRefused, CodeBlocked, "a branch rule blocks the merge (merge state BLOCKED)"}, true
 	}
 	return Merged{}, false
