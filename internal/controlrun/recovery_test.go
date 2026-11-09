@@ -151,14 +151,13 @@ func TestOnlyAnEarlierAttemptThatRanMakesAResume(t *testing.T) {
 }
 
 func TestRebootWhileThePlanIsStoppedLeavesTheTaskResumable(t *testing.T) {
-	c, h, repo, plan, task := setup(t)
+	c, h, _, plan, task := setup(t)
 	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
 	c.Service.Now = func() time.Time { return now }
 	pass(t, c)
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
 	first := st.Attempts[st.Items[task.ID].Attempt]
-	execute(t, c.Service, control.Request{Op: "lock-acquire", Attempt: first.ID})
 	now = now.Add(time.Minute)
 	execute(t, c.Service, control.Request{Op: "stop", ID: plan.ID})
 	h.status.Windows = nil // the host rebooted: its tmux server, and the window, are gone
@@ -168,9 +167,6 @@ func TestRebootWhileThePlanIsStoppedLeavesTheTaskResumable(t *testing.T) {
 	st, _ = c.Service.Store.Snapshot()
 	if at := st.Attempts[first.ID]; at.Reason != control.EndVanished || st.Items[task.ID].State != "running" {
 		t.Fatalf("a window lost while the plan was stopped failed its task: %+v %s", at, st.Items[task.ID].State)
-	}
-	if st.Locks[repo.ID].Attempt != first.ID {
-		t.Error("a vanished attempt's merge lock was not kept for operator recovery")
 	}
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()

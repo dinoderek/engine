@@ -4,11 +4,9 @@ package controlcmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -44,8 +42,7 @@ const Usage = "engine serve\n" +
 	"engine ps\nengine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
-	"engine lock acquire|check|release [--attempt <id>] [--lock-token-file <path>]\n" +
-	"engine lock recover <repo-id> --attempt <id> --lock-token-file <path> --body <evidence>\n" +
+	"engine merge-queue <repo-id>\n" +
 	"engine attempt list [<task-id>]\n" +
 	"All writes accept --request-key <key>; edits require --version. Output is JSON.\n"
 
@@ -85,15 +82,6 @@ func Main(args []string, e Env) int {
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine:", err)
 		return 1
-	}
-	if out.Lock != nil && (req.Op == "lock-acquire" || req.Op == "lock-check") {
-		if dir := e.Getenv("ENGINE_RUN_DIR"); dir != "" {
-			b, _ := json.Marshal(out.Lock)
-			if err = os.WriteFile(filepath.Join(dir, "merge-lock.json"), b, 0o600); err != nil {
-				fmt.Fprintln(e.Err, "engine: store merge lock:", err)
-				return 1
-			}
-		}
 	}
 	enc := json.NewEncoder(e.Out)
 	enc.SetIndent("", "  ")
@@ -143,7 +131,7 @@ func Parse(args []string, e Env) (control.Request, error) {
 	}
 	fs := flag.NewFlagSet("engine", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	bodyFile, tokenFile := "", ""
+	bodyFile := ""
 	fs.StringVar(&r.Key, "request-key", "", "")
 	fs.IntVar(&r.Version, "version", 0, "")
 	fs.StringVar(&r.Item.Repo, "repo", "", "")
@@ -158,7 +146,6 @@ func Parse(args []string, e Env) (control.Request, error) {
 	fs.StringVar(&r.Body, "body", "", "")
 	fs.StringVar(&bodyFile, "body-file", "", "")
 	fs.StringVar(&r.Attempt, "attempt", e.Getenv("ENGINE_ATTEMPT_ID"), "")
-	fs.StringVar(&tokenFile, "lock-token-file", "", "")
 	fs.IntVar(&r.After, "after", 0, "")
 	toOperator := fs.Bool("operator", false, "")
 	fs.Bool("json", true, "")
@@ -206,57 +193,22 @@ func Parse(args []string, e Env) (control.Request, error) {
 			return r, err
 		}
 	}
-	if err = lockToken(&r, tokenFile, e); err != nil {
-		return r, err
-	}
 	if r.Key == "" {
 		r.Key = control.Secret()
 	}
 	return r, nil
 }
 
-func lockToken(r *control.Request, tokenFile string, e Env) error {
-	if strings.HasPrefix(r.Op, "lock-") && r.Op != "lock-acquire" && r.Op != "lock-show" || r.Op == "merge-request" {
-		if tokenFile != "" {
-			token, readErr := control.ReadCredential(tokenFile)
-			if readErr != nil {
-				return readErr
-			}
-			r.Token = token
-		} else if dir := e.Getenv("ENGINE_RUN_DIR"); dir != "" {
-			b, readErr := os.ReadFile(filepath.Join(dir, "merge-lock.json"))
-			if errors.Is(readErr, fs.ErrNotExist) {
-				// No lock was taken here: the server says what the
-				// request needs.
-				return nil
-			}
-			if readErr != nil {
-				return readErr
-			}
-			var lock control.Lock
-			if err := json.Unmarshal(b, &lock); err != nil {
-				return err
-			}
-			r.Token = lock.Token
-		}
-	}
-	return nil
-}
-
 func operation(args []string) (control.Request, []string, error) {
 	r := control.Request{}
 	head, rest := args[0], args[1:]
 	switch head {
-	case "repo", "plan", "task", "lock", "attempt":
+	case "repo", "plan", "task", "attempt":
 		if len(rest) == 0 {
 			return r, nil, fmt.Errorf("%s requires an operation", head)
 		}
 		op := rest[0]
 		rest = rest[1:]
-		if head == "lock" {
-			r.Op = "lock-" + op
-			return r, rest, nil
-		}
 		if head == "attempt" {
 			if op != "list" && op != "reconcile" {
 				return r, nil, fmt.Errorf("attempt supports list or reconcile")
@@ -296,7 +248,7 @@ func operation(args []string) (control.Request, []string, error) {
 	case "ps":
 		r.Op = "list"
 		r.State = "task"
-	case "run", "updates", "ask", "inbox", "reply", "ack", "resolve":
+	case "run", "updates", "ask", "inbox", "reply", "ack", "resolve", "merge-queue":
 		r.Op = head
 	default:
 		return r, nil, fmt.Errorf("unknown server command %s", head)
@@ -339,7 +291,7 @@ func positionals(r *control.Request, pos []string) error {
 		}
 		r.ReplyTo = n
 		pos = pos[1:]
-	} else if r.Op != "create" && r.Op != "inbox" && !strings.HasPrefix(r.Op, "lock-") {
+	} else if r.Op != "create" && r.Op != "inbox" {
 		if len(pos) > 0 {
 			r.ID = pos[0]
 			pos = pos[1:]
@@ -347,9 +299,6 @@ func positionals(r *control.Request, pos []string) error {
 		if r.ID == "" && r.Op != "list" && r.Op != "attempts" {
 			return fmt.Errorf("item ID is required")
 		}
-	} else if (r.Op == "lock-recover" || r.Op == "lock-show") && len(pos) > 0 {
-		r.ID = pos[0]
-		pos = pos[1:]
 	}
 	if len(pos) > 0 {
 		if r.Op != "say" && r.Op != "ask" && r.Op != "reply" && r.Op != "resolve" {

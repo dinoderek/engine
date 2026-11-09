@@ -47,7 +47,7 @@ starts inherits that run's variables.
 `engine hook pre-tool-use` blocks Bash merges without
 `--match-head-commit`, with `--auto` or `--admin`, or through the REST or
 GraphQL API. In an engine session it blocks every PR merge: the
-coordinator merges after `engine task merge-ready` (`coordinator.md`, "Merges and merge locks").
+coordinator merges after `engine task merge-ready` (`coordinator.md`, "Merge queue").
 
 `engine hook permission` runs on `PermissionRequest` and `PermissionDenied`.
 With `ENGINE_UNATTENDED=1` it denies prompts, naming the Permission hard stop;

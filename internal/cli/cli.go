@@ -26,7 +26,7 @@ commands:
   repo, plan, task          manage server repositories, plans and tasks
   updates, inbox            read durable task updates or operator messages
   ask, reply, ack, resolve  exchange and resolve operator questions
-  lock, attempt             repository merge locks and execution attempts
+  merge-queue, attempt      a repository's merge queue and execution attempts
   ui [--listen <addr>]      serve the read-only dashboard on loopback (127.0.0.1:7332)
   version                   print the engine version
   hook pre-tool-use         the merge guard, for Claude Code and Codex: reads the event on stdin

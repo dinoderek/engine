@@ -30,7 +30,7 @@ func SQLite(ctx context.Context, path, sql string) ([]byte, error) {
 }
 
 // Store allows one server process per database, and serializes its transactions.
-// The OS releases its process lock on a crash; persisted merge locks remain.
+// The OS releases its process lock on a crash.
 type Store struct {
 	mu   sync.Mutex
 	path string
@@ -91,12 +91,21 @@ func (s *Store) initialize() error {
 	if err = json.Unmarshal(out, &version); err != nil {
 		return err
 	}
-	if len(version) != 1 || version[0].Version > 1 {
+	if len(version) != 1 || version[0].Version > schemaVersion {
 		return errors.New("unsupported control database schema")
 	}
-	_, err = s.sql("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, data TEXT NOT NULL); PRAGMA user_version=1; COMMIT;")
+	if v := version[0].Version; v == 1 || v == 2 {
+		return s.migrate()
+	}
+	_, err = s.sql("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, data TEXT NOT NULL); " + migratePlanStates + fmt.Sprintf("PRAGMA user_version=%d; COMMIT;", schemaVersion))
 	return err
 }
+
+// migratePlanStates moves a plan stored in a state version 1 allowed, and
+// later versions derive, back to planned. It is a no-op once applied.
+const migratePlanStates = "UPDATE records SET data = json_set(data, '$.state', 'planned') " +
+	"WHERE key LIKE 'item/%' AND json_extract(data, '$.kind') = 'plan' " +
+	"AND json_extract(data, '$.state') IN ('executing', 'verifying', 'blocked'); "
 
 func (s *Store) sql(sql string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -123,7 +132,7 @@ func (s *Store) Transaction(fn func(*State) error) error {
 	if s.lock == nil {
 		return errors.New("store is closed")
 	}
-	state, err := s.load()
+	state, _, err := s.load()
 	if err != nil {
 		return err
 	}
@@ -131,10 +140,15 @@ func (s *Store) Transaction(fn func(*State) error) error {
 	if err = fn(&state); err != nil {
 		return err
 	}
-	after := flatten(state)
+	return s.commit(before, flatten(state), "")
+}
+
+// commit writes the records that changed from before to after, plus tail,
+// in one SQLite transaction; nothing when nothing changed.
+func (s *Store) commit(before, after map[string]string, tail string) error {
 	var sql strings.Builder
 	sql.WriteString("BEGIN IMMEDIATE;\n")
-	changed := false
+	changed := tail != ""
 	for key, data := range after {
 		if before[key] == data {
 			continue
@@ -151,8 +165,9 @@ func (s *Store) Transaction(fn func(*State) error) error {
 	if !changed {
 		return nil
 	}
+	sql.WriteString(tail)
 	sql.WriteString("COMMIT;\n")
-	_, err = s.sql(sql.String())
+	_, err := s.sql(sql.String())
 	return err
 }
 
@@ -178,8 +193,8 @@ func flatten(s State) map[string]string {
 	for _, v := range s.Updates {
 		put(fmt.Sprintf("update/%012d", v.ID), v)
 	}
-	for k, v := range s.Locks {
-		put("lock/"+k, v)
+	for k, v := range s.Queue {
+		put("queue/"+k, v)
 	}
 	for k, v := range s.Auth {
 		put("auth/"+k, v)
@@ -190,28 +205,39 @@ func flatten(s State) map[string]string {
 	return records
 }
 
-func (s *Store) load() (State, error) {
+// load reads every record. Version 1's lock records are returned apart,
+// for the migration; a version 2 database has none.
+func (s *Store) load() (State, []legacyLock, error) {
 	st := emptyState()
 	out, err := s.sql("SELECT key,data FROM records ORDER BY key;")
 	if err != nil {
-		return st, err
+		return st, nil, err
 	}
 	if len(strings.TrimSpace(string(out))) == 0 {
-		return st, nil
+		return st, nil, nil
 	}
 	var rows []struct {
 		Key  string
 		Data string
 	}
 	if err = json.Unmarshal(out, &rows); err != nil {
-		return st, err
+		return st, nil, err
 	}
+	var locks []legacyLock
 	for _, row := range rows {
+		if strings.HasPrefix(row.Key, "lock/") {
+			var l legacyLock
+			if err = json.Unmarshal([]byte(row.Data), &l); err != nil {
+				return st, nil, fmt.Errorf("control record %s: %w", row.Key, err)
+			}
+			locks = append(locks, l)
+			continue
+		}
 		if err = loadRecord(&st, row.Key, []byte(row.Data)); err != nil {
-			return st, fmt.Errorf("control record %s: %w", row.Key, err)
+			return st, nil, fmt.Errorf("control record %s: %w", row.Key, err)
 		}
 	}
-	return st, nil
+	return st, locks, nil
 }
 
 func loadRecord(s *State, key string, b []byte) error {
@@ -237,12 +263,12 @@ func loadRecord(s *State, key string, b []byte) error {
 			return err
 		}
 		s.Updates = append(s.Updates, v)
-	case "lock":
-		var v Lock
+	case "queue":
+		var v QueueEntry
 		if err := json.Unmarshal(b, &v); err != nil {
 			return err
 		}
-		s.Locks[id] = v
+		s.Queue[id] = v
 	case "auth":
 		var v Actor
 		if err := json.Unmarshal(b, &v); err != nil {

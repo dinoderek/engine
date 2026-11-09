@@ -47,38 +47,3 @@ func TestOperatorInboxAcknowledgementReplyAndResolution(t *testing.T) {
 	reject(t, s, a, Request{Op: "say"}, 400)
 	reject(t, s, op, Request{Op: "resolve", ReplyTo: info.ID}, 400)
 }
-
-func TestRepositoryMergeLockSurvivesOwnerAndRequiresRecovery(t *testing.T) {
-	s := service(t)
-	repo, plan := repoPlan(t, s)
-	one := newTask(t, s, repo.ID, plan.ID)
-	two := newTask(t, s, repo.ID, plan.ID)
-	approve(t, s, plan)
-	a, first := dispatch(t, s, one)
-	b, second := dispatch(t, s, two)
-	take := Request{Op: "lock-acquire", Attempt: first.Attempt.ID}
-	lock := call(t, s, a, take).Lock
-	if got := call(t, s, a, take).Lock; got.Token != lock.Token {
-		t.Fatal("owner reacquisition changed token")
-	}
-	reject(t, s, b, Request{Op: "lock-acquire", Attempt: second.Attempt.ID}, 409)
-	reject(t, s, b, Request{Op: "lock-release", Attempt: first.Attempt.ID, Token: lock.Token}, 403)
-	reject(t, s, a, Request{Op: "lock-release", Attempt: first.Attempt.ID, Token: "wrong"}, 409)
-	call(t, s, a, Request{Op: "lock-check", Attempt: first.Attempt.ID, Token: lock.Token})
-	call(t, s, a, Request{Op: "ask", ID: one.ID, Body: "Need decision"})
-	reject(t, s, a, Request{Op: "lock-check", Attempt: first.Attempt.ID, Token: lock.Token}, 409)
-	recovery := Request{Op: "lock-recover", ID: repo.ID, Attempt: first.Attempt.ID, Token: lock.Token, Body: "Host checked; execution stopped; PR outcome reconciled"}
-	reject(t, s, op, recovery, 409)
-	if err := s.SetAttempt(first.Attempt.ID, "ended", ""); err != nil {
-		t.Fatal(err)
-	}
-	call(t, s, op, recovery)
-	next := call(t, s, b, Request{Op: "lock-acquire", Attempt: second.Attempt.ID}).Lock
-	if next.Token == lock.Token {
-		t.Fatal("replacement token reused")
-	}
-	reject(t, s, op, Request{Op: "lock-release", Attempt: first.Attempt.ID, Token: lock.Token}, 409)
-	call(t, s, b, Request{Op: "lock-release", Attempt: second.Attempt.ID, Token: next.Token})
-	reject(t, s, b, Request{Op: "lock-check", Attempt: "missing", Token: next.Token}, 404)
-	reject(t, s, op, Request{Op: "lock-recover", ID: repo.ID}, 404)
-}

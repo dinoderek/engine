@@ -64,7 +64,8 @@ func pendingMessage(st control.State, item control.Item, at control.Attempt) int
 	return last
 }
 
-var itemWakeKinds = []string{"say", "reply", "resolved", control.MergeMerged, control.MergeRefused}
+var itemWakeKinds = []string{"say", "reply", "resolved", control.MergeMerged, control.MergeRefused,
+	control.MergeTurn, control.MergeDemoted, control.MergeWithdrawn, control.LockRetired}
 var planWakeKinds = []string{"say", "resolved"}
 
 func planWake(item control.Item, u control.Update) bool {

@@ -65,13 +65,14 @@ tier. Telemetry records the tier and model of every run.
 
 | Entity | States |
 | --- | --- |
-| Plan | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`; `blocked` while any task is `needs-human`. |
+| Plan | `prepare` → `approved` (operator) → `planned` → `done`. Its status adds `blocked` while the operator is needed (a plan question, a task `needs-human` or `failed`) and `executing` once a task starts. |
 | Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
 
-"Ready" is computed, never stored. The planner creates the plan and its
-tasks; you approve the plan. The executor sets `running`, `needs-human` and
-`in-review`; the merge marks the task `done`. The coordinator owns the other
-plan states and `failed`.
+"Ready" and plan status are computed (`control.PlanStatus`), never
+stored. The planner creates the plan and its tasks; you approve the plan. The
+planner, or the coordinator on passing lint, sets `planned`. The executor
+sets `running`, `needs-human` and `in-review`; the merge marks the task
+`done`. The coordinator sets a plan `done` and a task `failed`.
 
 ## The inbox
 
@@ -85,6 +86,6 @@ Attaching is the interactive channel.
 There is no file ownership: parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Each merge moves
 the default branch and forces a re-gate of every other open PR, so each
-repository has one merge lock (`coordinator.md`, "Merges and merge locks"):
-its holder merges the default branch, gates and requests its merge while the
-others wait before their last gate run.
+repository has one merge queue (`coordinator.md`, "Merge queue"): only its
+head refreshes from the default branch, gates and is merged, while the
+others wait their turn.

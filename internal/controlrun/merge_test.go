@@ -22,20 +22,40 @@ var reviewedPR = fmt.Sprintf("https://github.com/owner/demo/pull/%d", 42)
 // merger is a host whose merge op answers with reply, recording each request.
 type merger struct {
 	*host
-	reply    func() (hostops.Merged, error)
+	reply    func(hostops.MergeRequest) (hostops.Merged, error)
 	requests []hostops.MergeRequest
 }
 
+// ControlMerge answers as the host does: a check of a PR it would merge
+// says it is ready, and never merges it.
 func (m *merger) ControlMerge(r hostops.MergeRequest) (hostops.Merged, error) {
 	m.requests = append(m.requests, r)
-	return m.reply()
+	got, err := m.reply(r)
+	if r.Check && err == nil && got.Code == hostops.CodeMerged && !strings.HasPrefix(got.Reason, "already") {
+		return hostops.Merged{Outcome: hostops.MergePending, Code: hostops.CodeReady, Reason: "ready"}, nil
+	}
+	return got, err
 }
 
-// requested dispatches the task, then has its executor move it to in-review,
-// take the merge lock when lock is set, and request the merge.
-func requested(t *testing.T, lock bool, reply func() (hostops.Merged, error)) (*Coordinator, *merger, control.Item, control.Actor) {
+// merges are the merge calls among the requests, leaving out checks.
+func (m *merger) merges() []hostops.MergeRequest {
+	var out []hostops.MergeRequest
+	for _, r := range m.requests {
+		if !r.Check {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// requested dispatches the task, then has its executor move it to in-review
+// and request the merge.
+func requested(t *testing.T, reply func(hostops.MergeRequest) (hostops.Merged, error)) (*Coordinator, *merger, control.Item, control.Actor) {
 	t.Helper()
 	c, h, _, _, task := setup(t)
+	if reply == nil {
+		reply = func(hostops.MergeRequest) (hostops.Merged, error) { return hostops.Merged{}, nil }
+	}
 	m := &merger{host: h, reply: reply}
 	c.Client = func(hosts.Host) remote.Client { return m }
 	pass(t, c)
@@ -45,37 +65,31 @@ func requested(t *testing.T, lock bool, reply func() (hostops.Merged, error)) (*
 	if err != nil {
 		t.Fatal(err)
 	}
-	do := func(r control.Request) control.Response {
-		t.Helper()
-		r.Key = control.Secret()
-		out, err := c.Service.Execute(worker, r)
-		if err != nil {
-			t.Fatal(r.Op, err)
-		}
-		return out
-	}
-	do(control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "in-review", Item: control.Item{PR: reviewedPR}})
-	token := ""
-	if lock {
-		token = do(control.Request{Op: "lock-acquire", Attempt: worker.Attempt}).Lock.Token
-	} else if err := c.Service.Store.Transaction(func(s *control.State) error {
-		s.Locks[task.Repo] = control.Lock{Repo: task.Repo, Attempt: worker.Attempt, Token: "t"}
-		return nil
-	}); err != nil {
+	if _, err = c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "in-review",
+		Item: control.Item{PR: reviewedPR}, Key: control.Secret()}); err != nil {
 		t.Fatal(err)
 	}
-	do(control.Request{Op: "merge-request", ID: task.ID, Token: map[bool]string{true: token, false: "t"}[lock], Merge: &control.MergeRequest{
-		PR: reviewedPR, Head: reviewedHead, Method: "squash", Verdict: "APPROVED"}})
-	if !lock { // The lock moves away after the request.
-		if err := c.Service.Store.Transaction(func(s *control.State) error { delete(s.Locks, task.Repo); return nil }); err != nil {
-			t.Fatal(err)
-		}
-	}
+	request(t, c, worker, task.ID, reviewedHead)
 	return c, m, task, worker
 }
 
-func reply(outcome, reason string) func() (hostops.Merged, error) {
-	return func() (hostops.Merged, error) { return hostops.Merged{Outcome: outcome, Reason: reason}, nil }
+func request(t *testing.T, c *Coordinator, worker control.Actor, id, head string) {
+	t.Helper()
+	if _, err := c.Service.Execute(worker, control.Request{Op: "merge-request", ID: id, Key: control.Secret(), Merge: &control.MergeRequest{
+		PR: reviewedPR, Head: head, Method: "squash", Verdict: "APPROVED"}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func reply(code, reason string) func(hostops.MergeRequest) (hostops.Merged, error) {
+	outcome := map[string]string{hostops.CodeMerged: hostops.MergeDone, hostops.CodePendingChecks: hostops.MergePending,
+		hostops.CodePendingMergeable: hostops.MergePending, hostops.CodeReady: hostops.MergePending}[code]
+	if outcome == "" {
+		outcome = hostops.MergeRefused
+	}
+	return func(hostops.MergeRequest) (hostops.Merged, error) {
+		return hostops.Merged{Outcome: outcome, Code: code, Reason: reason}, nil
+	}
 }
 
 func lastUpdate(t *testing.T, c *Coordinator, id string, kinds ...string) (control.Update, bool) {
@@ -92,139 +106,169 @@ func lastUpdate(t *testing.T, c *Coordinator, id string, kinds ...string) (contr
 	return control.Update{}, false
 }
 
-func TestCoordinatorMergesOnTheTasksHostAndCompletesTheTask(t *testing.T) {
-	c, m, task, _ := requested(t, true, reply(hostops.MergeDone, "merged at "+reviewedHead))
-	var woken []string
-	c.Wake = func(_ reconcile.Session, text string) error { woken = append(woken, text); return nil }
-	m.status.Windows[0].State = "waiting"
-	pass(t, c)
-	if len(m.requests) != 1 || m.requests[0] != (hostops.MergeRequest{Repo: "owner/demo", PR: 42, Head: reviewedHead, Method: "squash"}) {
-		t.Fatalf("merge requests %+v", m.requests)
-	}
-	st, _ := c.Service.Store.Snapshot()
-	if got := st.Items[task.ID]; got.State != "done" || got.PR != reviewedPR {
-		t.Fatalf("task %+v", got)
-	}
-	if _, held := st.Locks[task.Repo]; held {
-		t.Fatal("lock kept after the merge")
-	}
-	if len(woken) == 0 {
-		t.Fatal("the executor was not told about its merge")
-	}
-	pass(t, c)
-	if len(m.requests) != 1 {
-		t.Fatal("an answered request merged again")
-	}
-}
-
-func TestCoordinatorHandsBackAMergeItCannotMake(t *testing.T) {
-	for name, reason := range map[string]string{
-		"main moved":   "main moved: the head is 2 commits behind it; merge it in and gate again",
-		"red checks":   "check test is not green",
-		"head changed": "the PR's head is fff, not the reviewed " + reviewedHead,
-	} {
-		t.Run(name, func(t *testing.T) {
-			c, m, task, _ := requested(t, true, reply(hostops.MergeRefused, reason))
-			woken := 0
-			c.Wake = func(reconcile.Session, string) error { woken++; return nil }
-			m.status.Windows[0].State = "waiting"
-			pass(t, c)
-			if woken == 0 {
-				t.Fatal("the refusal did not wake the executor")
-			}
-			u, ok := lastUpdate(t, c, task.ID, control.MergeRefused)
-			st, _ := c.Service.Store.Snapshot()
-			if !ok || !strings.Contains(u.Body, reason) || st.Items[task.ID].State != "in-review" || st.Locks[task.Repo].Attempt == "" {
-				t.Fatalf("refusal %+v, task %s, lock %+v", u, st.Items[task.ID].State, st.Locks[task.Repo])
-			}
-		})
-	}
-}
-
-func TestCoordinatorRefusesAMergeWithoutTheLock(t *testing.T) {
-	c, m, task, _ := requested(t, false, reply(hostops.MergeDone, "merged"))
-	pass(t, c)
-	if u, ok := lastUpdate(t, c, task.ID, control.MergeRefused); !ok || !strings.Contains(u.Body, "merge lock") || len(m.requests) != 0 {
-		t.Fatalf("refusal %+v, merges %v", u, m.requests)
-	}
-}
-
-func TestCoordinatorWaitsForPendingChecksAndForTheOperator(t *testing.T) {
-	c, m, task, worker := requested(t, true, reply(hostops.MergePending, "check test is still running"))
-	pass(t, c)
-	if _, ok := lastUpdate(t, c, task.ID, control.MergeMerged, control.MergeRefused); ok || len(m.requests) != 1 {
-		t.Fatal("a pending merge was answered")
-	}
-	if _, err := c.Service.Execute(worker, control.Request{Op: "ask", ID: task.ID, Body: "Approve the merge?", Key: "ask"}); err != nil {
-		t.Fatal(err)
-	}
-	m.reply = reply(hostops.MergeDone, "merged")
-	pass(t, c)
-	if len(m.requests) != 1 {
-		t.Fatal("merged while the operator's question was open")
-	}
-}
-
-// failureNotices are the coordinator's merge-failure messages to the operator.
-func failureNotices(t *testing.T, c *Coordinator, id string) []control.Update {
+// operatorNotices are the coordinator's messages to the operator on id.
+func operatorNotices(t *testing.T, c *Coordinator, id string) []control.Update {
 	t.Helper()
 	st, _ := c.Service.Store.Snapshot()
 	var out []control.Update
 	for _, u := range st.Updates {
-		if u.Item == id && u.Recipient == "operator" && strings.Contains(u.Body, "gh auth status") {
+		if u.Item == id && u.Recipient == "operator" && u.Author == "coordinator" {
 			out = append(out, u)
 		}
 	}
 	return out
 }
 
-func acknowledge(t *testing.T, c *Coordinator, u control.Update) {
+func entry(t *testing.T, c *Coordinator, id string) (control.QueueEntry, bool) {
 	t.Helper()
-	if _, err := c.Service.Execute(control.Actor{Name: "operator", Role: "operator"}, control.Request{Op: "ack", ReplyTo: u.ID, Key: control.Secret()}); err != nil {
+	st, _ := c.Service.Store.Snapshot()
+	e, ok := st.Queue[id]
+	return e, ok
+}
+
+func later(c *Coordinator, d time.Duration) {
+	now := c.Service.Now().Add(d)
+	c.Service.Now = func() time.Time { return now }
+}
+
+func TestCoordinatorMergesOnTheTasksHostAndCompletesTheTask(t *testing.T) {
+	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged at "+reviewedHead))
+	var woken []string
+	c.Wake = func(_ reconcile.Session, text string) error { woken = append(woken, text); return nil }
+	m.status.Windows[0].State = "waiting"
+	pass(t, c)
+	if got := m.merges(); len(got) != 1 || got[0] != (hostops.MergeRequest{Repo: "owner/demo", PR: 42, Head: reviewedHead, Method: "squash"}) {
+		t.Fatalf("merge requests %+v", m.requests)
+	}
+	st, _ := c.Service.Store.Snapshot()
+	if got := st.Items[task.ID]; got.State != "done" || got.PR != reviewedPR || len(st.Queue) != 0 {
+		t.Fatalf("task %+v, queue %+v", got, st.Queue)
+	}
+	if len(woken) == 0 {
+		t.Fatal("the executor was not told about its merge")
+	}
+	pass(t, c)
+	if len(m.requests) != 1 {
+		t.Fatal("a merged task was merged again")
+	}
+}
+
+func TestCoordinatorHandsBackARedOrClosedPR(t *testing.T) {
+	for code, operator := range map[string]bool{hostops.CodeRed: false, hostops.CodeClosed: true, hostops.CodeBlocked: true} {
+		t.Run(code, func(t *testing.T) {
+			c, m, task, _ := requested(t, reply(code, "the reason"))
+			woken := 0
+			c.Wake = func(reconcile.Session, string) error { woken++; return nil }
+			m.status.Windows[0].State = "waiting"
+			pass(t, c)
+			u, ok := lastUpdate(t, c, task.ID, control.MergeRefused)
+			st, _ := c.Service.Store.Snapshot()
+			if !ok || !strings.Contains(u.Body, "the reason") || st.Items[task.ID].State != "in-review" || len(st.Queue) != 0 || woken == 0 {
+				t.Fatalf("refusal %+v, task %s, queue %+v, woken %d", u, st.Items[task.ID].State, st.Queue, woken)
+			}
+			if told := len(operatorNotices(t, c, task.ID)) > 0; told != operator {
+				t.Errorf("operator told %v, want %v", told, operator)
+			}
+		})
+	}
+}
+
+func TestABehindHeadGetsItsTurnAndMergesOnceRefreshed(t *testing.T) {
+	c, m, task, worker := requested(t, reply(hostops.CodeBehind, "main moved: 2 commits behind"))
+	woken := 0
+	c.Wake = func(reconcile.Session, string) error { woken++; return nil }
+	m.status.Windows[0].State = "waiting"
+	pass(t, c)
+	turn, ok := lastUpdate(t, c, task.ID, control.MergeTurn)
+	if e, _ := entry(t, c, task.ID); !ok || e.Phase != control.QueueRefresh || !strings.Contains(turn.Body, "main moved") || woken != 1 {
+		t.Fatalf("turn %+v, entry %+v, woken %d", turn, e, woken)
+	}
+	m.status.Windows[0].State = "working"
+	pass(t, c)
+	if len(m.merges()) != 1 {
+		t.Fatal("a refreshing head was merged before it requested again")
+	}
+	refreshed := strings.Repeat("b", 40)
+	request(t, c, worker, task.ID, refreshed)
+	m.reply = reply(hostops.CodeMerged, "merged at "+refreshed)
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	if got := m.merges(); len(got) != 2 || got[1].Head != refreshed || st.Items[task.ID].State != "done" {
+		t.Fatalf("merges %+v, task %s", got, st.Items[task.ID].State)
+	}
+}
+
+func TestPendingChecksWaitThenDemoteAndAQuestionHoldsTheMerge(t *testing.T) {
+	c, m, task, worker := requested(t, reply(hostops.CodePendingChecks, "check test is still running"))
+	pass(t, c)
+	if _, ok := lastUpdate(t, c, task.ID, control.MergeMerged, control.MergeRefused, control.MergeDemoted); ok || len(m.merges()) != 1 {
+		t.Fatal("pending checks were answered")
+	}
+	if _, err := c.Service.Execute(worker, control.Request{Op: "ask", ID: task.ID, Body: "Approve the merge?", Key: "ask"}); err != nil {
 		t.Fatal(err)
+	}
+	m.reply = reply(hostops.CodeMerged, "merged")
+	pass(t, c)
+	if e, _ := entry(t, c, task.ID); len(m.merges()) != 1 || e.Phase != control.QueueWaiting {
+		t.Fatalf("merged while the operator's question was open; entry %+v", e)
 	}
 }
 
 func TestCoordinatorRecordsAMergeWhoseResultWasLost(t *testing.T) {
 	calls := 0
-	c, m, task, _ := requested(t, true, func() (hostops.Merged, error) {
+	c, m, task, _ := requested(t, func(hostops.MergeRequest) (hostops.Merged, error) {
 		calls++
 		if calls == 1 {
 			return hostops.Merged{}, errors.New("host connection reset")
 		}
-		return hostops.Merged{Outcome: hostops.MergeDone, Reason: "already merged at " + reviewedHead}, nil
+		return hostops.Merged{Outcome: hostops.MergeDone, Code: hostops.CodeMerged, Reason: "already merged at " + reviewedHead}, nil
 	})
 	pass(t, c)
-	acknowledge(t, c, failureNotices(t, c, task.ID)[0])
-	pass(t, c)
+	if e, _ := entry(t, c, task.ID); e.Failures != 1 || len(operatorNotices(t, c, task.ID)) != 0 {
+		t.Fatalf("one failure: %+v", e)
+	}
+	// A restarted server is a new coordinator on the same records.
+	restarted := &Coordinator{Service: c.Service, URL: c.URL, Config: c.Config, Host: c.Host, Client: c.Client, Logf: t.Logf}
+	pass(t, restarted)
 	st, _ := c.Service.Store.Snapshot()
-	if st.Items[task.ID].State != "done" || len(m.requests) != 2 {
-		t.Fatalf("task %s after %d merges", st.Items[task.ID].State, len(m.requests))
+	if st.Items[task.ID].State != "done" || len(m.merges()) != 2 {
+		t.Fatalf("task %s after %d merges", st.Items[task.ID].State, len(m.merges()))
 	}
 }
 
-func TestCoordinatorHoldsAFailedMergeUntilTheOperatorAcknowledges(t *testing.T) {
-	calls := 0
-	c, _, task, _ := requested(t, true, func() (hostops.Merged, error) {
-		calls++
-		return hostops.Merged{}, errors.New("gh: authentication required")
-	})
+func TestAVanishedHeadMergesWithoutItsSession(t *testing.T) {
+	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged at "+reviewedHead))
+	m.reply = reply(hostops.CodePendingChecks, "running")
+	pass(t, c) // the head, waiting on checks, is seen live
+	m.status.Windows = nil
 	pass(t, c)
-	pass(t, c)
-	notices := failureNotices(t, c, task.ID)
 	st, _ := c.Service.Store.Snapshot()
-	if len(notices) != 1 || calls != 1 || st.Items[task.ID].State != "in-review" {
-		t.Fatalf("%d notices after %d attempts; task %s", len(notices), calls, st.Items[task.ID].State)
+	if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != control.EndVanished {
+		t.Fatalf("attempt %+v", at)
 	}
-	acknowledge(t, c, notices[0])
+	m.reply = reply(hostops.CodeMerged, "merged at "+reviewedHead)
 	pass(t, c)
-	if notices = failureNotices(t, c, task.ID); len(notices) != 2 || calls != 2 {
-		t.Fatalf("%d notices after %d attempts once acknowledged", len(notices), calls)
+	if st, _ = c.Service.Store.Snapshot(); st.Items[task.ID].State != "done" {
+		t.Fatalf("task %s", st.Items[task.ID].State)
+	}
+}
+
+func TestADeadExecutionFailsAndLeavesTheQueue(t *testing.T) {
+	c, m, task, _ := requested(t, reply(hostops.CodePendingChecks, "running"))
+	m.status.Windows[0].Alive = false
+	st, _ := c.Service.Store.Snapshot()
+	if err := c.ConfirmEnded(st.Items[task.ID].Attempt); err != nil {
+		t.Fatal(err)
+	}
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	if _, queued := st.Queue[task.ID]; st.Items[task.ID].State != "failed" || queued {
+		t.Fatalf("task %s, queued %v", st.Items[task.ID].State, queued)
 	}
 }
 
 // standaloneMergeRequest is a standalone task, dispatched to a host whose
-// merges succeed, that holds the lock and has requested its merge.
+// merges succeed, that has requested its merge.
 func standaloneMergeRequest(t *testing.T) (*Coordinator, *merger, control.Item, control.Attempt) {
 	t.Helper()
 	c, h, repo, _, _ := setup(t)
@@ -241,7 +285,7 @@ func standaloneMergeRequest(t *testing.T) (*Coordinator, *merger, control.Item, 
 	task := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Alone", Repo: repo.ID, Body: "## Outcome\nWorks"}})
 	task = execute(t, c.Service, control.Request{Op: "approve", ID: task.ID, Version: task.Version})
 	execute(t, c.Service, control.Request{Op: "run", ID: task.ID, Version: task.Version})
-	m := &merger{host: h, reply: reply(hostops.MergeDone, "merged at "+reviewedHead)}
+	m := &merger{host: h, reply: reply(hostops.CodeMerged, "merged at "+reviewedHead)}
 	c.Client = func(hosts.Host) remote.Client { return m }
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
@@ -250,20 +294,11 @@ func standaloneMergeRequest(t *testing.T) (*Coordinator, *merger, control.Item, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range []control.Request{
-		{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "in-review", Item: control.Item{PR: reviewedPR}},
-		{Op: "lock-acquire", Attempt: at.ID},
-	} {
-		r.Key = control.Secret()
-		if _, err := c.Service.Execute(worker, r); err != nil {
-			t.Fatal(r.Op, err)
-		}
-	}
-	st, _ = c.Service.Store.Snapshot()
-	if _, err := c.Service.Execute(worker, control.Request{Op: "merge-request", ID: task.ID, Token: st.Locks[repo.ID].Token, Key: "ready", Merge: &control.MergeRequest{
-		PR: reviewedPR, Head: reviewedHead, Method: "squash", Verdict: "APPROVED"}}); err != nil {
+	if _, err := c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "in-review",
+		Item: control.Item{PR: reviewedPR}, Key: control.Secret()}); err != nil {
 		t.Fatal(err)
 	}
+	request(t, c, worker, task.ID, reviewedHead)
 	return c, m, task, at
 }
 
@@ -276,28 +311,11 @@ func TestStandaloneSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, windows %v, attempt %s: the window closed as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
 	}
-	later := c.Service.Now().Add(reconcile.ReportWindow)
-	c.Service.Now = func() time.Time { return later }
+	later(c, reconcile.ReportWindow)
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
 	if len(m.status.Windows) != 0 || st.Attempts[at.ID].State != "ended" {
 		t.Fatalf("windows %v, attempt %s after the report window", m.status.Windows, st.Attempts[at.ID].State)
-	}
-}
-
-func TestCoordinatorLeavesAnUnreachableHostsMergePending(t *testing.T) {
-	c, _, task, _ := requested(t, true, func() (hostops.Merged, error) {
-		return hostops.Merged{}, &remote.UnreachableError{Host: "devbox", Address: "devbox", Detail: "timeout"}
-	})
-	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
-	if _, ok := control.PendingMerge(&st, task.ID); !ok {
-		t.Fatal("an outage answered the request")
-	}
-	for _, u := range st.Updates {
-		if u.Item == task.ID && u.Recipient == "operator" {
-			t.Fatalf("an outage told the operator: %+v", u)
-		}
 	}
 }
 
@@ -339,7 +357,7 @@ func waitedLong(t *testing.T, c *Coordinator, m *merger, id string) control.Atte
 }
 
 func TestPlanTaskSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
-	c, m, task, _ := requested(t, true, reply(hostops.MergeDone, "merged at "+reviewedHead))
+	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged at "+reviewedHead))
 	c.Wake = func(reconcile.Session, string) error { return nil }
 	at := waitedLong(t, c, m, task.ID)
 	pass(t, c)
@@ -347,8 +365,7 @@ func TestPlanTaskSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, windows %v, attempt %s: reaped as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
 	}
-	later := c.Service.Now().Add(reconcile.ReportWindow)
-	c.Service.Now = func() time.Time { return later }
+	later(c, reconcile.ReportWindow)
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
 	if len(m.status.Windows) != 0 || st.Attempts[at.ID].State != "ended" {
@@ -356,14 +373,11 @@ func TestPlanTaskSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 	}
 }
 
-func TestAPendingMergeIsNotAStall(t *testing.T) {
-	c, m, task, _ := requested(t, true, reply(hostops.MergePending, "check test is still running"))
+func TestAQueuedMergeIsNotAStall(t *testing.T) {
+	c, m, task, _ := requested(t, reply(hostops.CodePendingChecks, "check test is still running"))
 	waitedLong(t, c, m, task.ID)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
-	for _, u := range st.Updates {
-		if u.Item == task.ID && u.Recipient == "operator" {
-			t.Fatalf("a session waiting on its merge was reported: %+v", u)
-		}
+	if n := operatorNotices(t, c, task.ID); len(n) != 0 {
+		t.Fatalf("a session waiting on its merge was reported: %+v", n)
 	}
 }

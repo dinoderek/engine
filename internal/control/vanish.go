@@ -53,8 +53,8 @@ func Vanished(st *State, item Item) bool {
 
 // endDead ends at, whose window a host read confirmed gone. An unfinished
 // task's current attempt ends vanished when the task is resumable, leaving
-// its state alone; otherwise it ends failed and so does the task. A merge
-// lock the attempt holds stays with it for operator recovery.
+// its state alone, and its merge queue entry stays queued; otherwise it ends
+// failed and so does the task, which leaves the queue.
 func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	item := st.Items[at.Item]
 	at.State, at.Ended = "ended", s.now()
@@ -63,6 +63,7 @@ func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 		if resumable(st, item, at) {
 			at.Reason = EndVanished
 		} else {
+			withdraw(st, a, item, "its session failed", s.now())
 			item.State = "failed"
 			item.Version++
 			st.Items[item.ID] = item

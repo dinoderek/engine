@@ -15,7 +15,7 @@ asks.
 | Execution protocol | The phases, roles and state machine from requirements to merged feature. |
 | Coordinator | The reconcile core runs in `engine serve`, spawning sessions on local or SSH hosts. No LLM. |
 | Skills | `build`: one task to a merged PR in any repo, and its reviewer. `engine`: the server planner and executor. One Claude Code and Codex plugin ships both. |
-| Control server | Plans, tasks, execution attempts, updates, operator inbox and repository merge locks. CLI access through an authenticated private API. |
+| Control server | Plans, tasks, execution attempts, updates, operator inbox and repository merge queues. CLI access through an authenticated private API. |
 | Hosts | Each machine's harnesses, session slots and capabilities, and how to reach every session. |
 | Telemetry | Each run's record, logs and harness signals, kept in a run directory on its host. |
 | Project context guideline | What a repo must provide so executors can run hands-off. |

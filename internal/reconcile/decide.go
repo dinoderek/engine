@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-// Decide works out one pass for v's root, in order: merges first, since
-// their outcome changes the rest of the pass, then cleanup of a done root,
-// a lint failure, the planner, and the tasks.
+// Decide works out one pass for v's root, in order: cleanup of a done root,
+// a lint failure, the planner, and the tasks. The merge queue is decided
+// before it, by DecideQueue.
 func Decide(v View) []Action {
-	acts := merges(v)
+	var acts []Action
 	switch {
 	case v.Root.State == "done":
 		return append(acts, cleanup(v)...)
@@ -34,10 +34,6 @@ func Decide(v View) []Action {
 		}
 		return acts
 	}
-	starting := slices.ContainsFunc(placed, func(a Action) bool { return a.Kind == Dispatch })
-	if s := planState(v, starting); s != "" {
-		acts = append(acts, Action{Kind: SetState, Item: v.Root.ID, State: s})
-	}
 	if len(v.Tasks) > 0 && !slices.ContainsFunc(v.Tasks, Item.open) {
 		acts = append(acts, Action{Kind: SetState, Item: v.Root.ID, State: "done", Key: "finished", Text: summary(v)})
 	}
@@ -54,7 +50,7 @@ func planStep(v View) ([]Action, bool) {
 	p := v.Root
 	planner := p.Session
 	switch {
-	case slices.Contains([]string{"planned", "executing", "verifying", "blocked", "done"}, p.State):
+	case p.State == "planned" || p.State == "done":
 		return nil, false
 	case p.State != "approved":
 		return []Action{{Kind: Stop, Item: p.ID, Text: p.ID + " is not approved"}}, true

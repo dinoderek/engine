@@ -50,7 +50,7 @@ func ready(v View) []Item {
 // deep before standard before light, then the lowest number.
 func order(all, cands []Item) {
 	downstream := map[string]int{}
-	edges := dependencies(all, false)
+	edges := dependencies(all)
 	for _, t := range all {
 		if !t.open() {
 			continue
@@ -69,20 +69,11 @@ func order(all, cands []Item) {
 	})
 }
 
-// dependencies maps each task to the tasks it depends on: every one, or,
-// with within, only those among all.
-func dependencies(all []Item, within bool) map[string][]string {
-	in := map[string]bool{}
-	for _, t := range all {
-		in[t.ID] = true
-	}
+// dependencies maps each task to the tasks it depends on.
+func dependencies(all []Item) map[string][]string {
 	edges := map[string][]string{}
 	for _, t := range all {
-		for _, d := range t.Depends {
-			if !within || in[d] {
-				edges[t.ID] = append(edges[t.ID], d)
-			}
-		}
+		edges[t.ID] = append(edges[t.ID], t.Depends...)
 	}
 	return edges
 }
@@ -104,71 +95,4 @@ func upstream(edges map[string][]string, from string) []string {
 		stack = append(stack, edges[id]...)
 	}
 	return out
-}
-
-// planState is the state the plan should be in once a task has started,
-// or "" when it already is or none has.
-func planState(v View, starting bool) string {
-	started := starting
-	open := 0
-	var last Item
-	for _, t := range v.Tasks {
-		if !t.open() || t.taken() {
-			started = true
-		}
-		if t.open() {
-			open++
-			last = t
-		}
-	}
-	if !started || open == 0 {
-		return ""
-	}
-	want := "executing"
-	switch {
-	case slices.ContainsFunc(v.Tasks, func(t Item) bool { return t.open() && t.state() == "needs-human" }):
-		want = "blocked"
-	case open == 1 && isAcceptance(v.Tasks, last):
-		want = "verifying"
-	}
-	if v.Root.State == want {
-		return ""
-	}
-	return want
-}
-
-// isAcceptance reports whether t depends, directly or not, on every other
-// task.
-func isAcceptance(all []Item, t Item) bool {
-	up := slices.DeleteFunc(upstream(dependencies(all, true), t.ID), func(id string) bool { return id == t.ID })
-	return len(all) > 1 && len(up) == len(all)-1
-}
-
-// merges answers each task's pending merge request.
-func merges(v View) []Action {
-	var acts []Action
-	for _, t := range v.Tasks {
-		if a, ok := MergeStep(t); ok {
-			acts = append(acts, a)
-		}
-	}
-	return acts
-}
-
-// MergeStep is the Merge t's pending merge request calls for, if any. A
-// request waits while the task is at a hard stop or a failed merge waits
-// for the operator. One without the lock, or from a task not in-review,
-// is refused.
-func MergeStep(t Item) (Action, bool) {
-	if t.Merge == nil || t.State == "needs-human" || t.Question > 0 || t.MergeHeld {
-		return Action{}, false
-	}
-	a := Action{Kind: Merge, Item: t.ID, Attempt: t.Current.ID, Request: *t.Merge}
-	switch {
-	case !t.Locked:
-		a.Refuse = "The task does not hold the repository merge lock; take it, refresh the default branch, gate and request the merge again."
-	case t.State != "in-review":
-		a.Refuse = "The task is " + t.State + ", not in-review; set it in-review and request the merge again."
-	}
-	return a, true
 }

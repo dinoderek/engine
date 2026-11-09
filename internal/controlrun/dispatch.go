@@ -138,7 +138,7 @@ func kickoff(item control.Item, at control.Attempt, reviewer string) string {
 		role = "planner"
 	}
 	return fmt.Sprintf("Use the engine skill's server %s mode for %s. Read engine %s show %s and its updates. "+
-		"All plan/task state, messages, approvals and repository merge locks use the engine server CLI, never GitHub issues. "+
+		"All plan/task state, messages, approvals and merge requests use the engine server CLI, never GitHub issues. "+
 		"Execution: %s. Reviewer model: %s. The repository's tests, review and pinned-head merge rules apply. "+
 		"Read the server plan-source reference before working.", role, item.ID, item.Kind, item.ID, at.ID, reviewer)
 }
