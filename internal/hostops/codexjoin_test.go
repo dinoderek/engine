@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/harness/codex"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -115,7 +115,7 @@ func TestSpawnCodexJoins(t *testing.T) {
 	}
 	bin := filepath.Join(h.dir, "bin", "codex")
 	if want := []string{"env CODEX_HOME=" + engineHome + " " + bin + " app-server daemon version", "ps -ww -eo args=", "ps -ww -eo pid=,lstart=,args=",
-		"ps -o etime= -p 123", "sqlite3 -readonly -json " + filepath.Join(engineHome, "logs_2.sqlite") + " " + hosts.CodexRemoteSQL(123, 3723)}; !slices.Equal(d.calls, want) {
+		"ps -o etime= -p 123", "sqlite3 -readonly -json " + filepath.Join(engineHome, "logs_2.sqlite") + " " + codex.RemoteSQL(123, 3723)}; !slices.Equal(d.calls, want) {
 		t.Errorf("asked\n %q\nwant %q", d.calls, want)
 	}
 	config, _ := os.ReadFile(filepath.Join(engineHome, "config.toml"))

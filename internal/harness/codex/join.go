@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -139,15 +138,15 @@ func (c Adapter) disconnected(run session.Runner, pid string) string {
 	if err != nil {
 		return unknown + "its start cannot be read: " + err.Error() + ")"
 	}
-	elapsed, err := hosts.ParseElapsed(etime)
+	elapsed, err := parseElapsed(etime)
 	if err != nil {
 		return unknown + "its start cannot be read: " + err.Error() + ")"
 	}
-	out, err := run("sqlite3", "-readonly", "-json", filepath.Join(c.engineHome(), hosts.CodexLogs), hosts.CodexRemoteSQL(n, elapsed))
+	out, err := run("sqlite3", "-readonly", "-json", filepath.Join(c.engineHome(), logsDB), RemoteSQL(n, elapsed))
 	if err != nil {
 		return unknown + "its log cannot be read: " + err.Error() + ")"
 	}
-	why, known := hosts.CodexDisconnected(out)
+	why, known := disconnectedWhy(out)
 	switch {
 	case !known:
 		return unknown + why + ")"

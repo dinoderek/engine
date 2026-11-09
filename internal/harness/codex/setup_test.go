@@ -1,9 +1,11 @@
-package setup
+package codex
 
 import (
-	"errors"
 	"strings"
 	"testing"
+
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/harnesstest"
 )
 
 const (
@@ -11,17 +13,6 @@ const (
 	boxCodex   = boxHome + "/.local/bin/codex"
 	boxEngineH = boxHome + "/.local/share/engine/codex"
 )
-
-// newCodexRig is a rig whose hosts list codex, with a devbox that is set up
-// except for Codex's engine home and daemon, which the case decides.
-func newCodexRig(t *testing.T, codex *codexState) *rig {
-	t.Helper()
-	r := newRig(t)
-	r.home = callerHomeWith(t, codexHostsTOML)
-	r.box = settledBox(r.home)
-	r.box.codex = codex
-	return r
-}
 
 // A running daemon with remote control on is judged by its own log: one the
 // apps cannot see is reported not connected, with why, one whose log cannot
@@ -43,7 +34,7 @@ func TestCodexDaemonReportsItsConnection(t *testing.T) {
 			c := settledCodex(boxHome)
 			c.etime, c.log, c.logFail = tt.etime, tt.log, tt.logFail
 			r := newCodexRig(t, c)
-			if !mustRun(t, r, "box") {
+			if !mustRun(t, r) {
 				t.Fatalf("items left open:\n%s", r.out.String())
 			}
 			if want := "11. codex daemon: ok (running; remote control on, " + tt.want; !strings.Contains(r.out.String(), want) {
@@ -55,14 +46,13 @@ func TestCodexDaemonReportsItsConnection(t *testing.T) {
 
 func TestCodexStepsOnASettledHost(t *testing.T) {
 	r := newCodexRig(t, settledCodex(boxHome))
-	if !mustRun(t, r, "box") {
+	if !mustRun(t, r) {
 		t.Fatalf("items left open:\n%s", r.out.String())
 	}
 	out := r.out.String()
 	for _, want := range []string{
 		"7. codex: ok (codex-cli 0.164.0)", "8. codex sign-in: ok (Logged in using ChatGPT)", "9. codex home: ok (" + boxEngineH + ")",
-		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control on, connected)", "12. gh auth: ok", "13. preflight: ok",
-		"checking --harness codex", "box is set up",
+		"10. codex plugin: ok (0.7.1)", "11. codex daemon: ok (running; remote control on, connected)",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
@@ -71,21 +61,18 @@ func TestCodexStepsOnASettledHost(t *testing.T) {
 	if len(r.box.mutations) != 0 {
 		t.Errorf("a settled host changed: %q", r.box.mutations)
 	}
-	if got := strings.Join(r.checked, ","); got != "checked,codex" {
-		t.Errorf("checks %q", got)
-	}
 }
 
 func TestCodexSetsUpAFreshHostAndStaysSafeToRerun(t *testing.T) {
 	c := freshCodex(boxHome)
 	r := newCodexRig(t, c)
-	if !mustRun(t, r, "box") {
+	if !mustRun(t, r) {
 		t.Fatalf("items left open:\n%s", r.out.String())
 	}
 	out := r.out.String()
 	for _, want := range []string{
 		"9. codex home: changed (wrote config.toml, linked the login)", "10. codex plugin: changed (0.7.1, was none)",
-		"11. codex daemon: changed (started; remote control on, connected)", "13. preflight: ok",
+		"11. codex daemon: changed (started; remote control on, connected)",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
@@ -108,7 +95,7 @@ func TestCodexSetsUpAFreshHostAndStaysSafeToRerun(t *testing.T) {
 	}
 
 	changes := len(r.box.mutations)
-	if !mustRun(t, r, "box") || len(r.box.mutations) != changes || c.started != 1 {
+	if !mustRun(t, r) || len(r.box.mutations) != changes || c.started != 1 {
 		t.Errorf("a rerun changed %q (started %d times):\n%s", r.box.mutations[changes:], c.started, r.out.String())
 	}
 }
@@ -156,17 +143,12 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startFail = false, false, true }},
 		{"remote control stays off", "11. codex daemon: OPEN", "remote control is off after the start", "remote-control start",
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startNoRC = false, false, true }},
-		{"the check finds a prompt", "13. preflight: OPEN", "an unattended session there would stop", "ssh -t dev@box 'claude --permission-mode auto --remote-control'",
-			func(*codexState) {}},
 	}
 	for _, c := range cases {
 		codex := settledCodex(boxHome)
 		c.break_(codex)
 		r := newCodexRig(t, codex)
-		if c.name == "the check finds a prompt" {
-			r.check = func() (bool, error) { return false, nil }
-		}
-		if mustRun(t, r, "box") {
+		if mustRun(t, r) {
 			t.Errorf("%s: closed", c.name)
 		}
 		out := r.out.String()
@@ -180,29 +162,29 @@ func TestWithoutTheBinaryTheOtherCodexStepsWait(t *testing.T) {
 	codex := settledCodex(boxHome)
 	codex.bin = ""
 	r := newCodexRig(t, codex)
-	mustRun(t, r, "box")
+	mustRun(t, r)
 	out := r.out.String()
 	for _, want := range []string{"8. codex sign-in: OPEN (codex is not usable (step 7))", "9. codex home: OPEN (codex is not usable", "10. codex plugin: OPEN (codex is not usable", "11. codex daemon: OPEN (codex is not usable"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
 		}
 	}
-	if len(r.box.mutations) != 0 || len(r.checked) != 0 {
-		t.Errorf("changed or checked with Codex missing: %q %q", r.box.mutations, r.checked)
+	if len(r.box.mutations) != 0 {
+		t.Errorf("changed with Codex missing: %q", r.box.mutations)
 	}
 }
 
 func TestBadHomeOrBinConfigStopsTheCodexSteps(t *testing.T) {
 	codex := settledCodex("")
 	r := newCodexRig(t, codex)
-	mustRun(t, r, "box")
+	mustRun(t, r)
 	if out := r.out.String(); !strings.Contains(out, "7. codex: OPEN (could not read the home directory") {
 		t.Errorf("an empty home:\n%s", out)
 	}
 	codex = settledCodex(boxHome)
 	r = newCodexRig(t, codex)
-	r.home = callerHomeWith(t, strings.ReplaceAll(codexHostsTOML, `codex = "~/.local/bin/codex"`, `codex = "bin/codex"`))
-	mustRun(t, r, "box")
+	r.tgt.Entry.Bin[Name] = "bin/codex"
+	mustRun(t, r)
 	if out := r.out.String(); !strings.Contains(out, `7. codex: OPEN (host box: bin for codex is "bin/codex"`) {
 		t.Errorf("a relative bin:\n%s", out)
 	}
@@ -222,7 +204,7 @@ func TestCodexSetupKeepsWhatIsAlreadyRight(t *testing.T) {
 		codex := settledCodex(boxHome)
 		c.break_(codex)
 		r := newCodexRig(t, codex)
-		if !mustRun(t, r, "box") {
+		if !mustRun(t, r) {
 			t.Errorf("%s: left items open:\n%s", c.name, r.out.String())
 		}
 		linked := strings.Contains(strings.Join(r.box.mutations, "\n"), "ln -sfn")
@@ -236,18 +218,18 @@ func TestAStartThatExitsOnAnErroredConnectionStillStartedTheDaemon(t *testing.T)
 	codex := settledCodex(boxHome)
 	codex.daemonUp, codex.rcOn, codex.startExit1 = false, false, true
 	r := newCodexRig(t, codex)
-	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "11. codex daemon: changed (started; remote control on, connected)") {
+	if !mustRun(t, r) || !strings.Contains(r.out.String(), "11. codex daemon: changed (started; remote control on, connected)") {
 		t.Errorf("errored start:\n%s", r.out.String())
 	}
 }
 
 func TestCodexReportsTheOperatorsOwnState(t *testing.T) {
 	codex := settledCodex(boxHome)
-	codex.operatorRC = result{errOut: "\x1b[2m2026-10-26T10:01:27Z\x1b[0m \x1b[31mERROR\x1b[0m Codex is ignoring 1 unrecognized configuration setting.\n" +
+	codex.operatorRC = harness.Result{ErrOut: "\x1b[2m2026-10-26T10:01:27Z\x1b[0m \x1b[31mERROR\x1b[0m Codex is ignoring 1 unrecognized configuration setting.\n" +
 		"  user (/home/dev/.codex/config.toml): `features.rcmp_client` is ignored.\n" +
-		"Error: Remote control is enabled on box but the connection is errored.\n", code: 1}
+		"Error: Remote control is enabled on box but the connection is errored.\n", Code: 1}
 	r := newCodexRig(t, codex)
-	if !mustRun(t, r, "box") {
+	if !mustRun(t, r) {
 		t.Fatalf("reporting is not an open item:\n%s", r.out.String())
 	}
 	want := "7. codex: ok (codex-cli 0.164.0; the operator's remote control is errored; features.rcmp_client is ignored in /home/dev/.codex/config.toml)"
@@ -260,7 +242,7 @@ func TestWithoutAnOperatorDaemonNothingIsRead(t *testing.T) {
 	codex := settledCodex(boxHome)
 	codex.operatorDaemon = false
 	r := newCodexRig(t, codex)
-	if !mustRun(t, r, "box") || !strings.Contains(r.out.String(), "7. codex: ok (codex-cli 0.164.0)\n") {
+	if !mustRun(t, r) || !strings.Contains(r.out.String(), "7. codex: ok (codex-cli 0.164.0)\n") {
 		t.Fatalf("open or noisy:\n%s", r.out.String())
 	}
 	for _, cmd := range r.box.commands {
@@ -270,92 +252,66 @@ func TestWithoutAnOperatorDaemonNothingIsRead(t *testing.T) {
 	}
 }
 
-func TestACodexCheckThatFailsLeavesCodexOpenAfterClaudePasses(t *testing.T) {
-	r := newCodexRig(t, settledCodex(boxHome))
-	r.checkCodex = func() (bool, error) { return false, nil }
-	if mustRun(t, r, "box") {
-		t.Fatal("closed")
-	}
-	out := r.out.String()
-	if !strings.Contains(out, "13. preflight: OPEN (an unattended Codex session there would stop") || !strings.Contains(out, "engine start --check --harness codex --host box") {
-		t.Errorf("out:\n%s", out)
-	}
-	if got := strings.Join(r.checked, ","); got != "checked,codex" {
-		t.Errorf("checks %q", got)
-	}
-	r = newCodexRig(t, settledCodex(boxHome))
-	r.check = func() (bool, error) { return false, errors.New("no protocol") }
-	mustRun(t, r, "box")
-	if got := strings.Join(r.checked, ","); got != "checked" {
-		t.Errorf("Codex was checked after Claude failed: %q", got)
-	}
-}
-
-func TestADefaultCodexHarnessIsCheckedOnce(t *testing.T) {
-	r := newCodexRig(t, settledCodex(boxHome))
-	r.home = callerHomeWith(t, strings.Replace(codexHostsTOML, `default_harness = "claude"`, `default_harness = "codex"`, 1))
-	if !mustRun(t, r, "box") {
-		t.Fatalf("open:\n%s", r.out.String())
-	}
-	if got := strings.Join(r.checked, ","); got != "checked" {
-		t.Errorf("checks %q", got)
-	}
-	if strings.Contains(r.out.String(), "checking --harness codex") {
-		t.Errorf("checked Codex twice:\n%s", r.out.String())
-	}
-}
-
 func TestACodexHostCheckingItselfAlsoActs(t *testing.T) {
 	codex := freshCodex("/Users/me")
 	codex.plugin = ""
-	r := newCodexRig(t, nil)
-	r.local.codex = codex
-	if !mustRun(t, r, "") {
+	r := newCodexRig(t, codex)
+	r.local()
+	if !mustRun(t, r) {
 		t.Fatalf("items left open:\n%s", r.out.String())
 	}
 	out := r.out.String()
-	for _, want := range []string{"mac (this host; the Codex steps act)", "6. no suspend: ok (not Linux)", "7. codex: ok", "9. codex home: changed (wrote config.toml, linked the login)",
-		"10. codex plugin: changed (0.7.1, was none)", "11. codex daemon: changed", "13. preflight: ok"} {
+	for _, want := range []string{"6. codex: ok", "8. codex home: changed (wrote config.toml, linked the login)",
+		"9. codex plugin: changed (0.7.1, was none)", "10. codex daemon: changed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("want %q in:\n%s", want, out)
 		}
 	}
-	if len(r.ssh) != 0 {
-		t.Errorf("reached out: %q", r.ssh)
+	for _, cmd := range r.box.commands {
+		if strings.HasPrefix(cmd, "ssh ") {
+			t.Errorf("reached out: %q", cmd)
+		}
 	}
-	r.local.codex.plugin = "0.1.0"
-	if !mustRun(t, r, "") || !strings.Contains(r.out.String(), "10. codex plugin: ok (0.1.0)") {
+	codex.plugin = "0.1.0"
+	if !mustRun(t, r) || !strings.Contains(r.out.String(), "9. codex plugin: ok (0.1.0)") {
 		t.Errorf("a local host holds any installed version:\n%s", r.out.String())
 	}
-}
-
-func TestAHostWithoutCodexRunsNoCodexSteps(t *testing.T) {
-	r := newRig(t)
-	r.box = settledBox(r.home)
-	if !mustRun(t, r, "box") {
-		t.Fatalf("open:\n%s", r.out.String())
+	acting := 0
+	for _, s := range New(harness.Env{}, Options{}).Setup().Steps(r.tgt) {
+		if s.Acts {
+			acting++
+		}
 	}
-	if out := r.out.String(); strings.Contains(out, "codex") || !strings.Contains(out, "8. preflight: ok") {
-		t.Errorf("out:\n%s", out)
-	}
-	if got := strings.Join(r.checked, ","); got != "checked" {
-		t.Errorf("checks %q", got)
+	if acting != 3 {
+		t.Errorf("%d steps act on this host, want the home, plugin and daemon", acting)
 	}
 }
 
-func TestAFailingDefaultCodexCheckNamesTheCodexRemedy(t *testing.T) {
+// A failed Codex check names Codex's own remedy: the check again, on the
+// host, whose report says what stopped it.
+func TestACodexCheckThatFailsNamesTheCodexRemedy(t *testing.T) {
 	r := newCodexRig(t, settledCodex(boxHome))
-	r.home = callerHomeWith(t, strings.Replace(codexHostsTOML, `default_harness = "claude"`, `default_harness = "codex"`, 1))
-	r.check = func() (bool, error) { return false, nil }
-	if mustRun(t, r, "box") {
-		t.Fatal("closed")
+	detail, command := New(harness.Env{}, Options{}).Setup().CheckFailed(r.tgt)
+	if !strings.Contains(detail, "an unattended Codex session there would stop") || command != "engine start --check --harness codex --host box" {
+		t.Errorf("remote: %q, %q", detail, command)
 	}
-	out := r.out.String()
-	if !strings.Contains(out, "engine start --check --harness codex --host box") || strings.Contains(out, "claude --permission-mode") {
-		t.Errorf("out:\n%s", out)
+	r.local()
+	if _, command := New(harness.Env{}, Options{}).Setup().CheckFailed(r.tgt); command != "engine start --check --harness codex" {
+		t.Errorf("local: %q", command)
 	}
 }
 
+// Codex needs no tool on the PATH: hosts.toml pins its binary. It reads no
+// plugin version for the caller either.
+func TestCodexSetupNeedsNoToolAndReadsNoPlugin(t *testing.T) {
+	s := New(harness.Env{}, Options{}).Setup()
+	if tools := s.Tools(); len(tools) != 0 {
+		t.Errorf("tools %q", tools)
+	}
+	if v, found, err := s.Plugin(&harnesstest.Target{}); v != "" || found || err != nil {
+		t.Errorf("plugin %q %v %v", v, found, err)
+	}
+}
 func TestTheDaemonWaitsForTheLoginAndTheHome(t *testing.T) {
 	for _, c := range []struct {
 		name   string
@@ -367,7 +323,7 @@ func TestTheDaemonWaitsForTheLoginAndTheHome(t *testing.T) {
 		codex := freshCodex(boxHome)
 		c.break_(codex)
 		r := newCodexRig(t, codex)
-		mustRun(t, r, "box")
+		mustRun(t, r)
 		if !strings.Contains(r.out.String(), "11. codex daemon: OPEN (engine's Codex home is not ready (steps 8 and 9))") || codex.started != 0 {
 			t.Errorf("%s: started %d:\n%s", c.name, codex.started, r.out.String())
 		}

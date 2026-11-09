@@ -1,25 +1,29 @@
 // Package setup is `engine setup [--host <name>]`: it brings a host to the
-// caller's engine commit, plugin and config, in eight steps, and a host that
-// lists codex also gets Codex's five. It is safe to rerun. It changes only
-// engine's own files (~/.config/engine, ~/.local/bin, ~/.local/share/engine),
-// Claude's plugin, and Codex's plugin and daemon in engine's own Codex home,
-// and for anything else it prints the exact command for the operator to run.
-// With no host it checks this one; the Codex steps also act on it.
+// caller's engine commit, plugin and config. Its own steps check the host's
+// tools, engine, config and suspend; each harness the host lists adds its
+// steps after them, through its adapter; gh's sign-in and the preflight
+// check come last. The report numbers the steps in order. It is safe to
+// rerun. It changes only engine's own files (~/.config/engine, ~/.local/bin,
+// ~/.local/share/engine) and what the adapters change, and for anything else
+// it prints the exact command for the operator to run. With no host it
+// checks this one; an adapter's steps may still act on it.
 package setup
 
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/version"
 )
 
-// Deps are the outside world: the caller's build, the commands it runs, and
-// the preflight check. Tests replace each one.
+// Deps are the outside world: the caller's build, the commands it runs, the
+// harness adapters and the preflight check. Tests replace each one.
 type Deps struct {
 	Home   string
 	Getenv func(string) string
@@ -29,39 +33,12 @@ type Deps struct {
 	GH session.RunFunc
 	// Info is the caller's own build.
 	Info version.Info
-	// Check runs `engine start --check` for the harness ("" is the default
-	// one) on the host being set up, prints its report, and reports whether an
-	// unattended session there would run.
+	// Harnesses are the adapters; a host gets the steps of those it lists.
+	Harnesses harness.Adapters
+	// Check runs `engine start --check` for the named harness on the host
+	// being set up, prints its report, and reports whether an unattended
+	// session there would run.
 	Check func(harness string, out io.Writer) (bool, error)
-}
-
-// state is how a step ended.
-type state string
-
-const (
-	stateOK      state = "ok"
-	stateChanged state = "changed"
-	stateOpen    state = "OPEN"
-)
-
-// outcome is what one step found or did. An open step carries the exact
-// command that closes it, for the operator to run.
-type outcome struct {
-	state   state
-	detail  string
-	command string
-}
-
-func passed(detail string) outcome  { return outcome{state: stateOK, detail: detail} }
-func changed(detail string) outcome { return outcome{state: stateChanged, detail: detail} }
-func open(detail, command string) outcome {
-	return outcome{state: stateOpen, detail: detail, command: command}
-}
-
-type step struct {
-	n    int // its number in the report; a host checking itself skips some
-	name string
-	run  func() (outcome, error)
 }
 
 // runner is one setup run against one target.
@@ -71,11 +48,15 @@ type runner struct {
 	want wanted
 	// host is the target's entry in hosts.toml.
 	host hosts.Host
-	// defaultHarness is hosts.toml's, which a check with no harness runs.
+	// defaultHarness is the harness a request that names none runs.
 	defaultHarness string
-	// codex is set when the host lists codex, and holds what its steps find.
-	codex *codexTarget
-	// missing are the tools step 1 did not find, which later steps need.
+	// adapters are the adapters of the harnesses the host lists, in the
+	// registry's order.
+	adapters []harness.Adapter
+	// names are the run's step names, in report order.
+	names []string
+	// missing are the tools the tools step did not find, which later steps
+	// need.
 	missing map[string]bool
 	// opened counts the steps so far that ended open.
 	opened int
@@ -103,32 +84,58 @@ func Run(host string, d Deps, out io.Writer) (bool, error) {
 		t, h = target{name: other.Name, address: other.Address, exec: d.Exec}, other
 	}
 	r := &runner{d: d, t: t, host: h, defaultHarness: cfg.DefaultHarness, missing: map[string]bool{}}
-	if h.Runs(codexHarness) {
-		r.codex, r.t.acts = &codexTarget{}, true
+	r.adapters = hostAdapters(d.Harnesses, h)
+	if r.defaultHarness == "" {
+		if a, ok := lookup(d.Harnesses, ""); ok {
+			r.defaultHarness = a.Name()
+		}
 	}
 	if t.remote() {
 		if r.want, err = r.resolveWanted(); err != nil {
 			return false, err
 		}
 	}
+	steps := r.steps(out)
 	fmt.Fprintf(out, "engine setup: %s\n", r.t.label())
 	var opens []string
-	for _, s := range r.steps(out) {
-		res, err := s.run()
+	for i, s := range steps {
+		res, err := s.Run()
 		if err != nil {
 			return false, err
 		}
-		line := fmt.Sprintf("%d. %s: %s", s.n, s.name, res.state)
-		if res.detail != "" {
-			line += " (" + res.detail + ")"
+		line := fmt.Sprintf("%d. %s: %s", i+1, s.Name, res.State)
+		if res.Detail != "" {
+			line += " (" + res.Detail + ")"
 		}
 		fmt.Fprintln(out, line)
-		if res.state == stateOpen {
+		if res.State == harness.StepOpen {
 			r.opened++
-			opens = append(opens, fmt.Sprintf("%d. %s: %s", s.n, s.name, res.command))
+			opens = append(opens, fmt.Sprintf("%d. %s: %s", i+1, s.Name, res.Command))
 		}
 	}
 	return report(out, r.t, opens), nil
+}
+
+// lookup is the adapter called name in set, which may be nil.
+func lookup(set harness.Adapters, name string) (harness.Adapter, bool) {
+	if set == nil {
+		return nil, false
+	}
+	return set.Get(name)
+}
+
+// hostAdapters are the adapters of the harnesses h lists, in set's order.
+func hostAdapters(set harness.Adapters, h hosts.Host) []harness.Adapter {
+	if set == nil {
+		return nil
+	}
+	var out []harness.Adapter
+	for _, name := range set.Names() {
+		if a, ok := set.Get(name); ok && h.Runs(name) {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // report prints the commands still to run, and whether there are none.
@@ -144,24 +151,29 @@ func report(out io.Writer, t target, opens []string) bool {
 	return false
 }
 
-// steps lists the steps for the target. A host that is this one has no
-// engine to install or config to copy: it only checks. A host that lists
-// codex gets Codex's steps in either case. gh's sign-in comes next, and the
+// steps lists the steps for the target, and records their names and which
+// harnesses act on this host. A host that is this one has no engine to
+// install or config to copy: it only checks. Each harness the host lists
+// adds its steps, in the registry's order. gh's sign-in comes next, and the
 // check runs last.
-func (r *runner) steps(out io.Writer) []step {
-	steps := []step{{1, "tools", r.tools}, {2, "engine", r.enginePath}, {3, "plugin", r.pluginInstalled},
-		{5, "sign-in", r.signIn}, {6, "no suspend", r.noSuspend}}
+func (r *runner) steps(out io.Writer) []harness.Step {
+	steps := []harness.Step{{Name: "tools", Run: r.tools}, {Name: "engine", Run: r.enginePath}, {Name: "no suspend", Run: r.noSuspend}}
 	if r.t.remote() {
-		steps = []step{
-			{1, "tools", r.tools}, {2, "engine", r.installEngine}, {3, "plugin", r.installPlugin},
-			{4, "config", r.copyConfig}, {5, "sign-in", r.signIn}, {6, "no suspend", r.noSuspend},
+		steps = []harness.Step{{Name: "tools", Run: r.tools}, {Name: "engine", Run: r.installEngine},
+			{Name: "config", Run: r.copyConfig}, {Name: "no suspend", Run: r.noSuspend}}
+	}
+	for _, a := range r.adapters {
+		own := a.Setup().Steps(stepTarget{r})
+		if !r.t.remote() && slices.ContainsFunc(own, func(s harness.Step) bool { return s.Acts }) {
+			r.t.acts = append(r.t.acts, a.Name())
 		}
+		steps = append(steps, own...)
 	}
-	last := 7
-	if r.codex != nil {
-		steps = append(steps, step{7, "codex", r.codexBinary}, step{8, "codex sign-in", r.codexSignIn},
-			step{9, "codex home", r.codexHome}, step{10, "codex plugin", r.codexPluginStep}, step{11, "codex daemon", r.codexDaemon})
-		last = 12
+	steps = append(steps, harness.Step{Name: "gh auth", Run: r.ghAuth},
+		harness.Step{Name: "preflight", Run: func() (harness.Outcome, error) { return r.preflight(out) }})
+	r.names = make([]string, len(steps))
+	for i, s := range steps {
+		r.names[i] = s.Name
 	}
-	return append(steps, step{last, "gh auth", r.ghAuth}, step{last + 1, "preflight", func() (outcome, error) { return r.preflight(out) }})
+	return steps
 }

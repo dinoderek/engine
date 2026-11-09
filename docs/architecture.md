@@ -29,10 +29,10 @@ Two programs share one Go module:
   host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
   worktrees, the tmux session, windows and pane logs, the run record and the
   harness's state file. `internal/harness` is what engine asks of a harness:
-  the `Adapter` interface (launch, observe, hooks, check, release). Each harness is an
+  the `Adapter` interface (launch, observe, hooks, setup, check, release). Each harness is an
   adapter package below it (`claude`, `codex`), and `internal/harness/registry`
   lists them. The commands build their adapters from the registry and hand
-  them to `internal/hostops`, which sees only the interface.
+  them to `internal/hostops` and `internal/setup`, which see only the interface.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →

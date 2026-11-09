@@ -1,4 +1,4 @@
-package setup
+package codex
 
 import (
 	"os/exec"
@@ -13,7 +13,7 @@ func TestSetupRequiresRefreshForUnrecordedOrReplacedDaemon(t *testing.T) {
 			c := settledCodex(boxHome)
 			c.environment = receipt
 			r := newCodexRig(t, c)
-			if mustRun(t, r, "box") {
+			if mustRun(t, r) {
 				t.Fatal("unrecorded environment accepted")
 			}
 			if c.started != 0 || c.environment != receipt {
@@ -24,10 +24,10 @@ func TestSetupRequiresRefreshForUnrecordedOrReplacedDaemon(t *testing.T) {
 			}
 			// Operator stops the old process; setup starts and records a replacement.
 			c.daemonUp, c.rcOn = false, false
-			if !mustRun(t, r, "box") || c.environment != c.instance || c.started != 1 {
+			if !mustRun(t, r) || c.environment != c.instance || c.started != 1 {
 				t.Fatal(r.out.String())
 			}
-			if !mustRun(t, r, "box") || c.started != 1 {
+			if !mustRun(t, r) || c.started != 1 {
 				t.Fatal("settled daemon restarted")
 			}
 		})
@@ -43,7 +43,7 @@ func TestSetupDoesNotAcceptAnUnrecordedStart(t *testing.T) {
 			c.environmentWriteFail = true
 		}
 		r := newCodexRig(t, c)
-		if mustRun(t, r, "box") {
+		if mustRun(t, r) {
 			t.Fatal("unrecorded start accepted")
 		}
 		if c.environment != "" {

@@ -50,6 +50,7 @@ func Contract(t *testing.T, build New, fx Fixtures) {
 	t.Run("hook events", func(t *testing.T) { checkEvents(t, build, fx) })
 	t.Run("hook replies", func(t *testing.T) { checkReplies(t, build) })
 	t.Run("hook entries", func(t *testing.T) { checkEntries(t, build) })
+	t.Run("setup", func(t *testing.T) { checkSetup(t, build) })
 }
 
 func env(t *testing.T, exec session.Runner) harness.Env {

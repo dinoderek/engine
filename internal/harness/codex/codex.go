@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 
 	"github.com/dinoderek/engine/internal/harness"
-	"github.com/dinoderek/engine/internal/hosts"
 )
 
 // Name is the harness's name.
@@ -89,10 +88,15 @@ func (Adapter) CheckKickoff(marker string) string {
 // home is the host's own Codex home, which an embedded session runs in.
 func (a Adapter) home() string { return Home(a.env.Var, a.env.Home) }
 
+// HomeDir is engine's own Codex home, under home: the config, login link,
+// plugin and app-server daemon that engine setup prepares for engine's Codex
+// sessions to join, apart from the operator's own Codex home.
+const HomeDir = ".local/share/engine/codex"
+
 // EngineHome is engine's own Codex home, where engine setup runs engine's
 // daemon.
 func EngineHome(home string) string {
-	return filepath.Join(home, filepath.FromSlash(hosts.CodexHomeDir))
+	return filepath.Join(home, filepath.FromSlash(HomeDir))
 }
 
 func (a Adapter) engineHome() string   { return EngineHome(a.env.Home) }

@@ -1,4 +1,4 @@
-package setup
+package codex
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 // reposDir is where engine keeps its clones and worktrees, under the home.
@@ -70,7 +72,7 @@ func installedCodexPlugin(listJSON string) (string, bool) {
 		return "", false
 	}
 	for _, p := range list.Installed {
-		if p.PluginID == pluginID && p.Enabled {
+		if p.PluginID == harness.PluginID && p.Enabled {
 			return p.Version, true
 		}
 	}
@@ -88,14 +90,14 @@ const remoteErrored = "errored"
 
 // remoteState reads the output of `codex remote-control --json`: the status it
 // prints, errored for the exit that says the connection is, else unreadable.
-func remoteState(res result) string {
+func remoteState(res harness.Result) string {
 	var reply struct {
 		Status string `json:"status"`
 	}
-	if json.Unmarshal([]byte(res.out), &reply) == nil && reply.Status != "" {
+	if json.Unmarshal([]byte(res.Out), &reply) == nil && reply.Status != "" {
 		return reply.Status
 	}
-	if rcErrored.MatchString(ansiColor.ReplaceAllString(res.errOut, "")) {
+	if rcErrored.MatchString(ansiColor.ReplaceAllString(res.ErrOut, "")) {
 		return remoteErrored
 	}
 	return "unreadable"
@@ -105,12 +107,12 @@ func remoteState(res result) string {
 // reports and does not fix: a remote-control connection that is not up, and
 // config keys Codex ignores. They come from the output of `codex
 // remote-control --json` on the operator's home.
-func operatorNotes(res result) []string {
+func operatorNotes(res harness.Result) []string {
 	var notes []string
 	if state := remoteState(res); state != "connected" && state != "unreadable" {
 		notes = append(notes, "the operator's remote control is "+state)
 	}
-	for _, m := range ignoredKey.FindAllStringSubmatch(ansiColor.ReplaceAllString(res.errOut, ""), -1) {
+	for _, m := range ignoredKey.FindAllStringSubmatch(ansiColor.ReplaceAllString(res.ErrOut, ""), -1) {
 		notes = append(notes, fmt.Sprintf("%s is ignored in %s", m[2], m[1]))
 	}
 	return notes

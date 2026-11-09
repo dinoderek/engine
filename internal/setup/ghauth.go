@@ -3,6 +3,8 @@ package setup
 import (
 	"regexp"
 	"strings"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 // ghTokenToFile moves gh's token from the macOS login keychain to gh's own
@@ -49,7 +51,7 @@ func ghFailed(status string) []string {
 
 // ghWhy is what gh said about a failure: the failed account's line, or else
 // its first line that is not the host's name.
-func ghWhy(status string, res result) string {
+func ghWhy(status string, res harness.Result) string {
 	if m := ghFailed(status); m != nil {
 		return m[0]
 	}
@@ -58,7 +60,7 @@ func ghWhy(status string, res result) string {
 			return line
 		}
 	}
-	return res.why()
+	return res.Why()
 }
 
 // ghAuth checks that gh on the target can reach github.com in the context
@@ -66,34 +68,34 @@ func ghWhy(status string, res result) string {
 // started by a dispatch inherits. On macOS a token in the login keychain is
 // open even when it works now: the next tmux server started over ssh will
 // not read it.
-func (r *runner) ghAuth() (outcome, error) {
+func (r *runner) ghAuth() (harness.Outcome, error) {
 	if r.missing["gh"] {
 		return r.blocked("gh"), nil
 	}
-	uname, err := r.t.sh("uname -s", "")
+	uname, err := r.t.Sh("uname -s", "")
 	if err != nil {
-		return outcome{}, err
+		return harness.Outcome{}, err
 	}
-	darwin := len(uname.lines()) > 0 && uname.lines()[0] == "Darwin"
-	res, err := r.t.sh("gh auth status -h github.com", "")
+	darwin := len(uname.Lines()) > 0 && uname.Lines()[0] == "Darwin"
+	res, err := r.t.Sh("gh auth status -h github.com", "")
 	if err != nil {
-		return outcome{}, err
+		return harness.Outcome{}, err
 	}
-	status := res.out + res.errOut
+	status := res.Out + res.ErrOut
 	account := ghAccount(status)
 	switch {
-	case res.code != 0 && darwin && keychainOrUnknown(ghFailed(status)):
-		return open("gh cannot sign in to github.com ("+ghWhy(status, res)+"); ssh cannot read a token in the macOS login keychain, "+
+	case res.Code != 0 && darwin && keychainOrUnknown(ghFailed(status)):
+		return harness.Open("gh cannot sign in to github.com ("+ghWhy(status, res)+"); ssh cannot read a token in the macOS login keychain, "+
 			"so in a Terminal on the host (after gh auth login -h github.com, if gh is signed out there too) run", ghTokenToFile), nil
-	case res.code != 0:
-		return open("gh cannot sign in to github.com ("+ghWhy(status, res)+")", r.t.onHost("gh auth login -h github.com", true)), nil
+	case res.Code != 0:
+		return harness.Open("gh cannot sign in to github.com ("+ghWhy(status, res)+")", r.t.onHost("gh auth login -h github.com", true)), nil
 	case account == nil:
-		return passed("signed in"), nil
+		return harness.Passed("signed in"), nil
 	case darwin && account[2] == "keyring":
-		return open("gh keeps "+account[1]+"'s token in the login keychain, which a tmux server started over ssh cannot read; "+
+		return harness.Open("gh keeps "+account[1]+"'s token in the login keychain, which a tmux server started over ssh cannot read; "+
 			"in a Terminal on the host, run", ghTokenToFile), nil
 	}
-	return passed(account[1] + " (" + account[2] + ")"), nil
+	return harness.Passed(account[1] + " (" + account[2] + ")"), nil
 }
 
 // keychainOrUnknown reports whether the account keeps its token in the

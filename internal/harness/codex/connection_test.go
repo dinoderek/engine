@@ -1,4 +1,4 @@
-package hosts
+package codex
 
 import (
 	"fmt"
@@ -27,9 +27,9 @@ func TestParseElapsed(t *testing.T) {
 		{"-1:02", 0, false},
 	}
 	for _, tt := range tests {
-		got, err := ParseElapsed(tt.in)
+		got, err := parseElapsed(tt.in)
 		if (err == nil) != tt.ok || got != tt.want {
-			t.Errorf("ParseElapsed(%q) = %d, %v; want %d, ok %v", tt.in, got, err, tt.want, tt.ok)
+			t.Errorf("parseElapsed(%q) = %d, %v; want %d, ok %v", tt.in, got, err, tt.want, tt.ok)
 		}
 	}
 }
@@ -50,7 +50,7 @@ func TestCodexDisconnected(t *testing.T) {
 		{"empty list", "[]", "its log reply cannot be read", false},
 	}
 	for _, tt := range tests {
-		if got, known := CodexDisconnected(tt.out); got != tt.want || known != tt.known {
+		if got, known := disconnectedWhy(tt.out); got != tt.want || known != tt.known {
 			t.Errorf("%s: got %q, %v; want %q, %v", tt.name, got, known, tt.want, tt.known)
 		}
 	}
@@ -63,7 +63,7 @@ func TestCodexRemoteSQLAgainstAFixtureLog(t *testing.T) {
 	if _, err := exec.LookPath("sqlite3"); err != nil {
 		t.Skip("sqlite3 absent")
 	}
-	db := filepath.Join(t.TempDir(), CodexLogs)
+	db := filepath.Join(t.TempDir(), logsDB)
 	now := time.Now().Unix()
 	ws := codexRemoteTarget
 	rows := []struct {
@@ -87,21 +87,21 @@ func TestCodexRemoteSQLAgainstAFixtureLog(t *testing.T) {
 	}
 	query := func(pid, elapsed int) string {
 		t.Helper()
-		out, err := exec.Command("sqlite3", "-readonly", "-json", db, CodexRemoteSQL(pid, elapsed)).Output()
+		out, err := exec.Command("sqlite3", "-readonly", "-json", db, RemoteSQL(pid, elapsed)).Output()
 		if err != nil {
 			t.Fatal(err)
 		}
 		return string(out)
 	}
-	if got, _ := CodexDisconnected(query(123, 100)); got != "" {
+	if got, _ := disconnectedWhy(query(123, 100)); got != "" {
 		t.Errorf("the daemon's newest record is its connection, got %q", got)
 	}
 	// Started (with the slack) after its connection: nothing since, though
 	// the earlier process with its PID connected.
-	if got, _ := CodexDisconnected(query(123, 10-codexStartSlack)); got != "no connection logged since the daemon started" {
+	if got, _ := disconnectedWhy(query(123, 10-codexStartSlack)); got != "no connection logged since the daemon started" {
 		t.Errorf("got %q", got)
 	}
-	if got, _ := CodexDisconnected(query(999, 100)); !strings.Contains(got, "reader disconnected") {
+	if got, _ := disconnectedWhy(query(999, 100)); !strings.Contains(got, "reader disconnected") {
 		t.Errorf("the same-second disconnection logged later, got %q", got)
 	}
 }

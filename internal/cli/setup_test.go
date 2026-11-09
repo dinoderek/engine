@@ -108,7 +108,7 @@ func TestSetupCommandLine(t *testing.T) {
 	}
 	// The preflight is the real one: this home has no claude binary, so it
 	// refuses, and an open item exits 1.
-	if code != 1 || !strings.Contains(out.String(), "8. preflight: OPEN (") || !strings.Contains(out.String(), "is not an executable claude binary") {
+	if code != 1 || !strings.Contains(out.String(), "7. preflight: OPEN (") || !strings.Contains(out.String(), "is not an executable claude binary") {
 		t.Errorf("the preflight did not run through engine start --check: exit %d\n%s", code, out.String())
 	}
 	var help bytes.Buffer
@@ -130,8 +130,8 @@ func TestSetupCommandLineFlagsAGhThatCannotSignIn(t *testing.T) {
 		return answer(in, o, e, name, args...)
 	}
 	code := Run([]string{"setup"}, env)
-	if code != 1 || !strings.Contains(out.String(), "7. gh auth: OPEN (gh cannot sign in to github.com (Failed to log in to github.com account octo (keyring))") ||
-		!strings.Contains(out.String(), "  7. gh auth: gh auth token | gh auth login -h github.com --with-token --insecure-storage\n") {
+	if code != 1 || !strings.Contains(out.String(), "6. gh auth: OPEN (gh cannot sign in to github.com (Failed to log in to github.com account octo (keyring))") ||
+		!strings.Contains(out.String(), "  6. gh auth: gh auth token | gh auth login -h github.com --with-token --insecure-storage\n") {
 		t.Errorf("exit %d\n%s", code, out.String())
 	}
 }
