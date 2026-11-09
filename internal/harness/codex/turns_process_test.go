@@ -1,4 +1,4 @@
-package hostops
+package codex
 
 import (
 	"context"
@@ -24,9 +24,9 @@ case "$second" in *'"thread/turns/list"'*) : ;; *) exit 5 ;; esac
 printf '%s\n' '{"id":3,"result":{"data":[{"status":"failed"}]}}'
 while read -r line; do :; done
 `, 0755)
-	ctx, cancel := context.WithTimeout(context.Background(), codexQuotaTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), appServerTimeout)
 	defer cancel()
-	got, err := readCodexTurns(ctx, bin, bin+".home", []string{"missing", "present"})
+	got, err := readTurns(ctx, bin, bin+".home", []string{"missing", "present"})
 	if err != nil || len(got) != 1 || !json.Valid(got["present"]) {
 		t.Fatalf("turns %s, %v", got["present"], err)
 	}
@@ -37,7 +37,7 @@ func TestReadCodexTurnsTimesOut(t *testing.T) {
 	write(t, bin, "#!/bin/sh\nwhile read -r line; do :; done\n", 0755)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	if _, err := readCodexTurns(ctx, bin, t.TempDir(), []string{"a"}); err == nil || ctx.Err() != context.DeadlineExceeded {
+	if _, err := readTurns(ctx, bin, t.TempDir(), []string{"a"}); err == nil || ctx.Err() != context.DeadlineExceeded {
 		t.Fatalf("err %v, ctx %v", err, ctx.Err())
 	}
 }

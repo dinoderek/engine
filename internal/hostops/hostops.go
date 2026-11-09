@@ -7,19 +7,19 @@ package hostops
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
 	"time"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
 // Protocol is the version of the ops' wire format. A caller refuses a reply
 // that carries another.
-const Protocol = 5
+const Protocol = 6
 
 // The executor's modes. The kickoff names one, and a hands-off session is
 // marked unattended.
@@ -35,11 +35,11 @@ type Deps struct {
 	Run session.RunFunc
 	// Probe reads a repo's own `dev` usage under a deadline; nil uses Run.
 	Probe session.RunFunc
-	// Exec runs the host's own CLIs, such as claude agents.
+	// Exec runs the host's own CLIs, such as the harness binaries.
 	Exec session.Runner
 	Tmux *session.Tmux
 	Home string
-	// Getenv reads CLAUDE_CONFIG_DIR.
+	// Getenv reads the caller's environment.
 	Getenv func(string) string
 	Now    func() time.Time
 	// BaseURL is where repos are cloned from; GitHub when empty.
@@ -50,12 +50,9 @@ type Deps struct {
 	// daemon when it runs with remote control on. Off, a session starts
 	// embedded and nothing asks the daemon its state. The commands set it.
 	JoinRemote bool
-	// CodexQuota reads account/rateLimits/read in engine's Codex home.
-	// Nil uses a short-lived app-server subprocess.
-	CodexQuota func(context.Context, string, string) (json.RawMessage, error)
-	// CodexTurns reads the newest stored turn for each engine thread, without
-	// resuming it. Nil uses a short-lived app-server subprocess.
-	CodexTurns func(context.Context, string, string, []string) (map[string]json.RawMessage, error)
+	// Harnesses are the harness adapters, built from the same Exec, Home,
+	// Getenv and Now.
+	Harnesses harness.Adapters
 	// CodexLabel titles a thread and files it under a project, through
 	// engine's daemon. Nil uses `codex app-server proxy`.
 	CodexLabel func(context.Context, string, string, CodexLabelRequest) error

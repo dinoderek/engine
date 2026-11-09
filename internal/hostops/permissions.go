@@ -10,7 +10,7 @@ import (
 )
 
 // autoReview is the decision the permission hook logs for a request it left
-// to Codex's auto-review (hook.AutoReview; hostops cannot import hook).
+// to the harness's own review (hook.AutoReview; hostops cannot import hook).
 const autoReview = "left to auto-review"
 
 // permissionEntry is the part of a permissions.jsonl line hostops reads.

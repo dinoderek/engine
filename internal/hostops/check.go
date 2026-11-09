@@ -45,11 +45,11 @@ type CheckResult struct {
 	// hooked is true for a harness whose hooks report its state, so the
 	// check must see the file.
 	hooked bool
-	// Reviewed are the Codex permission requests the hook left to
-	// auto-review, which decided them without a prompt.
+	// Reviewed are the permission requests the hook left to the harness's
+	// own review, which decided them without a prompt.
 	Reviewed []string
 	// Signalled is true when the session's hooks wrote its state file. Only
-	// a harness whose state comes from hooks needs it: Codex.
+	// a harness whose state comes from hooks needs it.
 	Signalled bool
 	// State is the state the file last recorded, when it is there.
 	State string
@@ -67,8 +67,8 @@ func (r CheckResult) OK() bool {
 	return r.Closed && r.Finished && len(r.Denied) == 0 && (r.Signalled || !r.hooked) && r.GH.OK
 }
 
-// Check launches a throwaway hands-off session of the harness (Claude when
-// empty) in a scratch folder, with this host's launch line at the light tier,
+// Check launches a throwaway hands-off session of the harness (the default
+// when empty) in a scratch folder, with this host's launch line at the light tier,
 // and has it do what an executor does that has needed a prompt before: read
 // the skill, read a file it wrote in /tmp, run gh and engine, and close its
 // own window. It reports every permission request, a stall, and a step left
@@ -76,10 +76,11 @@ func (r CheckResult) OK() bool {
 // the same tmux session, so a gh that cannot read its token there fails the
 // check. Each run gets its own run directory, which it leaves in place.
 func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
-	h, err := harnessFor(d, harnessName, CheckName)
+	h, err := adapterFor(d, harnessName)
 	if err != nil {
 		return CheckResult{}, err
 	}
+	l := h.Session(CheckName)
 	cfg, host, bin, err := checkHost(d, h.Name())
 	if err != nil {
 		return CheckResult{}, err
@@ -97,18 +98,18 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	if err != nil {
 		return CheckResult{}, err
 	}
-	r := CheckResult{RunDir: runDir, hooked: h.Name() == Codex}
+	r := CheckResult{RunDir: runDir, hooked: h.HookedState()}
 	if r.GH, err = probeGH(d, runDir, work); err != nil {
 		return CheckResult{}, err
 	}
 	if d.JoinRemote {
-		r.Joined, r.Note = h.Join(d.Exec, bin, line)
+		r.Joined, r.Note = l.Join(bin, line)
 	}
-	if err := h.Trust(work, work, r.Joined); err != nil {
+	if err := l.Trust(work, work, r.Joined); err != nil {
 		return CheckResult{}, err
 	}
 	defer func() {
-		if err := h.Untrust(work); err != nil {
+		if err := l.Release(work); err != nil {
 			fmt.Fprintf(out, "could not remove the check's trust: %v\n", err)
 		}
 	}()
@@ -126,12 +127,8 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 		return CheckResult{}, err
 	}
 	defer func() { _ = os.Remove(marker) }()
-	kickoff := CheckKickoff(filepath.Join(session.PluginDir(d.Getenv, d.Home), "skills", "engine", "SKILL.md"), marker)
-	if h.Name() == Codex {
-		kickoff = CodexCheckKickoff(marker)
-	}
-	l := launch{line: line, dir: work, runDir: runDir, mode: HandsOff, kickoff: kickoff, joined: r.Joined}
-	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(d, h, l), Log: filepath.Join(runDir, session.PaneLog)}
+	run := launch{line: line, dir: work, runDir: runDir, mode: HandsOff, kickoff: h.CheckKickoff(marker), joined: r.Joined}
+	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(h.Name(), l, run), Log: filepath.Join(runDir, session.PaneLog)}
 	opened, err := d.Tmux.Open(w)
 	if err != nil {
 		return CheckResult{}, fmt.Errorf("open the tmux window: %w", err)
@@ -179,31 +176,6 @@ func checkHost(d Deps, harness string) (*hosts.Config, hosts.Host, string, error
 		}
 	}
 	return cfg, host, bin, nil
-}
-
-// CheckKickoff is the check session's first message.
-func CheckKickoff(skill, marker string) string {
-	return "This is engine's preflight check, not a task: do exactly these steps, in order, and nothing else. " +
-		"1. Read " + skill + " with the Read tool. " +
-		"2. Run `echo ok > " + marker + "` with Bash, then read " + marker + " with the Read tool. " +
-		"3. Run `gh api user --jq .login` with Bash. " +
-		"4. Run `engine version` with Bash. " +
-		"5. Run `echo done >> " + marker + "` with Bash. " +
-		"6. Run `cd \"$HOME\" && tmux kill-window -t \"$TMUX_PANE\"` with Bash. " +
-		"If a step is denied, skip it and go on."
-}
-
-// CodexCheckKickoff is a Codex check session's first message: Codex reads
-// files through its shell, and the skill comes from engine's Codex plugin.
-func CodexCheckKickoff(marker string) string {
-	return "This is engine's preflight check, not a task: do exactly these steps, in order, and nothing else. " +
-		"1. Read the SKILL.md of the engine plugin's engine skill. " +
-		"2. Run `echo ok > " + marker + "`, then `cat " + marker + "`. " +
-		"3. Run `gh api user --jq .login`. " +
-		"4. Run `engine version`. " +
-		"5. Run `echo done >> " + marker + "`. " +
-		"6. Run `cd \"$HOME\" && tmux kill-window -t \"$TMUX_PANE\"`. " +
-		"If a step is denied, skip it and go on."
 }
 
 // waitClosed polls until the window with id is gone, or CheckTimeout. A

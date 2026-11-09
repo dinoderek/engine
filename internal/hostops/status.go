@@ -1,12 +1,12 @@
 package hostops
 
 import (
-	"encoding/json"
+	"context"
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -16,8 +16,6 @@ const ScreenLines = 20
 
 // Status is status's reply: what this host's sessions are doing now.
 type Status struct {
-	codexTurns map[string]json.RawMessage
-
 	Quota map[string]session.Quota `json:"quota,omitempty"`
 	// Slots is how many sessions the host runs at once, and FreeSlots how
 	// many more it can start: only a live window with a run recorded under
@@ -29,12 +27,8 @@ type Status struct {
 	HeavySlots     int      `json:"heavy_slots"`
 	FreeHeavySlots int      `json:"free_heavy_slots"`
 	Windows        []Window `json:"windows"`
-	// Agents are the live Claude Code sessions, so a caller can find one
-	// started by hand; a window's state already says what Claude Code does.
-	// When AgentsError says why Claude Code could not list them, what they
-	// would show is unknown.
-	Agents      []session.Agent `json:"agents"`
-	AgentsError string          `json:"agents_error,omitempty"`
+	// HarnessErrors says, by harness, why its sessions' states are unknown.
+	HarnessErrors map[string]string `json:"harness_errors,omitempty"`
 	// Runs is the newest run of each session name, by name. RunsError
 	// names the run.json files that could not be read: those runs are
 	// unknown.
@@ -80,12 +74,16 @@ type Run struct {
 	Record session.Record `json:"run"`
 }
 
-// ReadStatus reads this host's windows and the state of each, live Claude
-// Code sessions, newest runs and free slots, heavy and all, and the screen
-// of every window whose session is not working. A tmux that cannot list its
-// windows fails the op: nothing it would say is known.
+// ReadStatus reads this host's windows and the state of each, each harness's
+// quota and sign-in, newest runs and free slots, heavy and all, and the
+// screen of every window whose session is not working. A tmux that cannot
+// list its windows fails the op: nothing it would say is known.
 func ReadStatus(d Deps) (Status, error) {
 	_, host, err := openHost(d.Home)
+	if err != nil {
+		return Status{}, err
+	}
+	adapters, err := d.adapters()
 	if err != nil {
 		return Status{}, err
 	}
@@ -97,21 +95,12 @@ func ReadStatus(d Deps) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	now := time.Now
-	if d.Now != nil {
-		now = d.Now
-	}
-	s := Status{Quota: session.ReadQuota(d.Home, now()), Slots: host.Slots(), HeavySlots: host.HeavySlots(), Windows: []Window{}, Agents: []session.Agent{}, Runs: []Run{}}
-	s.readCodexQuota(d, host, now)
-	if host.Runs(Claude) {
-		s.listAgents(d, host)
-	}
-	s.readSignIns(d, host)
+	s := Status{Slots: host.Slots(), HeavySlots: host.HeavySlots(), Windows: []Window{}, Runs: []Run{}}
 	runs, err := session.LatestRuns(d.Home)
 	if err != nil {
 		s.RunsError = err.Error()
 	}
-	s.codexTurns = codexTurnReadings(d, host, windows, runs)
+	states := s.observe(adapters, host, windows, runs)
 	for _, w := range windows {
 		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
 		if code, ok := codes[w.ID]; ok && w.Dead {
@@ -119,8 +108,8 @@ func ReadStatus(d Deps) (Status, error) {
 		}
 		if r, ok := runs[w.Name]; ok {
 			out.Harness = r.Record.Harness
-			if out.Alive {
-				s.probe(&out, r)
+			if st, ok := states[w.Name]; ok && out.Alive {
+				out.State, out.WaitingFor, out.Background, out.ResetsAt = st.State, st.WaitingFor, st.Background, st.ResetsAt
 			}
 			if out.State == session.StateWaiting {
 				out.Denial = LastDenial(filepath.Join(r.Dir, session.PermissionLog))
@@ -142,54 +131,38 @@ func ReadStatus(d Deps) (Status, error) {
 	return s, nil
 }
 
-func (s *Status) listAgents(d Deps, host hosts.Host) {
-	bin, err := host.BinPath(Claude, d.Home)
-	if err == nil {
-		var agents []session.Agent
-		if agents, err = session.ListAgents(d.Exec, bin); err == nil && agents != nil {
-			s.Agents = agents
-		}
-	}
-	if err != nil {
-		s.AgentsError = err.Error()
-	}
-}
-
-// probe sets a live window's state from the probe of the harness its
-// newest run launched. A harness with no probe leaves it unknown.
-func (s *Status) probe(w *Window, r session.Run) {
-	switch r.Record.Harness {
-	case Claude:
-		if s.AgentsError != "" {
-			return
-		}
-		for _, a := range s.Agents {
-			if a.Name == w.Name {
-				w.State = session.AgentState(a)
-				if w.State == session.StateWaiting {
-					w.WaitingFor = a.WaitingFor
-				}
-				w.Background = w.State == session.StateWorking && turnEnded(r.Dir, a.SessionID)
-				break
+// observe has each adapter read its harness on this host, given the newest
+// run of every live window that names it, and records each one's quota,
+// sign-in and errors. It returns the windows' states by name.
+func (s *Status) observe(a harness.Adapters, host hosts.Host, windows []session.WindowInfo, runs map[string]session.Run) map[string]harness.State {
+	states := map[string]harness.State{}
+	for _, name := range a.Names() {
+		h, _ := a.Get(name)
+		mine := map[string]session.Run{}
+		for _, w := range windows {
+			if r, ok := runs[w.Name]; ok && !w.Dead && r.Record.Harness == name {
+				mine[w.Name] = r
 			}
 		}
-		if l, ok := session.ReadLimit(r.Dir); ok && w.State != session.StateWorking {
-			w.State, w.ResetsAt, w.WaitingFor = session.StateLimited, l.ResetsAt, ""
+		snap := h.Observe(context.Background(), host, mine)
+		if snap.Quota != nil {
+			if s.Quota == nil {
+				s.Quota = map[string]session.Quota{}
+			}
+			s.Quota[name] = *snap.Quota
 		}
-	case Codex:
-		s.probeCodex(w, r)
+		if snap.SignedOut {
+			s.SignedOut = append(s.SignedOut, name)
+		}
+		if snap.Error != "" {
+			if s.HarnessErrors == nil {
+				s.HarnessErrors = map[string]string{}
+			}
+			s.HarnessErrors[name] = snap.Error
+		}
+		for w, st := range snap.Sessions {
+			states[w] = st
+		}
 	}
-}
-
-// turnEnded reports whether a Claude session that Claude Code lists as busy
-// has ended its last turn: the newest hook event in its run's state file is
-// a Stop, from the same session when both name one. Claude Code stays busy
-// while a background job runs after the turn. A missing or unreadable file
-// is not known to have ended, so the session counts as busy in a turn.
-func turnEnded(dir, sessionID string) bool {
-	st, ok := session.ReadHarnessState(dir)
-	if !ok || st.Event != "Stop" || st.State != session.StateWaiting {
-		return false
-	}
-	return st.SessionID == "" || sessionID == "" || st.SessionID == sessionID
+	return states
 }

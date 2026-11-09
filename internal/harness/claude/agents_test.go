@@ -1,10 +1,12 @@
-package session
+package claude
 
 import (
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/dinoderek/engine/internal/session"
 )
 
 // claudeAgents is the shape `claude agents --json` prints: the fields engine
@@ -56,6 +58,16 @@ func TestListAgentsFailures(t *testing.T) {
 		bad := func(string, ...string) (string, error) { return out, nil }
 		if _, err := ListAgents(bad, "claude"); err == nil || !strings.Contains(err.Error(), "unreadable output") {
 			t.Errorf("output %q: %v", out, err)
+		}
+	}
+}
+
+func TestAgentState(t *testing.T) {
+	for status, want := range map[string]string{
+		AgentBusy: session.StateWorking, AgentWaiting: session.StateWaiting, AgentIdle: session.StateWaiting, "unheard-of": "", "": "",
+	} {
+		if got := AgentState(Agent{Status: status}); got != want {
+			t.Errorf("%q: got %q, want %q", status, got, want)
 		}
 	}
 }

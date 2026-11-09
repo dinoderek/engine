@@ -1,7 +1,7 @@
 // This file is what a session is doing: working, or waiting for input. Each
-// harness says it its own way. Claude Code lists its live sessions; a harness
-// that cannot be asked writes a state file to the run directory from its
-// hooks. A state engine cannot read is unknown, never dead.
+// harness adapter says it its own way, often from the state file its hooks
+// write to the run directory. A state engine cannot read is unknown, never
+// dead.
 
 package session
 
@@ -60,17 +60,4 @@ func ReadHarnessState(dir string) (HarnessState, bool) {
 		return s, true
 	}
 	return HarnessState{}, false
-}
-
-// AgentState is the state of a live Claude Code session: busy is working;
-// waiting and idle are waiting, because only a prompt moves the session on.
-// A status a newer Claude Code adds is unknown.
-func AgentState(a Agent) string {
-	switch a.Status {
-	case AgentBusy:
-		return StateWorking
-	case AgentWaiting, AgentIdle:
-		return StateWaiting
-	}
-	return ""
 }

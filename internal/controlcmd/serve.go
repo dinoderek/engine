@@ -17,6 +17,8 @@ import (
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/controlrun"
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/registry"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/reconcile"
@@ -163,7 +165,8 @@ func hostClients(ctx context.Context, e Env, limit time.Duration) func(hosts.Hos
 		if h.Name == name {
 			tm := session.New()
 			tm.Run = hostExec
-			return remote.Local{Deps: hostops.Deps{Home: e.Home, Run: session.RunCommandContext(ctx, limit), Probe: session.RunCommandContext(ctx, min(limit, 3*time.Minute)), Exec: hostExec, Tmux: tm, Getenv: e.Getenv, Now: time.Now, JoinRemote: true}}
+			return remote.Local{Deps: hostops.Deps{Home: e.Home, Run: session.RunCommandContext(ctx, limit), Probe: session.RunCommandContext(ctx, min(limit, 3*time.Minute)), Exec: hostExec, Tmux: tm, Getenv: e.Getenv, Now: time.Now, JoinRemote: true,
+				Harnesses: registry.New(harness.Env{Exec: hostExec, Home: e.Home, Getenv: e.Getenv, Now: time.Now})}}
 		}
 		return remote.SSH{Name: h.Name, Address: h.Address, Exec: remote.ExecContext(ctx, limit)}
 	}

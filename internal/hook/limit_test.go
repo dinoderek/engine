@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dinoderek/engine/internal/session"
+	"github.com/dinoderek/engine/internal/harness/claude"
 )
 
 func limitInput(kind string) string {
@@ -45,7 +45,7 @@ func TestLimitStopsAndResetFallbacks(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			l, ok := session.ReadLimit(dir)
+			l, ok := claude.ReadLimit(dir)
 			if !ok || l.Since != 1000 || l.ResetsAt != tc.reset || l.Error == "" {
 				t.Fatalf("marker %+v, %v", l, ok)
 			}
@@ -86,7 +86,7 @@ func TestLimitEventsKeepOrClear(t *testing.T) {
 			if err := Limit(strings.NewReader(input), dir, time.Unix(2000, 0)); err != nil {
 				t.Fatal(err)
 			}
-			l, ok := session.ReadLimit(dir)
+			l, ok := claude.ReadLimit(dir)
 			if ok != tc.keep {
 				t.Fatalf("marker %+v, %v", l, ok)
 			}

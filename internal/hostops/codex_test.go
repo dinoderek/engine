@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/codex"
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
@@ -159,7 +161,7 @@ func TestCheckCodex(t *testing.T) {
 		t.Errorf("profile left: %v", err)
 	}
 	for _, want := range []string{"export ENGINE_HARNESS=codex", "-m luna", "-p engine-" + CheckName, "--dangerously-bypass-hook-trust",
-		hosts.ShellWord(CodexCheckKickoff(filepath.Join(checkTmp, "engine-"+checkRun)))} {
+		hosts.ShellWord(codex.New(harness.Env{}, codex.Options{}).CheckKickoff(filepath.Join(checkTmp, "engine-"+checkRun)))} {
 		if !strings.Contains(f.command, strings.ReplaceAll(want, "'", `'\''`)) {
 			t.Errorf("command lacks %q:\n%s", want, f.command)
 		}

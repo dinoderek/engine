@@ -1,4 +1,4 @@
-package hostops
+package codex
 
 import (
 	"bufio"
@@ -11,42 +11,16 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
-const codexQuotaTimeout = 3 * time.Second
+// appServerTimeout is the deadline every app-server read of one status
+// shares.
+const appServerTimeout = 3 * time.Second
 
-func (s *Status) readCodexQuota(d Deps, host hosts.Host, now func() time.Time) {
-	// Codex readings must come from the current call, never a stale run file.
-	delete(s.Quota, Codex)
-	if !host.Runs(Codex) {
-		return
-	}
-	bin, err := host.BinPath(Codex, d.Home)
-	if err != nil {
-		return
-	}
-	read := d.CodexQuota
-	if read == nil {
-		read = readCodexRateLimits
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), codexQuotaTimeout)
-	defer cancel()
-	at := now()
-	data, err := read(ctx, bin, (codex{d: d}).engineHome())
-	if err != nil {
-		return
-	}
-	q := codexQuota(data, at)
-	if len(q.Windows) != 0 {
-		s.Quota = session.MergeQuota(now(), s.Quota, map[string]session.Quota{Codex: q})
-	}
-}
-
-// readCodexRateLimits starts no conversation. It closes the process and its
+// readRateLimits starts no conversation. It closes the process and its
 // pipes after the reply, including on malformed output or deadline expiry.
-func readCodexRateLimits(ctx context.Context, bin, home string) (json.RawMessage, error) {
+func readRateLimits(ctx context.Context, bin, home string) (json.RawMessage, error) {
 	var data json.RawMessage
 	err := codexAppServer(ctx, bin, home, func(in io.Writer, out io.Reader) error {
 		var err error
@@ -139,7 +113,7 @@ func codexQuota(data []byte, at time.Time) session.Quota {
 			Secondary *window `json:"secondary"`
 		} `json:"rateLimits"`
 	}
-	q := session.Quota{Harness: Codex, ObservedAt: at.Unix(), Windows: map[string]session.QuotaWindow{}}
+	q := session.Quota{Harness: Name, ObservedAt: at.Unix(), Windows: map[string]session.QuotaWindow{}}
 	if json.Unmarshal(data, &reply) != nil {
 		return q
 	}
@@ -149,4 +123,63 @@ func codexQuota(data []byte, at time.Time) session.Quota {
 		}
 	}
 	return q
+}
+
+func readTurns(ctx context.Context, bin, home string, ids []string) (map[string]json.RawMessage, error) {
+	data := map[string]json.RawMessage{}
+	err := codexAppServer(ctx, bin, home, func(in io.Writer, out io.Reader) error {
+		scan, err := initializeCodex(in, out)
+		if err != nil {
+			return err
+		}
+		for i, id := range ids {
+			req := map[string]any{"id": i + 2, "method": "thread/turns/list", "params": map[string]any{
+				"threadId": id, "limit": 1, "sortDirection": "desc", "itemsView": "notLoaded",
+			}}
+			line, err := json.Marshal(req)
+			if err != nil {
+				return err
+			}
+			if _, err := in.Write(append(line, '\n')); err != nil {
+				return err
+			}
+			// A missing thread in this home must not hide other threads.
+			if reply, err := codexReply(scan, i+2); err == nil {
+				data[id] = reply
+			}
+		}
+		return nil
+	})
+	return data, err
+}
+
+// codexTurnFailed compares the newest turn's completion with the latest hook.
+// Epoch-second completion times share a second with the final tool hook.
+// A newer submitted turn is returned first and so suppresses an old failure.
+func codexTurnFailed(data json.RawMessage, st session.HarnessState) bool {
+	var reply struct {
+		Data []struct {
+			ID          string `json:"id"`
+			Status      string `json:"status"`
+			StartedAt   int64  `json:"startedAt"`
+			CompletedAt *int64 `json:"completedAt"`
+			Error       struct {
+				Info string `json:"codexErrorInfo"`
+			} `json:"error"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(data, &reply) != nil || len(reply.Data) == 0 || st.At.IsZero() {
+		return false
+	}
+	t := reply.Data[0]
+	if st.TurnID != "" && st.TurnID != t.ID && t.StartedAt <= st.At.Unix() {
+		return false
+	}
+	return t.Status == "failed" && t.Error.Info == "usageLimitExceeded" && t.StartedAt > 0 &&
+		t.CompletedAt != nil && *t.CompletedAt >= t.StartedAt && *t.CompletedAt >= st.At.Unix()
+}
+
+// codexStateLimited ignores a failure observed before this run's spawn.
+func codexStateLimited(data json.RawMessage, st session.HarnessState, spawned time.Time) bool {
+	return !st.At.Before(spawned) && codexTurnFailed(data, st)
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/harness/claude"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -60,7 +61,7 @@ func TestLimitHookWritesMarkerAndTelemetry(t *testing.T) {
 	if code := Run([]string{"hook", "limit"}, env); code != 0 {
 		t.Fatalf("exit %d: %s", code, errs.String())
 	}
-	if l, ok := session.ReadLimit(dir); !ok || l.ResetsAt != 2000 {
+	if l, ok := claude.ReadLimit(dir); !ok || l.ResetsAt != 2000 {
 		t.Errorf("marker %+v, %v", l, ok)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "limits.jsonl")); err != nil {

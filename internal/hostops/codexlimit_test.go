@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/harness/codex"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -50,9 +51,9 @@ func TestCodexLimitStatus(t *testing.T) {
 			}
 			tm := &tmuxFake{windows: []string{line}, screens: map[string]string{"@1": "usage limit"}}
 			d := Deps{Home: h.dir, Tmux: tm.tmux(), Exec: agentsFake("[]", nil), Now: func() time.Time { return at }}
-			d.CodexQuota = func(context.Context, string, string) (json.RawMessage, error) {
+			d = withCodex(d, codex.Options{Quota: func(context.Context, string, string) (json.RawMessage, error) {
 				return codexLimitQuota(tc.quota)
-			}
+			}})
 			st, err := ReadStatus(d)
 			if err != nil {
 				t.Fatal(err)

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/registry"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
@@ -49,7 +51,8 @@ func runAsRemoteEngine(args []string) int {
 		fmt.Fprintln(os.Stderr, "engine: unknown command")
 		return 2
 	}
-	d := hostops.Deps{Run: session.RunCommand, Exec: session.Exec, Home: os.Getenv("HOME"), Getenv: os.Getenv, Now: time.Now}
+	d := hostops.Deps{Run: session.RunCommand, Exec: session.Exec, Home: os.Getenv("HOME"), Getenv: os.Getenv, Now: time.Now,
+		Harnesses: registry.New(harness.Env{Exec: session.Exec, Home: os.Getenv("HOME"), Getenv: os.Getenv, Now: time.Now})}
 	return hostops.Main(args[1:], d, os.Stdin, os.Stdout, os.Stderr)
 }
 

@@ -16,7 +16,7 @@ type Client interface {
 	Status() (hostops.Status, error)
 	Collect(runID string) (hostops.Collected, error)
 	Release(name string, failed bool) (hostops.Released, error)
-	// Check runs the preflight check of the harness (Claude when empty) on
+	// Check runs the preflight check of the harness (the default when empty) on
 	// the host, prints its report to out, and reports whether an unattended
 	// session there would run without a prompt.
 	Check(harness string, out io.Writer) (bool, error)

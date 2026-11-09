@@ -62,7 +62,6 @@ func TestStatus(t *testing.T) {
 			{Name: "r-3", ID: "@3", ExitCode: &two, Screen: "Error: not logged in"},
 			{Name: "r-4", ID: "@4"},
 		},
-		Agents: []session.Agent{{PID: 1, Name: "r-1", Status: "busy"}, {PID: 2, Name: "r-2", Status: "waiting", WaitingFor: "a permission"}},
 		Runs: []Run{
 			{Name: "r-1", Dir: newest, Record: session.Record{RunID: "r-1-b", Name: "r-1", Harness: Claude, Spawned: at.Add(time.Hour)}},
 			{Name: "r-2", Dir: other, Record: session.Record{RunID: "r-2-a", Name: "r-2", Harness: Claude, Spawned: at}},
@@ -84,7 +83,7 @@ func TestStatusWithoutClaudeAgents(t *testing.T) {
 	}
 	// Nothing says the session is working, so its state is unknown and its
 	// screen is shown.
-	if w := got.Windows[0]; !strings.Contains(got.AgentsError, "not signed in") || len(got.Agents) != 0 ||
+	if w := got.Windows[0]; !strings.Contains(got.HarnessErrors[Claude], "not signed in") ||
 		w.Harness != Claude || w.State != "" || w.Screen != "a screen" || got.FreeSlots != 1 {
 		t.Errorf("status %+v", got)
 	}
@@ -211,7 +210,7 @@ func TestStatusOnAQuietHost(t *testing.T) {
 	// every slot is free.
 	h := newHome(t, "box")
 	got, err := ReadStatus(Deps{Tmux: (&tmuxFake{}).tmux(), Home: h.dir, Exec: agentsFake("", errors.New("never asked"))})
-	if err != nil || got.AgentsError != "" || got.FreeSlots != 2 || len(got.Windows) != 0 || got.Runs == nil || got.Agents == nil {
+	if err != nil || len(got.HarnessErrors) != 0 || got.FreeSlots != 2 || len(got.Windows) != 0 || got.Runs == nil {
 		t.Errorf("status %+v, %v", got, err)
 	}
 }

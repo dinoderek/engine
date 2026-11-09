@@ -26,10 +26,13 @@ Two programs share one Go module:
   share `internal/hosts`, the host config: it parses `hosts.toml` with an
   in-house reader of the TOML subset the config uses, validates it, works out
   each machine's slots and expands launch lines. `internal/session` is the
-  host's session ops, through `git`, `gh`, `tmux` and the harness: engine's
-  clones and task worktrees, the tmux session, windows and pane logs, the live
-  Claude Code sessions, Claude Code's folder trust, engine's Codex profiles, the run record and the
-  harness's state file.
+  host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
+  worktrees, the tmux session, windows and pane logs, the run record and the
+  harness's state file. `internal/harness` is what engine asks of a harness:
+  the `Adapter` interface (launch, observe, check, release). Each harness is an
+  adapter package below it (`claude`, `codex`), and `internal/harness/registry`
+  lists them. The commands build their adapters from the registry and hand
+  them to `internal/hostops`, which sees only the interface.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →
@@ -48,7 +51,8 @@ non-test imports. The reasons:
   `internal/cli`. Leaf packages (`internal/version`,
   `internal/hook`, `internal/hosts`, `internal/session`,
   `devtools/internal/repo`) import no first-party code; a command package
-  such as `internal/start` composes them. A new package adds its rule in the
+  such as `internal/start` composes them. Only the registry imports a
+  concrete harness adapter. A new package adds its rule in the
   same PR.
 
 ## Decisions new code must respect
