@@ -4,7 +4,7 @@
 
 Two skills hold agent behaviour. `build` takes one task to a merged PR in any
 repo, outside the engine process, and holds the hard-stop classes and the
-reviewer. `engine` holds the server roles (planner, executor, supervisor); its
+reviewer. `engine` holds the server roles (planner, executor); its
 executor is `build` with changes. This doc never restates a rule they hold.
 
 ## Principles
@@ -39,9 +39,8 @@ change the rule or override it for the feature. A plan's approval covers its
 tasks; a standalone task carries its own.
 
 The executor reviews its own work with a fresh reviewer at `deep`, requests
-the merge, and the coordinator makes it. The supervisor finds the
-coordinator's gaps: it acts only through `engine` commands and records every
-gap it fills, so each becomes a coordinator fix.
+the merge, and the coordinator makes it. The operator watches the run
+(`operator-setup.md`, "Watching a run").
 
 Cards and roles name a tier (`deep`, `standard`, `light`), never a model. Host
 config maps each tier to a model and effort per harness
@@ -58,7 +57,7 @@ tier. Telemetry records the tier and model of every run.
 - **Hard stops are the only interruptions, asked once.** Repeated questions
   usually share a root cause, such as one red gate on the default branch. An
   executor first looks for an answer or open question on the same root cause,
-  and a question that affects every task is resolved once for the plan.
+  and asks a question that affects every task once, on the plan.
 - **More than two `review` rulings on one task** mean Prepare under-specified
   the card.
 
@@ -67,7 +66,7 @@ tier. Telemetry records the tier and model of every run.
 | Entity | States |
 | --- | --- |
 | Plan | `prepare` → `approved` (operator) → `planned` → `executing` → `verifying` → `done`; `blocked` while any task is `needs-human`. |
-| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` during a hard stop; `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
+| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
 
 "Ready" is computed, never stored. The planner creates the plan and its
 tasks; you approve the plan. The executor sets `running`, `needs-human` and
@@ -84,9 +83,8 @@ Attaching is the interactive channel.
 ## Merge conflicts
 
 There is no file ownership: parallelism comes only from dependencies, and an
-executor resolves conflicts by merging the default branch. Telemetry counts
-conflict merges per run. Each merge moves the default branch and forces a
-re-gate of every other open PR, so each repository has one merge lock
-(`coordinator.md`, "Merges and merge locks"): its holder merges the default
-branch, gates and requests its merge while the others wait before their last
-gate run.
+executor resolves conflicts by merging the default branch. Each merge moves
+the default branch and forces a re-gate of every other open PR, so each
+repository has one merge lock (`coordinator.md`, "Merges and merge locks"):
+its holder merges the default branch, gates and requests its merge while the
+others wait before their last gate run.

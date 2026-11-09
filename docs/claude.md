@@ -40,6 +40,10 @@ or raises a hard stop.
 
 ## Hooks
 
+`engine hook state --harness claude` records whether the last turn ended
+("Session list"), only in a Claude run: a process another harness's session
+starts inherits that run's variables.
+
 `engine hook pre-tool-use` blocks Bash merges without
 `--match-head-commit`, with `--auto` or `--admin`, or through the REST or
 GraphQL API. In an engine session it blocks every PR merge: the
@@ -68,6 +72,18 @@ moves the session on. For a window whose newest run is Claude's, `status`
 takes the state of the session of the window's name. A limit marker makes
 a live, non-busy window `limited`, with `resets_at`; busy wins. An unavailable
 session list leaves state unknown.
+
+`busy` also covers a session whose turn has ended while a background job
+runs, and Claude Code takes typed input then. `engine hook state` tells the
+two apart: it writes the run's `harness-state.json` on `UserPromptSubmit`,
+`PreToolUse` and `PostToolUse` (`working`) and `Stop` (`waiting`). A busy
+session whose newest event is a `Stop`, from its own `sessionId` when both
+name one, is `working` with `background` set. A missing or unreadable file,
+or any other event, leaves it busy in a turn. A turn that a finished
+background job starts runs no hook until its first tool call; typing then
+is queued as the next prompt, not lost. A background subagent's tool calls
+also write `working`, so a session waiting on one reads as busy in a turn
+until it ends.
 
 ## Apps
 

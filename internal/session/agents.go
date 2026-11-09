@@ -22,6 +22,9 @@ type Agent struct {
 	PID  int    `json:"pid"`
 	CWD  string `json:"cwd"`
 	Name string `json:"name"`
+	// SessionID is Claude Code's own ID for the session, the one its hook
+	// events carry.
+	SessionID string `json:"sessionId"`
 	// Status is busy, waiting or idle; a newer Claude Code may report another.
 	Status string `json:"status"`
 	// WaitingFor says what a waiting session needs, when Claude Code says.

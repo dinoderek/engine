@@ -1,68 +1,37 @@
 # Backlog (ephemeral)
 
-Work to do before or alongside the build. Delete each item when it is done.
+Open work not yet in a plan. Delete each item when it is done.
 
-## Build order
+## Build
 
-1. **Engine's own context:** `AGENTS.md`, the Go module, `./dev` and its lanes,
-   CI, and Dependabot. It is the first worked example of
-   `docs/project-context.md`.
-2. **Skills move** (alongside step 1): see "Set up" below.
-3. **The `engine` skill, run by hand.** The skill, the marketplace, the
-   task-issue template, `engine labels sync` and the merge guard exist. Left:
-   pilot it on one BOGA3 task the operator picks (BOGA3 needs no changes: the
-   planner overrides its blocking rules in the card), then on two or three
-   Gnocchi task issues with at least one dependency.
-4. **Plans written together.** Use `plan task` and `plan feature` on real work
-   until the card and feature shapes settle.
-5. **`engine start` / `ps` / `attach`.** The launcher and session overview,
-   Claude only, local host.
-6. **`engine run`.** The reconcile loop over a feature: dependency graph, plan
-   lint, concurrency caps, feature labels. From here on, engine's own tasks can
-   run through engine.
-7. **Breadth.** Codex, SSH hosts (`devbox`), placement by capability, webhook
-   forwarding. BOGA3 joins as a pilot.
-8. **Telemetry upload.** OTel collector and R2 sync. A local `run.json` exists
-   from step 5.
-9. **Seed prompt and retrofit skill.**
-
-## Set up
-
-10. **Move `task-protocol` here from `agent-skills`**, or retire it if the
-    `engine` skill's gated mode covers it by then. Engine is already a plugin
-    marketplace (`plugins/engine`). Steps, in order:
-    1. Bring `plugins/task-protocol` across with its history, and add it to
-       `.claude-plugin/marketplace.json`.
-    2. Port `install-codex.sh`, so it links every skill in `plugins/`.
-    3. Switch the marketplace in BOGA3's and Gnocchi's
-       `.claude/settings.json`, and in BOGA3's docs, which point to the
-       user-level skill.
-    4. Re-run the Codex installer from engine, after uninstalling the old
-       links.
-    5. Archive `agent-skills`.
-
-    Until step 3, `agent-skills` stays the live copy of `task-protocol`.
+1. **Telemetry upload.** The OTel collector, the finalised `run.json` and the
+   R2 sync: `telemetry.md` in this directory.
+2. **Seed prompt and retrofit skill:** `seed-prompt.md` in this directory.
 
 ## Check
 
-11. **Codex remote control for a launched session.** Does a TUI started with
-    `--remote` against the host's `codex remote-control` app-server show up
-    in the ChatGPT app? Check on the Linux host too. It is still marked
-    experimental in 0.163, and the official docs say phone setup starts in the
-    desktop app (openai/codex#35928). If it fails, Codex runs under Paseo
-    (`prior-art.md`) behind the same `engine host` ops, and Claude stays on
-    tmux.
-12. **Model IDs.** `gpt-6.1-sol` is confirmed (it is this Mac's Codex
-    default). Check `gpt-6-luna` with a one-line `codex exec`.
-13. **Reviewer tier on Codex.** Claude Code can start a subagent on a
-    different model. Check whether a Codex session can, or whether its
-    reviewer inherits the session's model.
+3. **Reviewer model in a session.** The kickoff names a reviewer model. A
+   Claude executor's harness has refused a full model ID (`claude-opus-5-5`)
+   as a subagent model and fell back to the `opus` alias; Codex executors'
+   reviewers have run on the session's own model. Decide whether the kickoff
+   should name an alias for Claude, and whether a Codex reviewer can take
+   another model at all.
+4. **Codex light tier.** `gpt-6-luna` is configured but has never run a task.
+   Check it with a one-line `codex exec`.
+5. **Claude's suggested next prompt.** An idle Claude session shows a
+   suggested prompt in its input box, which reads like an operator's unsent
+   draft. Disable prompt suggestions in engine sessions if the CLI allows it.
+6. **Live limit recovery.** A real Claude or Codex limit stop, and the
+   coordinator's automatic resume after the reset, under `engine serve`, have
+   only been proved by tests and a recorded Codex failed-turn replay.
+7. **Codex sessions in the ChatGPT app.** Joined Codex sessions show in the
+   Codex app; the ChatGPT app has not been checked.
 
 ## Parked
 
 - **`engine host` commands.** `engine host init <name>` would write the host's
-  name file and check its tools (tmux, gh, signed-in harnesses); `engine host
-  add <name> --address … --ram … --capabilities …` would edit `hosts.toml`.
-  Until then both files are written by hand. Revisit before `engine start`;
-  the names clash with the coordinator's `engine host <op> --json` ops, so
-  pick another namespace (such as `engine hosts`).
+  name file and check its tools; `engine host add <name> --address … --ram …
+  --capabilities …` would edit `hosts.toml`. Until then both files are written
+  by hand and `engine setup` checks them. The names clash with the
+  coordinator's `engine host <op> --json` ops, so pick another namespace (such
+  as `engine hosts`).

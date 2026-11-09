@@ -70,7 +70,7 @@ func TestStateHookDoesNothingElsewhere(t *testing.T) {
 	}{
 		"outside an engine run":        {recordedEvent(t, "Stop"), nil, 0, ""},
 		"an unattended denial":         {recordedEvent(t, "PermissionRequest"), map[string]string{session.RunDirVar: dir, session.UnattendedVar: "1"}, 0, ""},
-		"an event that says nothing":   {recordedEvent(t, "PreToolUse"), map[string]string{session.RunDirVar: dir}, 0, ""},
+		"an event that says nothing":   {recordedEvent(t, "Notification"), map[string]string{session.RunDirVar: dir}, 0, ""},
 		"an unreadable event":          {"not json", map[string]string{session.RunDirVar: dir}, 1, "unreadable state event"},
 		"a run directory that is gone": {recordedEvent(t, "Stop"), map[string]string{session.RunDirVar: filepath.Join(dir, "gone")}, 1, "record the session state"},
 	}
@@ -85,6 +85,40 @@ func TestStateHookDoesNothingElsewhere(t *testing.T) {
 				if _, ok := session.ReadHarnessState(where); ok {
 					t.Errorf("a state file was written in %s", where)
 				}
+			}
+		})
+	}
+}
+
+// A plugin's state hook names its harness, and records only a run of that
+// harness: a Claude reviewer a Codex executor starts inherits the Codex
+// run's variables, and must not write its state.
+func TestStateHookRecordsOnlyItsOwnHarnessRun(t *testing.T) {
+	for _, tt := range []struct {
+		name, flag, run string
+		wrote           bool
+	}{
+		{"its own harness's run", "claude", "claude", true},
+		{"another harness's run", "claude", "codex", false},
+		{"Codex in a Claude run", "codex", "claude", false},
+		{"a run that names no harness", "claude", "", true},
+		{"no harness named", "", "codex", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			args := []string{"hook", "state"}
+			if tt.flag != "" {
+				args = append(args, "--harness", tt.flag)
+			}
+			vars := map[string]string{session.RunDirVar: dir, session.HarnessVar: tt.run}
+			var errOut bytes.Buffer
+			env := Env{In: strings.NewReader(recordedEvent(t, "Stop")), Out: &bytes.Buffer{}, Err: &errOut, Getenv: func(k string) string { return vars[k] },
+				Now: func() time.Time { return stateAt }}
+			if code := Run(args, env); code != 0 {
+				t.Fatalf("exit %d, stderr %q", code, errOut.String())
+			}
+			if _, ok := session.ReadHarnessState(dir); ok != tt.wrote {
+				t.Errorf("state file written %v, want %v", ok, tt.wrote)
 			}
 		})
 	}

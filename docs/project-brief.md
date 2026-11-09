@@ -14,11 +14,11 @@ asks.
 | --- | --- |
 | Execution protocol | The phases, roles and state machine from requirements to merged feature. |
 | Coordinator | The reconcile core runs in `engine serve`, spawning sessions on local or SSH hosts. No LLM. |
-| Skills | `build`: one task to a merged PR in any repo, and its reviewer. `engine`: the server planner, executor and supervisor. One Claude Code and Codex plugin ships both. |
+| Skills | `build`: one task to a merged PR in any repo, and its reviewer. `engine`: the server planner and executor. One Claude Code and Codex plugin ships both. |
 | Control server | Plans, tasks, execution attempts, updates, operator inbox and repository merge locks. CLI access through an authenticated private API. |
 | Hosts | Each machine's harnesses, session slots and capabilities, and how to reach every session. |
-| Telemetry | Raw run data in a standard format, stored off-machine. |
-| Project context guideline | What a repo must provide so executors can run hands-off. It is the source for a language-neutral seed prompt. |
+| Telemetry | Each run's record, logs and harness signals, kept in a run directory on its host. |
+| Project context guideline | What a repo must provide so executors can run hands-off. |
 
 ## State
 
@@ -34,7 +34,7 @@ engine is the first worked example of the project context guideline's core.
 ## Scope
 
 - **In:** the protocol, control server and its single coordinator, the two
-  skills, host config, telemetry design, and the project context guideline.
+  skills, host config, run records, and the project context guideline.
   The control server is the only plan source; GitHub carries code, PRs and CI.
 - **Out:** dashboard writes, phone push, GitHub issues or in-repo files as
   plans, and deploys: engine has no deploy target, so `./dev` has no `deploy`

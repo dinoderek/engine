@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -40,7 +41,7 @@ func TestStateFromRecordedEvents(t *testing.T) {
 		{"SessionEnd", false, "ended"},
 		{"SessionStart", true, "waiting"},
 		{"PermissionRequest", true, ""},
-		{"PreToolUse", false, ""},
+		{"PreToolUse", false, "working"},
 	}
 	for _, tt := range tests {
 		name := tt.event
@@ -183,5 +184,31 @@ func TestPermissionLeavesAnAttendedCodexRequestAlone(t *testing.T) {
 	p := Permission{Out: &out, Err: &errs, Log: &log, Now: at}
 	if code := p.Handle(strings.NewReader(codexEvent(t, "PermissionRequest"))); code != 0 || out.Len() != 0 || log.Len() != 0 || errs.Len() != 0 {
 		t.Errorf("exit %d, out %q, log %q, stderr %q", code, out.String(), log.String(), errs.String())
+	}
+}
+
+// Claude Code's hook events, in the shape it sends them, set the state the
+// host reads to tell a turn that ended from one under way.
+func TestStateFromClaudeEvents(t *testing.T) {
+	const id = "b0846859-b053-4a13-bab8-aeff8f1fd096"
+	event := func(name, extra string) string {
+		return `{"session_id":"` + id + `","transcript_path":"/home/u/.claude/projects/p/` + id + `.jsonl","cwd":"/w","permission_mode":"auto","hook_event_name":"` + name + `"` + extra + `}`
+	}
+	for _, tt := range []struct{ name, in, want string }{
+		{"UserPromptSubmit", event("UserPromptSubmit", `,"prompt":"Read the new task updates"`), "working"},
+		{"PreToolUse", event("PreToolUse", `,"tool_name":"Bash","tool_input":{"command":"./dev test"},"tool_use_id":"toolu_1"`), "working"},
+		{"PostToolUse", event("PostToolUse", `,"tool_name":"Bash","tool_input":{"command":"./dev test","run_in_background":true},"tool_response":{"backgroundTaskId":"b1"}`), "working"},
+		{"Stop", event("Stop", `,"stop_hook_active":false`), "waiting"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []Signal
+			s := State{Err: &bytes.Buffer{}, Unattended: true, Write: func(sig Signal) error { got = append(got, sig); return nil }}
+			if code := s.Handle(strings.NewReader(tt.in)); code != 0 {
+				t.Fatalf("exit %d", code)
+			}
+			if want := []Signal{{State: tt.want, Event: tt.name, SessionID: id}}; !reflect.DeepEqual(got, want) {
+				t.Errorf("wrote %+v, want %+v", got, want)
+			}
+		})
 	}
 }
