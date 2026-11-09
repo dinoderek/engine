@@ -194,7 +194,7 @@ func acceptSessions(t *testing.T, s *controlStack, d *dashboard, w *world) {
 	links = sessionMap(list)[w.links.ID]
 	check(t, list.Feedback == 2 && links.Feedback == nil && links.Latest.Update == resolution && links.Latest.Kind == "resolved",
 		"a recorded resolution clears the request: %+v", links)
-	check(t, links.State == "needs-human" && links.Observed == "waiting", "workflow and host state stay as they were: %+v", links)
+	check(t, links.State == "running" && links.Observed == "waiting", "the resolution restores the task's state, and host state stays: %+v", links)
 	check(t, list.Sessions[0].Item == w.hardening.ID, "the remaining requests lead: %+v", list.Sessions[0])
 	var rollout ui.PlanDetail
 	d.get(t, "/api/plans/"+w.rollout.ID, &rollout)

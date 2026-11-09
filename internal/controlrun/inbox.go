@@ -48,8 +48,8 @@ func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
 }
 
 // pendingMessage is the newest update a session has not been woken for: a
-// message on its own item, or a message or ruling on its task's plan that
-// is addressed to the plan's sessions rather than the operator. A session's
+// message on its own item, or a message or resolution on its task's plan
+// that is addressed to the plan's sessions rather than the operator. A session's
 // own updates and the coordinator's notices never wake it.
 func pendingMessage(st control.State, item control.Item, at control.Attempt) int {
 	last := 0
@@ -65,7 +65,7 @@ func pendingMessage(st control.State, item control.Item, at control.Attempt) int
 }
 
 var itemWakeKinds = []string{"say", "reply", "resolved", control.MergeMerged, control.MergeRefused}
-var planWakeKinds = []string{"say", "resolved", "ruling"}
+var planWakeKinds = []string{"say", "resolved"}
 
 func planWake(item control.Item, u control.Update) bool {
 	return item.Kind == "task" && item.Plan != "" && u.Item == item.Plan &&

@@ -131,9 +131,9 @@ into no turn. Only idle sessions get wake-up pointers.
 
 **Stalls.** Limited and background-only sessions never stall. A dispatched session that has not
 claimed its task 5 minutes after it started is noticed once, and one that
-ended before claiming is restarted. A session that has waited 10 minutes
-while its task is open and not `needs-human` has stopped outside the
-protocol; the operator is notified once, naming the sign-in for a signed-out
+ended before claiming is restarted. A session waiting 10 minutes
+on an open task with no hard stop or question has
+stopped outside the protocol; the operator is notified once, naming the sign-in for a signed-out
 harness. A denial at most 10 minutes older than the wait makes the stall a
 Permission hard stop naming the tool, input and reason.
 

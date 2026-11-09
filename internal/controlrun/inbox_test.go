@@ -1,6 +1,7 @@
 package controlrun
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestPlanUpdatesWakeTheWaitingTaskSession(t *testing.T) {
 	}
 }
 
-func TestPendingMessageCountsRulingsOnlyForTheTasksPlan(t *testing.T) {
+func TestPendingMessageCountsResolutionsOnlyForTheTasksPlan(t *testing.T) {
 	task := control.Item{ID: "t3", Kind: "task", Plan: "p2"}
 	planner := control.Item{ID: "p2", Kind: "plan"}
 	at := control.Attempt{ID: "a1", Seen: 1}
@@ -61,19 +62,59 @@ func TestPendingMessageCountsRulingsOnlyForTheTasksPlan(t *testing.T) {
 		want int
 	}{
 		{"own say", task, control.Update{ID: 2, Item: "t3", Kind: "say", Author: "operator"}, 2},
-		{"plan ruling", task, control.Update{ID: 2, Item: "p2", Kind: "ruling", Author: "operator"}, 2},
+		{"plan question", task, control.Update{ID: 2, Item: "p2", Kind: "ask", Author: "a2", Recipient: "operator"}, 0},
 		{"plan resolution", task, control.Update{ID: 2, Item: "p2", Kind: "resolved", Author: "operator"}, 2},
 		{"plan reply", task, control.Update{ID: 2, Item: "p2", Kind: "reply", Author: "operator"}, 0},
 		{"plan state", task, control.Update{ID: 2, Item: "p2", Kind: "state", Author: "operator"}, 0},
-		{"other plan", task, control.Update{ID: 2, Item: "p9", Kind: "ruling", Author: "operator"}, 0},
-		{"own ruling seen", task, control.Update{ID: 1, Item: "p2", Kind: "ruling", Author: "operator"}, 0},
+		{"other plan", task, control.Update{ID: 2, Item: "p9", Kind: "resolved", Author: "operator"}, 0},
+		{"resolution seen", task, control.Update{ID: 1, Item: "p2", Kind: "resolved", Author: "operator"}, 0},
 		{"own author", task, control.Update{ID: 2, Item: "p2", Kind: "say", Author: "a1"}, 0},
 		{"planner own plan", planner, control.Update{ID: 2, Item: "p2", Kind: "say", Author: "operator"}, 2},
-		{"planner ruling", planner, control.Update{ID: 2, Item: "p2", Kind: "ruling", Author: "operator"}, 0},
+		{"planner plan state", planner, control.Update{ID: 2, Item: "p2", Kind: "state", Author: "operator"}, 0},
 	}
 	for _, tc := range cases {
 		if got := pendingMessage(control.State{Updates: []control.Update{tc.u}}, tc.item, at); got != tc.want {
 			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestPlanQuestionHoldsEveryTaskSessionUntilItsResolutionWakesThem(t *testing.T) {
+	c, h, repo, plan, task := setup(t)
+	card := "## Outcome\nWorks\n## Tests\nProve it"
+	sibling := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Sibling", Repo: repo.ID, Plan: plan.ID, Body: card}})
+	execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Acceptance", Repo: repo.ID, Plan: plan.ID, Body: card, Depends: []string{task.ID, sibling.ID}}})
+	pass(t, c)
+	pass(t, c)
+	if len(h.status.Windows) != 2 {
+		t.Fatalf("windows = %+v, want both tasks running", h.status.Windows)
+	}
+	for i := range h.status.Windows {
+		h.status.Windows[i].State = session.StateWaiting
+	}
+	woken := map[string]int{}
+	c.Wake = func(s reconcile.Session, _ string) error { woken[s.Name]++; return nil }
+	st, _ := c.Service.Store.Snapshot()
+	attempt := st.Items[task.ID].Attempt
+	worker := control.Actor{Name: attempt, Role: "worker", Attempt: attempt}
+	out, err := c.Service.Execute(worker, control.Request{Op: "ask", Key: control.Secret(), ID: plan.ID, Body: "The unit lane is red on main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	execute(t, c.Service, control.Request{Op: "say", ID: plan.ID, Body: "Looking into it"})
+	pass(t, c)
+	if len(woken) != 0 {
+		t.Fatalf("woke %v while the plan question was open", woken)
+	}
+	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: out.Updates[0].ID, Body: "Fixed on main; merge it in"})
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	if st.Items[task.ID].State != "running" {
+		t.Fatalf("asker is %s, want running", st.Items[task.ID].State)
+	}
+	for _, id := range []string{task.ID, sibling.ID} {
+		if name := fmt.Sprintf("demo-%d", control.Number(id)); woken[name] != 1 {
+			t.Fatalf("woken = %v, want %s woken once", woken, name)
 		}
 	}
 }

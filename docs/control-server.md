@@ -110,29 +110,28 @@ dispatch receipts retain the token privately for interrupted dispatch recovery.
 engine tell t3 "Use the second approach"
 engine updates t3 --after 0
 engine ask t3 "Approve this API change?"
+engine ask p2 "The unit lane is red on main"
 engine inbox --operator
 engine ack 12
 engine reply 12 "Investigating"
 engine resolve 12 "Approved for the task revision in this question"
-engine resolve 14 "Every task may change the API" --plan p2
-engine task state t3 --version 4 --state running
 ```
 
 Updates are immutable and ordered; read up to 200 after a cursor.
-Comments leave workflow state alone; a task question atomically puts it in
-needs-human. Acknowledgements and replies leave it unresolved. Resolution records the operator decision; an explicit
-state change resumes the task. On a task's question, `--plan` also
-posts the decision as a plan `ruling`. The server never answers a question from a
-ruling. Unresolved questions block completion and
-merge checks.
-An unresolved plan question also blocks planner handoff, child dispatch,
-child merges and automatic quota resume until the operator resolves it.
+Comments leave workflow state alone. A question atomically holds a task in
+needs-human: its own, or the asking task (the update's `task`) of one a
+task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements
+and replies leave it unresolved. Resolution records the decision and atomically
+restores each held task's earlier state, unless another question holds it,
+its state changed or its execution ended. Unresolved
+questions block completion and merge checks; a plan's also block its tasks'
+state changes, planner handoff, child dispatch and automatic quota resume.
 
 Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
 on resolution. Idle, unrestricted sessions get wake-up pointers for
 others' messages on their item; tasks also for others' plan messages and
-rulings, except coordinator notices and those to the operator. Messages
+resolutions, except coordinator notices and those to the operator. Messages
 persist when wake-up fails.
 
 ## Dashboard
@@ -190,7 +189,7 @@ run files, item bodies and full update bodies never join them.
 - `feedback` is the item's unresolved question, its own or its parent plan's.
   Acknowledgements and replies leave it; resolution clears it. Waiting
   without one is not a feedback request.
-- `latest` is the item's newest `say`, `ask`, `reply`, `resolved` or `ruling` update
+- `latest` is the item's newest `say`, `ask`, `reply` or `resolved` update
   with a body, excluding the coordinator's automatic notices. A task's
   preview never shows its plan's messages.
 
