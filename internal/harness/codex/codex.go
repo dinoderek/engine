@@ -9,11 +9,23 @@
 // hooks of engine's Codex plugin without Codex's per-hash hook trust, whose
 // review prompt would stop an unattended launch.
 //
+// A joined session differs from an embedded one (as of Codex 0.164.0), which
+// is why the two launch differently. The agent and its hooks run inside the
+// daemon and see its environment, not the window's: -c
+// shell_environment_policy.set reaches the agent's commands, but not the
+// hooks, which get only the event. The session's profile (-p) is ignored, and
+// folder trust comes only from the daemon's config.toml, one entry per folder
+// (a -c projects."…".trust_level does not stop the prompt, joined or not).
+// Writable roots and --add-dir are refused with --remote, so the daemon's
+// config.toml holds them. The daemon is named after the host, and Codex has
+// no flag that names a session, so the thread is titled after it starts.
+//
 // Codex has no session list engine can ask, so a session's state comes from
 // the state file its hooks write, supplemented by the daemon's stored turns
 // (a usage-limit failure) and the account's rate limits. A joined session's
-// hooks run inside the daemon, without the launch's variables, so they find
-// their run by the event's cwd; the state hook then labels its thread.
+// hooks find their run by the event's cwd; the state hook then labels its
+// thread. Codex's notify setting is unused: it holds a single program, which
+// other tools already claim.
 package codex
 
 import (

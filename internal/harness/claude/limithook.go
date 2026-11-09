@@ -20,7 +20,9 @@ type limitEvent struct {
 
 // recordLimit is the `limit` entry: it keeps the run's limit marker
 // (LimitFile) and records each stop's complete input in the run's
-// limits.jsonl. No run directory means this is not an engine run.
+// limits.jsonl. No run directory means this is not an engine run. Claude
+// Code resumes a limited session itself (autoContinueAtUsageLimit, left on),
+// so a prompt or its auto-resume notification clears the marker.
 func recordLimit(in io.Reader, dir string, now time.Time) error {
 	if dir == "" {
 		return nil

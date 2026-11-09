@@ -22,30 +22,15 @@ in Codex, left to auto-review, and per action auto mode refused, with the
 time, tool, input and decision (`Entry` in `internal/hook/permission.go`).
 Run IDs are `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, using launch time. A preflight
 check's directory, `check-<time>`, stays, with no `run.json`. A hook that finds
-its run without `ENGINE_RUN_DIR` (`codex.md`, "Session signals") scans these
+its run without `ENGINE_RUN_DIR` scans these
 directories for the `run.json` whose worktree holds the event's `cwd`.
 
-`quota.json` holds Claude subscription usage: `harness`, `observed_at` (epoch
-seconds), and `windows` with optional `five_hour` and `seven_day` entries, each
-with `used` (percent) and `resets_at` (epoch seconds). The status-line hook
-atomically replaces it only when usage or reset times change.
-
-`limit.json` holds Claude's current usage stop: `since`, `resets_at` (epoch
-seconds; zero means unknown), `error`, and optional `notification_type` for
-stale or disabled auto-resume. Hooks replace it atomically and remove it
-when a prompt or automatic resume fires. `limits.jsonl` retains each stop
-with those fields and its complete hook `input`, including error details,
-for inspection after the marker clears.
-
-`harness-state.json` retains the harness's session ID, and Codex's optional
-turn ID, with each hook state, so a newer Codex prompt cannot inherit an
-older failed turn. Stored
-failed-turn input is read through app-server; it is not a limit hook event.
-
-`codex-label.json` records the attempts to label a joined Codex thread: the
-thread ID, title, project, repo, project root, the latest attempt's time and
-error, and the attempt count; `codex-label.lock` is held during one. For how
-the label is set, load `codex.md`, "Apps".
+`harness-state.json` is the state hook's latest state, with the harness's
+session and turn IDs. Each adapter may keep its own files there too, named
+in its package under `internal/harness/`: Claude's `quota.json` (subscription
+usage), `limit.json` (the current usage stop) and `limits.jsonl` (every
+stop's full input); Codex's `codex-label.json` (the attempts to label a
+joined thread).
 
 The coordinator logs each resume attempt with the task, timestamp and
 `resumed-for=<resets_at>`. Its notes retain the attempt and limit-alert times

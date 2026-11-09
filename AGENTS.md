@@ -63,7 +63,7 @@ Read these at each session start:
 | changes dispatch, recovery, merges, the merge queue, host ops or session signals | `docs/coordinator.md` |
 | changes server records, API, credentials, inbox or `engine ui` | `docs/control-server.md` |
 | changes host config, placement, attempts or session access | `docs/hosts-and-sessions.md` |
-| changes a Claude or Codex session | `docs/claude.md`, `docs/codex.md` |
+| changes a harness adapter or what the core asks of one | `docs/harnesses.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
 | sets up GitHub access, notifications, harness sign-in or a host | `docs/operator-setup.md` |
 | changes what a target repo must provide, or the shape of this file or the doc rules | `docs/project-context.md` |

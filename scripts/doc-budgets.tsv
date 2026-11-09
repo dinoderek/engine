@@ -27,6 +27,7 @@ budget	docs/control-server.md	1500
 budget	docs/coordinator.md	1400
 budget	docs/execution-protocol.md	900
 budget	docs/hosts-and-sessions.md	1400
+budget	docs/harnesses.md	700
 budget	docs/project-context.md	1400
 # Read at the start of every session: AGENTS.md plus its "Always load" list.
 set	always-load	4000	AGENTS.md,docs/project-brief.md,docs/architecture.md,docs/project-structure.md,docs/testing-strategy.md,docs/quality-gates.md

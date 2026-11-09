@@ -1,6 +1,6 @@
 # Hosts and sessions
 
-> **Owns:** host config, task placement, the attempt as the session registry, how sessions are started and reached. **Not here:** dispatch, host ops and session signals (`coordinator.md`), what a session does (the skills, `plugins/engine/skills/`), what it records (`telemetry.md`), each harness's launch line, tiers, permissions and apps (`claude.md`, `codex.md`).
+> **Owns:** host config, task placement, the attempt as the session registry, how sessions are started and reached. **Not here:** dispatch, host ops and session signals (`coordinator.md`), what a session does (the skills, `plugins/engine/skills/`), what it records (`telemetry.md`), each harness's launch line, tiers and adapter (`harnesses.md`).
 
 ## Hosts
 
@@ -57,7 +57,7 @@ capabilities = ["linux", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 ```
 
-Launch lines and tier models are in `claude.md` and `codex.md`. Each host
+Launch lines and tier models are in `harnesses.md`. Each host
 pins every harness binary (`bin`), which `{bin}` in the launch line expands
 to; engine never uses whichever comes first on `PATH`.
 
@@ -116,22 +116,20 @@ The host:
    remade). A resume opens on `origin`'s branch at its tip, refusing a local
    branch with commits `origin` lacks; a clean worktree left there with no
    such commits is adopted and fast-forwarded, else refused;
-3. trusts the worktree for its harness (`claude.md` and `codex.md`,
-   "Starting");
+3. trusts the worktree for its harness;
 4. opens the window `<repo>-<task>` in the session `engine`, in the worktree;
 5. runs the host's launch line at the task's tier (default `standard`) with
-   the flags the harness adds at start, then `--` and the kickoff: the
+   the flags the harness's adapter adds, then `--` and the kickoff: the
    session's first message, naming the `engine` skill's server executor or
    planner mode, the task or plan, the attempt and the reviewer model.
    `/bin/sh` exports `ENGINE_RUN_DIR`, `ENGINE_HARNESS`, the server's URL,
-   credential file and attempt, and `ENGINE_UNATTENDED=1` when hands-off. A Codex session joined
-   to remote control gets the `ENGINE_*` variables on its command line instead
-   (`codex.md`, "Starting");
-6. writes `run.json` (`telemetry.md`; a Codex session joined to remote
-   control gets it before step 4, since its hooks find their run by it).
+   credential file and attempt, and `ENGINE_UNATTENDED=1` when hands-off; a
+   session that joins a remote-control daemon gets them from its adapter;
+6. writes `run.json` (`telemetry.md`; before step 4 for a session that joins
+   a daemon, since its hooks find their run by it).
 
 **Preflight:** `engine start --check [--harness <name>] [--host <name>]`
-(Claude without `--harness`) runs `gh auth status` in the `engine` tmux server
+(the default harness without `--harness`) runs `gh auth status` in the `engine` tmux server
 (`operator-setup.md`, "GitHub access"), then a hands-off light-tier session,
 `engine-check`, reads the skill, writes and reads a file in `/tmp`, runs `gh`
 and `engine`, and closes. It exits 1, printing what it met, when gh failed or
@@ -144,7 +142,7 @@ the session was denied, stalled or skipped a step.
 | Browser | The dashboard (`engine ui`, `control-server.md`), on loopback: on its host or through a tunnel. Its session view adds each attempt's host and observed state. |
 | Terminal | `engine ps [--json]` lists every task with its state and attempt. `engine attach <task-id>` runs `tmux attach` on its host, locally or over `ssh -t <address>`. |
 | Phone | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
-| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT and Codex apps, when the session joined engine's remote-control daemon. For setup, load `claude.md` or `codex.md`, "Apps". |
+| Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT and Codex apps, when the session joined engine's remote-control daemon. For setup, load `operator-setup.md`. |
 
 ## tmux setup
 

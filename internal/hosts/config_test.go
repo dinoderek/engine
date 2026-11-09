@@ -14,7 +14,7 @@ import (
 func docExample(t *testing.T) string {
 	t.Helper()
 	var b strings.Builder
-	for _, doc := range []string{"hosts-and-sessions.md", "claude.md", "codex.md"} {
+	for _, doc := range []string{"hosts-and-sessions.md", "harnesses.md"} {
 		data, err := os.ReadFile("../../docs/" + doc)
 		if err != nil {
 			t.Fatal(err)

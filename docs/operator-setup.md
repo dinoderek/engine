@@ -35,7 +35,7 @@ open while gh fails there or, on macOS, keeps its token in the keychain.
 ## Each host
 
 **The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
-`sqlite3` on a Codex host, `codex.md` "Apps"), and put
+`sqlite3` on a Codex host, to read the daemon's connection), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
 name, one line, as attempts and every surface show it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
@@ -51,7 +51,10 @@ first. Setup installs the Codex plugin only into engine's own Codex home, and
 embedded sessions that cannot join engine's daemon use the host's own: install
 it there by hand on each Codex host,
 with `codex plugin marketplace add dinoderek/engine` and `codex plugin add
-engine@engine`. Setup prints these when the plugin is missing there.
+engine@engine`. Setup prints these when the plugin is missing there. In a
+Codex session engine did not launch, Codex runs the plugin's hooks only once
+reviewed: review them in the first such session after each install and
+update (`codex plugin update`).
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
@@ -71,12 +74,15 @@ first, then each harness's, then gh's sign-in and the preflight, which checks
 every harness the host lists, the default first.
 
 **Codex, on a host that lists it.** The Mac too. Setup checks that the pinned Codex runs and is signed in, then builds engine's own
-Codex home (`codex.md`, "Setup"), and never edits `~/.codex`. Starting engine's
+Codex home, and never edits `~/.codex`. Starting engine's
 daemon turns on remote control, which opens a connection to OpenAI's service for
 the ChatGPT and Codex apps. Signing in is yours: setup prints `codex login`, or,
 on another host, `ssh -t <address> codex login --device-auth`. After a reboot, rerun setup
-to start engine's daemon. Setup reports the operator's own remote-control
-errors and ignored config keys, and fixes none.
+to start engine's daemon. Setup records the daemon it starts; a running
+daemon it did not record leaves setup open, since it may hold a session's
+environment: finish its sessions, run the stop command setup prints, and
+rerun setup. Setup reports the operator's own remote-control errors and
+ignored config keys, and fixes none.
 
 **Claude's one-time prompts.** Nobody is there to answer them in an engine
 window. When the preflight finds one, run `claude --permission-mode auto
