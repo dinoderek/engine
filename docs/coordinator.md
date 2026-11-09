@@ -164,8 +164,8 @@ its liveness, like a failed call's, is unknown. A session in
 **Stalls.** Limited sessions never stall, including before claiming. Their
 `waiting-since` is cleared; a later ordinary wait starts a fresh timer.
 Claude limit markers carry `resets_at`; busy wins over a marker. An
-unclaimed window the coordinator opened stalls after 5 minutes
-(`ClaimWait`); one that ended before claiming is reported once, then restarted. A session whose
+unclaimed window the coordinator opened stalls after
+`ClaimWait`; one that ended before claiming is reported once, then restarted. A session whose
 `waiting-since` is 10 minutes old while its task is open and not
 `needs-human` has stopped outside the protocol, as on a question asked in
 the session. The coordinator @mentions you on the task's issue with the

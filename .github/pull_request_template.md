@@ -15,10 +15,12 @@
 
 ## Rulings
 
-<!-- At most five one-line `low` notes, and any `review` rulings, each as:
-Ruling (risk: low|review): <decision>
-User notices: <what a user would see, or nothing>   (review only)
-Alternative: <the option not taken>                 (review only)
+<!-- At most five `low` notes, each one line:
+Ruling (risk: low): <decision>
+and any `review` rulings, each as:
+Ruling (risk: review): <decision>
+User notices: <what a user would see, or nothing>
+Alternative: <the option not taken>
 If wrong: <what it costs to undo, what it touches>
 Cite any operator answer this task followed. "None" if none. -->
 

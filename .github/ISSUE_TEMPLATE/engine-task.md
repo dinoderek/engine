@@ -21,7 +21,7 @@ the engine skill, references/plan.md ("Card"). -->
 
 ## Open
 
-<!-- Questions the executor decides, graded by undo cost. "None" if none. -->
+<!-- Questions the executor decides. "None" if none. -->
 
 ## Tests
 

@@ -108,7 +108,8 @@ You decide, without asking:
 
 - internal design, naming and structure;
 - which test layer a claim belongs in;
-- the card's **Open** questions, and choices its design left open;
+- the card's **Open** questions (gated: after presenting them), and choices
+  its design left open;
 - refactors inside the modules the task touches;
 - UI details within the agreed mocks;
 - adding dev-only dependencies.

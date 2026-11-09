@@ -62,7 +62,8 @@ repo's own merge and cleanup steps; the merge guard enforces it.
   2. Holding it, redo step 7: fetch; if the default branch moved, merge it
      in, rerun the gates and the review, push, and wait for CI green on the
      new head.
-  3. Read updates once more. Send the rulings digest, if any (below).
+  3. Read updates once more. Send the rulings digest, if any (below),
+     once: a repeated request does not resend it.
   4. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
      <the repo's merge method> --verdict APPROVED`, then end your turn. The
      merge guard refuses `gh pr merge` in a server session. Approval the repo
