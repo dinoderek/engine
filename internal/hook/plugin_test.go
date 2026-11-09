@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -45,7 +46,7 @@ func readJSON(t *testing.T, path string, into any) {
 func guards(cmds []string) []string {
 	var out []string
 	for _, c := range cmds {
-		if c != "engine hook state" {
+		if !strings.HasPrefix(c, "engine hook state") {
 			out = append(out, c)
 		}
 	}
@@ -87,7 +88,7 @@ func TestCodexPluginRegistersStateHook(t *testing.T) {
 	for event := range codex.Hooks.Hooks {
 		for _, cmds := range codex.Hooks.Hooks.commands(event) {
 			for _, c := range cmds {
-				if c == "engine hook state" {
+				if c == "engine hook state --harness codex" {
 					events = append(events, event)
 				}
 			}
@@ -158,7 +159,7 @@ func TestClaudePluginRegistersStateHook(t *testing.T) {
 	var events []string
 	for event := range plugin.Hooks {
 		for matcher, cmds := range plugin.Hooks.commands(event) {
-			if slices.Contains(cmds, "engine hook state") {
+			if slices.Contains(cmds, "engine hook state --harness claude") {
 				events = append(events, event)
 				if matcher != "" {
 					t.Errorf("%s: the state hook runs only for %q, want every tool", event, matcher)

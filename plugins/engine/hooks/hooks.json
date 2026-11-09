@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook state"
+            "command": "engine hook state --harness claude"
           }
         ]
       }
@@ -71,7 +71,7 @@
           },
           {
             "type": "command",
-            "command": "engine hook state"
+            "command": "engine hook state --harness claude"
           }
         ]
       }
@@ -81,7 +81,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook state"
+            "command": "engine hook state --harness claude"
           }
         ]
       }
@@ -91,7 +91,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook state"
+            "command": "engine hook state --harness claude"
           }
         ]
       }

@@ -100,7 +100,7 @@ prompts, decides.
 
 ## Session signals
 
-Codex's hooks run `engine hook state`, which writes `harness-state.json` to the
+Codex's hooks run `engine hook state --harness codex`, which writes `harness-state.json` to the
 run directory, atomically: the state (`working`, `waiting` or `ended`), the
 event that set it, the time and Codex's session and turn IDs. A prompt, or a finished
 tool call, makes the session `working`: the call after an approved permission

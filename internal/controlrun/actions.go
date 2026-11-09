@@ -105,15 +105,15 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 	if _, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false); err != nil {
 		return err
 	}
-	if a.Attempt != "" {
-		if err := c.Service.SetAttempt(a.Attempt, "ended", ""); err != nil {
+	if a.Key != "" {
+		if err := c.notice(a.Item, a.Key, a.Text); err != nil {
 			return err
 		}
 	}
-	if a.Key == "" {
+	if a.Attempt == "" {
 		return nil
 	}
-	return c.notice(a.Item, a.Key, a.Text)
+	return c.Service.SetAttempt(a.Attempt, "ended", "")
 }
 
 // stop clears root's coordination intent. Completed and failed intent stays

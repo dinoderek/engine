@@ -40,7 +40,9 @@ or raises a hard stop.
 
 ## Hooks
 
-`engine hook state` records whether the last turn ended ("Session list").
+`engine hook state --harness claude` records whether the last turn ended
+("Session list"), only in a Claude run: a process another harness's session
+starts inherits that run's variables.
 
 `engine hook pre-tool-use` blocks Bash merges without
 `--match-head-commit`, with `--auto` or `--admin`, or through the REST or

@@ -13,7 +13,7 @@
   decides from records and fresh host reads, merges first. A pass reads every
   host's `status` in parallel; the session view's observer reuses those reads
   (`control-server.md`, "Session view"). Stopping coordination leaves
-  existing sessions running.
+  sessions running.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -30,7 +30,7 @@ releases the ended one's session, once a read shows its window gone. A
 refused dispatch retries each pass, noticing once per attempt.
 
 The host serializes dispatches by run ID and returns an existing run on
-replay. It uses the host's Git credentials, with isolated clones under
+replay. It uses the host's Git credentials and identity, with isolated clones under
 `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin
 into an owner-only run file whose path the window command exports (joined
 Codex sessions receive it too); hooks recover their connection from the
@@ -146,4 +146,4 @@ Waiting with a limit reset also clears the stall timer.
 
 Still `limited` 10 minutes after the attempt, or a reset over 24 hours away
 (no typing), gives one notice per reset and session. Recovery covers
-executors and the plan's planner.
+executors and planners.
