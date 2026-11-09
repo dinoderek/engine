@@ -16,10 +16,10 @@ func fixtureRepos() []control.Item {
 
 func fixturePlans() []control.Item {
 	return []control.Item{
-		{ID: "p24", Kind: "plan", Repo: "r1", Title: "Control server rollout", State: "executing"},
+		{ID: "p24", Kind: "plan", Repo: "r1", Title: "Control server rollout", State: "planned", Status: "executing"},
 		{ID: "p3", Kind: "plan", Repo: "r9", Title: "Checkout redesign", State: "prepare"},
 		{ID: "p10", Kind: "plan", Repo: "r1", Title: "Dashboard", State: "done"},
-		{ID: "p11", Kind: "plan", Repo: "r9", Title: "Engine-powered search", State: "executing"},
+		{ID: "p11", Kind: "plan", Repo: "r9", Title: "Engine-powered search", State: "planned", Status: "executing"},
 	}
 }
 
@@ -40,6 +40,7 @@ func TestPlanListFilters(t *testing.T) {
 		{name: "everything, by number", want: []string{"p3", "p10", "p11", "p24"}},
 		{name: "repo", filter: Filter{Repo: "r9"}, want: []string{"p3", "p11"}},
 		{name: "state", filter: Filter{State: "executing"}, want: []string{"p11", "p24"}},
+		{name: "state filters on the status, not the stored state", filter: Filter{State: "planned"}, want: []string{}},
 		{name: "repo and state combine", filter: Filter{Repo: "r1", State: "executing"}, want: []string{"p24"}},
 		{name: "title, case-insensitive", filter: Filter{Query: "ROLLOUT"}, want: []string{"p24"}},
 		{name: "repo slug", filter: Filter{Query: "acme/"}, want: []string{"p3", "p11"}},
@@ -112,7 +113,7 @@ func TestGroup(t *testing.T) {
 // prerequisites, one in another plan and one standalone.
 func fixtureView() []control.Item {
 	return []control.Item{
-		{ID: "p24", Kind: "plan", Repo: "r1", Title: "Control server rollout", State: "executing", ApprovedVersion: 2},
+		{ID: "p24", Kind: "plan", Repo: "r1", Title: "Control server rollout", State: "planned", Status: "executing", ApprovedVersion: 2},
 		{ID: "r1", Kind: "repo", Slug: "dinoderek/engine"},
 		{ID: "t30", Kind: "task", Plan: "p24", Title: "Acceptance", State: "todo", Depends: []string{"t26", "t28", "t29"}},
 		{ID: "t26", Kind: "task", Plan: "p24", Title: "Store", State: "done"},

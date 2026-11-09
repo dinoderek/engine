@@ -30,6 +30,8 @@ type Item struct {
 	Attempt         string   `json:"attempt,omitempty"`
 	Coordinating    bool     `json:"coordinating,omitempty"`
 	ApprovedVersion int      `json:"approved_version,omitempty"`
+	// Status is a plan's PlanStatus in read responses. It is never stored.
+	Status string `json:"status,omitempty"`
 	// StoppedAt is when the operator last stopped this item's coordination.
 	StoppedAt time.Time `json:"stopped_at,omitzero"`
 }

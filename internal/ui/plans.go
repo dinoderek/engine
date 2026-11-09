@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"slices"
 	"sort"
 	"strings"
@@ -23,7 +24,8 @@ type Repo struct {
 	Title string `json:"title"`
 }
 
-// PlanRow is one plan's metadata in the plan list.
+// PlanRow is one plan's metadata in the plan list. State is the plan's
+// status (control.PlanStatus), as the server reports it.
 type PlanRow struct {
 	ID    string `json:"id"`
 	Repo  string `json:"repo"`
@@ -96,10 +98,10 @@ func planList(repos, plans []control.Item, f Filter) PlanList {
 	byNumber(out.Repos, func(r Repo) string { return r.ID })
 	query := strings.ToLower(strings.TrimSpace(f.Query))
 	for _, p := range plans {
-		if !slices.Contains(out.States, p.State) {
-			out.States = append(out.States, p.State)
+		row := PlanRow{ID: p.ID, Repo: p.Repo, Slug: slugs[p.Repo], Title: p.Title, State: cmp.Or(p.Status, p.State)}
+		if !slices.Contains(out.States, row.State) {
+			out.States = append(out.States, row.State)
 		}
-		row := PlanRow{ID: p.ID, Repo: p.Repo, Slug: slugs[p.Repo], Title: p.Title, State: p.State}
 		if matches(row, f, query) {
 			out.Plans = append(out.Plans, row)
 		}
@@ -128,7 +130,7 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 		items[it.ID] = it
 	}
 	plan := items[id]
-	out := PlanDetail{Plan: PlanRow{ID: plan.ID, Repo: plan.Repo, Slug: items[plan.Repo].Slug, Title: plan.Title, State: plan.State}, Tasks: []TaskRow{}}
+	out := PlanDetail{Plan: PlanRow{ID: plan.ID, Repo: plan.Repo, Slug: items[plan.Repo].Slug, Title: plan.Title, State: cmp.Or(plan.Status, plan.State)}, Tasks: []TaskRow{}}
 	hosts := activeHosts(live)
 	feedback := feedbackByTask(sessions)
 	asked := planQuestion(id, sessions)

@@ -51,16 +51,17 @@ func acceptPlans(t *testing.T, d *dashboard, w *world) {
 	status, _ := d.get(t, "/api/plans", &all)
 	check(t, status == 200 && all.Total == 3, "plans: %d %+v", status, all)
 	check(t, len(all.Repos) == 2 && all.Repos[0].Slug == "owner/alpha" && all.Repos[1].Slug == "owner/beta", "repos: %+v", all.Repos)
-	check(t, slices.Equal(all.States, []string{"executing", "prepare"}), "states: %v", all.States)
+	// Rollout is blocked by its needs-human task, hardening by its plan question.
+	check(t, slices.Equal(all.States, []string{"blocked", "prepare"}), "states: %v", all.States)
 	check(t, slices.Equal(planIDs(all), []string{w.rollout.ID, w.hardening.ID, w.backup.ID}), "plan order: %v", planIDs(all))
-	check(t, all.Plans[0].Slug == "owner/alpha" && all.Plans[0].Title == "Dashboard rollout" && all.Plans[0].State == "executing", "plan row: %+v", all.Plans[0])
+	check(t, all.Plans[0].Slug == "owner/alpha" && all.Plans[0].Title == "Dashboard rollout" && all.Plans[0].State == "blocked", "plan row: %+v", all.Plans[0])
 
 	for query, want := range map[string][]string{
-		"?repo=" + w.beta.ID + "&state=executing&q=HARD": {w.hardening.ID},
-		"?repo=" + w.beta.ID + "&q=rollout":              nil,
-		"?q=OWNER/ALPHA":                                 {w.rollout.ID, w.backup.ID},
-		"?q=" + strings.ToUpper(w.backup.ID):             {w.backup.ID},
-		"?state=prepare&cached=1":                        {w.backup.ID},
+		"?repo=" + w.beta.ID + "&state=blocked&q=HARD": {w.hardening.ID},
+		"?repo=" + w.beta.ID + "&q=rollout":            nil,
+		"?q=OWNER/ALPHA":                               {w.rollout.ID, w.backup.ID},
+		"?q=" + strings.ToUpper(w.backup.ID):           {w.backup.ID},
+		"?state=prepare&cached=1":                      {w.backup.ID},
 	} {
 		var got ui.PlanList
 		d.get(t, "/api/plans"+query, &got)

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"slices"
 	"time"
 
@@ -59,8 +60,9 @@ type Thread struct {
 // messageKinds includes ruling, a plan update kind stored records may hold.
 var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved", "ruling"}
 
+// itemDetail shows a plan's status, as the plan list does, and a task's state.
 func itemDetail(it control.Item) ItemDetail {
-	return ItemDetail{ID: it.ID, Kind: it.Kind, Repo: it.Repo, Plan: it.Plan, Title: it.Title, State: it.State, Description: RenderMarkdown(it.Body)}
+	return ItemDetail{ID: it.ID, Kind: it.Kind, Repo: it.Repo, Plan: it.Plan, Title: it.Title, State: cmp.Or(it.Status, it.State), Description: RenderMarkdown(it.Body)}
 }
 
 // threadWindow projects one item's updates, oldest first. It returns the

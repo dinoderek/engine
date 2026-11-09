@@ -8,12 +8,12 @@
   The coordinator, inside `engine serve`, is no agent and never edits code.
 - **Stateless.** Each pass derives everything from the server's records and
   each host's tmux sessions, `claude agents --json` and run directories.
-  A restarted server picks up the sessions still live.
+  A restarted server adopts live sessions.
 - **One pass** runs every 30 seconds and once at start. `internal/reconcile`
   decides from records and fresh host reads, merges first. A pass reads every
   host's `status` in parallel; the session view's observer reuses those reads
   (`control-server.md`, "Session view"). Stopping coordination leaves
-  sessions running.
+  sessions running. Plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -48,7 +48,7 @@ run, then applies the same rule. Unknown dispatch outcomes stay reserved.
 
 ## Merges and merge locks
 
-One lock per repository covers every plan and standalone task. Acquiring is
+One lock per repository covers its plans and standalone tasks. Acquiring is
 atomic and records the owner and a fresh token; locks never expire, and an
 ended attempt keeps its lock. `engine lock release` needs the token `engine
 lock acquire` keeps in the run directory, so a late release cannot free
@@ -59,7 +59,7 @@ sessions. Holding the lock, the executor runs `engine task merge-ready` for
 the task's in-review PR. A question or `needs-human` holds the merge, so
 operator approval comes first.
 
-Each pass the coordinator answers the newest request with the `merge` op of
+Each pass answers the newest request with the `merge` op of
 the task's host and that host's `gh`; the server has no GitHub credential. A
 merge marks the task done with its PR and frees the lock in one transaction;
 the session keeps its window 10 minutes to report. A done task's session is
@@ -67,7 +67,7 @@ released once idle 10 minutes; releasing one whose background job still runs
 is a notice. An op refusal or a missing
 lock is a `merge-refused` update that wakes the executor. Pending checks wait
 and are never a stall. A failed `gh` call notifies the operator and waits for
-their acknowledgement.
+acknowledgement.
 
 After checking the host and PR, the operator can inspect `engine lock show
 <repo-id>` and `engine lock recover` with the current attempt, its token file
