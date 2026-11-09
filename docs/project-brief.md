@@ -22,18 +22,23 @@ asks.
 
 ## State
 
-Built: the control server and its CLI, `engine version`,
-`engine start --check` (the preflight session, on this machine or another one over SSH), `engine host` (its ops), `engine ps`, `engine attach`, `engine tell`, `engine lint`, `engine run` (across hosts), `engine ui` (a read-only local dashboard), the host config reader
-(`internal/hosts`), the `build` and `engine` skills and their merge guard (a Claude Code
-plugin this repo publishes), and the repo's own tooling: `./dev` and its
-quality gates.
+Built: the control server and its CLI with the one coordinator it runs
+(dispatch, recovery and merges across hosts), `engine start --check` (the
+preflight session), `engine host`, `engine ps`, `engine attach`, `engine tell`,
+`engine lint`, `engine run`, `engine ui` (a read-only local dashboard), the
+host config reader (`internal/hosts`), the `build` and `engine` skills and
+their merge guard (a plugin this repo publishes), and the repo's own tooling:
+`./dev` and its quality gates.
 engine is the first worked example of the project context guideline's core.
 
 ## Scope
 
-- **In:** the protocol, control server, coordinator, skill, host config, telemetry design, and the project context guideline.
-- **Out:** dashboard writes, phone push, automatic tracker migration, and deploys:
-  engine has no deploy target, so `./dev` has no `deploy` verb.
+- **In:** the protocol, control server and its single coordinator, the two
+  skills, host config, telemetry design, and the project context guideline.
+  The control server is the only plan source; GitHub carries code, PRs and CI.
+- **Out:** dashboard writes, phone push, GitHub issues or in-repo files as
+  plans, and deploys: engine has no deploy target, so `./dev` has no `deploy`
+  verb.
 
 ## Stack
 

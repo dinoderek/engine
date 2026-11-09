@@ -1,9 +1,11 @@
-> **Owns:** server deployment, records, API, credentials, inbox, coordination recovery, repository merges and merge locks. **Not here:** host configuration (`hosts-and-sessions.md`), how the coordinator reaches hosts and reads session signals (`coordinator.md`), executor practices (the engine skill).
+> **Owns:** server deployment, records, API, credentials, the inbox, the dashboard and the session view. **Not here:** dispatch, recovery, merges and merge locks, host calls and session signals (`coordinator.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
 
 # Control server
 
-`engine serve` owns plans, tasks, updates, execution attempts and merge locks.
-GitHub supplies code, PRs and CI; task state and comms stay in the server.
+`engine serve` owns plans, tasks, updates, execution attempts and merge locks,
+and runs the coordinator. GitHub supplies code, PRs and CI; task state and
+comms stay in the server. For dispatch, recovery, merges and locks, load
+`coordinator.md`.
 
 ## Start
 
@@ -203,60 +205,3 @@ An unreachable host, unreadable run records or an old observation give
 `unknown`. The cache drops ended and
 replaced attempts and starts empty with the server. The timings are the
 constants in `internal/controlrun/observe.go`.
-
-## Dispatch and recovery
-
-Each pass, `internal/reconcile` decides persisted coordination intent from
-records and fresh host reads, merges first. Plans are serialized against
-fresh fleet capacity. A dispatch records its attempt, host and credential
-before calling the host. Restart adopts matching sessions or retries the
-same dispatch identity on that host. An unreachable host means unknown,
-never dead. A dispatch for a task whose earlier attempt ran is a resume: the
-host opens the task's branch from `origin` (`hosts-and-sessions.md`). A new
-attempt first releases the ended one's session there, once a read shows its
-window gone. A refused dispatch retries each pass, noticing once per
-attempt.
-
-The host serializes dispatches by run ID and returns an existing run on
-replay. It uses ordinary Git credentials and identity, with isolated clones
-under `~/.local/share/engine/control-repos`. Credentials travel through
-SSH stdin into an owner-only run file. The window command exports the file's
-path; joined Codex sessions receive that path too. The server-session record
-lets hooks recover their connection from a worktree. Credential and lock-token
-files are excluded from collected artifacts.
-
-A window gone from a host that answered ends its attempt `vanished` if the
-task is resumable: coordination stopped after the window was last seen live,
-or the window was seen live and the task has a PR or open question, unless
-it resumed a vanished attempt. The task keeps its state and resumes once any
-question is resolved. Otherwise attempt and task end `failed`.
-
-`engine attempt reconcile <id> --body <evidence>` is operator-only. The
-server requires a successful host observation with no live matching window
-and a recorded run, then applies the same rule. Unknown dispatch outcomes
-remain reserved. An ended attempt keeps its merge lock.
-
-## Merges and merge locks
-
-One repository lock covers every plan and standalone task. Acquiring is
-atomic, recording the owner and a fresh token; locks never expire.
-`engine lock release` requires the token `engine lock acquire` keeps in the
-run directory, so a late release cannot free another attempt's lock.
-
-Executors never merge: the pre-tool hook refuses PR merges in server
-sessions. Holding the lock, the executor runs `engine task merge-ready` for
-the task's in-review PR. A question or `needs-human` holds the merge, so
-operator approval comes first.
-
-Each pass, the coordinator answers the newest request with the `merge` op of
-the task's host (`coordinator.md`) and that host's `gh`; the server has no
-GitHub credential. A merge marks the task done with its PR and frees the
-lock in one transaction; the session keeps its window 10 minutes to report.
-An op refusal or a missing lock is a `merge-refused` update that wakes the
-executor. Pending checks wait and are never a stall. A failed `gh` call
-notifies the operator and waits for their acknowledgement.
-
-After checking the host and PR outcome, the operator can inspect
-`engine lock show <repo-id>` and use `engine lock recover` with the current
-attempt, its token file and reconciliation evidence. Recovery requires an
-ended attempt. Manual merges outside engine can still move the default branch.

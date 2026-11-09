@@ -65,9 +65,8 @@ non-test imports. The reasons:
 - **Coordination derives decisions from authoritative records and host
   observations.** The server persists intent and execution identities.
   Coordinators never edit code; the server's coordinator merges its tasks.
-  For server changes, load
-  `control-server.md`; for host reach and session signals, load
-  `coordinator.md`.
+  For server records and API, load `control-server.md`; for dispatch, merges,
+  host reach and session signals, load `coordinator.md`.
 - **The reconcile core has no CLI assumptions.** `internal/reconcile` reads
   only its View. `internal/cli` stays a thin dispatcher.
 - **Tooling is Go too.** The repo has one toolchain. A lane is either one
