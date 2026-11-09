@@ -145,8 +145,8 @@ like:
 - `engine ui`: the same reads in a browser (`control-server.md`,
   "Dashboard").
 
-A task whose digest holds more than two `review` rulings had a weak card:
-raise it at the next Prepare.
+A task with many `review` rulings had a weak card (`execution-protocol.md`,
+"Rulings and hard stops"): raise it at the next Prepare.
 
 **Engine bugs.** When the coordinator misses something (a stall it never
 raised, a merge it never made, a state that is wrong), file an issue on

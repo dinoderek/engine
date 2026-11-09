@@ -83,8 +83,8 @@ Attaching is the interactive channel.
 ## Merge conflicts
 
 There is no file ownership: parallelism comes only from dependencies, and an
-executor resolves conflicts by merging the default branch. Each merge moves the default branch and forces a
-re-gate of every other open PR, so each repository has one merge lock
-(`coordinator.md`, "Merges and merge locks"): its holder merges the default
-branch, gates and requests its merge while the others wait before their last
-gate run.
+executor resolves conflicts by merging the default branch. Each merge moves
+the default branch and forces a re-gate of every other open PR, so each
+repository has one merge lock (`coordinator.md`, "Merges and merge locks"):
+its holder merges the default branch, gates and requests its merge while the
+others wait before their last gate run.

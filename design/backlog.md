@@ -21,6 +21,11 @@ Open work not yet in a plan. Delete each item when it is done.
 5. **Claude's suggested next prompt.** An idle Claude session shows a
    suggested prompt in its input box, which reads like an operator's unsent
    draft. Disable prompt suggestions in engine sessions if the CLI allows it.
+6. **Live limit recovery.** A real Claude or Codex limit stop, and the
+   coordinator's automatic resume after the reset, under `engine serve`, have
+   only been proved by tests and a recorded Codex failed-turn replay.
+7. **Codex sessions in the ChatGPT app.** Joined Codex sessions show in the
+   Codex app; the ChatGPT app has not been checked.
 
 ## Parked
 

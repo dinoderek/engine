@@ -5,16 +5,16 @@
 ## Run record
 
 Each run has a directory on its host,
-`~/.local/share/engine/runs/<run-id>/`. The host and the coordinator read it;
-nothing leaves the host.
+`~/.local/share/engine/runs/<run-id>/`. The host reads it, and the
+coordinator reads it through the `collect` and `status` host ops; nothing is
+uploaded.
 
 `run.json` is the run's index, written once at spawn. The host's `spawn` op
 writes the identity its caller passed (run ID, repo, task, host, harness,
 tier, model, effort, mode, and whether it is heavy: `hosts-and-sessions.md`,
 "Hosts"), the session name, tmux target (by window id, such as `engine:@3`),
 branch, worktree, the pane log's path and the spawn time, with `schema: 1`.
-`Record` in `internal/session/record.go` holds the field names. A writer that
-adds a field keeps the others.
+`Record` in `internal/session/record.go` holds the field names.
 
 The directory also holds `pane.log` (the window's raw output) and
 `permissions.jsonl`: one JSON line per permission request the hook denied or,
