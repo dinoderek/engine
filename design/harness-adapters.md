@@ -9,8 +9,9 @@ Claude Code and Codex become two adapters behind one interface. The core
 (`hostops`, `setup`, `hook`, `cli`, `reconcile`, `controlrun`) knows only the
 interface and a harness's name as data. Every Codex app feature stays, inside
 the Codex adapter: joining engine's daemon, thread titles, project filing and
-the connection check. No behaviour a running session can see changes, except
-the hook command lines agreed below.
+the connection check. No engine session runs while this lands (it is built
+outside engine), so nothing keeps backwards compatibility: hook command lines
+and the status wire format change freely.
 
 `reconcile` and `controlrun` are already harness-neutral: they carry harness
 names as data, and read `Status.SignedOut`, `Window.State` and the quota
@@ -20,10 +21,10 @@ fields. They change only through their imports of `hostops` types.
 
 | Package | Holds | May import (first-party) |
 | --- | --- | --- |
-| `internal/harness` | the interfaces and their neutral types (`Launch`, `Snapshot`, `Event`, `Step`, `Outcome`, …), `Set` | `internal/hosts`, `internal/session` |
+| `internal/harness` | the interfaces and their neutral types (`Launch`, `Snapshot`, `Event`, `Step`, `Outcome`, …), `Adapters` | `internal/hosts`, `internal/session` |
 | `internal/harness/claude` | the Claude Code adapter | `internal/harness`, `internal/hosts`, `internal/session` |
 | `internal/harness/codex` | the Codex adapter | `internal/harness`, `internal/hosts`, `internal/session` |
-| `internal/harness/registry` | `New(harness.Env) harness.Set`: the one list of adapters, and the default | `internal/harness`, `internal/harness/claude`, `internal/harness/codex` |
+| `internal/harness/registry` | `New(harness.Env) harness.Adapters`: the one list of adapters, and the default | `internal/harness`, `internal/harness/claude`, `internal/harness/codex` |
 
 **Deviation from the brief:** the registry is its own package, not part of
 `internal/harness`. The adapters import `internal/harness` for its types, so
@@ -33,7 +34,7 @@ the list and still needs one package to import them; an explicit registry is
 plainer.
 
 **Composition roots.** The core gets adapters injected, never looked up:
-`hostops.Deps.Harnesses` and `setup.Deps.Harnesses` are a `harness.Set`, and
+`hostops.Deps.Harnesses` and `setup.Deps.Harnesses` are a `harness.Adapters`, and
 `cli.Env.Harnesses` feeds the hook entries. Only the three packages that build
 a `hostops.Deps` today, `internal/cli`, `internal/controlcmd` and
 `internal/start`, import the registry. So hostops and reconcile tests inject a
@@ -52,8 +53,8 @@ type Env struct {
 	Now    func() time.Time
 }
 
-// Set is the adapters engine knows, by name.
-type Set interface {
+// Adapters is every adapter engine knows, by name. The registry builds it.
+type Adapters interface {
 	// Get returns the adapter called name; "" is the default (Claude today).
 	Get(name string) (Adapter, bool)
 	// Names lists them in a fixed order, for usage text, setup and release.
@@ -97,10 +98,12 @@ type Launcher interface {
 	Join(bin, line string) (joined bool, warning string)
 	// Trust makes dir, a folder in clone, trusted, so no prompt blocks start.
 	Trust(dir, clone string, joined bool) error
-	// Release removes what this session left: Trust's entries for dir and
-	// per-session files. An empty dir removes only what needs no folder. It
+	// Release deletes the files Trust and the launch wrote for this session
+	// alone: Codex's per-session profile, and dir's trust entry in engine's
+	// Codex config.toml. Claude has none (its trust key sits in a file every
+	// session shares). An empty dir removes only what needs no folder. It
 	// runs on every adapter at release, whatever the run's harness: a spawn
-	// that failed before run.json may have left them.
+	// that failed before run.json may have written them.
 	Release(dir string) error
 	// Env is the shell that exports the harness's config location, ending in
 	// " && ".
@@ -121,8 +124,7 @@ type Snapshot struct {
 	Quota     *session.Quota      // nil: unknown
 	SignedOut bool                // only when the harness's CLI says so
 	Sessions  map[string]State    // by window name; absent is unknown
-	Live      []LiveSession       // sessions the harness lists, engine's or not
-	Error     string              // why Sessions or Live are unknown
+	Error     string              // why Sessions are unknown
 }
 
 // State is a live window's state, as hostops.Window reports it.
@@ -134,12 +136,11 @@ type State struct {
 }
 ```
 
-`Status` keeps its wire shape (**Q1**): `quota[name]` from each snapshot's
-`Quota`, `signed_out` from `SignedOut`, each window's `state` fields from
-`Sessions`, and `agents` / `agents_error` from `Live` / `Error` (only Claude
-fills them; `LiveSession` keeps `session.Agent`'s JSON tags). The probe order
-stays: Codex reads quota before turns, as `probeCodex` does now, because both
-happen inside one `Observe`.
+`Status` becomes harness-neutral at wire protocol 5 (Q1, decided): `quota[name]`
+and `signed_out` as now, each window's state fields from `Sessions`, and a new
+`harness_errors` (name → why its sessions are unknown) in place of the
+Claude-shaped `agents` / `agents_error`, which nothing consumes. Codex still
+reads quota before turns, because both happen inside one `Observe`.
 
 ### Hooks
 
@@ -224,7 +225,7 @@ type Step struct {
 
 | Site today | Moves to |
 | --- | --- |
-| `hostops/harness.go`: `Claude`, `Codex`, `harness`, `harnessFor`, `claude{}`, `tmpReads` | interface → `harness`; `claude{}` → `harness/claude/launch.go`; `harnessFor` → `Set.Get`. `launch`/`launchCommand` stay in hostops (neutral), building `harness.Launch` |
+| `hostops/harness.go`: `Claude`, `Codex`, `harness`, `harnessFor`, `claude{}`, `tmpReads` | interface → `harness`; `claude{}` → `harness/claude/launch.go`; `harnessFor` → `Adapters.Get`. `launch`/`launchCommand` stay in hostops (neutral), building `harness.Launch` |
 | `hostops/codexharness.go`, `daemonenv.go` | `harness/codex/launch.go`, `join.go` |
 | `hostops/status.go`: `probe` switch, `listAgents`, `turnEnded`, Claude limit read | switch → loop over snapshots; Claude parts → `harness/claude/observe.go` |
 | `hostops/codexstate.go`, `codexturns.go`, `codexquota.go`, `codexws.go` | `harness/codex/observe.go`, `turns.go`, `quota.go`, `appserver.go`, `ws.go` |
@@ -233,7 +234,7 @@ type Step struct {
 | `hostops/release.go`: Codex untrust | loop: every adapter's `Session(name).Release(worktree)` |
 | `hostops/check.go`: `h.Name() == Codex` (twice), `CodexCheckKickoff`, Claude kickoff path | `HookedState()`, `CheckKickoff()` |
 | `hostops/hostops.go` `Deps.CodexQuota/CodexTurns/CodexLabel`, `JoinRemote` | Codex adapter's own options (tests inject); `JoinRemote` stays in hostops (it gates the call to `Join`) |
-| `hostops/command.go` usage `claude\|codex` | built from `Set.Names()` |
+| `hostops/command.go` usage `claude\|codex` | built from `Adapters.Names()` |
 | `hostops/permissions.go` comment on `hook.AutoReview` | the policy's logged decision string moves to `harness` (`LeaveToReview`) |
 | `cli/cli.go`: `Codex: run.harness == hostops.Codex`, hook usage lines, `statusline`/`limit`/`codex-label` cases | neutral entries (below); usage from the set |
 | `cli/hookrun.go`: `rec.Harness == hostops.Codex` | `adapter.Hooks().FindsRun()` |
@@ -255,47 +256,45 @@ type Step struct {
 
 ## The hook CLI
 
-New shape: `engine hook <entry> [--harness <name>] [args…]`.
+New shape: `engine hook <entry> --harness <name> [args…]`. Every entry names
+its harness on its own command line; the CLI resolves it through the registry
+and names no harness itself.
 
 - **Core entries** (in `cli`/`hook`, the same for every harness):
   `pre-tool-use` (the merge guard), `permission` (log, and the adapter's
   unattended policy), `state` (the state file, then `Signalled`).
 - **Adapter entries**, looked up in the named adapter's `Entries()`:
   Claude's `statusline` and `limit`, Codex's `label <run-dir> <thread>`.
-- **Without `--harness`**: a core entry takes the harness as today, from
-  `ENGINE_HARNESS`, else the run found by cwd, else the default. An adapter
-  entry goes to the one adapter that declares it.
-
-So the CLI names no harness and no harness-only entry, and every command line
-an installed plugin or a running session uses today keeps working unchanged,
-with no alias table:
+- **`--harness` is required.** Without it, or with a name the registry lacks,
+  or an entry the adapter lacks, the hook fails open (exit 1, which blocks
+  nothing). The run directory and unattended mode still come from the
+  environment, or for a joined Codex session from the run found by cwd.
+- **Hooks no longer read `ENGINE_HARNESS`**; the window still exports it.
 
 | Today | After |
 | --- | --- |
-| `engine hook pre-tool-use` | same (core, harness unused) |
-| `engine hook permission` | same (core; harness from env or run, as now) |
+| `engine hook pre-tool-use` | `engine hook pre-tool-use --harness claude\|codex` |
+| `engine hook permission` | `engine hook permission --harness claude\|codex` |
 | `engine hook state --harness claude\|codex` | same |
-| `engine hook statusline` (in running Claude sessions' `--settings`) | resolves to Claude's entry |
-| `engine hook limit` | resolves to Claude's entry |
-| `engine hook codex-label <dir> <thread>` | Codex declares `label` and, for one release, `codex-label` (a detach in flight across a binary update) |
+| `engine hook statusline` (Claude's `--settings`) | `engine hook statusline --harness claude` |
+| `engine hook limit` | `engine hook limit --harness claude` |
+| `engine hook codex-label <dir> <thread>` | `engine hook label --harness codex <dir> <thread>` |
 
-**Migration: both.** Old lines keep working (above), and setup updates the
-plugin: the manifests move to `--harness` on every entry and the plugin
-version bumps (both `plugin.json` files), which `engine setup` installs on
-each host for Claude and into engine's Codex home for Codex. Sessions keep
-the hooks they loaded until they end, which is why the old lines must work.
-The operator's own Codex home updates by hand (`codex plugin update`), as
-today. A later PR may drop the `codex-label` alias.
+**Migration: none.** No engine session runs while this lands, so no old
+command line keeps working and there is no alias. The manifests switch to the
+new lines and the plugin version bumps in both `plugin.json` files; `engine
+setup` installs it for Claude on each host and into engine's Codex home. The
+operator's own Codex home updates by hand (`codex plugin update`).
 
-**Q2 (behaviour change, hard stop).** With `--harness` in the manifests, the
-permission hook takes the harness from the manifest, not the inherited
-`ENGINE_HARNESS`. Today a Claude reviewer that a Codex executor starts
-inherits `ENGINE_HARNESS=codex`, so its unattended permission requests are
-logged as "left to auto-review" instead of denied, and Claude then prompts
-in an unattended window. The state hook already guards this case with
-`--harness`. *Recommendation:* take the manifest's harness (the fix), and
-keep `ENGINE_UNATTENDED` and the run directory from the environment as now.
-Alternative: keep today's precedence (env wins) and file the bug separately.
+**Q2 (hard stop: behaviour change).** The manifest is the plugin's hook
+config (`plugins/engine/hooks/hooks.json`, `plugins/engine/.codex-plugin/plugin.json`):
+the harness runs its command line and nothing else, so a hook learns its
+harness only from its command line or its environment. A Claude reviewer
+started inside a Codex run inherits `ENGINE_HARNESS=codex` and
+`ENGINE_UNATTENDED=1`; today its permission hook leaves requests to an
+auto-review Claude has not got, so Claude prompts in an unattended window.
+With `--harness` required, the hook knows its real harness and denies, as for
+every unattended Claude request. *Recommendation:* accept that fix.
 
 ## Import rules and the leak check
 
@@ -456,9 +455,9 @@ doc comments.
   session and hosts move to `harness/codex`; Claude's statusline, limit,
   trust, agents and sign-in tests to `harness/claude`. The process-level
   tests (`codexturns_process_test.go`, `setup/codexproc_test.go`) move as is.
-- **CLI tests** prove every command line in the "Today" column above still
-  runs the same handler, and that `--harness` on an adapter entry of another
-  adapter fails open (exit 1).
+- **CLI tests** prove every new command line runs its handler, and that a
+  missing or unknown `--harness`, or an entry the named adapter lacks, fails
+  open (exit 1).
 - **Lane test** as in the leak check section.
 - **Coverage** stays ≥ 80%; the lane names any file below, per PR.
 
@@ -471,7 +470,7 @@ behaviour-preserving on its own:
    the fake and contract suite, hostops on the interface, the `session` and
    `hosts` moves, import rules. Docs: paths only.
 2. **Hooks.** Neutral entries, adapter `Hooks`, manifests with `--harness`,
-   plugin version bump, CLI compatibility tests (and Q2's ruling).
+   plugin version bump, CLI tests (and the Q2 fix).
 3. **Setup and check.** Adapter `Setup` steps and `CheckKickoff`.
 4. **Leak lane and docs.** `harness-names` lane (now at zero), `harnesses.md`,
    doc comments, removal of `claude.md` and `codex.md`, the other docs' cuts.
@@ -481,28 +480,11 @@ because `harnesses.md` describes the interface the first three build. The
 operator's docs priority could instead go first as a docs-only PR that moves
 the quirks into today's files' doc comments (they then move with the code).
 
-## Open questions
+## Decisions
 
-- **Q1. Status wire format.** `agents` and `agents_error` are Claude-shaped.
-  *Recommendation:* keep wire protocol 4 unchanged in this work (filled from
-  `Snapshot.Live`/`Error`); neutralising it means a protocol bump, which
-  makes every un-updated host unreachable until setup, and is a separate
-  change.
-- **Q2.** Permission harness precedence (above). Hard stop: it changes what
-  a running session sees once its plugin updates.
-- **Q3. Setup step numbers.** Today Claude's plugin and sign-in are steps 3
-  and 5, between core steps, and Codex's are 7–11. With adapter steps after
-  the core's, a remote host's report reads 1 tools, 2 engine, 3 config, 4 no
-  suspend, 5 claude plugin, 6 claude sign-in, 7–11 codex…, 12 gh auth, 13
-  preflight. *Recommendation:* accept the renumbering; nothing parses it.
-- **Q3b. Claude on a Codex-only host.** Today `claude` is a required tool and
-  its plugin and sign-in run on every host. With adapters, a host runs only
-  the steps of the harnesses it lists. *Recommendation:* adopt it (every
-  current host lists both, so nothing changes in practice); else keep Claude's
-  steps unconditional.
-- **Q4.** The leak lane (above).
-- **Q5.** The split (above).
-- **Q6. Concurrent work.** Before implementing I fetch `origin/main`; if the
-  merge-queue, plan-question, derived-state or docs-trim PRs are still open,
-  I ask you whether to wait. PR 1 touches `hostops` hardest, so it is the one
-  that would conflict.
+- **Q1** No backwards compatibility: status wire protocol 5 (above).
+- **Q2** Open: confirm the permission-harness fix (above).
+- **Q3, Q3b, Q4, Q5, Q6** As recommended: sequential setup step numbers;
+  a host runs only the setup steps of the harnesses it lists; the
+  `harness-names` lane is a ruling; four PRs, docs last; fetch `origin/main`
+  first and ask if the concurrent PRs are still open.
