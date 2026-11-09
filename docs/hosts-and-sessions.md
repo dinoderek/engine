@@ -119,9 +119,10 @@ branch. It holds letters, digits, `_`, `.` and `-`, and does not start with
 
 The coordinator dispatches a task's session on the host placement picks
 (`control-server.md`, "Dispatch and recovery"). It decides the model, effort
-and kickoff from the task's tier, then has the host run its own `sync-repo`
-and `spawn` ops (`coordinator.md`, "Reaching hosts"), in-process for this
-host, over SSH for another. The host's `spawn` refuses when the host file,
+and kickoff from the task's tier, then has the host run its `control-spawn`
+op (`coordinator.md`, "Reaching hosts"), in-process for this host, over SSH
+for another: it syncs engine's clone, then runs the steps below. The host's
+spawn refuses when the host file,
 `hosts.toml` or this host's entry is missing; the harness is unknown or not
 run on the host, or its binary is not executable; its window exists; or no
 slot is free, or no heavy slot for a heavy task. The coordinator itself

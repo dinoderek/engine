@@ -44,19 +44,19 @@ func TestUpstream(t *testing.T) {
 	}
 }
 
-func TestSection(t *testing.T) {
+func TestSectionText(t *testing.T) {
 	body := "## Outcome\nIt works.\n<!-- note -->\n\n### Detail\nx\n## Open\n- a\n## Outcomes\nno\n"
 	// A ### subheading stays inside its section; a comment is dropped.
-	if got, ok := Section(body, "Outcome"); !ok || got != "It works.\n\n\n### Detail\nx" {
+	if got, ok := sectionText(body, "Outcome"); !ok || got != "It works.\n\n\n### Detail\nx" {
 		t.Errorf("outcome %q %v", got, ok)
 	}
-	if got, ok := Section(body, "Open"); !ok || got != "- a" {
+	if got, ok := sectionText(body, "Open"); !ok || got != "- a" {
 		t.Errorf("open %q %v", got, ok)
 	}
-	if _, ok := Section(body, "Tests"); ok {
+	if _, ok := sectionText(body, "Tests"); ok {
 		t.Error("found Tests")
 	}
-	if _, ok := Section("##Outcome\nx", "Outcome"); ok {
+	if _, ok := sectionText("##Outcome\nx", "Outcome"); ok {
 		t.Error("read ##Outcome as a heading")
 	}
 }

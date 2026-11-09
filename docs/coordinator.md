@@ -15,14 +15,12 @@ For storage, dispatch recovery, merges and the operator inbox, load
 - **Never edits code.** It merges a task's PR on the task's host
   (`control-server.md`).
 
-Passes run every 5 minutes. Between passes, a session check runs every 60
-seconds. It reads every host's `status`, parallel calls, and starts a pass
-early when a session has started, ended, become known or unknown, changed
-state or limit reset, or has waited long enough to stall or resume from a
-limit. A pass reads sessions and fleet quota from those replies, keeping the
-newest observation per harness; expired windows read 0%. Designed, not built:
-a pass on each webhook event (`gh webhook forward` to a localhost endpoint),
-and coalescing events that arrive mid-pass.
+Passes run every 30 seconds, and once at start. A pass reads every host's
+`status`, parallel calls, and reads sessions and fleet quota from those
+replies, keeping the newest observation per harness; expired windows read 0%.
+The session view's observer reuses those reads and refreshes the stale ones
+(`control-server.md`, "Session view"). Designed, not built: a pass on each
+webhook event (`gh webhook forward` to a localhost endpoint).
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -45,6 +43,7 @@ host names or addresses, load `hosts-and-sessions.md`.
 
 | Op | Does |
 | --- | --- |
+| `control-spawn` | What the coordinator calls: syncs engine's isolated clone of the repo, then runs `spawn` with the run's credentials (`control-server.md`, "Dispatch and recovery"). |
 | `sync-repo` | Makes sure engine's own clone exists, fetches it, and returns its default branch. |
 | `spawn` | Creates the worktree with the repo's command (`git worktree add` if it has none), trusts it for the harness the caller names (Claude by default), opens the tmux window, launches the harness with the caller's model, effort and kickoff (on stdin), and writes `run.json`. |
 | `status` | Lists the windows of the session `engine` (alive, exit code, harness, state), `claude agents --json`, the newest run of each session name, quota per harness (Claude’s newest run observation and a live Codex reading), free slots and free heavy slots, the last 20 screen lines of each window whose session is not working, and a waiting window's newest `permissions.jsonl` denial (`telemetry.md`). |
@@ -103,7 +102,9 @@ harness list shows it (`claude.md`, "Session list"); otherwise its liveness,
 like a failed call's, is unknown. A session in `needs-human` or `in-review`
 keeps that state while alive.
 
-**Stalls.** Limited sessions never stall. A session that has waited for 10
+**Stalls.** Limited sessions never stall. A dispatched session that has not
+claimed its task 5 minutes after it started is noticed once, and one that
+ended before claiming is restarted. A session that has waited for 10
 minutes while its task is open and not `needs-human` has stopped outside the
 protocol, as on a question asked in the session. The coordinator notifies the
 operator with the last screen `status` sent, once per session start or wait.

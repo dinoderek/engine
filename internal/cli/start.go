@@ -71,7 +71,7 @@ func parseCheck(args []string) (checkArgs, error) {
 		case strings.HasPrefix(arg, "-"):
 			return a, fmt.Errorf("unknown flag %s", arg)
 		default:
-			return a, fmt.Errorf("engine start takes no task, got %s", arg)
+			return a, fmt.Errorf("takes no task, got %s", arg)
 		}
 	}
 	if !check {

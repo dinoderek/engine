@@ -22,7 +22,7 @@ const (
 )
 
 // RunDirVar gives a session its run directory, UnattendedVar set to "1"
-// marks a session nobody is watching (engine start sets it in hands-off
+// marks a session nobody is watching (the host's spawn sets it in hands-off
 // mode), and HarnessVar names the harness engine launched, so a hook that
 // both harnesses run can tell them apart.
 const (

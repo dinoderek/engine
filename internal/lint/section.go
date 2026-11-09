@@ -10,10 +10,10 @@ var (
 	nextHeading = regexp.MustCompile(`^#{1,2}[ \t]`)
 )
 
-// Section returns the text under the `## <heading>` line of a task body, up
+// sectionText returns the text under the `## <heading>` line of a task body, up
 // to the next heading, without HTML comments, and whether the heading is
 // there.
-func Section(body, heading string) (string, bool) {
+func sectionText(body, heading string) (string, bool) {
 	body = htmlComment.ReplaceAllString(strings.ReplaceAll(body, "\r\n", "\n"), "")
 	var section []string
 	in, found := false, false

@@ -19,7 +19,7 @@ func TestParseCheck(t *testing.T) {
 		{"on a host", []string{"--check", "--host", "devbox"}, checkArgs{Host: "devbox"}, ""},
 		{"host before check", []string{"--host=devbox", "--check"}, checkArgs{Host: "devbox"}, ""},
 		{"no --check", []string{"--host", "devbox"}, checkArgs{}, "only --check is left"},
-		{"a task", []string{"--check", "t7"}, checkArgs{}, "engine start takes no task, got t7"},
+		{"a task", []string{"--check", "t7"}, checkArgs{}, "takes no task, got t7"},
 		{"a tier", []string{"--check", "--tier", "deep"}, checkArgs{}, "unknown flag --tier"},
 		{"a mode", []string{"--mode=gated", "--check"}, checkArgs{}, "unknown flag --mode=gated"},
 		{"flag without a value", []string{"--check", "--harness"}, checkArgs{}, "--harness needs a value"},

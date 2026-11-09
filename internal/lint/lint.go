@@ -56,7 +56,7 @@ func planProblems(tasks []task) []Problem {
 func sectionProblems(t task, sections []section) []Problem {
 	var problems []Problem
 	for _, r := range sections {
-		text, ok := Section(t.body, r.Heading)
+		text, ok := sectionText(t.body, r.Heading)
 		switch {
 		case !ok:
 			problems = append(problems, Problem{t.name, "no ## " + r.Heading + " section"})
@@ -143,7 +143,7 @@ func sharedQuestions(tasks []task) []Problem {
 	owner := map[string]string{}
 	var problems []Problem
 	for _, t := range tasks {
-		text, _ := Section(t.body, "Open")
+		text, _ := sectionText(t.body, "Open")
 		for _, q := range questions(text) {
 			prev, ok := owner[q]
 			switch {
