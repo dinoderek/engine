@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook pre-tool-use"
+            "command": "engine hook pre-tool-use --harness claude"
           }
         ]
       },
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook permission"
+            "command": "engine hook permission --harness claude"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook permission"
+            "command": "engine hook permission --harness claude"
           }
         ]
       }
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook limit"
+            "command": "engine hook limit --harness claude"
           }
         ]
       }
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook limit"
+            "command": "engine hook limit --harness claude"
           }
         ]
       }
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "engine hook limit"
+            "command": "engine hook limit --harness claude"
           },
           {
             "type": "command",

@@ -6,14 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/dinoderek/engine/internal/controlcmd"
 	"github.com/dinoderek/engine/internal/harness"
-	"github.com/dinoderek/engine/internal/harness/registry"
-	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
@@ -31,13 +27,11 @@ commands:
   merge-queue, attempt      a repository's merge queue and execution attempts
   ui [--listen <addr>]      serve the read-only dashboard on loopback (127.0.0.1:7332)
   version                   print the engine version
-  hook pre-tool-use         the merge guard, for Claude Code and Codex: reads the event on stdin
-  hook permission           log permission requests in unattended sessions, and deny
-                            Claude Code's (Codex's auto-review decides its own)
-  hook statusline           record Claude quota and print its status line
-  hook limit                record or clear a Claude usage limit
-  hook state [--harness h]  record a session's state from its hook event
-  hook codex-label <run-dir> <thread>  title a joined Codex thread and file it under its repo's project
+  hook <entry> --harness <name> [args]
+                            run a harness hook on the event on stdin: pre-tool-use
+                            (the merge guard), permission (log, and deny or leave
+                            to the harness's review in unattended sessions), state
+                            (record a session's state), or the harness's own
   ps [--json]               list server tasks
   attach <task>             attach to a task's tmux window, here or over SSH
   tell <task> <text>        message a task; a lone - reads the text from stdin
@@ -76,6 +70,9 @@ type Env struct {
 	Now    func() time.Time
 	// Detach starts this engine with args in the background, without waiting.
 	Detach func(args ...string) error
+	// Harnesses are the harness adapters; nil builds the registry's from
+	// Local, Home, Getenv and Now.
+	Harnesses harness.Adapters
 }
 
 // System is the Env of the running process.
@@ -125,43 +122,6 @@ func Run(args []string, env Env) int {
 	}
 }
 
-// runHook runs a harness hook. An unknown hook fails open (exit 1, which
-// blocks nothing) rather than 2, which a harness reads as "block": a plugin
-// can be newer than the engine binary it calls.
-func runHook(args []string, env Env) int {
-	if len(args) == 1 && args[0] == "pre-tool-use" {
-		return preToolUse(env)
-	}
-	if len(args) == 1 && args[0] == "permission" {
-		return permissionHook(env)
-	}
-	if len(args) == 1 && args[0] == "statusline" {
-		if err := hook.Statusline(env.In, env.Out, env.Getenv(session.RunDirVar), env.Now()); err != nil {
-			fmt.Fprintln(env.Err, "engine hook statusline:", err)
-			return 1
-		}
-		return 0
-	}
-	if len(args) == 1 && args[0] == "limit" {
-		if err := hook.Limit(env.In, env.Getenv(session.RunDirVar), env.Now()); err != nil {
-			fmt.Fprintln(env.Err, "engine hook limit:", err)
-			return 1
-		}
-		return 0
-	}
-	if len(args) == 1 && args[0] == "state" {
-		return stateHook(env, "")
-	}
-	if len(args) == 3 && args[0] == "state" && args[1] == "--harness" {
-		return stateHook(env, args[2])
-	}
-	if len(args) == 3 && args[0] == "codex-label" {
-		return codexLabelHook(env, args[1], args[2])
-	}
-	fmt.Fprintf(env.Err, "engine hook: unknown hook %q; update engine (go install ./cmd/engine)\n", strings.Join(args, " "))
-	return 1
-}
-
 // runHost runs one of this host's ops for a caller, which may be on another
 // host.
 func runHost(args []string, env Env) int {
@@ -171,47 +131,5 @@ func runHost(args []string, env Env) int {
 // hostDeps is what this host's ops run with.
 func hostDeps(env Env) hostops.Deps {
 	return hostops.Deps{Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now, JoinRemote: true,
-		Harnesses: registry.New(harness.Env{Exec: env.Local, Home: env.Home, Getenv: env.Getenv, Now: env.Now})}
-}
-
-// permissionHook runs the permission hook, logging to the run directory of
-// the session's run, when there is one.
-func permissionHook(env Env) int {
-	run, in := findHookRun(env)
-	h := hook.Permission{Out: env.Out, Err: env.Err, Unattended: run.unattended, Codex: run.harness == codexHarness, Now: env.Now()}
-	if run.dir != "" {
-		f, err := os.OpenFile(filepath.Join(run.dir, session.PermissionLog), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-		if err != nil {
-			fmt.Fprintln(env.Err, "engine hook: open the permission log:", err)
-		} else {
-			h.Log = f
-			code := h.Handle(in)
-			if err := f.Close(); err != nil {
-				fmt.Fprintln(env.Err, "engine hook: close the permission log:", err)
-			}
-			return code
-		}
-	}
-	return h.Handle(in)
-}
-
-// stateHook records the session's state in the run directory of the session's
-// run. Outside an engine run there is none, and it does nothing. With harness
-// set, it records only a run of that harness: a Claude reviewer that a Codex
-// executor starts inherits the Codex run's variables, and its turns are not
-// that run's.
-func stateHook(env Env, harness string) int {
-	run, in := findHookRun(env)
-	if run.dir == "" || harness != "" && run.harness != "" && harness != run.harness {
-		return 0
-	}
-	h := hook.State{Err: env.Err, Unattended: run.unattended}
-	h.Write = func(sig hook.Signal) error {
-		if err := session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID}); err != nil {
-			return err
-		}
-		labelCodexThread(env, run, sig)
-		return nil
-	}
-	return h.Handle(in)
+		Harnesses: adapters(env)}
 }

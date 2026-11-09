@@ -118,12 +118,11 @@ func TestPreToolUse(t *testing.T) {
 		"blocked merge": {eventJSON("Bash", "gh pr merge 7"), 2, "engine merge guard: gh pr merge needs --match-head-commit"},
 		"safe merge":    {eventJSON("Bash", "gh pr merge 7 --match-head-commit abc"), 0, ""},
 		"other tool":    {eventJSON("Write", "gh pr merge 7"), 0, ""},
-		"unreadable":    {"not json", 1, "unreadable PreToolUse event"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			var errOut bytes.Buffer
-			if code := PreToolUse(strings.NewReader(tt.in), &errOut); code != tt.code || !strings.Contains(errOut.String(), tt.stderr) {
+			if code := PreToolUse(parse(t, claudeHooks, tt.in), &errOut); code != tt.code || !strings.Contains(errOut.String(), tt.stderr) {
 				t.Errorf("exit %d, stderr %q; want %d, %q", code, errOut.String(), tt.code, tt.stderr)
 			}
 		})

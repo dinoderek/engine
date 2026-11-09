@@ -5,9 +5,11 @@ package harnesstest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,14 +23,33 @@ import (
 // env offers (an app-server, say) replaces those reads so they fail at once.
 type New func(env harness.Env) harness.Adapter
 
+// Fixtures are what an adapter's harness sends, for the contract to check
+// the adapter reads it.
+type Fixtures struct {
+	// Events are hook events as the harness sends them, with the kind each
+	// means; they should cover every kind the adapter reads.
+	Events []Event
+}
+
+// Event is one hook event fixture: Raw, the harness's JSON, is the event
+// called Name, of Kind.
+type Event struct {
+	Raw  string
+	Name string
+	Kind harness.EventKind
+}
+
 // Contract checks what the core relies on from every adapter.
-func Contract(t *testing.T, build New) {
+func Contract(t *testing.T, build New, fx Fixtures) {
 	t.Helper()
 	t.Run("name", func(t *testing.T) { checkName(t, build) })
 	t.Run("launch line", func(t *testing.T) { checkArgs(t, build) })
 	t.Run("release", func(t *testing.T) { checkRelease(t, build) })
 	t.Run("observe unknown", func(t *testing.T) { checkObserve(t, build) })
 	t.Run("check kickoff", func(t *testing.T) { checkKickoff(t, build) })
+	t.Run("hook events", func(t *testing.T) { checkEvents(t, build, fx) })
+	t.Run("hook replies", func(t *testing.T) { checkReplies(t, build) })
+	t.Run("hook entries", func(t *testing.T) { checkEntries(t, build) })
 }
 
 func env(t *testing.T, exec session.Runner) harness.Env {
@@ -138,5 +159,67 @@ func checkKickoff(t *testing.T, build New) {
 	k := a.CheckKickoff(marker)
 	if !strings.Contains(k, marker) || !strings.Contains(k, "tmux kill-window") {
 		t.Errorf("kickoff %q: want the marker and the window's own close", k)
+	}
+}
+
+// checkEvents: every fixture reads as its kind and keeps the harness's own
+// name; JSON that is not an event is an error, never an event.
+func checkEvents(t *testing.T, build New, fx Fixtures) {
+	h := build(env(t, failing)).Hooks()
+	if len(fx.Events) == 0 {
+		t.Fatal("no event fixtures")
+	}
+	for _, f := range fx.Events {
+		ev, err := h.Event([]byte(f.Raw))
+		if err != nil || ev.Kind != f.Kind || ev.Name != f.Name {
+			t.Errorf("%s: read as %+v, %v; want kind %s", f.Name, ev, err, f.Kind)
+		}
+	}
+	if _, err := h.Event([]byte("not json")); err == nil {
+		t.Error("JSON that is not an event read as one")
+	}
+	if ev, err := h.Event([]byte(`{"hook_event_name":"NoSuchEvent"}`)); err != nil || ev.Kind != harness.Other {
+		t.Errorf("an unknown event: %+v, %v; want kind %s", ev, err, harness.Other)
+	}
+}
+
+// checkReplies: a harness whose unattended requests are denied writes a
+// denial that is JSON and carries the message; Signalled, on a run that is
+// none of its business, neither fails nor starts anything.
+func checkReplies(t *testing.T, build New) {
+	h := build(env(t, failing)).Hooks()
+	if p := h.Unattended(); p != harness.Deny && p != harness.LeaveToReview {
+		t.Fatalf("unattended policy %v", p)
+	}
+	if h.Unattended() == harness.Deny {
+		var out strings.Builder
+		const message = "contract: denied"
+		if err := h.Deny(&out, message); err != nil || !json.Valid([]byte(out.String())) || !strings.Contains(out.String(), message) {
+			t.Errorf("deny wrote %q, %v; want JSON with the message", out.String(), err)
+		}
+	}
+	var errs strings.Builder
+	detach := func(entry string, args ...string) error {
+		t.Errorf("a run outside engine started %s %v", entry, args)
+		return nil
+	}
+	for _, kind := range []harness.EventKind{harness.PromptSubmitted, harness.ToolFinished, harness.TurnStopped} {
+		h.Signalled(harness.HookContext{Run: harness.HookRun{Dir: t.TempDir()}, Err: &errs, Detach: detach}, harness.Event{Kind: kind, SessionID: "s"})
+	}
+	if errs.Len() != 0 {
+		t.Errorf("signalled reported %q", errs.String())
+	}
+}
+
+// checkEntries: an adapter's own entries are one word each, never a core
+// entry's name, and run.
+func checkEntries(t *testing.T, build New) {
+	for name, run := range build(env(t, failing)).Hooks().Entries() {
+		if name == "" || strings.ContainsAny(name, " \t") || slices.Contains(harness.CoreEntries, name) {
+			t.Errorf("entry %q: want one word that is not a core entry", name)
+		}
+		if run == nil {
+			t.Errorf("entry %q runs nothing", name)
+		}
 	}
 }

@@ -1,4 +1,4 @@
-package hostops
+package codex
 
 import (
 	"bufio"

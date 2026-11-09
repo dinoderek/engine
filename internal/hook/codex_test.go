@@ -9,17 +9,37 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/harness/claude"
+	"github.com/dinoderek/engine/internal/harness/codex"
 )
 
-// codexEvent reads an event recorded from a live Codex session. The paths in
-// it are scrubbed; the fields are as Codex sent them.
-func codexEvent(t *testing.T, name string) string {
+// codexEvent reads an event recorded from a live Codex session, as the Codex
+// adapter reads it. The paths in it are scrubbed; the fields are as Codex
+// sent them.
+func codexEvent(t *testing.T, name string) harness.Event {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", "codex", name+".json"))
+	data, err := os.ReadFile(filepath.Join("..", "harness", "codex", "testdata", "hooks", name+".json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(data)
+	return parse(t, codexHooks, string(data))
+}
+
+var (
+	codexHooks  = codex.New(harness.Env{}, codex.Options{}).Hooks()
+	claudeHooks = claude.New(harness.Env{}).Hooks()
+)
+
+// parse reads raw as hooks read it.
+func parse(t *testing.T, hooks harness.Hooks, raw string) harness.Event {
+	t.Helper()
+	e, err := hooks.Event([]byte(raw))
+	if err != nil {
+		t.Fatalf("%s: %v", raw, err)
+	}
+	return e
 }
 
 // codexSession is the session ID in every recorded event.
@@ -52,7 +72,7 @@ func TestStateFromRecordedEvents(t *testing.T) {
 			var got []Signal
 			var errs bytes.Buffer
 			s := State{Err: &errs, Unattended: tt.unattended, Write: func(sig Signal) error { got = append(got, sig); return nil }}
-			if code := s.Handle(strings.NewReader(codexEvent(t, tt.event))); code != 0 {
+			if code := s.Handle(codexEvent(t, tt.event)); code != 0 {
 				t.Fatalf("exit %d, stderr %q", code, errs.String())
 			}
 			if tt.want == "" {
@@ -73,44 +93,35 @@ func TestStateFromRecordedEvents(t *testing.T) {
 }
 
 func TestStateFailsOpen(t *testing.T) {
-	tests := map[string]struct {
-		in     string
-		write  func(Signal) error
-		stderr string
-	}{
-		"unreadable event": {"not json", nil, "unreadable state event"},
-		"write fails":      {codexEvent(t, "Stop"), func(Signal) error { return errors.New("disk full") }, "disk full"},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			var errs bytes.Buffer
-			code := State{Err: &errs, Write: tt.write}.Handle(strings.NewReader(tt.in))
-			if code != 1 || !strings.Contains(errs.String(), tt.stderr) {
-				t.Errorf("exit %d, stderr %q; want 1, %q (never 2, which blocks)", code, errs.String(), tt.stderr)
-			}
-		})
+	var errs bytes.Buffer
+	code := State{Err: &errs, Write: func(Signal) error { return errors.New("disk full") }}.Handle(codexEvent(t, "Stop"))
+	if code != 1 || !strings.Contains(errs.String(), "disk full") {
+		t.Errorf("exit %d, stderr %q; want 1, %q (never 2, which blocks)", code, errs.String(), "disk full")
 	}
 }
 
 // withCommand returns the recorded PreToolUse event with another shell
 // command in it.
-func withCommand(t *testing.T, command string) string {
+func withCommand(t *testing.T, command string) harness.Event {
 	t.Helper()
-	var e map[string]any
-	if err := json.Unmarshal([]byte(codexEvent(t, "PreToolUse")), &e); err != nil {
-		t.Fatal(err)
-	}
-	e["tool_input"] = map[string]string{"command": command}
-	data, err := json.Marshal(e)
+	data, err := os.ReadFile(filepath.Join("..", "harness", "codex", "testdata", "hooks", "PreToolUse.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(data)
+	var e map[string]any
+	if err := json.Unmarshal(data, &e); err != nil {
+		t.Fatal(err)
+	}
+	e["tool_input"] = map[string]string{"command": command}
+	if data, err = json.Marshal(e); err != nil {
+		t.Fatal(err)
+	}
+	return parse(t, codexHooks, string(data))
 }
 
 func TestMergeGuardReadsCodexShellEvents(t *testing.T) {
 	tests := map[string]struct {
-		in     string
+		in     harness.Event
 		code   int
 		stderr string
 	}{
@@ -123,7 +134,7 @@ func TestMergeGuardReadsCodexShellEvents(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			var errs bytes.Buffer
-			if code := PreToolUse(strings.NewReader(tt.in), &errs); code != tt.code || !strings.Contains(errs.String(), tt.stderr) {
+			if code := PreToolUse(tt.in, &errs); code != tt.code || !strings.Contains(errs.String(), tt.stderr) {
 				t.Errorf("exit %d, stderr %q; want %d, %q", code, errs.String(), tt.code, tt.stderr)
 			}
 		})
@@ -134,25 +145,24 @@ func TestMergeGuardReadsCodexShellEvents(t *testing.T) {
 // before auto-review, and a deny would pre-empt the review.
 func TestPermissionLeavesAnUnattendedCodexRequestToAutoReview(t *testing.T) {
 	var out, errs, log bytes.Buffer
-	p := Permission{Out: &out, Err: &errs, Unattended: true, Codex: true, Log: &log, Now: at}
-	if code := p.Handle(strings.NewReader(codexEvent(t, "PermissionRequest"))); code != 0 || errs.Len() != 0 || out.Len() != 0 {
+	p := Permission{Out: &out, Err: &errs, Unattended: true, Policy: codexHooks.Unattended(), Deny: codexHooks.Deny, Log: &log, Now: at}
+	if code := p.Handle(codexEvent(t, "PermissionRequest")); code != 0 || errs.Len() != 0 || out.Len() != 0 {
 		t.Fatalf("exit %d, out %q, stderr %q", code, out.String(), errs.String())
 	}
 	var entry Entry
 	if err := json.Unmarshal(log.Bytes(), &entry); err != nil {
 		t.Fatalf("log %q: %v", log.String(), err)
 	}
-	if entry.Tool != "Bash" || entry.Decision != AutoReview || !strings.Contains(string(entry.Input), "touch $HOME/codex-cap-probe.txt") {
+	if entry.Tool != "Bash" || entry.Decision != harness.LeaveToReview.Decision() || !strings.Contains(string(entry.Input), "touch $HOME/codex-cap-probe.txt") {
 		t.Errorf("entry %+v", entry)
 	}
 }
 
-// The hook reads Codex's request as it reads Claude's: outside a Codex
-// session engine launched, an unattended request is denied.
+// Under the deny policy, Codex's request is denied in the shape Codex reads.
 func TestPermissionHandlesCodexRequests(t *testing.T) {
 	var out, errs, log bytes.Buffer
-	p := Permission{Out: &out, Err: &errs, Unattended: true, Log: &log, Now: at}
-	if code := p.Handle(strings.NewReader(codexEvent(t, "PermissionRequest"))); code != 0 || errs.Len() != 0 {
+	p := Permission{Out: &out, Err: &errs, Unattended: true, Policy: harness.Deny, Deny: codexHooks.Deny, Log: &log, Now: at}
+	if code := p.Handle(codexEvent(t, "PermissionRequest")); code != 0 || errs.Len() != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errs.String())
 	}
 	var got struct {
@@ -181,8 +191,8 @@ func TestPermissionHandlesCodexRequests(t *testing.T) {
 
 func TestPermissionLeavesAnAttendedCodexRequestAlone(t *testing.T) {
 	var out, errs, log bytes.Buffer
-	p := Permission{Out: &out, Err: &errs, Log: &log, Now: at}
-	if code := p.Handle(strings.NewReader(codexEvent(t, "PermissionRequest"))); code != 0 || out.Len() != 0 || log.Len() != 0 || errs.Len() != 0 {
+	p := Permission{Out: &out, Err: &errs, Log: &log, Policy: codexHooks.Unattended(), Deny: codexHooks.Deny, Now: at}
+	if code := p.Handle(codexEvent(t, "PermissionRequest")); code != 0 || out.Len() != 0 || log.Len() != 0 || errs.Len() != 0 {
 		t.Errorf("exit %d, out %q, log %q, stderr %q", code, out.String(), log.String(), errs.String())
 	}
 }
@@ -203,7 +213,7 @@ func TestStateFromClaudeEvents(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []Signal
 			s := State{Err: &bytes.Buffer{}, Unattended: true, Write: func(sig Signal) error { got = append(got, sig); return nil }}
-			if code := s.Handle(strings.NewReader(tt.in)); code != 0 {
+			if code := s.Handle(parse(t, claudeHooks, tt.in)); code != 0 {
 				t.Fatalf("exit %d", code)
 			}
 			if want := []Signal{{State: tt.want, Event: tt.name, SessionID: id}}; !reflect.DeepEqual(got, want) {

@@ -1,4 +1,4 @@
-package hook
+package claude
 
 import (
 	"bytes"
@@ -33,7 +33,7 @@ func TestStatuslineRetainsLastValidQuota(t *testing.T) {
 			dir := t.TempDir()
 			initial := `{"session_name":"test","rate_limits":{"five_hour":{"used_percentage":83,"resets_at":2000},"seven_day":{"used_percentage":41,"resets_at":3000}}}`
 			var out bytes.Buffer
-			if err := Statusline(strings.NewReader(initial), &out, dir, time.Unix(1000, 0)); err != nil {
+			if err := statusline(strings.NewReader(initial), &out, dir, time.Unix(1000, 0)); err != nil {
 				t.Fatal(err)
 			}
 			want := quotaReading{Harness: "claude", ObservedAt: 1000, Windows: map[string]quotaWindow{
@@ -42,7 +42,7 @@ func TestStatuslineRetainsLastValidQuota(t *testing.T) {
 			}}
 			original := assertRetainedQuota(t, dir, want)
 			out.Reset()
-			err := Statusline(strings.NewReader(tc.input), &out, dir, time.Unix(1100, 0))
+			err := statusline(strings.NewReader(tc.input), &out, dir, time.Unix(1100, 0))
 			assertUnavailableOutput(t, out.String(), err, tc.malformed)
 			retained := assertRetainedQuota(t, dir, want)
 			if !bytes.Equal(original, retained) {
@@ -50,7 +50,7 @@ func TestStatuslineRetainsLastValidQuota(t *testing.T) {
 			}
 			changed := strings.Replace(initial, "83", "84", 1)
 			out.Reset()
-			if err := Statusline(strings.NewReader(changed), &out, dir, time.Unix(1200, 0)); err != nil {
+			if err := statusline(strings.NewReader(changed), &out, dir, time.Unix(1200, 0)); err != nil {
 				t.Fatal(err)
 			}
 			if out.String() != "test  5h 84%\n" {

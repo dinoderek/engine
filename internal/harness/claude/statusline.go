@@ -1,4 +1,4 @@
-package hook
+package claude
 
 import (
 	"encoding/json"
@@ -24,9 +24,11 @@ type quotaReading struct {
 	Windows    map[string]quotaWindow `json:"windows"`
 }
 
-// Statusline prints the engine session name and Claude's five-hour usage,
-// and atomically records changed readings. Absent quota never creates a file.
-func Statusline(in io.Reader, out io.Writer, dir string, now time.Time) error {
+// statusline is the `statusline` entry, the status line command the launch
+// sets: it prints the engine session name and Claude's five-hour usage, and
+// atomically records changed readings in the run's quota.json. Absent quota
+// never creates a file.
+func statusline(in io.Reader, out io.Writer, dir string, now time.Time) error {
 	var input struct {
 		Name   string                  `json:"session_name"`
 		Limits map[string]*usageWindow `json:"rate_limits"`
@@ -44,7 +46,7 @@ func Statusline(in io.Reader, out io.Writer, dir string, now time.Time) error {
 			name = rec.Name
 		}
 	}
-	q := quotaReading{Harness: "claude", ObservedAt: now.Unix(), Windows: map[string]quotaWindow{}}
+	q := quotaReading{Harness: Name, ObservedAt: now.Unix(), Windows: map[string]quotaWindow{}}
 	for _, key := range []string{"five_hour", "seven_day"} {
 		w := input.Limits[key]
 		if w == nil || w.Used == nil || *w.Used < 0 || *w.Used > 100 || w.ResetsAt <= 0 {

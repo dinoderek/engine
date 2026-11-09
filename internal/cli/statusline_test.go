@@ -22,7 +22,7 @@ func TestStatuslineHookCommand(t *testing.T) {
 			}
 			return ""
 		}}
-		if code := Run([]string{"hook", "statusline"}, env); code != tc.code {
+		if code := Run([]string{"hook", "statusline", "--harness", "claude"}, env); code != tc.code {
 			t.Fatalf("exit %d, %s", code, errs.String())
 		}
 		if tc.code == 0 {

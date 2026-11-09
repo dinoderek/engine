@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 var at = time.Date(2026, 10, 24, 13, 7, 0, 0, time.UTC)
@@ -15,7 +17,7 @@ const readRequest = `{"hook_event_name":"PermissionRequest","tool_name":"Read","
 
 func TestPermissionDeniesAnUnattendedRequest(t *testing.T) {
 	var out, errs, log bytes.Buffer
-	if code := (Permission{Out: &out, Err: &errs, Unattended: true, Log: &log, Now: at}).Handle(strings.NewReader(readRequest)); code != 0 {
+	if code := (claudePermission{Out: &out, Err: &errs, Unattended: true, Log: &log, Now: at}).Handle(parse(t, claudeHooks, readRequest)); code != 0 {
 		t.Fatalf("code %d, stderr %q", code, errs.String())
 	}
 	var got struct {
@@ -44,14 +46,14 @@ func TestPermissionDeniesAnUnattendedRequest(t *testing.T) {
 
 func TestPermissionLeavesAnAttendedRequestAlone(t *testing.T) {
 	var out, errs, log bytes.Buffer
-	if code := (Permission{Out: &out, Err: &errs, Unattended: false, Log: &log, Now: at}).Handle(strings.NewReader(readRequest)); code != 0 || out.Len() != 0 || log.Len() != 0 || errs.Len() != 0 {
+	if code := (claudePermission{Out: &out, Err: &errs, Unattended: false, Log: &log, Now: at}).Handle(parse(t, claudeHooks, readRequest)); code != 0 || out.Len() != 0 || log.Len() != 0 || errs.Len() != 0 {
 		t.Errorf("code %d, out %q, log %q, stderr %q", code, out.String(), log.String(), errs.String())
 	}
 }
 
 func TestPermissionDeniesWithoutALog(t *testing.T) {
 	var out, errs bytes.Buffer
-	if code := (Permission{Out: &out, Err: &errs, Unattended: true, Now: at}).Handle(strings.NewReader(readRequest)); code != 0 || !strings.Contains(out.String(), `"deny"`) {
+	if code := (claudePermission{Out: &out, Err: &errs, Unattended: true, Now: at}).Handle(parse(t, claudeHooks, readRequest)); code != 0 || !strings.Contains(out.String(), `"deny"`) {
 		t.Errorf("code %d, out %q", code, out.String())
 	}
 }
@@ -60,7 +62,7 @@ func TestPermissionLogsAnAutoModeDenial(t *testing.T) {
 	event := `{"hook_event_name":"PermissionDenied","tool_name":"Bash","tool_input":{"command":"rm -rf /x"},"reason":"[Irreversible Local Destruction]"}`
 	for _, unattended := range []bool{true, false} {
 		var out, errs, log bytes.Buffer
-		if code := (Permission{Out: &out, Err: &errs, Unattended: unattended, Log: &log, Now: at}).Handle(strings.NewReader(event)); code != 0 || out.Len() != 0 {
+		if code := (claudePermission{Out: &out, Err: &errs, Unattended: unattended, Log: &log, Now: at}).Handle(parse(t, claudeHooks, event)); code != 0 || out.Len() != 0 {
 			t.Fatalf("code %d, out %q", code, out.String())
 		}
 		var entry Entry
@@ -70,13 +72,19 @@ func TestPermissionLogsAnAutoModeDenial(t *testing.T) {
 	}
 }
 
-func TestPermissionRejectsOtherInput(t *testing.T) {
-	for name, in := range map[string]string{"not JSON": "{", "other event": `{"hook_event_name":"PreToolUse"}`} {
-		var out, errs bytes.Buffer
-		if code := (Permission{Out: &out, Err: &errs, Unattended: true, Now: at}).Handle(strings.NewReader(in)); code != 1 || errs.Len() == 0 || out.Len() != 0 {
-			t.Errorf("%s: code %d, out %q, stderr %q", name, code, out.String(), errs.String())
-		}
+func TestPermissionRejectsOtherEvents(t *testing.T) {
+	var out, errs bytes.Buffer
+	if code := (claudePermission{Out: &out, Err: &errs, Unattended: true, Now: at}).Handle(parse(t, claudeHooks, `{"hook_event_name":"PreToolUse"}`)); code != 1 || !strings.Contains(errs.String(), `"PreToolUse" is not a permission event`) || out.Len() != 0 {
+		t.Errorf("code %d, out %q, stderr %q", code, out.String(), errs.String())
 	}
+}
+
+// claudePermission is a Permission with Claude Code's policy and denial.
+type claudePermission Permission
+
+func (p claudePermission) Handle(e harness.Event) int {
+	p.Policy, p.Deny = claudeHooks.Unattended(), claudeHooks.Deny
+	return Permission(p).Handle(e)
 }
 
 type failing struct{}
@@ -85,12 +93,12 @@ func (failing) Write([]byte) (int, error) { return 0, errors.New("disk full") }
 
 func TestPermissionWriteFailures(t *testing.T) {
 	var errs bytes.Buffer
-	if code := (Permission{Out: failing{}, Err: &errs, Unattended: true, Now: at}).Handle(strings.NewReader(readRequest)); code != 1 || !strings.Contains(errs.String(), "disk full") {
+	if code := (claudePermission{Out: failing{}, Err: &errs, Unattended: true, Now: at}).Handle(parse(t, claudeHooks, readRequest)); code != 1 || !strings.Contains(errs.String(), "disk full") {
 		t.Errorf("decision write: code %d, stderr %q", code, errs.String())
 	}
 	errs.Reset()
 	var out bytes.Buffer
-	if code := (Permission{Out: &out, Err: &errs, Unattended: true, Log: failing{}, Now: at}).Handle(strings.NewReader(readRequest)); code != 0 || !strings.Contains(out.String(), `"deny"`) || !strings.Contains(errs.String(), "disk full") {
+	if code := (claudePermission{Out: &out, Err: &errs, Unattended: true, Log: failing{}, Now: at}).Handle(parse(t, claudeHooks, readRequest)); code != 0 || !strings.Contains(out.String(), `"deny"`) || !strings.Contains(errs.String(), "disk full") {
 		t.Errorf("log write: code %d, out %q, stderr %q", code, out.String(), errs.String())
 	}
 }
