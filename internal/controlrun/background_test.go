@@ -69,3 +69,23 @@ func releaseNotices(st control.State, id string) []control.Update {
 	}
 	return out
 }
+
+// A wait that follows a background spell starts its own clock: the stall
+// counts the wait, while release counts the whole idle spell.
+func TestAWaitAfterABackgroundSpellStartsItsOwnClock(t *testing.T) {
+	start, later := time.Date(2026, 11, 9, 9, 0, 0, 0, time.UTC), time.Date(2026, 11, 9, 9, 15, 0, 0, time.UTC)
+	bg := reconcile.Session{Live: true, Background: true}
+	at := kept(control.Attempt{}, bg, start, true)
+	if !at.IdleSince.Equal(start) || !at.WaitingSince.IsZero() {
+		t.Fatalf("background: idle %v, waiting %v", at.IdleSince, at.WaitingSince)
+	}
+	wait := reconcile.Session{Live: true, Waiting: true}
+	at = kept(at, wait, later, true)
+	if !at.IdleSince.Equal(start) || !at.WaitingSince.Equal(later) {
+		t.Fatalf("waiting after background: idle %v, waiting %v; want %v, %v", at.IdleSince, at.WaitingSince, start, later)
+	}
+	at = kept(at, reconcile.Session{Live: true}, later, true)
+	if !at.IdleSince.IsZero() || !at.WaitingSince.IsZero() {
+		t.Fatalf("busy in a turn: idle %v, waiting %v; want both cleared", at.IdleSince, at.WaitingSince)
+	}
+}

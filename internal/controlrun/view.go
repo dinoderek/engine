@@ -70,7 +70,7 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 		return t
 	}
 	sess := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))
-	sess.WaitingSince = at.WaitingSince
+	sess.WaitingSince, sess.IdleSince = at.WaitingSince, at.IdleSince
 	sess.StallNoted = at.Notice
 	if sess.ResetsAt == 0 && sess.Waiting {
 		sess.ResetsAt = at.ResetsAt
@@ -137,18 +137,25 @@ func coordinating(st *control.State, item control.Item) bool {
 	return item.Coordinating || item.Plan != "" && st.Items[item.Plan].Coordinating
 }
 
-// kept is at with one pass's observation of its session applied: the start
-// of an idle spell, a limit reset, and when it was seen live. A window
+// since is the start of a spell that holds now: the recorded start, or now
+// for a spell just begun. A spell that does not hold has none.
+func since(start time.Time, holds bool, now time.Time) time.Time {
+	switch {
+	case !holds:
+		return time.Time{}
+	case start.IsZero():
+		return now
+	}
+	return start
+}
+
+// kept is at with one pass's observation of its session applied: the starts
+// of a wait and of an idle spell, a limit reset, and when it was seen live. A window
 // is recorded as seen live only while coordination runs, so a pass that
 // overlaps a stop never dates the sighting after it.
 func kept(at control.Attempt, sess reconcile.Session, now time.Time, coordinating bool) control.Attempt {
-	if sess.Idle() && sess.ResetsAt == 0 {
-		if at.WaitingSince.IsZero() {
-			at.WaitingSince = now
-		}
-	} else {
-		at.WaitingSince = time.Time{}
-	}
+	at.WaitingSince = since(at.WaitingSince, sess.Waiting && sess.Idle() && sess.ResetsAt == 0, now)
+	at.IdleSince = since(at.IdleSince, sess.Idle() && sess.ResetsAt == 0, now)
 	if sess.ResetsAt > 0 {
 		at.ResetsAt = sess.ResetsAt
 	}

@@ -115,7 +115,7 @@ configuration (`operator-setup.md`).
 ## Session signals
 
 Agent state is never scraped from the pane; the task's state and questions
-are the server's records. The session layer adds whether a session is alive
+are server records. The session layer adds whether a session is alive
 and takes input:
 
 1. **The harness** gives each window of session `engine` a `state` (`working`,
@@ -129,7 +129,7 @@ A session is **idle** when `waiting`, or `working` with `background` set
 (`claude.md`, "Session list"): only a background job runs, so typing cuts
 into no turn. Only idle sessions get wake-up pointers.
 
-**Stalls.** Limited sessions never stall. A dispatched session that has not
+**Stalls.** Limited and background-only sessions never stall. A dispatched session that has not
 claimed its task 5 minutes after it started is noticed once, and one that
 ended before claiming is restarted. A session that has waited 10 minutes
 while its task is open and not `needs-human` has stopped outside the

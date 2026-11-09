@@ -126,6 +126,7 @@ func TestDecide(t *testing.T) {
 		{"a short wait is not flagged", view(plan("executing"), with(task(2, "running"), waiting(StallWait-time.Second))), nil},
 		{"a wait at a hard stop is not flagged", view(plan("executing"), with(task(2, "needs-human"), waiting(StallWait))), []string{"state p1 blocked"}},
 		{"a wait on the coordinator's merge is not flagged", view(plan("executing"), requesting(with(task(2, "in-review"), waiting(StallWait)), true)), []string{"merge t2 9"}},
+		{"a short wait after a long background spell is not flagged", view(plan("executing"), with(task(2, "running"), afterBackground(time.Minute, 2*StallWait))), nil},
 		{"a session busy only in a background job is not flagged", view(plan("executing"), with(task(2, "running"), background(StallWait))), nil},
 		{"a running task never waits for its claim: the server claims at dispatch", view(plan("executing"), with(task(2, "running"), working())), nil},
 		{"a live session of an unheld task is flagged after the claim wait", view(plan("executing"), with(task(2, "todo"), working())),

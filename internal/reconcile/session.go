@@ -56,9 +56,11 @@ type Session struct {
 	// turn has ended: only a background job keeps it busy, and it takes
 	// typed input as a waiting session does.
 	Background bool
-	// WaitingSince is when it was first seen idle in its current spell:
+	// WaitingSince is when it was first seen waiting in its current wait,
+	// and IdleSince when it was first seen idle in its current spell:
 	// waiting, or working only in a background job.
 	WaitingSince time.Time
+	IdleSince    time.Time
 	// StallNoted is the start, or the wait, the coordinator last flagged.
 	StallNoted time.Time
 	// Screen is the window's last lines, when its host sent them: it does
@@ -82,7 +84,7 @@ func (s Session) Flagged(at time.Time) bool {
 
 // Waited reports whether the session has waited for input for d by now.
 func (s Session) Waited(now time.Time, d time.Duration) bool {
-	return s.Waiting && s.IdleFor(now, d)
+	return s.Waiting && s.Idle() && s.ResetsAt <= 0 && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
 }
 
 // Idle reports whether the session takes typed input without cutting into
@@ -95,7 +97,7 @@ func (s Session) Idle() bool {
 // IdleFor reports whether the session has been idle, with no limit reset
 // pending, for d by now.
 func (s Session) IdleFor(now time.Time, d time.Duration) bool {
-	return s.Idle() && s.ResetsAt <= 0 && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
+	return s.Idle() && s.ResetsAt <= 0 && !s.IdleSince.IsZero() && now.Sub(s.IdleSince) >= d
 }
 
 // Denied reports whether the session's wait follows a permission denial:

@@ -48,7 +48,7 @@ func working() Session {
 // waiting is a live session waiting for input since d before t0.
 func waiting(d time.Duration) Session {
 	s := working()
-	s.Waiting, s.WaitingSince = true, t0.Add(-d)
+	s.Waiting, s.WaitingSince, s.IdleSince = true, t0.Add(-d), t0.Add(-d)
 	return s
 }
 
@@ -56,7 +56,15 @@ func waiting(d time.Duration) Session {
 // since d before t0: its last turn ended then.
 func background(d time.Duration) Session {
 	s := working()
-	s.Background, s.WaitingSince = true, t0.Add(-d)
+	s.Background, s.IdleSince = true, t0.Add(-d)
+	return s
+}
+
+// afterBackground is a session waiting for wait before t0, after a
+// background spell that began idle before t0.
+func afterBackground(wait, idle time.Duration) Session {
+	s := waiting(wait)
+	s.IdleSince = t0.Add(-idle)
 	return s
 }
 

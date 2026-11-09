@@ -34,7 +34,7 @@ commands:
                             Claude Code's (Codex's auto-review decides its own)
   hook statusline           record Claude quota and print its status line
   hook limit                record or clear a Claude usage limit
-  hook state                record a Codex session's state from its hook event
+  hook state                record a session's state from its hook event
   hook codex-label <run-dir> <thread>  title a joined Codex thread and file it under its repo's project
   ps [--json]               list server tasks
   attach <task>             attach to a task's tmux window, here or over SSH
