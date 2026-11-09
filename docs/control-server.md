@@ -122,7 +122,7 @@ Comments leave workflow state alone. A question atomically holds a task in
 needs-human: its own, or the asking task (the update's `task`) of one a
 task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements
 and replies leave it unresolved. Resolution records the decision and atomically
-restores the held task's earlier state, unless another question holds it,
+restores each held task's earlier state, unless another question holds it,
 its state changed or its execution ended. Unresolved
 questions block completion and merge checks; a plan's also block its tasks'
 state changes, planner handoff, child dispatch and automatic quota resume.

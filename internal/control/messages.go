@@ -179,7 +179,7 @@ func (s Service) release(st *State, a Actor, question Update) []Update {
 			}
 		}
 	}
-	slices.Sort(ids)
+	slices.SortFunc(ids, func(x, y string) int { return Number(x) - Number(y) })
 	var out []Update
 	for _, id := range slices.Compact(ids) {
 		item, ok := st.Items[id]
