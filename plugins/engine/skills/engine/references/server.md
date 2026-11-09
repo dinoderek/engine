@@ -16,8 +16,8 @@ session's environment supplies the endpoint, credential file and attempt ID
 - `engine task state <id> --version <n> --state <state> [--pr <url>]` changes
   state; plans use `engine plan state`.
 - `engine tell <id> <text>` posts a message on your task or its plan, and
-  wakes the sessions waiting on it. `engine ask <task> <text>` asks the
-  operator and moves the task to `needs-human`. `--operator` on `tell` sends
+  wakes the sessions waiting on it. `engine ask <id> <text>` asks the
+  operator; on a task, it moves the task to `needs-human`. `--operator` on `tell` sends
   a message to the operator's inbox that asks for no answer.
 
 ## Planner
@@ -46,8 +46,8 @@ repo's own merge and cleanup steps; the merge guard enforces it.
 - **Step 1.** The server claimed the task and opened its worktree: work
   there, and create none.
 
-- **Step 2.** Also read the parent plan, `engine updates` for the task and
-  the plan, and the card's and plan's `## Overrides`. Every dependency must be
+- **Step 2.** Also read the parent plan, if any, `engine updates` for the
+  task and the plan, and the card's and plan's `## Overrides`. Every dependency must be
   `done`; if not, it is a **Drift** hard stop.
 - **Updates are the inbox.** Read them before you change code, before the PR,
   before the merge request, and first thing when the session resumes.
@@ -87,8 +87,9 @@ bypass gates or the lock.
    on. Only a hard stop asks and waits.
 2. **One grade reaches the operator: `review`.** Only if undoing it after
    merge needs another PR *and* it touches persisted data, a surface other
-   people use, or a shape another task builds on. Anything else is not a
-   ruling: the `build` skill's "Decisions" shows what is not.
+   people use, or a shape another task builds on, within what the design
+   covers; a contract change it does not cover is a hard stop. Anything
+   else is not a ruling: the `build` skill's "Decisions" shows what is not.
 3. **`low` notes** follow `build`: optional, at most five, PR body only.
 4. **One digest per task.** Send every `review` ruling at once, just before
    the merge request: `engine tell <task> --operator <digest>`. Do not wait
@@ -108,8 +109,8 @@ bypass gates or the lock.
 
 The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
 
-- **Look in the server first:** `engine updates <task>` and `engine updates
-  <plan>`. A plan `ruling` update, or a `resolved` one on your task or plan, that
+- **Look in the server first:** `engine updates <task>` and, if the task
+  has a plan, `engine updates <plan>`. A plan `ruling` update, or a `resolved` one on your task or plan, that
   decides the same root cause covers you: cite its sequence with
   `engine tell <task>` and in the PR body, and carry on. A plan-level
   question still open on the same root cause: cite its sequence with

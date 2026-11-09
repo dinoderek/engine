@@ -165,7 +165,7 @@ its liveness, like a failed call's, is unknown. A session in
 `waiting-since` is cleared; a later ordinary wait starts a fresh timer.
 Claude limit markers carry `resets_at`; busy wins over a marker. An
 unclaimed window the coordinator opened stalls after
-`ClaimWait`; one that ended before claiming is reported once, then restarted. A session whose
+`ClaimWait` (`internal/run`); one that ended before claiming is reported once, then restarted. A session whose
 `waiting-since` is 10 minutes old while its task is open and not
 `needs-human` has stopped outside the protocol, as on a question asked in
 the session. The coordinator @mentions you on the task's issue with the
