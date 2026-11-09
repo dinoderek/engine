@@ -3,10 +3,11 @@ package codex
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dinoderek/engine/internal/harness"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 // reposDir is where engine keeps its clones and worktrees, under the home.

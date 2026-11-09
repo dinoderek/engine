@@ -15,7 +15,7 @@ import (
 
 // engineRepo is where the caller's commit must be, for another host to
 // install it.
-const engineRepo = harness.PluginRepo
+const engineRepo = "dinoderek/engine"
 
 // configFile is a file of ~/.config/engine that setup copies or writes.
 type configFile struct{ name, content string }
@@ -60,7 +60,7 @@ func (r *runner) resolveWanted() (wanted, error) {
 		return wanted{}, err
 	}
 	if version == "" {
-		return wanted{}, refuse("engine's plugin is not installed for the user on this host, so there is no version to bring %s to", r.t.name)
+		return wanted{}, refuse("the %s plugin is not installed for the user on this host, so there is no version to bring %s to", harness.PluginID, r.t.name)
 	}
 	w.plugin = version
 	return w, nil

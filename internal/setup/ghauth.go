@@ -1,9 +1,10 @@
 package setup
 
 import (
-	"github.com/dinoderek/engine/internal/harness"
 	"regexp"
 	"strings"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 // ghTokenToFile moves gh's token from the macOS login keychain to gh's own

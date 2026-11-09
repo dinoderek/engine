@@ -2,10 +2,10 @@ package codex
 
 import (
 	"fmt"
-	"github.com/dinoderek/engine/internal/harness"
 	"strconv"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
 )
 
