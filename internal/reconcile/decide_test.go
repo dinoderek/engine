@@ -53,6 +53,20 @@ func limited(resets time.Duration, resumed time.Duration) Session {
 
 func flagged(s Session) Session { s.StallNoted = s.WaitingSince; return s }
 
+// signedOut is f with its first host reporting harnesses signed out.
+func signedOut(f Fleet, harnesses ...string) Fleet { f.Hosts[0].Status.SignedOut = harnesses; return f }
+
+// unreachable is f with its first host's status unreadable.
+func unreachable(f Fleet) Fleet { f.Hosts[0].Unreachable = "ssh: connect timed out"; return f }
+
+// bothHarnesses is fleet(free) with devbox running claude and codex alike.
+func bothHarnesses(free int) Fleet {
+	f := fleet(free)
+	f.HarnessRatio, f.Caps["codex"] = map[string]int{"claude": 1, "codex": 1}, 4
+	f.Hosts[0].Harnesses = []string{"claude", "codex"}
+	return f
+}
+
 func gone() Session { return Session{Mode: "hands-off", Spawned: t0.Add(-time.Hour)} }
 
 func TestDecide(t *testing.T) {
@@ -70,6 +84,13 @@ func TestDecide(t *testing.T) {
 		{"deep starts before standard; one with no free slot waits without a notice", withFleet(view(plan("executing"), task(2, "todo"), tier(task(3, "todo"), "deep")), fleet(1)),
 			[]string{"dispatch t3 devbox claude false"}},
 		{"a task no host can take is a notice", view(plan("executing"), harness(task(2, "todo"), "codex")), []string{"notice t2 placement/3"}},
+		{"a harness signed out on its host is passed over for another", withFleet(view(plan("executing"), task(2, "todo")), signedOut(bothHarnesses(2), "claude")),
+			[]string{"dispatch t2 devbox codex false"}},
+		{"a task whose only harness is signed out is a notice", withFleet(view(plan("executing"), task(2, "todo")), signedOut(fleet(2), "claude")),
+			[]string{"notice t2 placement/3"}},
+		{"an unreachable host is never read as signed out", withFleet(view(plan("executing"), task(2, "todo")), unreachable(signedOut(fleet(2), "claude"))), nil},
+		{"another harness signed out changes nothing", withFleet(view(plan("executing"), task(2, "todo")), signedOut(fleet(2), "codex")),
+			[]string{"dispatch t2 devbox claude false"}},
 		{"an unknown session is not dispatched", view(plan("executing"), with(task(2, "todo"), Session{Unknown: true})), nil},
 		{"a window live on any host holds a todo task", withFleet(view(plan("executing"), task(2, "todo")), liveElsewhere), nil},
 
@@ -77,6 +98,7 @@ func TestDecide(t *testing.T) {
 		{"an approved plan without tasks starts its planner", view(plan("approved")), []string{"dispatch p1 devbox claude false"}},
 		{"the planner waits for a free local slot", withFleet(view(plan("approved")), fleet(0)), nil},
 		{"a planner harness the host does not run is a notice", view(harness(plan("approved"), "codex")), []string{"notice p1 planner-harness/2"}},
+		{"a planner harness signed out here is a notice, not a start", withFleet(view(plan("approved")), signedOut(fleet(2), "claude")), []string{"notice p1 planner-signin/2/claude"}},
 		{"a live planner is left to work", view(with(plan("approved"), working())), nil},
 		{"an unknown planner is left alone", view(with(plan("approved"), Session{Unknown: true})), nil},
 		{"a planner waiting outside a hard stop is flagged", view(with(plan("approved"), waiting(StallWait))), []string{fmt.Sprintf("notice p1 stall/a1/%d", unix(-StallWait))}},

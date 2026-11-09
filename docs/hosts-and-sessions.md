@@ -67,9 +67,9 @@ In start order, the coordinator gives each ready task a host that meets all
 of these, preferring the most free slots (heavy ones, for a heavy task),
 then the fewest capabilities, then the lowest name:
 
-- a free slot from the host's `status` (a host whose `status` fails takes no
-  task), and a free heavy slot for a heavy task;
-- the chosen harness, under its cap across hosts;
+- a free slot from the host's `status` (none if its `status` fails), and a
+  free heavy slot for a heavy task;
+- the chosen harness, under its cap across hosts, and signed in there;
 - every capability in the card's `requires`.
 
 For each unpinned card, `harness_ratio` scores positive-weight harnesses by
@@ -80,7 +80,7 @@ ratio: `default_harness`. Unknown harnesses and all-zero ratios are refused.
 
 An unplaced task stays ready and waits; the operator is notified once if no
 host could take it even with all slots free. The planner starts at `deep` on
-the plan's harness, else `default_harness`.
+the plan's harness, else `default_harness`, once signed in there.
 
 ## Attempts and naming
 

@@ -41,7 +41,7 @@ func Handler(service Service, operatorToken string, logf func(string, ...any)) h
 		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
 		dec.DisallowUnknownFields()
 		if err = dec.Decode(&req); err != nil {
-			httpFailure(w, problem(400, "invalid request JSON"), logf)
+			httpFailure(w, requestProblem(err), logf)
 			return
 		}
 		if err = dec.Decode(new(any)); !errors.Is(err, io.EOF) {
@@ -57,6 +57,16 @@ func Handler(service Service, operatorToken string, logf func(string, ...any)) h
 			logf("write control response: %v", err)
 		}
 	})
+}
+
+// requestProblem is a request the server cannot decode. A field it does not
+// know usually comes from a client newer than the server, so the error says
+// to upgrade the server rather than leave a bare "invalid JSON".
+func requestProblem(err error) error {
+	if field, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+		return problem(400, "invalid request JSON: this server does not know the field %s, which a newer client sends; upgrade engine serve to the client's build (engine version)", field)
+	}
+	return problem(400, "invalid request JSON")
 }
 
 func httpFailure(w http.ResponseWriter, err error, logf func(string, ...any)) {

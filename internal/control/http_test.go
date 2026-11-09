@@ -80,6 +80,20 @@ func TestHTTPValidationAndStorageErrors(t *testing.T) {
 			}
 		})
 	}
+	// A field the server does not know names it and the upgrade; other bad
+	// JSON stays plain.
+	for body, want := range map[string]string{
+		`{"op":"list","future":{}}`: `this server does not know the field \"future\", which a newer client sends; upgrade engine serve`,
+		"bad":                       `{"error":"invalid request JSON"}`,
+	} {
+		req := httptest.NewRequest("POST", "/v1/command", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != 400 || !strings.Contains(rr.Body.String(), want) {
+			t.Errorf("%s: %d %s", body, rr.Code, rr.Body.String())
+		}
+	}
 	_ = s.Store.Close()
 	req := httptest.NewRequest("POST", "/v1/command", strings.NewReader(`{"op":"list"}`))
 	req.Header.Set("Authorization", "Bearer "+token)

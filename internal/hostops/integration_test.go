@@ -97,6 +97,7 @@ func eventually(t *testing.T, what string, ok func() bool) {
 // other prints a line and waits.
 const fakeClaude = `#!/bin/sh
 if [ "$1" = agents ]; then echo '[]'; exit 0; fi
+if [ "$1" = auth ]; then echo '{"loggedIn": true}'; exit 0; fi
 for a; do if [ "$a" = r-8 ]; then echo dying; exit 3; fi; done
 echo fake claude up
 exec sleep 60

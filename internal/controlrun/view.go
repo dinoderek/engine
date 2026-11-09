@@ -105,6 +105,8 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 			s.ResetsAt = w.ResetsAt
 			s.Screen = w.Screen
 			s.Denial = w.Denial
+			s.Harness = at.Harness
+			s.SignedOut = h.SignedOut(at.Harness)
 			return s
 		}
 		s.Unknown = at.State == "dispatching"

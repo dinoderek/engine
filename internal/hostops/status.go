@@ -40,6 +40,9 @@ type Status struct {
 	// unknown.
 	Runs      []Run  `json:"runs"`
 	RunsError string `json:"runs_error,omitempty"`
+	// SignedOut names the harnesses this host runs whose own CLI says they
+	// are signed out. A harness whose check cannot run is not listed.
+	SignedOut []string `json:"signed_out,omitempty"`
 }
 
 // Window is a window of the tmux session engine.
@@ -100,6 +103,7 @@ func ReadStatus(d Deps) (Status, error) {
 	if host.Runs(Claude) {
 		s.listAgents(d, host)
 	}
+	s.readSignIns(d, host)
 	runs, err := session.LatestRuns(d.Home)
 	if err != nil {
 		s.RunsError = err.Error()

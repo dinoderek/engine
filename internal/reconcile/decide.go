@@ -85,13 +85,18 @@ func planStep(v View) ([]Action, bool) {
 }
 
 // plannerDispatch starts the planner on this host, with the plan's harness
-// or the default. A harness this host does not run is a notice instead.
+// or the default. A harness this host does not run, or one signed out here,
+// is a notice instead.
 func plannerDispatch(v View) Action {
 	p := v.Root
 	host := v.Fleet.Local
 	harness := cmp.Or(p.Harness, v.Fleet.DefaultHarness)
 	local, _ := v.Fleet.Host(host)
 	if _, ok := v.Fleet.Caps[harness]; ok && slices.Contains(local.Harnesses, harness) {
+		if local.SignedOut(harness) {
+			return notice(p, fmt.Sprintf("planner-signin/%d/%s", p.Version, harness),
+				"The planner waits: "+signedOutText(host, harness)+". It starts once the harness is signed in.")
+		}
 		return Action{Kind: Dispatch, Item: p.ID, Host: host, Harness: harness, Resume: p.Resume, Text: "no tasks yet"}
 	}
 	return notice(p, fmt.Sprintf("planner-harness/%d", p.Version), fmt.Sprintf(

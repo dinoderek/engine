@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/reconcile"
+	"github.com/dinoderek/engine/internal/session"
 )
 
 // The plan's View is its tasks by number, with their structured fields and
@@ -53,5 +55,18 @@ func TestAStandaloneTaskIsItsOwnRootAndTask(t *testing.T) {
 	v := c.view(st, alone.ID, reconcile.Fleet{})
 	if v.Root.ID != alone.ID || len(v.Tasks) != 1 || v.Tasks[0].ID != alone.ID || len(v.Lint) != 0 {
 		t.Fatalf("view %+v", v)
+	}
+}
+
+// A session carries its harness, and whether its host says that harness is
+// signed out there; another harness signed out there is not its concern.
+func TestObserveCarriesTheHostsSignIn(t *testing.T) {
+	status := hostops.Status{SignedOut: []string{"claude"}, Windows: []hostops.Window{{Name: "demo-1", ID: "@4", Alive: true, State: session.StateWaiting}}}
+	fleet := reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "devbox", Status: status}}}
+	for harness, want := range map[string]bool{"claude": true, "codex": false} {
+		s := observe(control.Attempt{Host: "devbox", Window: "@4", Harness: harness, State: "running"}, fleet, "owner/demo", 1)
+		if !s.Live || !s.Waiting || s.Harness != harness || s.SignedOut != want {
+			t.Errorf("%s session %+v", harness, s)
+		}
 	}
 }
