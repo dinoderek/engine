@@ -91,12 +91,22 @@ func (s *Store) initialize() error {
 	if err = json.Unmarshal(out, &version); err != nil {
 		return err
 	}
-	if len(version) != 1 || version[0].Version > 1 {
+	if len(version) != 1 || version[0].Version > schemaVersion {
 		return errors.New("unsupported control database schema")
 	}
-	_, err = s.sql("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, data TEXT NOT NULL); PRAGMA user_version=1; COMMIT;")
+	_, err = s.sql("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, data TEXT NOT NULL); " + migratePlanStates + fmt.Sprintf("PRAGMA user_version=%d; COMMIT;", schemaVersion))
 	return err
 }
+
+// schemaVersion is the control database's schema. Version 2 stores only
+// prepare, approved, planned and done for a plan.
+const schemaVersion = 2
+
+// migratePlanStates moves a plan stored in a state version 1 allowed and
+// version 2 derives back to planned. It is a no-op on a version 2 database.
+const migratePlanStates = "UPDATE records SET data = json_set(data, '$.state', 'planned') " +
+	"WHERE key LIKE 'item/%' AND json_extract(data, '$.kind') = 'plan' " +
+	"AND json_extract(data, '$.state') IN ('executing', 'verifying', 'blocked'); "
 
 func (s *Store) sql(sql string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

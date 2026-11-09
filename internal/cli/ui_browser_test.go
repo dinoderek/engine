@@ -75,7 +75,7 @@ func browsePlans(t *testing.T, b *browser, w *world, shots string) {
 	if strings.Join(counts, ",") != "1 Done,2 In progress,1 Ready to run,2 Blocked" {
 		t.Errorf("task counts %v", counts)
 	}
-	if got := text(b, "#pane h2"); !strings.HasPrefix(got, "Tasks · "+w.rollout.ID+" · Executing") {
+	if got := text(b, "#pane h2"); !strings.HasPrefix(got, "Tasks · "+w.rollout.ID+" · Blocked") {
 		t.Errorf("pane heading %q", got)
 	}
 	for id, host := range map[string]string{w.plansView.ID: "devbox", w.sessionsUI.ID: "mac", w.docs.ID: "—"} {

@@ -10,7 +10,9 @@ session's environment supplies the endpoint, credential file and attempt ID
 - `engine plan show <id>`, `engine task show <id>`, `engine task list <plan>`
   and `engine updates <id> [--after <sequence>]`. Output is JSON. Updates
   carry monotonic sequences; keep a read cursor. Follow a task to its plan
-  and repository.
+  and repository. A plan stores `state` (`prepare`, `approved`, `planned`,
+  `done`); its derived `status` adds `blocked` while the operator is needed
+  and `executing` once a task has started.
 - A body is the agreed text: a plan's requirements and design, or a task's
   card. Dependencies, capabilities, harness and tier are JSON fields.
 - `engine task state <id> --version <n> --state <state> [--pr <url>]` changes

@@ -34,10 +34,6 @@ func Decide(v View) []Action {
 		}
 		return acts
 	}
-	starting := slices.ContainsFunc(placed, func(a Action) bool { return a.Kind == Dispatch })
-	if s := planState(v, starting); s != "" {
-		acts = append(acts, Action{Kind: SetState, Item: v.Root.ID, State: s})
-	}
 	if len(v.Tasks) > 0 && !slices.ContainsFunc(v.Tasks, Item.open) {
 		acts = append(acts, Action{Kind: SetState, Item: v.Root.ID, State: "done", Key: "finished", Text: summary(v)})
 	}
@@ -54,7 +50,7 @@ func planStep(v View) ([]Action, bool) {
 	p := v.Root
 	planner := p.Session
 	switch {
-	case slices.Contains([]string{"planned", "executing", "verifying", "blocked", "done"}, p.State):
+	case p.State == "planned" || p.State == "done":
 		return nil, false
 	case p.State != "approved":
 		return []Action{{Kind: Stop, Item: p.ID, Text: p.ID + " is not approved"}}, true

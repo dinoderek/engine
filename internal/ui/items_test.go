@@ -14,7 +14,7 @@ const hostile = "# Plan\n\n<script>alert(1)</script> [go](javascript:alert(2)) a
 func itemFake(t *testing.T) *fakeControl {
 	fc := newFakeControl(t)
 	items := map[string]control.Item{
-		"p5": {ID: "p5", Kind: "plan", Repo: "r1", Title: "Hostile", State: "executing", Body: hostile},
+		"p5": {ID: "p5", Kind: "plan", Repo: "r1", Title: "Hostile", State: "planned", Body: hostile},
 		"t6": {ID: "t6", Kind: "task", Repo: "r1", Plan: "p5", Title: "No body", State: "todo"},
 	}
 	updates := []control.Update{ask(1, "p5"), upd(2, "t6", "say", "<b>hi</b>"), upd(3, "p5", "say", "plan note"), upd(4, "t6", "state", "running")}
