@@ -4,7 +4,6 @@
 
 `engine serve` owns plans, tasks, updates, execution attempts and merge locks.
 GitHub supplies code, PRs and CI; task state and comms stay in the server.
-A feature's GitHub issue can hold a human-maintained PR summary.
 
 ## Start
 

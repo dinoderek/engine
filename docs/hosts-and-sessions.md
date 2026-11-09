@@ -128,8 +128,8 @@ run on the host, or its binary is not executable; or its window exists.
 Placement, not spawn, keeps to the slots: it picks only a host whose `status`
 shows a free slot, and a free heavy slot for a heavy task, and a host that
 lacks a capability in the task's `requires` takes none. An
-unreachable host is an error, not a refusal. A host on another protocol is
-refused, naming `engine setup --host <name>` (`operator-setup.md`). A
+unreachable host is an error, not a refusal. A host on another protocol
+fails, naming `engine setup --host <name>` (`operator-setup.md`). A
 harness's cap across hosts is placement's alone.
 
 The host:
@@ -183,7 +183,7 @@ skill, creates its own worktree, and is reachable only where it was started.
 
 | From | How |
 | --- | --- |
-| Any terminal | `engine attach <task-id>`: `tmux attach` on its host, locally, over `ssh -t <address>`, or `switch-client` inside tmux. |
+| Any terminal | `engine attach <task-id>`: `tmux attach` on its host, locally, over `ssh -t <address>`. |
 | Phone, SSH | An SSH app over Tailscale, `tmux attach -t engine`, then `Ctrl-b w`. |
 | Apps | Claude: the Claude apps and claude.ai/code, through Remote Control. Codex: the ChatGPT and Codex apps, when the session joined engine's remote-control daemon (`codex.md`, "Apps"). |
 

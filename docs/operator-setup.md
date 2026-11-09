@@ -1,6 +1,6 @@
 # Operator setup
 
-> **Owns:** the one-time setup an operator does by hand: GitHub access, notifications, harnesses and remote access. **Not here:** GitHub coordination (`coordinator.md`), host config (`hosts-and-sessions.md`).
+> **Owns:** the one-time setup an operator does by hand: GitHub access, notifications, harnesses and remote access. **Not here:** how the coordinator reaches hosts (`coordinator.md`), host config (`hosts-and-sessions.md`).
 
 ## GitHub access
 
@@ -27,12 +27,10 @@ open while gh fails there or, on macOS, keeps its token in the keychain.
 
 ## Notifications
 
-1. **Phone:** GitHub Mobile, signed in as you, with push on for
-   "Participating" and "@mentions".
-2. **Repos:** watch each target repo, using Custom → Issues and Pull requests.
-3. **Engine's side:** engine assigns you to every feature issue it drives, so
-   you count as participating. Hard stops @mention you; GitHub does not
-   notify you about activity from your own account. Read the task thread or attach to the session for it.
+1. **Hard stops and notices** reach the operator inbox: read it with
+   `engine inbox --operator` or in the dashboard (`control-server.md`).
+2. **Pull requests:** to hear about PRs and CI, run GitHub Mobile signed in as
+   you, and watch each target repo, using Custom → Pull requests.
 
 ## Each host
 

@@ -16,8 +16,7 @@ For storage, dispatch recovery, merges and the operator inbox, load
   (`control-server.md`).
 
 Passes run every 30 seconds, and once at start. A pass reads every host's
-`status`, parallel calls, and reads sessions and fleet quota from those
-replies, keeping the newest observation per harness; expired windows read 0%.
+`status`, parallel calls, and reads sessions from those replies.
 The session view's observer reuses those reads and refreshes the stale ones
 (`control-server.md`, "Session view"). Designed, not built: a pass on each
 webhook event (`gh webhook forward` to a localhost endpoint).
@@ -104,7 +103,7 @@ claimed its task 5 minutes after it started is noticed once, and one that
 ended before claiming is restarted. A session that has waited for 10
 minutes while its task is open and not `needs-human` has stopped outside the
 protocol, as on a question asked in the session. The coordinator notifies the
-operator with the last screen `status` sent, once per session start or wait.
+operator once per session start or wait.
 A denial at most 10 minutes older than the wait makes the stall a Permission
 hard stop, naming the tool, input and reason.
 
@@ -117,8 +116,7 @@ resets are never resumed. The attempt is noted before typing, so Enter
 failing never duplicates text. A later reset permits another attempt.
 Waiting with a limit reset also clears the ordinary stall timer.
 
-Still `limited` 10 minutes after the attempt: one notice with the last
-screen. A reset over 24 hours away: one notice at once, and no typing. Both
+Still `limited` 10 minutes after the attempt: one notice. A reset over 24 hours away: one notice at once, and no typing. Both
 alerts are once per reset and session. Recovery covers the executors and the
 plan's planner.
 
