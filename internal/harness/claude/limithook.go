@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/dinoderek/engine/internal/session"
 )
 
 type limitEvent struct {
@@ -67,7 +69,7 @@ func limitReset(e limitEvent, dir string) int64 {
 		}
 	}
 	var q quotaReading
-	data, _ := os.ReadFile(filepath.Join(dir, "quota.json"))
+	data, _ := os.ReadFile(filepath.Join(dir, session.QuotaFile))
 	if json.Unmarshal(data, &q) != nil {
 		return 0
 	}

@@ -7,7 +7,9 @@
 // profile for the session, which the launch selects with -p, trusting its
 // folder, so the user's config.toml is never edited. Either way it runs the
 // hooks of engine's Codex plugin without Codex's per-hash hook trust, whose
-// review prompt would stop an unattended launch.
+// review prompt would stop an unattended launch. The bypass is per invocation
+// and covers every enabled hook, the operator's and the repo's too, as a
+// Claude Code session runs a repo's hooks once its folder is trusted.
 //
 // A joined session differs from an embedded one (as of Codex 0.164.0), which
 // is why the two launch differently. The agent and its hooks run inside the
@@ -17,7 +19,8 @@
 // folder trust comes only from the daemon's config.toml, one entry per folder
 // (a -c projects."…".trust_level does not stop the prompt, joined or not).
 // Writable roots and --add-dir are refused with --remote, so the daemon's
-// config.toml holds them. The daemon is named after the host, and Codex has
+// config.toml holds them; network access, auto-review and the sandbox mode
+// still work from -c. The daemon is named after the host, and Codex has
 // no flag that names a session, so the thread is titled after it starts.
 //
 // Codex has no session list engine can ask, so a session's state comes from

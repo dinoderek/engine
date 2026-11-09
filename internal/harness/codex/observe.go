@@ -94,7 +94,9 @@ func (a Adapter) turns(ctx context.Context, bin string, runs map[string]session.
 // probe is a run's state: its hooks' state, made limited by a newer stored
 // turn that failed on the usage limit, or by an exhausted quota window while
 // the session waits or that turn failed. A missing or unreadable state file
-// is unknown, and so is ended while the window lives.
+// is unknown, and so is ended while the window lives. Codex's Stop and
+// Interrupt hook events carry no limit error, so the stored turn is what
+// tells a limited session from a waiting one.
 func probe(r session.Run, turns map[string]json.RawMessage, q *session.Quota) (harness.State, bool) {
 	st, ok := session.ReadHarnessState(r.Dir)
 	if !ok || st.State == session.StateEnded {

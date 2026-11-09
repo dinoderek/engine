@@ -13,8 +13,7 @@ executor is `build` with changes. This doc never restates a rule they hold.
   open questions itself and stops only for a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program: its code
   specifies a pass. Engine executors never merge; the coordinator merges the commit
-  that was reviewed and gated once its checks are green. The merge guard
-  (`harnesses.md`) blocks every merge in an engine
+  that was reviewed and gated once its checks are green. The merge guard blocks every merge in an engine
   session and any unpinned, auto or admin merge through `gh` elsewhere. A
   guard reads the command's words and catches mistakes, not deliberate evasion.
 - **One task = one session = one worktree = one PR.**

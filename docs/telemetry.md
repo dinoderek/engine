@@ -26,9 +26,9 @@ its run without `ENGINE_RUN_DIR` scans these
 directories for the `run.json` whose worktree holds the event's `cwd`.
 
 `harness-state.json` is the state hook's latest state, with the harness's
-session and turn IDs. Each adapter may keep its own files there too, named
-in its package under `internal/harness/`: Claude's `quota.json` (subscription
-usage), `limit.json` (the current usage stop) and `limits.jsonl` (every
+session and turn IDs, and `quota.json` the newest quota reading a harness's
+hooks record. Each adapter may keep its own files there too, named in its
+package under `internal/harness/`: Claude's `limit.json` (the current usage stop) and `limits.jsonl` (every
 stop's full input); Codex's `codex-label.json` (the attempts to label a
 joined thread).
 

@@ -13,7 +13,7 @@ the contract; what each answer drives:
 | a session's launch: config location, trust, flags after the line, the kickoff last | opens the window and runs the host's line with them; `release` asks every adapter to delete its per-session files, whatever the run's harness |
 | whether a session joins the host's remote-control daemon, and why not | joins only when the caller allows it; a warning reaches `spawn`'s reply, and a down daemon never refuses a spawn |
 | one observation per `status`: quota, signed out, each live window's state | unknown is never dead: a window's own exit decides that. Fleet consumers use the newest quota reading per harness and clear usage after its reset |
-| hook events in engine's terms, its denial, its unattended policy | runs the core hooks, the same for every harness: `pre-tool-use` blocks unpinned, auto, admin and API merges, and every merge in an engine session; `permission` logs and applies the policy; `state` writes the run's state file |
+| hook events in engine's terms, its denial, its unattended policy | runs the core hooks, the same for every harness: `pre-tool-use` is the merge guard; `permission` logs and applies the policy; `state` writes the run's state file |
 | its own hook entries, and whether its hooks find their run by `cwd` | resolves `engine hook <entry> --harness <name>`; a missing or unknown name or entry exits 1 and blocks nothing |
 | `engine setup` steps and the preflight's failure advice | runs them after the host's steps, only on a host that lists the harness |
 | the preflight kickoff, and whether state comes from hooks alone | fails a check whose window stayed open, skipped a step, or, with hooked state, wrote no state file |
