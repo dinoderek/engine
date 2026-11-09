@@ -1,16 +1,19 @@
-// Package controlrun adapts the existing reconcile decisions to server-owned work.
+// Package controlrun is the server's coordinator: each pass reads server
+// records and host observations into a reconcile View, and applies the
+// actions reconcile.Decide returns.
 package controlrun
 
 import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/run"
 )
 
 // Coordinator has one loop across all requested plans, so dispatches share fleet capacity.
@@ -23,8 +26,8 @@ type Coordinator struct {
 	// Config is injected by tests; production loads hosts.toml on every pass.
 	Config *hosts.Config
 	Host   hosts.Host
-	Resume func(run.Session) error
-	Wake   func(run.Session, string) error
+	Resume func(reconcile.Session) error
+	Wake   func(reconcile.Session, string) error
 	// Observer, when set, keeps each pass's host reads for the session view.
 	Observer *Observer
 }
@@ -87,16 +90,12 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 		return ctx.Err()
 	}
 	// Each plan sees launches from the previous plan.
-	fleet := (run.System{Config: cfg, Host: local, Client: c.Client}).Fleet()
-	if err := c.reconcileDispatches(id, fleet, cfg); err != nil {
-		return err
-	}
-	if err := c.merges(id, cfg); err != nil {
+	if err := c.reconcileDispatches(id, c.fleet(cfg, local), cfg); err != nil {
 		return err
 	}
 	// Recovery may have launched or adopted a session after the first observation.
-	fleet = (run.System{Config: cfg, Host: local, Client: c.Client}).Fleet()
-	st, err := c.Service.Store.Snapshot()
+	fleet := c.fleet(cfg, local)
+	st, v, acts, err := c.decide(id, &fleet, cfg, local)
 	if err != nil {
 		return err
 	}
@@ -104,34 +103,79 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	if !st.Items[id].Coordinating {
 		return nil
 	}
-	v, err := c.view(st, id, fleet)
-	if err != nil {
+	if err = c.keepObservations(v); err != nil {
 		return err
 	}
 	if err = c.wakeMessages(st, v); err != nil {
 		c.log("wake messages: %v", err)
 	}
-	if st.Items[id].State == "done" {
-		if err = c.cleanup(st, id, v, cfg); err != nil {
-			c.log("cleanup: %v", err)
-		}
-		return nil
-	}
-	if len(v.LintProblems) > 0 && st.Items[id].State != "approved" {
-		if err = c.notice(id, fmt.Sprintf("lint/%d", st.Items[id].Version), "Plan lint failed: "+fmt.Sprint(v.LintProblems)); err != nil {
-			c.log("lint notice: %v", err)
-		}
-		return nil
-	}
-	for _, act := range run.Decide(v) {
+	released := true
+	for _, act := range acts {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err = c.apply(st, id, act, cfg); err != nil {
-			c.log("%s %s: %v", act.Kind, id, err)
+		// Merges ran first; a stop never abandons a window it failed to release.
+		if act.Kind == reconcile.Merge || act.Kind == reconcile.Stop && !released {
+			continue
+		}
+		if err = c.apply(st, act, cfg); err != nil {
+			c.log("%s %s: %v", act.Kind, act.Item, err)
+			released = released && act.Kind != reconcile.Release
 		}
 	}
 	return nil
+}
+
+// decide is the pass's decision for root id. Merges are applied first, and
+// when there were any the pass is decided again on the records they
+// changed, and on hosts read again after them: a merged task is done for
+// the rest of the pass.
+func (c *Coordinator) decide(id string, fleet *reconcile.Fleet, cfg *hosts.Config, local hosts.Host) (control.State, reconcile.View, []reconcile.Action, error) {
+	st, err := c.Service.Store.Snapshot()
+	if err != nil || !st.Items[id].Coordinating {
+		return st, reconcile.View{}, nil, err
+	}
+	v := c.view(st, id, *fleet)
+	acts := reconcile.Decide(v)
+	merging := false
+	for _, act := range acts {
+		if act.Kind != reconcile.Merge {
+			continue
+		}
+		merging = true
+		if err = c.merge(act, cfg); err != nil {
+			c.log("merge %s: %v", act.Item, err)
+		}
+	}
+	if !merging {
+		return st, v, acts, nil
+	}
+	*fleet = c.fleet(cfg, local)
+	if st, err = c.Service.Store.Snapshot(); err != nil || !st.Items[id].Coordinating {
+		return st, reconcile.View{}, nil, err
+	}
+	v = c.view(st, id, *fleet)
+	return st, v, reconcile.Decide(v), nil
+}
+
+// fleet reads every host's status, one call per host, all at once.
+func (c *Coordinator) fleet(cfg *hosts.Config, local hosts.Host) reconcile.Fleet {
+	f := reconcile.Fleet{Local: local.Name, DefaultHarness: cfg.DefaultHarness, HarnessRatio: cfg.HarnessRatio, Caps: map[string]int{}, Heavy: cfg.HeavyCapabilities}
+	for name, h := range cfg.Harnesses {
+		f.Caps[name] = h.MaxSessions
+	}
+	names := cfg.HostNames()
+	f.Hosts = make([]reconcile.HostLoad, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Go(func() {
+			h := cfg.Hosts[name]
+			st, err := c.Client(h).Status()
+			f.Hosts[i] = reconcile.Load(h.Name, h.Harnesses, h.Capabilities, st, err)
+		})
+	}
+	wg.Wait()
+	return f
 }
 
 func (c *Coordinator) configuration() (*hosts.Config, hosts.Host, error) {

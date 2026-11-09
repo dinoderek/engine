@@ -14,8 +14,8 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/run"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -329,8 +329,8 @@ func TestSlowHostReadKeepsObservationsRecordedMeanwhile(t *testing.T) {
 	}
 	later, onMac := f.running(t, "mac", "@1")
 	st, _ := f.svc.Store.Snapshot()
-	mac := run.HostLoad{Name: "mac", Status: hostops.Status{Windows: []hostops.Window{window(later, "@1", true, session.StateWaiting)}}}
-	f.obs.Record(st, run.Fleet{Hosts: []run.HostLoad{mac, {Name: "devbox", Unreachable: "busy"}}})
+	mac := reconcile.HostLoad{Name: "mac", Status: hostops.Status{Windows: []hostops.Window{window(later, "@1", true, session.StateWaiting)}}}
+	f.obs.Record(st, reconcile.Fleet{Hosts: []reconcile.HostLoad{mac, {Name: "devbox", Unreachable: "busy"}}})
 	t0 := f.clock.now()
 	close(gate)
 	f.obs.Settle()

@@ -6,21 +6,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/session"
 	"github.com/dinoderek/engine/internal/tracker"
 )
 
-const (
-	resumeDelay = 2 * time.Minute
-	resumeWait  = 10 * time.Minute
-	farReset    = 24 * time.Hour
-)
+// farReset is how far off a reset makes a limit alert far.
+const farReset = 24 * time.Hour
 
 // Reset times name the notes; their contents are when the action happened.
 // Keeping them across coordinator restarts avoids another continue for a reset.
-func resetNote(prefix string, s Session) string {
-	return prefix + "=" + strconv.FormatInt(s.ResetsAt, 10)
-}
+var resetNote = reconcile.ResetNote
 
 // A derived quota limit disappears from status when its quota window resets.
 // Retain that observation for a waiting window until it is seen working.
@@ -75,25 +71,12 @@ func limitActions(v View, ref tracker.Ref) []Action {
 		return nil
 	}
 	s := v.Sessions[ref]
-	if !s.Live || s.Unknown || s.WindowID == "" || s.ResetsAt <= 0 || !s.Limited && !s.Waiting {
+	kind := map[reconcile.LimitStep]Kind{reconcile.LimitResume: Resume, reconcile.LimitFar: LimitAlert, reconcile.LimitStuck: LimitAlert}
+	step, text := reconcile.Limit(s, v.Now)
+	if step == reconcile.NoLimitStep {
 		return nil
 	}
-	reset := time.Unix(s.ResetsAt, 0)
-	a := Action{Ref: ref, Session: s}
-	switch {
-	case reset.Sub(v.Now) > farReset:
-		if s.FarNoted {
-			return nil
-		}
-		a.Kind, a.Text = LimitAlert, fmt.Sprintf("%s has a usage limit resetting more than 24 hours away (%s); waiting without typing", s.Name, reset.UTC().Format(time.RFC3339))
-	case s.ResumeAt.IsZero() && !v.Now.Before(reset.Add(resumeDelay)):
-		a.Kind, a.Text = Resume, "continue; "+resetNote("resumed-for", s)
-	case s.Limited && !s.ResumeAt.IsZero() && v.Now.Sub(s.ResumeAt) >= resumeWait && !s.StuckNoted:
-		a.Kind, a.Text = LimitAlert, s.Name+" is still limited 10 minutes after continue; "+resetNote("resumed-for", s)
-	default:
-		return nil
-	}
-	return []Action{a}
+	return []Action{{Kind: kind[step], Ref: ref, Session: s, Text: text}}
 }
 
 func atHardStop(v View, ref tracker.Ref) bool {

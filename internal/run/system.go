@@ -63,7 +63,7 @@ func (s System) Now() time.Time { return s.Clock() }
 // this host's too.
 func (s System) Rows(f Fleet) ([]ps.Row, error) {
 	src := s.Claims
-	src.Status = f.status
+	src.Status = func(name string) (hostops.Status, error) { return status(f, name) }
 	l, err := ps.List(src)
 	return l.Rows, err
 }

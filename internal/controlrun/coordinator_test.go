@@ -14,8 +14,8 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/run"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -297,7 +297,7 @@ func TestCoordinatorCancellationAndObservation(t *testing.T) {
 		t.Fatal("pass ignored cancellation")
 	}
 	h.status.RunsError = "unreadable"
-	s := observe(control.Attempt{Host: "devbox", State: "dispatching"}, run.Fleet{Hosts: []run.HostLoad{{Name: "devbox", Status: h.status}}}, "owner/demo", 1)
+	s := observe(control.Attempt{Host: "devbox", State: "dispatching"}, reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "devbox", Status: h.status}}}, "owner/demo", 1)
 	if !s.Unknown {
 		t.Fatal("unreadable records treated as dead")
 	}

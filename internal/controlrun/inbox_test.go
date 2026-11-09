@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/dinoderek/engine/internal/control"
-	"github.com/dinoderek/engine/internal/run"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -15,7 +15,7 @@ func TestPlanUpdatesWakeTheWaitingTaskSession(t *testing.T) {
 	pass(t, c)
 	h.status.Windows[0].State = session.StateWaiting
 	var texts []string
-	c.Wake = func(_ run.Session, text string) error { texts = append(texts, text); return nil }
+	c.Wake = func(_ reconcile.Session, text string) error { texts = append(texts, text); return nil }
 	st, _ := c.Service.Store.Snapshot()
 	attempt := st.Items[task.ID].Attempt
 	worker := control.Actor{Name: attempt, Role: "worker", Attempt: attempt}

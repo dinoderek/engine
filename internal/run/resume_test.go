@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -98,7 +99,7 @@ func TestFarResetAlertOnceThenResumeWhenDue(t *testing.T) {
 		t.Fatalf("resumed %v, comments %q", w.resumed, c)
 	}
 	// Sleep and a restart do not rely on a timer having fired.
-	w.now = t0.Add(25*time.Hour + resumeDelay)
+	w.now = t0.Add(25*time.Hour + reconcile.ResumeDelay)
 	passOf(t, w)
 	if len(w.resumed) != 1 {
 		t.Fatalf("due after sleep: %v", w.resumed)
@@ -151,7 +152,7 @@ func TestResumePreclaimAndPlanner(t *testing.T) {
 	e := w.execs[ref(1)]
 	e.limited, e.resetsAt = true, t0.Unix()
 	// Do not run the fake planner's completion script.
-	w.now = t0.Add(resumeDelay)
+	w.now = t0.Add(reconcile.ResumeDelay)
 	passOf(t, w)
 	if len(w.resumed) != 1 || w.resumed[0].Name != "r-1" {
 		t.Fatalf("planner: %+v", w.resumed)

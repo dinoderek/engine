@@ -61,12 +61,12 @@ func readSession(w World, ref tracker.Ref, fleet Fleet, claimHost string, now ti
 		return Session{}, false, err
 	}
 	host := claimHost
-	if _, ok := fleet.host(host); !ok {
+	if _, ok := fleet.Host(host); !ok {
 		if host, err = startedOn(dir, fleet); err != nil {
 			return Session{}, false, err
 		}
 	}
-	h, known := fleet.host(host)
+	h, known := fleet.Host(host)
 	if known && h.Unreachable != "" {
 		return Session{Name: name, Host: host, Unknown: true}, true, nil
 	}

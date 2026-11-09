@@ -105,7 +105,7 @@ func TestApplyPassesTheSelectedHarnessToStart(t *testing.T) {
 	if e := w.execs[ref(2)]; e == nil || e.harness != "codex" {
 		t.Fatalf("selected harness not launched: %+v", e)
 	}
-	if counts := w.Fleet().running(); counts["codex"] != 1 {
+	if counts := w.Fleet().Running(); counts["codex"] != 1 {
 		t.Fatalf("live counts %v", counts)
 	}
 }

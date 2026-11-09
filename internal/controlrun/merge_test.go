@@ -11,8 +11,8 @@ import (
 	"github.com/dinoderek/engine/internal/hook"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
-	"github.com/dinoderek/engine/internal/run"
 )
 
 const reviewedHead = "0123456789abcdef0123456789abcdef01234567"
@@ -95,7 +95,7 @@ func lastUpdate(t *testing.T, c *Coordinator, id string, kinds ...string) (contr
 func TestCoordinatorMergesOnTheTasksHostAndCompletesTheTask(t *testing.T) {
 	c, m, task, _ := requested(t, true, reply(hostops.MergeDone, "merged at "+reviewedHead))
 	var woken []string
-	c.Wake = func(_ run.Session, text string) error { woken = append(woken, text); return nil }
+	c.Wake = func(_ reconcile.Session, text string) error { woken = append(woken, text); return nil }
 	m.status.Windows[0].State = "waiting"
 	pass(t, c)
 	if len(m.requests) != 1 || m.requests[0] != (hostops.MergeRequest{Repo: "owner/demo", PR: 42, Head: reviewedHead, Method: "squash"}) {
@@ -126,7 +126,7 @@ func TestCoordinatorHandsBackAMergeItCannotMake(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c, m, task, _ := requested(t, true, reply(hostops.MergeRefused, reason))
 			woken := 0
-			c.Wake = func(run.Session, string) error { woken++; return nil }
+			c.Wake = func(reconcile.Session, string) error { woken++; return nil }
 			m.status.Windows[0].State = "waiting"
 			pass(t, c)
 			if woken == 0 {
@@ -262,13 +262,13 @@ func TestStandaloneSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.status.Windows[0].State = "waiting"
-	c.Wake = func(run.Session, string) error { return nil }
+	c.Wake = func(reconcile.Session, string) error { return nil }
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, windows %v, attempt %s: the window closed as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
 	}
-	later := c.Service.Now().Add(reportWindow)
+	later := c.Service.Now().Add(reconcile.ReportWindow)
 	c.Service.Now = func() time.Time { return later }
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
@@ -321,7 +321,7 @@ func waitedLong(t *testing.T, c *Coordinator, m *merger, id string) control.Atte
 	var at control.Attempt
 	if err := c.Service.Store.Transaction(func(st *control.State) error {
 		at = st.Attempts[st.Items[id].Attempt]
-		at.WaitingSince = c.Service.Now().Add(-2 * run.StallWait)
+		at.WaitingSince = c.Service.Now().Add(-2 * reconcile.StallWait)
 		st.Attempts[at.ID] = at
 		return nil
 	}); err != nil {
@@ -332,14 +332,14 @@ func waitedLong(t *testing.T, c *Coordinator, m *merger, id string) control.Atte
 
 func TestPlanTaskSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 	c, m, task, _ := requested(t, true, reply(hostops.MergeDone, "merged at "+reviewedHead))
-	c.Wake = func(run.Session, string) error { return nil }
+	c.Wake = func(reconcile.Session, string) error { return nil }
 	at := waitedLong(t, c, m, task.ID)
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, windows %v, attempt %s: reaped as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
 	}
-	later := c.Service.Now().Add(reportWindow)
+	later := c.Service.Now().Add(reconcile.ReportWindow)
 	c.Service.Now = func() time.Time { return later }
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()

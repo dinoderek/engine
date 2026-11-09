@@ -6,7 +6,7 @@ import (
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
-	"github.com/dinoderek/engine/internal/run"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -61,7 +61,7 @@ func TestWaitingMessagesAndCompletedSessionCleanup(t *testing.T) {
 	pass(t, c)
 	h.status.Windows[0].State = session.StateWaiting
 	wakes := 0
-	c.Wake = func(run.Session, string) error { wakes++; return nil }
+	c.Wake = func(reconcile.Session, string) error { wakes++; return nil }
 	execute(t, c.Service, control.Request{Op: "say", ID: task.ID, Body: "Use the second approach"})
 	pass(t, c)
 	pass(t, c)
@@ -87,7 +87,7 @@ func TestQuotaMarkersAreIndependentForEachReset(t *testing.T) {
 	h.status.Windows[0].State = session.StateLimited
 	h.status.Windows[0].ResetsAt = now.Add(-3 * time.Minute).Unix()
 	resumed := 0
-	c.Resume = func(run.Session) error { resumed++; return nil }
+	c.Resume = func(reconcile.Session) error { resumed++; return nil }
 	pass(t, c)
 	pass(t, c)
 	if resumed != 1 {
@@ -247,13 +247,13 @@ func TestRebootWhileAStandaloneTaskIsStoppedLeavesItResumable(t *testing.T) {
 
 func TestAPassRecordsASightingOnlyWhileCoordinating(t *testing.T) {
 	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
-	if at := kept(control.Attempt{}, run.Session{Live: true}, now, false); !at.LiveAt.IsZero() {
+	if at := kept(control.Attempt{}, reconcile.Session{Live: true}, now, false); !at.LiveAt.IsZero() {
 		t.Error("a pass overlapping a stop recorded a sighting")
 	}
-	if at := kept(control.Attempt{}, run.Session{Live: true}, now, true); !at.LiveAt.Equal(now) {
+	if at := kept(control.Attempt{}, reconcile.Session{Live: true}, now, true); !at.LiveAt.Equal(now) {
 		t.Error("a live window was not recorded")
 	}
-	if at := kept(control.Attempt{LiveAt: now}, run.Session{}, now.Add(time.Minute), true); !at.LiveAt.Equal(now) {
+	if at := kept(control.Attempt{LiveAt: now}, reconcile.Session{}, now.Add(time.Minute), true); !at.LiveAt.Equal(now) {
 		t.Error("a dead window moved the last sighting")
 	}
 }

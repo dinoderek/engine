@@ -163,7 +163,7 @@ func (w *world) Rows(f Fleet) ([]ps.Row, error) {
 			continue
 		}
 		state := ps.Running
-		if _, err := f.status(e.host); err == nil && e.window.Dead {
+		if _, err := status(f, e.host); err == nil && e.window.Dead {
 			state = ps.Dead
 		}
 		rows = append(rows, ps.Row{Task: c.Ref.String(), Session: e.window.Name, Host: e.host, State: state})

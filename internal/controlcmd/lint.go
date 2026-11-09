@@ -38,8 +38,8 @@ func lintMain(args []string, e Env) int {
 		fmt.Fprintln(e.Err, "engine lint: unknown or inaccessible plan", args[0])
 		return 1
 	}
-	f := controlrun.Feature(st, args[0])
-	problems := lint.Lint(f)
+	tasks := controlrun.Tasks(st, args[0])
+	problems := lint.Items(tasks)
 	for _, p := range problems {
 		fmt.Fprintln(e.Out, p)
 	}
@@ -47,6 +47,6 @@ func lintMain(args []string, e Env) int {
 		fmt.Fprintf(e.Out, "%s: %d problem(s)\n", args[0], len(problems))
 		return 1
 	}
-	fmt.Fprintf(e.Out, "%s: the plan passes, %d tasks\n", args[0], len(f.Tasks))
+	fmt.Fprintf(e.Out, "%s: the plan passes, %d tasks\n", args[0], len(tasks))
 	return 0
 }
