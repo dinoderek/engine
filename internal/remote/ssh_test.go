@@ -46,7 +46,7 @@ func (f *sshFake) ssh(address string) SSH {
 	return SSH{Name: "devbox", Address: address, Exec: f.exec}
 }
 
-const envelope = `"protocol":5,"engine":"v1","host":"devbox"`
+const envelope = `"protocol":6,"engine":"v1","host":"devbox"`
 
 // line is the remote command of the n'th call.
 func (f *sshFake) line(n int) string { return f.calls[n].args[len(f.calls[n].args)-1] }
@@ -85,7 +85,7 @@ func TestSSHSpawnPassesTheKickoffOnStdin(t *testing.T) {
 
 func TestSSHStatusCollectRelease(t *testing.T) {
 	f := &sshFake{replies: []reply{
-		{stdout: `{"slots":2,"free_slots":1,"windows":[{"name":"r-7","id":"@4","alive":true,"harness":"codex","state":"waiting"}],"agents":[],"runs":[],` + envelope + "}"},
+		{stdout: `{"slots":2,"free_slots":1,"windows":[{"name":"r-7","id":"@4","alive":true,"harness":"codex","state":"waiting"}],"runs":[],` + envelope + "}"},
 		{stdout: `{"run_dir":"/runs/x","run":null,"files":["a"],` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":true,"worktree_kept":false,` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":false,"worktree_kept":true,` + envelope + "}"},
@@ -118,9 +118,9 @@ func TestSSHStatusCollectRelease(t *testing.T) {
 // A host still on protocol 2 has no heavy slots: its status is refused,
 // and the operator is told how to bring it up to date.
 func TestSSHRefusesAProtocol2Status(t *testing.T) {
-	f := &sshFake{replies: []reply{{stdout: `{"protocol":2,"engine":"v0","host":"devbox","slots":2,"free_slots":2,"windows":[],"agents":[],"runs":[]}`}}}
+	f := &sshFake{replies: []reply{{stdout: `{"protocol":2,"engine":"v0","host":"devbox","slots":2,"free_slots":2,"windows":[],"runs":[]}`}}}
 	st, err := f.ssh("me@box").Status()
-	if err == nil || !strings.Contains(err.Error(), "speaks protocol 2 (engine v0), this engine speaks 5; run: engine setup --host devbox") || st.Slots != 0 {
+	if err == nil || !strings.Contains(err.Error(), "speaks protocol 2 (engine v0), this engine speaks 6; run: engine setup --host devbox") || st.Slots != 0 {
 		t.Errorf("got %+v, %v", st, err)
 	}
 }
@@ -136,7 +136,7 @@ func TestSSHMapsRemoteFailures(t *testing.T) {
 			"the window r-7 exists", true},
 		{"failure", reply{stdout: `{"error":"tmux is down","refused":false,` + envelope + "}", code: 1}, "host devbox: tmux is down", false},
 		{"exit 1 without an error", reply{stdout: `{"slots":1,` + envelope + "}", code: 1}, "exited 1 with no error", false},
-		{"protocol mismatch", reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`}, "speaks protocol 2 (engine v9), this engine speaks 5; run: engine setup --host devbox", false},
+		{"protocol mismatch", reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`}, "speaks protocol 2 (engine v9), this engine speaks 6; run: engine setup --host devbox", false},
 		{"protocol mismatch on a failure", reply{stdout: `{"error":"x","refused":true,"protocol":2,"engine":"v9","host":"devbox"}`, code: 1}, "speaks protocol 2", false},
 		{"no protocol", reply{stdout: `{"clone":"/c"}`}, "speaks protocol 0", false},
 		{"engine missing", reply{stderr: "sh: engine: command not found\n", code: 127}, "did not reply (sh: engine: command not found); is engine current there? run: engine setup --host devbox", false},

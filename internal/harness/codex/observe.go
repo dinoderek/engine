@@ -16,25 +16,22 @@ import (
 // home, and each run's state from its hooks' state file, supplemented by the
 // newest stored turn of its thread. The rate-limit read and the turn reads
 // each have their own deadline; any that fail leave what they would say
-// unknown.
+// unknown. A host that does not run Codex, or whose binary cannot be found,
+// has only the hooks' states: its sessions may outlive a config change.
 func (a Adapter) Observe(ctx context.Context, host hosts.Host, runs map[string]session.Run) harness.Snapshot {
 	var snap harness.Snapshot
-	if !host.Runs(Name) {
-		return snap
+	var turns map[string]json.RawMessage
+	if bin, err := host.BinPath(Name, a.env.Home); err == nil && host.Runs(Name) {
+		snap.Quota = a.quota(ctx, bin)
+		if a.env.Exec != nil {
+			// Engine's Codex home: joined sessions use it, and setup checks
+			// its sign-in. An embedded session runs in the host's own home,
+			// whose sign-in may differ when engine's home keeps a login of
+			// its own.
+			snap.SignedOut = signedOut(a.env.Exec("env", "CODEX_HOME="+a.engineHome(), bin, "login", "status"))
+		}
+		turns = a.turns(ctx, bin, runs)
 	}
-	bin, err := host.BinPath(Name, a.env.Home)
-	if err != nil {
-		snap.Error = err.Error()
-		return snap
-	}
-	snap.Quota = a.quota(ctx, bin)
-	if a.env.Exec != nil {
-		// Engine's Codex home: joined sessions use it, and setup checks its
-		// sign-in. An embedded session runs in the host's own home, whose
-		// sign-in may differ when engine's home keeps a login of its own.
-		snap.SignedOut = signedOut(a.env.Exec("env", "CODEX_HOME="+a.engineHome(), bin, "login", "status"))
-	}
-	turns := a.turns(ctx, bin, runs)
 	snap.Sessions = map[string]harness.State{}
 	for name, r := range runs {
 		if st, ok := probe(r, turns, snap.Quota); ok {

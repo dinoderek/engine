@@ -83,6 +83,10 @@ func ReadStatus(d Deps) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
+	adapters, err := d.adapters()
+	if err != nil {
+		return Status{}, err
+	}
 	windows, err := d.Tmux.Windows()
 	if err != nil {
 		return Status{}, err
@@ -96,7 +100,7 @@ func ReadStatus(d Deps) (Status, error) {
 	if err != nil {
 		s.RunsError = err.Error()
 	}
-	states := s.observe(d, host, windows, runs)
+	states := s.observe(adapters, host, windows, runs)
 	for _, w := range windows {
 		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
 		if code, ok := codes[w.ID]; ok && w.Dead {
@@ -130,12 +134,8 @@ func ReadStatus(d Deps) (Status, error) {
 // observe has each adapter read its harness on this host, given the newest
 // run of every live window that names it, and records each one's quota,
 // sign-in and errors. It returns the windows' states by name.
-func (s *Status) observe(d Deps, host hosts.Host, windows []session.WindowInfo, runs map[string]session.Run) map[string]harness.State {
+func (s *Status) observe(a harness.Adapters, host hosts.Host, windows []session.WindowInfo, runs map[string]session.Run) map[string]harness.State {
 	states := map[string]harness.State{}
-	a := d.adapters()
-	if a == nil {
-		return states
-	}
 	for _, name := range a.Names() {
 		h, _ := a.Get(name)
 		mine := map[string]session.Run{}

@@ -28,9 +28,6 @@ const startDaemon = "`engine setup` on this host starts it with remote control o
 // daemon it serves in the foreground until stopped, and the state it reports
 // is not one Codex home's.
 func (l launcher) Join(bin, line string) (bool, string) {
-	if l.env.Exec == nil {
-		return false, "the Codex session runs embedded: nothing can ask engine's Codex daemon its state"
-	}
 	c, run := l.Adapter, l.env.Exec
 	pid, why := c.unjoinable(run, bin, line)
 	if why != "" {

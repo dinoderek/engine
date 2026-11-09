@@ -112,7 +112,7 @@ func named(t *testing.T, root, name string) []string {
 }
 
 // checkObserve: what an adapter cannot read is unknown, never a state or a
-// sign-out, and a host that does not run the harness gets no reading.
+// sign-out, on a host that runs the harness or one that does not.
 func checkObserve(t *testing.T, build New) {
 	e := env(t, failing)
 	a := build(e)
@@ -127,7 +127,7 @@ func checkObserve(t *testing.T, build New) {
 		t.Errorf("an unreadable session has state %+v", st)
 	}
 	other := a.Observe(context.Background(), hosts.Host{Name: "h"}, runs)
-	if other.SignedOut || len(other.Sessions) != 0 {
+	if _, ok := other.Sessions["r-7"]; other.SignedOut || ok {
 		t.Errorf("a host that does not run %s: %+v", a.Name(), other)
 	}
 }

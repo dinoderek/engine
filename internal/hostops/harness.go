@@ -8,22 +8,31 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// defaultAdapters builds the adapters of Deps that carry none. The commands
-// always pass theirs; tests set this to the registry's.
+// defaultAdapters builds the adapters of Deps that carry none. It is nil
+// outside tests, which set it to build the registry's from each Deps as it
+// is when an op runs; the commands always pass their own.
 var defaultAdapters func(Deps) harness.Adapters
 
 // adapters are the harness adapters the ops launch and observe.
-func (d Deps) adapters() harness.Adapters {
-	if d.Harnesses == nil && defaultAdapters != nil {
-		return defaultAdapters(d)
+func (d Deps) adapters() (harness.Adapters, error) {
+	a := d.Harnesses
+	if a == nil && defaultAdapters != nil {
+		a = defaultAdapters(d)
 	}
-	return d.Harnesses
+	if a == nil || len(a.Names()) == 0 {
+		return nil, refuse("no harness adapters were given to the host ops")
+	}
+	return a, nil
 }
 
 // adapterFor returns the adapter called name, or the default when name is
 // empty.
 func adapterFor(d Deps, name string) (harness.Adapter, error) {
-	a, err := harness.Lookup(d.adapters(), name)
+	all, err := d.adapters()
+	if err != nil {
+		return nil, err
+	}
+	a, err := harness.Lookup(all, name)
 	if err != nil {
 		return nil, refuse("%v", err)
 	}

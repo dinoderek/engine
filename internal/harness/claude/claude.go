@@ -104,29 +104,27 @@ func (l launcher) Args(s harness.Launch) string {
 }
 
 // Observe reads the quota the status line recorded, whether Claude is signed
-// in, and each run's state from Claude Code's session list.
+// in, and each run's state from Claude Code's session list. A list Claude
+// cannot give leaves every state unknown.
 func (a Adapter) Observe(_ context.Context, host hosts.Host, runs map[string]session.Run) harness.Snapshot {
 	var snap harness.Snapshot
 	if q, ok := session.ReadQuota(a.env.Home, a.env.Time())[Name]; ok {
 		snap.Quota = &q
 	}
-	if !host.Runs(Name) {
-		return snap
+	var agents []Agent
+	if host.Runs(Name) {
+		bin, err := host.BinPath(Name, a.env.Home)
+		if err == nil && a.env.Exec != nil {
+			snap.SignedOut = signedOut(a.env.Exec(bin, "auth", "status"))
+			agents, err = ListAgents(a.env.Exec, bin)
+		}
+		if err != nil {
+			snap.Error = err.Error()
+			return snap
+		}
 	}
-	bin, err := host.BinPath(Name, a.env.Home)
-	if err != nil {
-		snap.Error = err.Error()
-		return snap
-	}
-	if a.env.Exec == nil {
-		return snap
-	}
-	snap.SignedOut = signedOut(a.env.Exec(bin, "auth", "status"))
-	agents, err := ListAgents(a.env.Exec, bin)
-	if err != nil {
-		snap.Error = err.Error()
-		return snap
-	}
+	// A host that does not run Claude lists no sessions, but a limit marker
+	// still says a window's session is limited.
 	snap.Sessions = map[string]harness.State{}
 	for name, r := range runs {
 		if st, ok := probe(name, r, agents); ok {

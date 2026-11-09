@@ -174,5 +174,8 @@ func Lookup(a Adapters, name string) (Adapter, error) {
 	if a != nil {
 		names = a.Names()
 	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("unknown harness %q: no harness adapters", name)
+	}
 	return nil, fmt.Errorf("unknown harness %q: want %s", name, strings.Join(names, " or "))
 }

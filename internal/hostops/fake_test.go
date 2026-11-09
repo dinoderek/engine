@@ -102,3 +102,19 @@ func TestReleaseAsksEveryAdapter(t *testing.T) {
 		t.Errorf("alpha %v, beta %v", a, b)
 	}
 }
+
+// An op handed no adapters refuses, so a caller that forgets them hears of it.
+func TestOpsRefuseWithoutAdapters(t *testing.T) {
+	h := newHome(t, "mac")
+	none := harness.NewAdapters()
+	d := Deps{Home: h.dir, Tmux: (&tmuxFake{}).tmux(), Harnesses: none}
+	if _, err := ReadStatus(d); !isRefusal(err) || !strings.Contains(err.Error(), "no harness adapters") {
+		t.Errorf("status: %v", err)
+	}
+	if _, err := Release(d, "r-7", false); !isRefusal(err) {
+		t.Errorf("release: %v", err)
+	}
+	if _, err := Spawn(d, request()); !isRefusal(err) || !strings.Contains(err.Error(), "no harness adapters") {
+		t.Errorf("spawn: %v", err)
+	}
+}

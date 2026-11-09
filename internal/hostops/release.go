@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -31,6 +32,10 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 	if !nameRe.MatchString(name) {
 		return Released{}, refuse("session name %q: use letters, digits, _, . and -, not starting with -", name)
 	}
+	adapters, err := d.adapters()
+	if err != nil {
+		return Released{}, err
+	}
 	r := Released{Name: name}
 	windows, err := d.Tmux.Windows()
 	if err != nil {
@@ -48,7 +53,7 @@ func Release(d Deps, name string, failed bool) (Released, error) {
 	run, ok, err := session.LatestRun(d.Home, name)
 	// Every adapter releases the session, whatever the run's harness: a
 	// spawn that failed before run.json was written may have left files.
-	if uerr := releaseAll(d, name, run.Record.Worktree); uerr != nil {
+	if uerr := releaseAll(adapters, name, run.Record.Worktree); uerr != nil {
 		r.Note = uerr.Error()
 	}
 	// An unreadable run.json fails the release only when no run of this
@@ -91,11 +96,7 @@ func removeWorktree(d Deps, rec session.Record) error {
 
 // releaseAll has every adapter release the session called name, whose
 // newest run's worktree is dir.
-func releaseAll(d Deps, name, dir string) error {
-	a := d.adapters()
-	if a == nil {
-		return nil
-	}
+func releaseAll(a harness.Adapters, name, dir string) error {
 	var errs []error
 	for _, n := range a.Names() {
 		h, _ := a.Get(n)
