@@ -10,7 +10,7 @@ import (
 // DenyMessage is what an unattended session's agent is told when its
 // permission request is denied.
 const DenyMessage = "engine: this session is unattended, so the permission request was denied. " +
-	"Try a route that needs no new permission; if none works, follow the Permission hard stop in the engine skill (rulings.md)."
+	"Try a route that needs no new permission; if none works, follow the Permission hard stop in the build skill (hard-stops.md)."
 
 // permissionEvent is the part of a Claude Code or Codex PermissionRequest, or
 // Claude Code PermissionDenied, event that engine reads and logs.

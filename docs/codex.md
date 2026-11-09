@@ -55,7 +55,7 @@ the kickoff, follow the launch line.
   once engine trusts the folder. The bypass is per invocation, and covers every
   enabled hook.
 
-## Installing the skill
+## Installing the skills
 
 `plugins/engine/.codex-plugin/plugin.json` points at the `skills/` tree the
 Claude plugin shares, and registers `engine hook state`, `engine hook

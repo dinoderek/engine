@@ -1,14 +1,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "engine",
-  "description": "engine's agent skills: the build protocol that plans, executes and reviews tasks through to merged PRs.",
+  "description": "engine's agent skills: build one task to a merged PR in any repo, and plan, execute and supervise engine server plans.",
   "owner": {
     "name": "dinoderek"
   },
   "plugins": [
     {
       "name": "engine",
-      "description": "The engine skill: plan a task or a feature as GitHub issues, then execute one task per session, hands-off or gated, through review to a PR merged on green.",
+      "description": "Two skills: build takes one task through review to a PR merged on green, gated or hands-off; engine plans server plans, executes their tasks and supervises the coordinator.",
       "source": "./plugins/engine",
       "category": "development"
     }

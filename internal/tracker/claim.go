@@ -42,8 +42,7 @@ func (c Claim) HarnessName() string {
 	return name
 }
 
-// claimPrefix starts every claim comment. The skill's execute reference owns
-// the format.
+// claimPrefix starts every claim comment. This package owns the format.
 const claimPrefix = "Claim:"
 
 // ParseClaim reads a claim comment body. It reports false unless the first

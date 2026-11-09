@@ -1,6 +1,6 @@
 # Hosts and sessions
 
-> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (the `engine` skill, `plugins/engine/skills/engine/`), what it records (`telemetry.md`), each harness's launch line, tiers, permissions and apps (`claude.md`, `codex.md`).
+> **Owns:** host config, task placement, how sessions are started and reached. **Not here:** what a session does (the skills, `plugins/engine/skills/`), what it records (`telemetry.md`), each harness's launch line, tiers, permissions and apps (`claude.md`, `codex.md`).
 
 ## Hosts
 
@@ -187,7 +187,7 @@ started.
 ## The claim comment is the registry
 
 The executor's claim comment on the task issue records where and how its
-session runs. The `engine` skill owns its format.
+session runs. `internal/tracker` owns its format.
 
 Everything that lists sessions reads these comments, so a task started by
 hand and one started by the coordinator look the same.

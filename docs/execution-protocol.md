@@ -1,18 +1,21 @@
 # Execution protocol
 
-> **Owns:** the principles, the phases at a glance, why the coordinator is a role, task and feature states and who moves them, the inbox, merge conflicts, why harnesses guard merges in code, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the claim comment, the ruling grades and the hard-stop list (the `engine` skill, `plugins/engine/skills/engine/`), each harness's guards (`claude.md`, `codex.md`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, why the coordinator is a role, task and feature states and who moves them, the inbox, merge conflicts, why harnesses guard merges in code, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does in each mode, the card fields, the ruling grades and the hard-stop list (the `build` and `engine` skills, `plugins/engine/skills/`), each harness's guards (`claude.md`, `codex.md`), how the coordinator runs (`coordinator.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
-The skill is the single source for agent behaviour. This doc explains the
-design around it and never restates a rule the skill holds. If you are
-changing what an agent does, change the skill.
+The skills are the single source for agent behaviour. `build` holds the
+loop that takes one task to a merged PR in any repo, its hard stops and its
+reviewer; `engine` holds the server roles (planner, executor, supervisor),
+its executor written as `build` with changes. This doc explains the design
+around them and never restates a rule they hold. If you are changing what an
+agent does, change the skill.
 
 ## Principles
 
 - **Hands-off when dispatched, stops by rule.** A dispatched executor decides
   open questions itself, and logs as rulings only the decisions worth your
   review. It stops only for a hard-stop class.
-- **Enforce in code, not prompts.** The coordinator's pass is specified once
-  and implemented in code (`engine run`). Merging is a scripted check of the
+- **Enforce in code, not prompts.** The coordinator's pass is specified only
+  by its code. Merging is a scripted check of the
   reviewed head commit against green checks. In Claude Code and in Codex, the
   merge guard (`claude.md`, "Hooks"; `codex.md`, "Guards") blocks an unpinned,
   auto or admin merge through `gh`.
@@ -29,9 +32,9 @@ changing what an agent does, change the skill.
 
 | Phase | Who | Skill mode | Ends when |
 | --- | --- | --- | --- |
-| 1. Prepare: requirements (the what) and design (the how) | You and a planner, in batches | `plan feature`, `plan task` | You label the issue `engine:approved`. |
-| 2. Plan: task issues with dependencies and a final acceptance task | A planner, alone | `plan breakdown` | Plan lint passes. |
-| 3. Execute: one task, from card to merged PR | One executor per task | `execute` | The PR merges on green. |
+| 1. Prepare: requirements (the what) and design (the how) | You and a planner, in batches | `engine` `plan` | You label the issue `engine:approved`. |
+| 2. Plan: task issues with dependencies and a final acceptance task | A planner, alone | `engine` `server planner` | Plan lint passes. |
+| 3. Execute: one task, from card to merged PR | One executor per task | `engine` `server executor`, or `build` | The PR merges on green. |
 
 Prepare carries more weight than in a human-gated flow. It is the only time
 you are consulted, so every open question is either answered there or
@@ -47,7 +50,7 @@ A task issue uses the template `.github/ISSUE_TEMPLATE/engine-task.md`, one
 section per card field. Dependencies have no section: they are the issue's
 "blocked by" list.
 
-The executor reviews its own work with a fresh reviewer (mode `review`). In
+The executor reviews its own work with a fresh reviewer (`build`'s `review` mode). In
 GitHub mode it merges itself once every check is green, with
 `--match-head-commit` pinned to the commit that was reviewed and gated. With a
 server plan it requests the merge and the coordinator makes it
@@ -61,14 +64,13 @@ server plan it requests the merge and the coordinator makes it
 
 ## Run modes
 
-The coordinator is a role, filled by a program or by an agent; the skill
-lists the five run modes. Its `coordinate` mode is the single spec for one
-reconcile pass, which `engine run` implements in code, so an agent
-coordinator and the program behave the same.
+The coordinator is a program, with no agent mode: its code is the spec for
+a reconcile pass. Outside engine, `build` needs no coordinator: you start
+the session and approve its merge.
 
-The supervisor mode exists to find the gaps in `engine run`. It acts only
+The supervisor mode exists to find the coordinator's gaps. It acts only
 through `engine` commands and records every gap it fills, so each one becomes
-an `engine run` fix, until the engine-only mode needs no agent.
+a coordinator fix, until a plan needs no agent watching it.
 
 ## Models
 
@@ -81,19 +83,22 @@ the tier and the model for every run, and the defaults are tuned from that.
 
 ## Rulings and hard stops
 
-- **You read only what is costly to undo.** Decisions are graded by what
-  undoing them costs. `low` ones stay in a collapsed PR section that you never
-  have to read. Only `high` ones queue under `engine:ruling-review`, so the
-  label stays rare. You read them and remove the label, so "what needs my
-  review" is one saved search across every repo:
-  `is:issue label:engine:ruling-review`.
+- **You read only what is costly to undo.** One grade reaches you,
+  `review`: a decision whose undo needs another PR and touches persisted
+  data, a surface others use, or a shape another task builds on. Each task
+  sends its `review` rulings as one inbox digest with its merge request, and
+  never waits for it to be read. Anything smaller is at most a one-line `low`
+  note in the PR body, or nothing.
 - **Rulings are written for you, not the code.** Each says what a user would
   notice and what the alternative was.
-- **Hard stops are the only interruptions.** The list grows or shrinks from
-  evidence. Telemetry counts rulings per task by risk, and a class of `high`
-  rulings that keeps being reversed becomes a hard stop.
-- **Several `med` or `high` rulings on one task** point to a card that Prepare
-  under-specified.
+- **Hard stops are the only interruptions, asked once.** The question
+  history showed the noise was repeats, not classes: the same red gate on the
+  default branch, or the same broken host sign-in, asked by task after task.
+  So an executor first looks for an answer or an open question on the same
+  root cause, and a question that affects every task is resolved once for the
+  whole plan.
+- **More than two `review` rulings on one task** point to a card that
+  Prepare under-specified.
 
 ## States
 

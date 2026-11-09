@@ -29,7 +29,7 @@
    - the protocol's classes: product, data, security, contract, gates,
      outward or costly, drift, objectives, review, environment, repo rule,
      permission
-     (defined in `plugins/engine/skills/engine/references/rulings.md`);
+     (defined in `plugins/engine/skills/build/references/hard-stops.md`);
    - **loosening a gate:** a lower threshold, a baseline row, a `//nolint`, a
      linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,
      `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`;
@@ -58,7 +58,7 @@ Read these at each session start:
 
 | If your task… | Load |
 | --- | --- |
-| changes how agents plan, execute or review | `plugins/engine/skills/engine/SKILL.md` and the reference it routes to |
+| changes how agents plan, build or review | `plugins/engine/skills/build/SKILL.md`, `plugins/engine/skills/engine/SKILL.md` and their references |
 | changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
 | changes how the coordinator runs, triggers, reaches hosts or identifies itself | `docs/coordinator.md` |
 | changes server state, API, inbox, merge locks or `engine ui` | `docs/control-server.md` |

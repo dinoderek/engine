@@ -40,9 +40,7 @@ For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement".
 
 **The reconcile loop.** Each pass reads state, works out what to do, and does
-it. The skill's `coordinate` mode
-(`plugins/engine/skills/engine/references/coordinate.md`) is the spec for a
-pass, so an agent coordinator and `engine run` behave the same.
+it. Its code, `internal/run`, is the spec for a pass.
 
 Passes run every 5 minutes. Between passes, a session check runs every 60
 seconds. It reads every host's `status`, parallel calls, and
@@ -75,8 +73,7 @@ The coordinator never claims tasks; executors claim their own. To avoid
 starting a task twice in the gap between spawning it and its claim landing, it
 skips any task whose session is still alive, on any host that answers.
 
-For changes to GitHub plan storage or lint, load the skill's
-`plugins/engine/skills/engine/references/plan-sources.md` or
+For changes to lint, load
 `plugins/engine/skills/engine/references/plan.md`.
 
 ## Reaching hosts
