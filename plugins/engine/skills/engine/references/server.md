@@ -68,13 +68,20 @@ repo's own merge and cleanup steps; the merge guard enforces it.
      <the repo's merge method> --verdict APPROVED`, then end your turn. The
      merge guard refuses `gh pr merge` in a server session. Approval the repo
      or card requires is an `engine ask` before the request.
-  5. The coordinator wakes you with an update. `merged`: the task is `done`
+  5. **Wait by ending your turn**, never in a background job, polling loop
+     or `sleep`: the coordinator types a pointer at its update into your window. Worked
+     example: `engine task merge-ready t7 … --head 3f2c…` prints the
+     request; you write "Merge requested for t7 at 3f2c…; waiting for the
+     coordinator." and stop. Later, `Read the new task updates: engine
+     updates t7 --after 512` arrives as your next prompt: run it, and act on
+     the `merged` or `merge-refused` update it shows.
+  6. The coordinator wakes you with an update. `merged`: the task is `done`
      and the lock freed; record the outcome with `engine tell <task>` and
      stop, keeping the worktree for the coordinator to release.
      `merge-refused`: act on its reason, then request again. Keep the lock
      for a clean default-branch merge; release it (`engine lock release`)
      while you fix anything else. Any other merge notice: wait.
-  6. Release the lock while you wait for the operator or close the PR
+  7. Release the lock while you wait for the operator or close the PR
      unmerged. After taking it again, redo item 2.
 - **Step 11.** Leave cleanup to the coordinator.
 

@@ -46,13 +46,16 @@ type Attempt struct {
 	Started      time.Time `json:"started"`
 	Ended        time.Time `json:"ended,omitempty"`
 	WaitingSince time.Time `json:"waiting_since,omitempty"`
-	Notice       time.Time `json:"notice,omitempty"`
-	ResetsAt     int64     `json:"resets_at,omitempty"`
-	ResumedFor   int64     `json:"resumed_for,omitempty"`
-	ResumeAt     time.Time `json:"resume_at,omitempty"`
-	Seen         int       `json:"seen,omitempty"`
-	FarFor       int64     `json:"far_for,omitempty"`
-	StuckFor     int64     `json:"stuck_for,omitempty"`
+	// IdleSince is when the session was first seen idle in its current
+	// spell: waiting, or busy only in a background job.
+	IdleSince  time.Time `json:"idle_since,omitzero"`
+	Notice     time.Time `json:"notice,omitempty"`
+	ResetsAt   int64     `json:"resets_at,omitempty"`
+	ResumedFor int64     `json:"resumed_for,omitempty"`
+	ResumeAt   time.Time `json:"resume_at,omitempty"`
+	Seen       int       `json:"seen,omitempty"`
+	FarFor     int64     `json:"far_for,omitempty"`
+	StuckFor   int64     `json:"stuck_for,omitempty"`
 	// LiveAt is the last coordinator pass that saw the attempt's window live.
 	LiveAt time.Time `json:"live_at,omitzero"`
 	// Reason is why a dead window ended the attempt: EndVanished or EndFailed.

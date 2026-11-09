@@ -8,15 +8,16 @@ import (
 	"github.com/dinoderek/engine/internal/reconcile"
 )
 
-// wakeMessages points each waiting session at the updates it has not been
-// woken for. A session at a hard stop is left alone.
+// wakeMessages points each idle session at the updates it has not been
+// woken for: one waiting for input, or one only a background job keeps
+// busy. A session busy in a turn, limited, or at a hard stop is left alone.
 func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
 	if c.Wake == nil {
 		return nil
 	}
 	for _, t := range v.Sessions() {
 		sess := *t.Session
-		if !sess.Live || !sess.Waiting || sess.Limited || sess.Unknown || t.State == "needs-human" || t.Question > 0 {
+		if !t.Wakeable() {
 			continue
 		}
 		at := t.Current

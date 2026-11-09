@@ -55,7 +55,9 @@ engine@engine`. Setup prints these when the plugin is missing there.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
-config, and ends with `engine start --check --host <name>`. The engine is built
+config, and ends with `engine start --check --host <name>`, which reads the
+host's protocol from the refusal of the undefined op `protocol`, then streams
+`ssh <address> engine start --check` and keeps its exit code. The engine is built
 with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
 from GitHub, and counts as current only on that commit and that Go. It changes
 only engine's own files (`~/.config/engine/`, `~/.local/bin/engine`,

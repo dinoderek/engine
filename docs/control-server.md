@@ -130,7 +130,7 @@ child merges and automatic quota resume until the operator resolves it.
 
 Messages addressed to operator appear in the cross-repository inbox.
 Informational messages leave the inbox on acknowledgement; questions leave
-on resolution. Waiting, unrestricted sessions get wake-up pointers for
+on resolution. Idle, unrestricted sessions get wake-up pointers for
 others' messages on their item; tasks also for others' plan messages and
 rulings, except coordinator notices and those to the operator. Messages
 persist when wake-up fails.

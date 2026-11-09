@@ -100,10 +100,18 @@ func (c *Coordinator) now() time.Time {
 }
 
 // release closes a finished session's window and worktree on its host, and
-// ends its attempt.
+// ends its attempt. A release with a Key tells the operator, once.
 func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
-	if _, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false); err != nil || a.Attempt == "" {
+	if _, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false); err != nil {
 		return err
+	}
+	if a.Key != "" {
+		if err := c.notice(a.Item, a.Key, a.Text); err != nil {
+			return err
+		}
+	}
+	if a.Attempt == "" {
+		return nil
 	}
 	return c.Service.SetAttempt(a.Attempt, "ended", "")
 }

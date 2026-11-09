@@ -34,7 +34,7 @@ commands:
                             Claude Code's (Codex's auto-review decides its own)
   hook statusline           record Claude quota and print its status line
   hook limit                record or clear a Claude usage limit
-  hook state                record a Codex session's state from its hook event
+  hook state [--harness h]  record a session's state from its hook event
   hook codex-label <run-dir> <thread>  title a joined Codex thread and file it under its repo's project
   ps [--json]               list server tasks
   attach <task>             attach to a task's tmux window, here or over SSH
@@ -148,7 +148,10 @@ func runHook(args []string, env Env) int {
 		return 0
 	}
 	if len(args) == 1 && args[0] == "state" {
-		return stateHook(env)
+		return stateHook(env, "")
+	}
+	if len(args) == 3 && args[0] == "state" && args[1] == "--harness" {
+		return stateHook(env, args[2])
 	}
 	if len(args) == 3 && args[0] == "codex-label" {
 		return codexLabelHook(env, args[1], args[2])
@@ -190,10 +193,13 @@ func permissionHook(env Env) int {
 }
 
 // stateHook records the session's state in the run directory of the session's
-// run. Outside an engine run there is none, and it does nothing.
-func stateHook(env Env) int {
+// run. Outside an engine run there is none, and it does nothing. With harness
+// set, it records only a run of that harness: a Claude reviewer that a Codex
+// executor starts inherits the Codex run's variables, and its turns are not
+// that run's.
+func stateHook(env Env, harness string) int {
 	run, in := findHookRun(env)
-	if run.dir == "" {
+	if run.dir == "" || harness != "" && run.harness != "" && harness != run.harness {
 		return 0
 	}
 	h := hook.State{Err: env.Err, Unattended: run.unattended}
