@@ -40,6 +40,7 @@ commands:
   hook statusline           record Claude quota and print its status line
   hook limit                record or clear a Claude usage limit
   hook state                record a Codex session's state from its hook event
+  hook codex-label <run-dir> <thread>  title a joined Codex thread and file it under its repo's project
   ps [--github] [--json]    list server tasks or GitHub claims
   attach <repo>-<task>      attach to a task's tmux window, here or over SSH
   tell <repo>-<task> <text> comment on a task's issue and point its session at it;
@@ -83,6 +84,8 @@ type Env struct {
 	Getenv func(string) string
 	Home   string
 	Now    func() time.Time
+	// Detach starts this engine with args in the background, without waiting.
+	Detach func(args ...string) error
 }
 
 // System is the Env of the running process.
@@ -91,6 +94,7 @@ func System() Env {
 	return Env{
 		In: os.Stdin, Out: os.Stdout, Err: os.Stderr, Exec: tracker.Exec, Stream: tracker.StreamExec,
 		Local: session.Exec, Run: session.RunCommand, Tmux: session.New(), Getenv: os.Getenv, Home: home, Now: time.Now, Build: version.Current(),
+		Detach: detachSelf,
 	}
 }
 
@@ -170,6 +174,9 @@ func runHook(args []string, env Env) int {
 	}
 	if len(args) == 1 && args[0] == "state" {
 		return stateHook(env)
+	}
+	if len(args) == 3 && args[0] == "codex-label" {
+		return codexLabelHook(env, args[1], args[2])
 	}
 	fmt.Fprintf(env.Err, "engine hook: unknown hook %q; update engine (go install ./cmd/engine)\n", strings.Join(args, " "))
 	return 1
@@ -288,7 +295,11 @@ func stateHook(env Env) int {
 	}
 	h := hook.State{Err: env.Err, Unattended: run.unattended}
 	h.Write = func(sig hook.Signal) error {
-		return session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID})
+		if err := session.WriteHarnessState(run.dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID}); err != nil {
+			return err
+		}
+		labelCodexThread(env, run, sig)
+		return nil
 	}
 	return h.Handle(in)
 }

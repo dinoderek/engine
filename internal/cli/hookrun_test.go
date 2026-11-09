@@ -2,13 +2,16 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/dinoderek/engine/internal/hook"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -138,5 +141,88 @@ func TestPermissionHookFindsItsRunByCwd(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestStateHookStartsTheLabelForAJoinedThread(t *testing.T) {
+	tests := []struct {
+		name, event string
+		vars        bool   // the run comes from the environment: an embedded session
+		record      string // codex-label.json already in the run, or ""
+		detached    bool
+	}{
+		{"a joined session's prompt", "UserPromptSubmit", false, "", true},
+		{"a joined session's tool call", "PostToolUse", false, "", true},
+		{"a joined session's stop", "Stop", false, "", true},
+		{"a joined session's start", "SessionStart", false, "", false},
+		{"an embedded session's prompt", "UserPromptSubmit", true, "", false},
+		{"a labelled thread", "UserPromptSubmit", false, `{"attempts":1}`, false},
+		{"a failure with attempts left", "Stop", false, `{"attempts":1,"error":"x"}`, true},
+		{"a failure too recent to retry", "Stop", false, `{"attempts":1,"error":"x","at":"` + stateAt.Add(-time.Second).Format(time.RFC3339) + `"}`, false},
+		{"no attempts left", "Stop", false, `{"attempts":3,"error":"x"}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHookHome(t)
+			if tt.record != "" {
+				if err := os.WriteFile(filepath.Join(h.codexRun, hostops.CodexLabelFile), []byte(tt.record), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var vars map[string]string
+			if tt.vars {
+				vars = map[string]string{session.RunDirVar: h.codexRun, session.HarnessVar: "codex"}
+			}
+			var started [][]string
+			var e bytes.Buffer
+			env := Env{In: strings.NewReader(eventAt(tt.event, h.codex)), Out: &bytes.Buffer{}, Err: &e, Home: h.home,
+				Getenv: func(k string) string { return vars[k] }, Now: func() time.Time { return stateAt },
+				Detach: func(args ...string) error { started = append(started, args); return nil }}
+			if code := Run([]string{"hook", "state"}, env); code != 0 {
+				t.Fatalf("exit %d, stderr %q", code, e.String())
+			}
+			var want [][]string
+			if tt.detached {
+				want = [][]string{{"hook", "codex-label", h.codexRun, codexSession}}
+			}
+			if !reflect.DeepEqual(started, want) {
+				t.Errorf("started %v, want %v", started, want)
+			}
+		})
+	}
+}
+
+func TestStateHookReportsALabelItCannotStart(t *testing.T) {
+	for name, detach := range map[string]func(...string) error{
+		"no detach":    nil,
+		"detach fails": func(...string) error { return errors.New("fork failed") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHookHome(t)
+			var e bytes.Buffer
+			env := Env{In: strings.NewReader(eventAt("UserPromptSubmit", h.codex)), Out: &bytes.Buffer{}, Err: &e, Home: h.home,
+				Getenv: func(string) string { return "" }, Now: func() time.Time { return stateAt }, Detach: detach}
+			if code := Run([]string{"hook", "state"}, env); code != 0 || !strings.Contains(e.String(), "label the Codex thread") {
+				t.Errorf("exit %d, stderr %q", code, e.String())
+			}
+			if st, ok := session.ReadHarnessState(h.codexRun); !ok || st.State != session.StateWorking {
+				t.Errorf("state %+v, %v", st, ok)
+			}
+		})
+	}
+}
+
+func TestCodexLabelHookRecordsItsAttempt(t *testing.T) {
+	h := newHookHome(t)
+	// The run names no repo, so the attempt fails and is recorded.
+	code, _, stderr := h.run([]string{"hook", "codex-label", h.codexRun, codexSession}, "", nil)
+	if code != 1 || !strings.Contains(stderr, "engine hook codex-label:") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+	if data, err := os.ReadFile(filepath.Join(h.codexRun, hostops.CodexLabelFile)); err != nil || !strings.Contains(string(data), `"attempts": 1`) {
+		t.Errorf("record %s, %v", data, err)
+	}
+	if code, _, _ := h.run([]string{"hook", "codex-label", filepath.Join(h.home, "missing"), codexSession}, "", nil); code != 1 {
+		t.Errorf("a run with no run.json: exit %d", code)
 	}
 }

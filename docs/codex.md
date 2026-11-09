@@ -70,8 +70,8 @@ install and after each update.
 ## Permission mode
 
 Sessions default to auto mode: the `workspace-write` sandbox, with Codex's
-auto-review deciding any action that crosses the sandbox boundary. With
-`approval_policy = "never"` there would be nothing for it to review.
+auto-review deciding any action that crosses the sandbox boundary (never
+`approval_policy = "never"`, which leaves it nothing to review).
 
 The sandbox needs two exceptions for executors:
 
@@ -211,10 +211,9 @@ reply or start that cannot be read, such as with no `sqlite3`, is unknown. A
 joined session still joins either way; `spawn` and `engine start --check`
 warn that the apps do not show it, or may not. `engine setup` reports
 `remote control on, connected`, `not connected (<reason>)` or `connection
-unknown (<reason>)`, and stays done. `codex remote-control --json` is no read
-of one Codex home's daemon: with no daemon it serves in the foreground until
-stopped, and at engine's daemon it reported the machine's errored connection
-while the daemon's log said connected.
+unknown (<reason>)`, and stays done. `codex remote-control --json` is no read:
+without a daemon it serves in the foreground, and it reports the machine's
+connection, not the daemon's.
 
 A joined session differs from an embedded one (Codex 0.164.0), which is why
 "Starting" launches it differently:
@@ -230,12 +229,13 @@ A joined session differs from an embedded one (Codex 0.164.0), which is why
 - `-c sandbox_workspace_write.writable_roots` and `--add-dir` are refused with
   `--remote`: the daemon's `config.toml` holds them. `network_access`,
   auto-review and the sandbox mode work from `-c` or from that file.
-- Hooks from the daemon's Codex home run in the daemon, and need
-  `--dangerously-bypass-hook-trust` on the TUI, or a review prompt stops the
-  session.
 
-A daemon started with its own `CODEX_HOME` reads its own `config.toml` and
-`hooks.json`, and a TUI run with the same `CODEX_HOME` joins it with `--remote
-unix://`, so engine's sessions have a config apart from the operator's manual
-ones. Codex has no flag that names a session, so the apps show its thread
-title, not `<repo>-<task>`, and the kickoff's `rc=` is unused.
+Engine's daemon reads its own home's `config.toml` and `hooks.json`, apart
+from the operator's. It is named after the host: Codex has no override.
+Codex has no flag that names a session, so the kickoff's `rc=` is unused.
+From a joined session's first prompt, the state hook starts `engine hook
+codex-label` in the background (hooks run inside the daemon), which calls
+the daemon via `codex app-server proxy`: `thread/name/set` titles the
+thread `<plan> > <task>`, or the task alone, and experimental project
+calls file it under the repo's project, found by its `engine_repo` metadata.
+Failures retry on later events, 15 seconds apart, three attempts max.

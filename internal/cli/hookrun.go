@@ -15,6 +15,9 @@ type hookRun struct {
 	dir        string
 	harness    string
 	unattended bool
+	// joined is true when the run was found by the event's cwd: the session
+	// joined engine's Codex daemon.
+	joined bool
 }
 
 // findHookRun reads a hook event from env.In and works out its run. With
@@ -40,7 +43,7 @@ func findHookRun(env Env) (hookRun, io.Reader) {
 	}
 	if json.Unmarshal(event, &e) == nil {
 		if dir, rec, ok := session.FindRun(env.Home, e.Cwd); ok && rec.Harness == hostops.Codex {
-			run.dir = dir
+			run.dir, run.joined = dir, true
 			if run.harness == "" {
 				run.harness = rec.Harness
 			}
