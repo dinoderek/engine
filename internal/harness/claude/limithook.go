@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/dinoderek/engine/internal/session"
 )
 
 type limitEvent struct {
@@ -20,7 +22,9 @@ type limitEvent struct {
 
 // recordLimit is the `limit` entry: it keeps the run's limit marker
 // (LimitFile) and records each stop's complete input in the run's
-// limits.jsonl. No run directory means this is not an engine run.
+// limits.jsonl. No run directory means this is not an engine run. Claude
+// Code resumes a limited session itself (autoContinueAtUsageLimit, left on),
+// so a prompt or its auto-resume notification clears the marker.
 func recordLimit(in io.Reader, dir string, now time.Time) error {
 	if dir == "" {
 		return nil
@@ -65,7 +69,7 @@ func limitReset(e limitEvent, dir string) int64 {
 		}
 	}
 	var q quotaReading
-	data, _ := os.ReadFile(filepath.Join(dir, "quota.json"))
+	data, _ := os.ReadFile(filepath.Join(dir, session.QuotaFile))
 	if json.Unmarshal(data, &q) != nil {
 		return 0
 	}

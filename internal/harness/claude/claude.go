@@ -159,7 +159,11 @@ func probe(name string, r session.Run, agents []Agent) (harness.State, bool) {
 // ended its last turn: the newest hook event in its run's state file is a
 // Stop, from the same session when both name one. Claude Code stays busy
 // while a background job runs after the turn. A missing or unreadable file
-// is not known to have ended, so the session counts as busy in a turn.
+// is not known to have ended, so the session counts as busy in a turn. A turn
+// a finished background job starts runs no hook until its first tool call,
+// so it reads as ended until then; typing is queued as the next prompt, not
+// lost. A background subagent's tool calls write working, so a session
+// waiting on one reads as busy in a turn.
 func turnEnded(dir, sessionID string) bool {
 	st, ok := session.ReadHarnessState(dir)
 	if !ok || st.Event != "Stop" || st.State != session.StateWaiting {

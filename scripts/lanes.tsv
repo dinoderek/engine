@@ -21,3 +21,4 @@ file-length	required	*	dev check file-length -max 500 -exclude *.md,go.sum
 imports	required	*.go,go.mod,import-rules.tsv,import-baseline.tsv	dev check imports
 versions	required	go.mod,*.md,plugin.json,.github/,.golangci.yml	dev check versions
 docs-check	required	*	dev check docs
+harness-names	required	*.go	dev check harness-names -names claude,codex -in cmd/,internal/ -allow internal/harness/

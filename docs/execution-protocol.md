@@ -1,6 +1,6 @@
 # Execution protocol
 
-> **Owns:** the principles, the phases at a glance, task and plan states and who moves them, the inbox, merge conflicts, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does (the `build` and `engine` skills, `plugins/engine/skills/`), each harness's guards (`claude.md`, `codex.md`), dispatch and merges (`coordinator.md`), records and the inbox's storage (`control-server.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
+> **Owns:** the principles, the phases at a glance, task and plan states and who moves them, the inbox, merge conflicts, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does (the `build` and `engine` skills, `plugins/engine/skills/`), what each harness's adapter provides (`harnesses.md`), dispatch and merges (`coordinator.md`), records and the inbox's storage (`control-server.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
 Two skills hold agent behaviour. `build` takes one task to a merged PR in any
 repo, outside the engine process, and holds the hard-stop classes and the
@@ -13,8 +13,7 @@ executor is `build` with changes. This doc never restates a rule they hold.
   open questions itself and stops only for a hard-stop class.
 - **Enforce in code, not prompts.** The coordinator is a program: its code
   specifies a pass. Engine executors never merge; the coordinator merges the commit
-  that was reviewed and gated once its checks are green. The merge guard
-  (`claude.md`, "Hooks"; `codex.md`, "Guards") blocks every merge in an engine
+  that was reviewed and gated once its checks are green. The merge guard blocks every merge in an engine
   session and any unpinned, auto or admin merge through `gh` elsewhere. A
   guard reads the command's words and catches mistakes, not deliberate evasion.
 - **One task = one session = one worktree = one PR.**

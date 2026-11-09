@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"time"
+
+	"github.com/dinoderek/engine/internal/session"
 )
 
 type usageWindow struct {
@@ -72,7 +74,7 @@ func statusline(in io.Reader, out io.Writer, dir string, now time.Time) error {
 }
 
 func writeQuota(dir string, q quotaReading) error {
-	file := filepath.Join(dir, "quota.json")
+	file := filepath.Join(dir, session.QuotaFile)
 	var old quotaReading
 	data, _ := os.ReadFile(file)
 	if json.Unmarshal(data, &old) == nil && old.Harness == q.Harness && reflect.DeepEqual(old.Windows, q.Windows) {

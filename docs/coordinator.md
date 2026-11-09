@@ -31,8 +31,7 @@ refused dispatch retries each pass, noticing once per attempt.
 The host serializes dispatches by run ID and returns an existing run on
 replay. It uses the host's Git credentials and identity, with isolated clones under
 `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin
-into an owner-only run file whose path the window command exports (joined
-Codex sessions receive it too); hooks recover their connection from the
+into an owner-only run file whose path the window command exports; hooks recover their connection from the
 worktree's server-session record. Credential files are never collected.
 
 A window gone from a host that answered ends its attempt `vanished` if the
@@ -115,15 +114,14 @@ are server records. The session layer adds whether a session is alive
 and takes input:
 
 1. **The harness** gives each window of session `engine` a `state` (`working`,
-   `waiting` or `limited`) from the probe of the harness its newest `run.json`
-   names (`claude.md`, "Session list"; `codex.md`, "Session signals").
+   `waiting` or `limited`) from the observation of the harness its newest
+   `run.json` names (for how each harness reads it, load `harnesses.md`).
    Anything else, a window with no run included, is unknown.
 2. **tmux.** A window that exists with its command not exited is alive; a dead
    window is dead whatever the harness says.
 
-A session is **idle** when `waiting`, or `working` with `background` set
-(`claude.md`, "Session list"): only a background job runs, so typing cuts
-into no turn. Only idle sessions get wake-up pointers.
+A session is **idle** when `waiting`, or `working` with `background` set:
+only a background job runs, so typing cuts into no turn. Only idle sessions get wake-up pointers.
 
 **Stalls.** Limited, queued and background-only sessions never stall. A dispatched session that has not
 claimed its task 5 minutes after it started is noticed once, and one that

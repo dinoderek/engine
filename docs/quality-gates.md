@@ -33,6 +33,7 @@ the runner lacks them, and requires a Chromium browser, because their tests skip
 | `imports` | the layer rules | `scripts/import-rules.tsv`, `scripts/import-baseline.tsv` |
 | `versions` | the version pins agree | `docs/versions.md` says what it checks |
 | `docs-check` | the doc rules below | `scripts/doc-budgets.tsv` |
+| `harness-names` | no string literal or identifier names a harness outside the adapters | `scripts/lanes.tsv` (flags) |
 
 Per function (`lint`): cognitive complexity **≤ 25** (gocognit), **≤ 200**
 lines (funlen), control nesting **≤ 4** and **≤ 5** parameters (revive). Every
