@@ -58,8 +58,8 @@ nothing; it reads one snapshot, including outside dependencies.
 
 `engine task complete-external <task-id> --version <n> --pr <url>` records
 work finished outside engine on a plan's task. It is operator-only, for an
-inactive task in todo or failed with no unresolved question, and it does not
-verify the merge. It records done and the PR in versioned history, keeps
+inactive task in todo or failed with no unresolved question. It takes a PR URL
+in the task's repository and does not verify the merge. It records done and the PR in versioned history, keeps
 dependencies and prior attempts, and needs no attempt. Ordinary state
 transitions still require an execution for running and in-review.
 

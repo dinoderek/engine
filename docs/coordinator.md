@@ -7,10 +7,9 @@
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
 - **Stateless.** Each pass derives everything from the server's records and
   each host's tmux sessions, harness observations and run directories.
-  A restarted server adopts live sessions.
-- **One pass** runs every 30 seconds and once at start (`internal/reconcile`).
-  A pass reads every host's `status` in parallel. Stopping coordination leaves
-  sessions running. Plans move only to `planned` and `done`.
+- **One pass** runs every 30 seconds and once at start. It reads every host's
+  `status` in parallel. Stopping coordination leaves sessions running. Plans
+  move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -27,7 +26,8 @@ the ended one's session, once a read shows its window gone. A refused dispatch
 retries each pass, noticing once per attempt.
 
 The host serializes dispatches by run ID and returns an existing run on
-replay. Credentials travel over SSH stdin into an owner-only run file whose
+replay. It uses the host's Git credentials and identity, with isolated clones
+under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin into an owner-only run file whose
 path the window command exports; hooks recover their connection from the
 worktree's server-session record. Credential files are never collected.
 
@@ -64,7 +64,7 @@ the merge, or at once if its window is gone, telling the operator where it
 ran; one in a turn at `CleanupCap` is noticed. Other done tasks' sessions go
 once idle 10 minutes. Releasing a running background job is a notice.
 
-Every wait is bounded in `internal/reconcile/queue.go`. A head outstaying one,
+Every wait is bounded. A head outstaying one,
 failing `gh` repeatedly, or whose host is not in `hosts.toml` ends
 `merge-refused` with the reason, telling the operator; the executor fixes it
 and requests again. A waiting PR's changes are found at its turn. Leaving
@@ -74,20 +74,23 @@ as merged.
 
 ## Reaching hosts
 
-A host does its own work through `engine host <op> --json`. The coordinator
-calls its own host's ops in-process and another machine's over `ssh`
-(`internal/remote/ssh.go`), and refuses to run unless `~/.config/engine/host`
-names a machine in `hosts.toml` (`hosts-and-sessions.md`).
+A host does its own work through `engine host <op> --json`: one job, one JSON
+object on stdout, exit 0, or 1 on failure. The caller passes the model, effort
+and kickoff; the host reads `hosts.toml` only for its launch line, harness
+binary and slots. The coordinator calls its own host's ops in-process and
+another machine's over `ssh` (`internal/remote/ssh.go`), and refuses to run
+unless `~/.config/engine/host` names a machine in `hosts.toml`
+(`hosts-and-sessions.md`).
 
 | Op | Does |
 | --- | --- |
-| `control-spawn` | Syncs engine's clone of the repo, then runs `spawn` with the run's credentials. |
+| `control-spawn` | Syncs engine's clone, then runs `spawn` with the run's credentials. |
 | `sync-repo` | Fetches engine's clone; returns the default branch. |
-| `spawn` | Starts a session with the caller's model, effort and kickoff (`hosts-and-sessions.md`). |
-| `status` | Session windows with their state, newest runs, quota, free slots and signed-out harnesses. |
+| `spawn` | Starts a session (`hosts-and-sessions.md`). |
+| `status` | Windows with their state and, unless working, last screen lines and a waiting window's newest denial; newest runs; quota, free slots and signed-out harnesses. |
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
-| `merge` | Merges a PR pinned to the reviewed head, once it is open, green, mergeable and unblocked by branch rules. Already merged is done. |
-| `release` | Closes the window and removes the run's harness files. For a done task, runs the repo's worktree release if it provides one. Engine never deletes the branch. |
+| `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Already merged is done. |
+| `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or it has changes. Engine never deletes the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine`
 (the build) and `host`. A failure is `{"error": …, "refused": true|false}`;
@@ -118,9 +121,10 @@ wake-up pointers.
 **Stalls.** Limited, queued and background-only sessions never stall. A
 dispatched session that has not claimed its task 5 minutes after it started is
 noticed once, and one that ended before claiming is restarted. A session
-waiting 10 minutes on an open task with no hard stop or question is notified
-once to the operator, naming the sign-in for a signed-out harness; a denial at most 10 minutes older than the wait makes it
-a Permission hard stop.
+waiting 10 minutes on an open task with no hard stop or question has stopped
+outside the protocol; the operator is notified once, naming the sign-in for a
+signed-out harness. A denial at most 10 minutes older than the wait makes the
+stall a Permission hard stop naming the tool, input and reason.
 
 **Limit recovery.** Never resume `needs-human`; recheck the task's state
 before typing. Each check types literal `continue` then Enter into a window
