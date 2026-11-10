@@ -86,6 +86,11 @@ func firstPartyGraph(module, listing string) (map[string][]string, error) {
 		r, ok := strings.CutPrefix(p, module+"/")
 		return r, ok
 	}
+	// The runner returns stderr too: go reports each module it downloads,
+	// "go: downloading …", while it loads, before it prints any package.
+	for strings.HasPrefix(listing, "go: ") {
+		_, listing, _ = strings.Cut(listing, "\n")
+	}
 	graph := map[string][]string{}
 	dec := json.NewDecoder(strings.NewReader(listing))
 	for {
