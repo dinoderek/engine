@@ -14,7 +14,7 @@ const startUsage = "usage: engine start --check [--harness <name>] [--host <name
 type checkArgs struct{ Harness, Host string }
 
 // runStart runs the preflight check, the only thing engine start does: a
-// task runs through the server, with engine run.
+// plan runs through the server, with engine run <plan>.
 func runStart(args []string, env Env) int {
 	a, err := parseCheck(args)
 	if err != nil {
