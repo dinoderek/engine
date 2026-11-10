@@ -109,3 +109,27 @@ func TestAfterMergeTexts(t *testing.T) {
 		t.Errorf("the planner's release %+v, want one that is not a done task's", planner)
 	}
 }
+
+// A cleanup turn stopped on a usage limit is resumed after its reset, in a
+// planned plan and a done one, rather than waited on for ever.
+func TestAfterMergeResumesALimitedTurn(t *testing.T) {
+	limited := working()
+	limited.Limited, limited.ResetsAt = true, unix(-time.Hour)
+	waitingReset := waiting(time.Hour)
+	waitingReset.ResetsAt = unix(-time.Hour)
+	for name, s := range map[string]Session{"limited": limited, "waiting on a reset": waitingReset} {
+		for _, root := range []string{"planned", "done"} {
+			t.Run(name+" in a "+root+" plan", func(t *testing.T) {
+				acts := Decide(view(plan(root), mergedAt(with(task(2, "done"), s), CleanupCap+time.Hour)))
+				if len(acts) == 0 || acts[0].Kind != Resume || acts[0].Item != "t2" {
+					t.Fatalf("actions:\n%s\nwant a resume of t2 first", shows(acts))
+				}
+				for _, a := range acts {
+					if a.Kind == Release || a.Kind == Stop {
+						t.Errorf("a resumed turn was released or coordination stopped:\n%s", shows(acts))
+					}
+				}
+			})
+		}
+	}
+}

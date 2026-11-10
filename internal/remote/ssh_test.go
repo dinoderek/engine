@@ -89,6 +89,7 @@ func TestSSHStatusCollectRelease(t *testing.T) {
 		{stdout: `{"run_dir":"/runs/x","run":null,"files":["a"],` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":true,"worktree_kept":false,` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":false,"worktree_kept":true,` + envelope + "}"},
+		{stdout: `{"name":"r-7","window_closed":true,"repo_released":true,"worktree_kept":false,` + envelope + "}"},
 	}}
 	c := f.ssh("me@box")
 	st, err := c.Status()
@@ -106,8 +107,12 @@ func TestSSHStatusCollectRelease(t *testing.T) {
 	if rel, err = c.Release("r-7", hostops.RunFailed); err != nil || !rel.WorktreeKept {
 		t.Errorf("failed release %+v, %v", rel, err)
 	}
+	if rel, err = c.Release("r-7", hostops.RunDone); err != nil || !rel.RepoReleased {
+		t.Errorf("done release %+v, %v", rel, err)
+	}
 	want := []string{`'engine' 'host' 'status' '--json'`, `'engine' 'host' 'collect' '--json' '--run-id' 'r-7-1'`,
-		`'engine' 'host' 'release' '--json' '--name' 'r-7'`, `'engine' 'host' 'release' '--json' '--name' 'r-7' '--failed'`}
+		`'engine' 'host' 'release' '--json' '--name' 'r-7'`, `'engine' 'host' 'release' '--json' '--name' 'r-7' '--failed'`,
+		`'engine' 'host' 'release' '--json' '--name' 'r-7' '--done'`}
 	for i, w := range want {
 		if f.line(i) != w {
 			t.Errorf("call %d: %s, want %s", i, f.line(i), w)

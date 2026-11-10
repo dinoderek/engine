@@ -67,7 +67,7 @@ tells the operator. Without it, it is released once idle `CleanupWait`
 after the merge, or at once if its window is gone, telling the operator
 where it ran; one in a turn at `CleanupCap` is noticed
 (`internal/reconcile/session.go`). Other done tasks' sessions go once idle
-10 minutes. A release with a background job running is a notice.
+10 minutes. Releasing a running background job is a notice.
 
 Every wait is bounded in `internal/reconcile/queue.go`. A head outstaying
 one, failing `gh`
@@ -142,4 +142,4 @@ Waiting with a limit reset also clears the stall timer.
 
 Still `limited` 10 minutes after the attempt, or a reset over 24 hours away
 (no typing), gives one notice per reset and session. Recovery covers
-executors and planners.
+planners, executors and cleanup turns.

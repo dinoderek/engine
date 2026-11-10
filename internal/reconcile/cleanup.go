@@ -33,7 +33,20 @@ func reaps(v View) []Action {
 // merge with no limit reset pending, or at once when its window is gone,
 // telling the operator. One still in a turn CleanupCap after the merge is
 // noticed once and released when it goes idle.
+//
+// A turn stopped on a usage limit is resumed, or alerted, as an open task's
+// is, and waits for its reset meanwhile.
 func afterMerge(v View, t Item) ([]Action, bool) {
+	lim := limit(v, t)
+	if len(lim) > 0 && lim[0].Kind == Resume {
+		return lim, false
+	}
+	step, released := releaseAfterMerge(v, t)
+	return append(lim, step...), released
+}
+
+// releaseAfterMerge is afterMerge's release or cap notice.
+func releaseAfterMerge(v View, t Item) ([]Action, bool) {
 	s := *t.Session
 	since := v.Now.Sub(t.MergedAt)
 	busy := s.Live && !s.Idle()
