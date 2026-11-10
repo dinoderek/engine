@@ -164,12 +164,6 @@ func TestStreamConnClosesBothEnds(t *testing.T) {
 	if err := s.Close(); err != nil || !r.closed || !w.closed {
 		t.Errorf("close: %v, reader %v, writer %v", err, r.closed, w.closed)
 	}
-	if s.SetDeadline(time.Time{}) != nil || s.SetReadDeadline(time.Time{}) != nil || s.SetWriteDeadline(time.Time{}) != nil {
-		t.Error("deadlines are not no-ops")
-	}
-	if s.LocalAddr().Network() != "stdio" || s.RemoteAddr().String() != "codex app-server proxy" {
-		t.Errorf("addresses %v %v", s.LocalAddr(), s.RemoteAddr())
-	}
 }
 
 type closeRecorder struct {

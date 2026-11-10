@@ -25,6 +25,7 @@ const wsReadLimit = 16 << 20
 // closes r and w.
 func dialDaemon(ctx context.Context, r io.ReadCloser, w io.WriteCloser) (*websocket.Conn, error) {
 	stream := &streamConn{r: r, w: w}
+	// The stream carries one connection; a redial must fail, not reuse it.
 	var dialed atomic.Bool
 	client := &http.Client{Transport: &http.Transport{
 		DialContext: func(context.Context, string, string) (net.Conn, error) {
@@ -34,10 +35,7 @@ func dialDaemon(ctx context.Context, r io.ReadCloser, w io.WriteCloser) (*websoc
 			return stream, nil
 		},
 	}}
-	c, resp, err := websocket.Dial(ctx, "ws://localhost/rpc", &websocket.DialOptions{HTTPClient: client})
-	if resp != nil && resp.Body != nil && err != nil {
-		_ = resp.Body.Close()
-	}
+	c, _, err := websocket.Dial(ctx, "ws://localhost/rpc", &websocket.DialOptions{HTTPClient: client})
 	if err != nil {
 		return nil, fmt.Errorf("websocket upgrade: %w", err)
 	}
@@ -90,8 +88,9 @@ func codexDaemon(ctx context.Context, bin, home string, exchange func(context.Co
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 	}()
-	// A read the library is not watching, such as the upgrade reply, ends
-	// when the pipe closes, even if a child of the proxy holds it open.
+	// HTTP and the library close the stream when ctx ends; closing the pipe
+	// here as well ends any read that does not watch ctx, such as the drain
+	// of a refused upgrade's body, even if a child of the proxy holds it open.
 	stop := context.AfterFunc(ctx, func() { _ = out.Close() })
 	defer stop()
 	conn, err := dialDaemon(ctx, out, in)
