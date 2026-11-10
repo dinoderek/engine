@@ -6,53 +6,29 @@
 
 | Path | Holds |
 | --- | --- |
-| `cmd/engine/` | engine entrypoint |
-| `internal/` | product packages; `internal/cli` dispatches commands |
-| `internal/control/` | server records, transactions and API |
-| `internal/reconcile/` | coordination decisions |
-| `internal/controlrun/` | server coordination and host observations |
-| `internal/controlcmd/` | server CLI and lifecycle |
-| `internal/hosts/` | host config: parsing, validation, slots, launch lines |
-| `internal/hostops/` | `engine host <op> --json`: a host's own ops, and the preflight check |
-| `internal/remote/` | a host's ops client: `Local` in-process, `SSH` to another machine, with its tmux-over-SSH runner |
-| `internal/session/` | local clones, worktrees, tmux and run files |
-| `internal/harness/` | the harness `Adapter` interface; one adapter package per harness (`claude/`, `codex/`); `registry/`, the only importer of an adapter; `harnesstest/`, the adapter contract and a fake for tests |
-| `internal/setup/` | `engine setup`: the steps that bring a host to the caller's engine commit, plugin and config |
-| `internal/lint/` | `engine lint`: the plan rules |
-| `internal/ui/` | `engine ui` and its embedded page |
-| `internal/start/` | `engine start --check` |
-| `devtools/cmd/dev/` | `dev`'s main package |
-| `devtools/internal/` | the `./dev` verbs, lane runner, lane checks, baselines, git and file helpers |
-| `dev` | the shell entrypoint to `devtools/cmd/dev/` |
+| `cmd/engine/`, `internal/` | the entrypoint and product packages, one per component or command (`internal/cli` dispatches) |
+| `internal/harness/` | the `Adapter` interface and one package per harness; `registry/` is the only importer of an adapter; `harnesstest/` holds the adapter contract and a fake |
+| `devtools/cmd/dev/`, `devtools/internal/`, `dev` | `./dev`: the main package; the verbs, lane runner, lane checks, baselines and helpers; the shell entrypoint |
 | `scripts/` | registries: lanes, import rules, doc budgets and baselines |
-| `docs/` | the persistent docs |
-| `design/` | ephemeral drafts: exempt from the doc rules, never cited |
-| `plugins/engine/` | the `engine` plugin: its skills in `skills/<name>/SKILL.md`, its Claude hooks in `plugins/engine/hooks/hooks.json`, its Codex manifest and hooks in `plugins/engine/.codex-plugin/plugin.json` |
+| `docs/`, `design/` | the persistent docs; ephemeral drafts, never cited |
+| `plugins/engine/` | the plugin: skills, Claude hooks in `plugins/engine/hooks/hooks.json`, Codex manifest and hooks in `plugins/engine/.codex-plugin/plugin.json` |
 | `.claude-plugin/`, `.agents/plugins/` | the Claude and Codex marketplaces that publish `plugins/` |
-| `.claude/` | this repo's Claude Code settings: it enables the `engine` plugin |
-| `.github/` | the CI workflow, Dependabot config, PR template |
-| `go.mod`, `go.sum` | the module, Go version and dev tools |
-| `.golangci.yml` | the lint configuration |
-
-`.dev/` and `.test-ai-results/` are gitignored outputs.
 
 ## Where new things go
 
 - **A product feature:** a new package under `internal/<name>/`, wired into
-  `internal/cli`. Add its row to `scripts/import-rules.tsv`.
-- **An `engine` command:** a case in `internal/cli` that calls the package
-  that does the work. The command's logic never lives in `internal/cli`.
-- **Tests:** a `_test.go` file beside the code, in the same package. Fixtures
-  go in that package's `testdata/`.
+  `internal/cli`, with its row in `scripts/import-rules.tsv`. A command's
+  logic never lives in `internal/cli`.
+- **Tests:** a `_test.go` in the same package; fixtures in `testdata/`.
 - **A gate lane:** a row in `scripts/lanes.tsv`. If no single command does
   the job, add a `dev check` subcommand in `devtools/internal/checks`, then a
   row in the lane table of `quality-gates.md`.
 - **A `./dev` verb:** a method on `dev.Tool` in `devtools/internal/dev`, plus
   its line in the usage text.
-- **A skill:** `plugins/engine/skills/<name>/SKILL.md`, with any references
-  in `references/` beside it, and a budget row in `scripts/doc-budgets.tsv`
-  for each file. Bump `version` in both of the plugin's `plugin.json` files:
-  the harnesses see an update only when it changes.
+- **A skill:** `plugins/engine/skills/<name>/SKILL.md`, references in
+  `references/`, and a budget row in `scripts/doc-budgets.tsv` per file. Bump
+  `version` in both of the plugin's `plugin.json` files: the harnesses see an
+  update only when it changes.
 - **A doc:** a file in `docs/` with the Owns/Not here header, a row in
-  `AGENTS.md`'s load-on-demand table, and, if it needs one, a budget in
-  `scripts/doc-budgets.tsv`.
+  `AGENTS.md`'s load-on-demand table, and a budget in
+  `scripts/doc-budgets.tsv` if it needs one.
