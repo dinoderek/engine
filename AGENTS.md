@@ -95,13 +95,14 @@ place per fact and keeping docs true: those are yours and the reviewer's.
 ## Workflow: worktree to merge
 
 Build a task with the `build` skill (`plugins/engine/skills/build/SKILL.md`).
-This repo's default is **hands-off**: a build that names no mode merges on
-green without asking. Its repo specifics:
+This repo sets the default mode: **hands-off**. A build that names no mode
+merges on green without asking. Its repo specifics:
 
 - **Worktree:** `./dev worktree create <type>/<topic>` from the main checkout;
   `./dev worktree release <branch>` at cleanup.
-- **Gate:** `./dev test`, green before every PR. CI runs the same command.
+- **Gate:** `./dev test`.
 - **Reviewer checklist:** this file.
 - **PR body:** `.github/pull_request_template.md`.
 - **Merge:** squash, pinned to the reviewed head.
 - **CI failure:** read the run's `test-ai-results` artifact.
+- **Attribution:** commits and reviews name the actual harness and model.
