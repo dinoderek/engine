@@ -9,6 +9,8 @@ tool (
 	golang.org/x/vuln/cmd/govulncheck
 )
 
+require github.com/yuin/goldmark v1.8.7
+
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect

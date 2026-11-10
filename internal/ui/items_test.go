@@ -45,25 +45,18 @@ func TestItemRouteRendersTheDescription(t *testing.T) {
 	if res.StatusCode != 200 || res.Header.Get("Cache-Control") != "no-store" {
 		t.Fatalf("GET item = %d %v", res.StatusCode, res.Header)
 	}
-	if strings.Contains(body, "<") || strings.Contains(body, `"href":"javascript`) {
-		t.Fatalf("item %s contains a raw < or a script link, want raw HTML and unsafe links inert", body)
-	}
 	var env struct{ Data ItemDetail }
 	if err := json.Unmarshal([]byte(body), &env); err != nil {
 		t.Fatal(err)
 	}
-	blocks := env.Data.Description
-	if len(blocks) != 3 || blocks[0].Type != "heading" || blocks[1].Inline[0].Text != "<script>alert(1)</script> " || blocks[2].Items[0][0].Text != "<img src=x onerror=alert(3)>" {
-		t.Fatalf("description = %+v, want the HTML as text", blocks)
-	}
-	if link := blocks[1].Inline[1]; link.Text != "go" || link.Href != "" {
-		t.Fatalf("unsafe link = %+v, want its text only", link)
-	}
-	if link := blocks[1].Inline[3]; link.Href != "https://example.com/d" {
-		t.Fatalf("safe link = %+v, want it actionable", link)
+	want := "<h3>Plan</h3>\n" +
+		"<p>&lt;script&gt;alert(1)&lt;/script&gt; [go](javascript:alert(2)) and [docs](https://example.com/d)</p>\n" +
+		"<ul>\n<li>\n<p>&lt;img src=x onerror=alert(3)&gt;</p>\n</li>\n</ul>\n"
+	if got := env.Data.DescriptionHTML; got != want {
+		t.Fatalf("description = %q\nwant          %q", got, want)
 	}
 	_, body = d.get(t, "GET", "127.0.0.1:7332", "/api/items/t6")
-	if !strings.Contains(body, `"description":[]`) || !strings.Contains(body, `"plan":"p5"`) {
+	if !strings.Contains(body, `"description_html":""`) || !strings.Contains(body, `"plan":"p5"`) {
 		t.Fatalf("task without a body = %s, want an empty description", body)
 	}
 }

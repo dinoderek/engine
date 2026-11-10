@@ -1,5 +1,6 @@
 "use strict";
-// Shared helpers. Every value from the server is inserted as text.
+// Shared helpers. Every value from the server is inserted as text, except a
+// description, which the server renders to inert HTML (panel.js).
 window.engine = window.engine || {};
 window.engine.dom = (function () {
   function el(tag, attrs, ...children) {

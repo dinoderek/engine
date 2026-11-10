@@ -105,27 +105,20 @@ func acceptDetails(t *testing.T, d *dashboard, w *world) {
 	var plan ui.ItemDetail
 	status, _ := d.get(t, "/api/items/"+w.rollout.ID, &plan)
 	check(t, status == 200 && plan.Kind == "plan" && plan.Repo == w.alpha.ID && plan.Title == "Dashboard rollout", "plan item: %d %+v", status, plan)
-	var types []string
-	var text strings.Builder
-	links := map[string]string{}
-	for _, b := range plan.Description {
-		types = append(types, b.Type)
-		runs := slices.Concat(append(b.Items, b.Inline)...)
-		for _, r := range runs {
-			text.WriteString(r.Text)
-			if r.Href != "" {
-				links[r.Text] = r.Href
-			}
-		}
-		text.WriteString(b.Text)
+	html := plan.DescriptionHTML
+	for _, want := range []string{
+		"<h4>Outcome</h4>", "<ul>\n<li>Plans view\n<ul>\n<li>filters\n<ol>\n<li>by repo</li>", `<th align="left">View</th>`, "<td align=\"right\"><code>#/plans</code></td>",
+		`<a href="https://example.test/control" target="_blank" rel="noopener noreferrer">control server doc</a>`,
+		`<pre><code class="language-sh">engine ui`, "<h5>Not live</h5>", "<p>a remote chart and a bad link.</p>",
+		"&lt;script&gt;alert(1)&lt;/script&gt; &lt;img src=x onerror=alert(2)&gt;",
+	} {
+		check(t, strings.Contains(html, want), "description HTML lacks %q: %s", want, html)
 	}
-	check(t, slices.Equal(types, []string{"heading", "paragraph", "list", "paragraph", "code", "paragraph"}), "description blocks: %v", types)
-	check(t, links["control server doc"] == "https://example.test/control", "safe link: %v", links)
-	check(t, strings.Contains(text.String(), "<script>alert(1)</script>") && strings.Contains(text.String(), "engine ui"), "raw HTML must stay text: %q", text.String())
+	check(t, strings.Count(html, "<a ") == 1 && !strings.Contains(html, "<img") && !strings.Contains(html, "<script"), "only the safe link may be live: %s", html)
 
 	var task ui.ItemDetail
 	d.get(t, "/api/items/"+w.sessionsUI.ID, &task)
-	check(t, task.Kind == "task" && task.Plan == w.rollout.ID && len(task.Description) == 2 && task.Description[1].Type == "list", "task item: %+v", task)
+	check(t, task.Kind == "task" && task.Plan == w.rollout.ID && strings.HasPrefix(task.DescriptionHTML, "<h4>Outcome</h4>\n<ul>"), "task item: %+v", task)
 
 	var first, rest, anchored ui.Thread
 	d.get(t, "/api/items/"+w.sessionsUI.ID+"/thread", &first)

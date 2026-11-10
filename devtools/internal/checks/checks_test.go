@@ -213,6 +213,16 @@ func TestImports(t *testing.T) {
 	e, out = tree(t, files, golist)
 	expect(t, Imports(e), 0, out, "4 packages follow 3 rules")
 
+	// A cold module cache puts go's download notes ahead of the listing.
+	cold := listing
+	listing = "go: downloading example.com/lib v1.0.0\ngo: downloading example.com/other v0.1.0\n" + cold
+	e, out = tree(t, files, golist)
+	expect(t, Imports(e), 0, out, "4 packages follow 3 rules")
+	listing = "warning: not go's\n" + cold
+	e, out = tree(t, files, golist)
+	expect(t, Imports(e), 1, out, "go list -json: invalid character")
+	listing = cold
+
 	files["scripts/import-rules.tsv"] += "gone/...\tforbid\tdevtool/...\n"
 	e, out = tree(t, files, golist)
 	expect(t, Imports(e), 1, out, "importer gone/... matches no package", "target devtool/... matches no package")

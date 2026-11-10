@@ -62,6 +62,10 @@ class Element {
   set textContent(v) {
     this.replaceChildren(...(v === "" ? [] : [String(v)]));
   }
+  // innerHTML parses markup written the way the server renders descriptions.
+  set innerHTML(html) {
+    this.replaceChildren(...parse(this.ownerDocument, html, true).childNodes);
+  }
   getAttribute(k) { return this.attrs.has(k) ? this.attrs.get(k) : null; }
   setAttribute(k, v) { this.attrs.set(k, String(v)); }
   removeAttribute(k) { this.attrs.delete(k); }
@@ -136,10 +140,12 @@ class Event {
 }
 
 const TOKEN = /<!--[\s\S]*?-->|<!doctype[^>]*>|<\/([a-z0-9]+)\s*>|<([a-z0-9]+)((?:\s+[^\s=>/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*\/?>|([^<]+)/gi;
-const VOID = new Set(["meta", "link", "input", "br", "img"]);
+const VOID = new Set(["meta", "link", "input", "br", "hr", "img"]);
+const ENTITIES = { lt: "<", gt: ">", quot: '"', amp: "&" };
 
-// parse builds the tree of an HTML file written the way index.html is.
-function parse(doc, html) {
+// parse builds the tree of an HTML file written the way index.html is, or of
+// a fragment, whose top-level text it keeps.
+function parse(doc, html, fragment) {
   const root = new Element(doc, "html");
   let at = root;
   for (const m of html.matchAll(TOKEN)) {
@@ -154,8 +160,8 @@ function parse(doc, html) {
       }
       at.append(el);
       if (!VOID.has(tag)) at = el;
-    } else if (m[4] && at !== root && m[4].trim()) {
-      at.append(m[4].replace(/&amp;/g, "&"));
+    } else if (m[4] && (fragment || at !== root) && m[4].trim()) {
+      at.append(m[4].replace(/&(lt|gt|quot|amp);|&#(\d+);/g, (_, e, n) => (n ? String.fromCharCode(Number(n)) : ENTITIES[e])));
     }
   }
   return root;

@@ -11,16 +11,16 @@ import (
 // pageSize is how many messages one thread read returns.
 const pageSize = 50
 
-// ItemDetail is a plan or task for the side panel. Description is empty when
-// the item has no body.
+// ItemDetail is a plan or task for the side panel. DescriptionHTML is its
+// body rendered by RenderMarkdown, empty when it has none.
 type ItemDetail struct {
-	ID          string  `json:"id"`
-	Kind        string  `json:"kind"`
-	Repo        string  `json:"repo"`
-	Plan        string  `json:"plan,omitempty"`
-	Title       string  `json:"title"`
-	State       string  `json:"state"`
-	Description []Block `json:"description"`
+	ID              string `json:"id"`
+	Kind            string `json:"kind"`
+	Repo            string `json:"repo"`
+	Plan            string `json:"plan,omitempty"`
+	Title           string `json:"title"`
+	State           string `json:"state"`
+	DescriptionHTML string `json:"description_html"`
 }
 
 // Message is one human-facing update. Its body is plain text.
@@ -62,7 +62,7 @@ var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved", "
 
 // itemDetail shows a plan's status, as the plan list does, and a task's state.
 func itemDetail(it control.Item) ItemDetail {
-	return ItemDetail{ID: it.ID, Kind: it.Kind, Repo: it.Repo, Plan: it.Plan, Title: it.Title, State: cmp.Or(it.Status, it.State), Description: RenderMarkdown(it.Body)}
+	return ItemDetail{ID: it.ID, Kind: it.Kind, Repo: it.Repo, Plan: it.Plan, Title: it.Title, State: cmp.Or(it.Status, it.State), DescriptionHTML: RenderMarkdown(it.Body)}
 }
 
 // threadWindow projects one item's updates, oldest first. It returns the

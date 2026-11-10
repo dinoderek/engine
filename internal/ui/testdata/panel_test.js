@@ -30,13 +30,12 @@ const PLANS = {
   },
   fetched: AT,
 };
-const DESCRIPTION = [
-  { type: "heading", level: 2, inline: run("Outcome") },
-  { type: "paragraph", inline: [{ text: "<script>alert(1)</script> " }, { text: "bad" }, { text: " " }, { text: "docs", href: "https://example.com/d" }] },
-  { type: "list", items: [run("one"), [{ text: "run " }, { text: "./dev test", code: true }]] },
-  { type: "code", lang: "go", text: "func main() {}" },
-];
-const item = (id, kind, description) => ({ data: { id, kind, repo: "r1", title: id === "p24" ? "Control server rollout" : "Task " + id, state: "running", description }, fetched: AT });
+// DESCRIPTION is a description as the server renders it (RenderMarkdown).
+const DESCRIPTION = "<h4>Outcome</h4>\n<p>&lt;script&gt;alert(1)&lt;/script&gt; bad " +
+  '<a href="https://example.com/d" target="_blank" rel="noopener noreferrer">docs</a></p>\n' +
+  "<ul>\n<li>one</li>\n<li>run <code>./dev test</code></li>\n</ul>\n" +
+  '<pre><code class="language-go">func main() {}\n</code></pre>\n';
+const item = (id, kind, description) => ({ data: { id, kind, repo: "r1", title: id === "p24" ? "Control server rollout" : "Task " + id, state: "running", description_html: description }, fetched: AT });
 
 // message builds a thread entry.
 const msg = (id, kind, extra = {}) => Object.assign({ id, author: "operator", at: AT, kind, body: "m" + id }, extra);
@@ -49,7 +48,7 @@ const BASE = [
 // page runs a scenario against fixtures it can change as it goes.
 async function page(hash, fx, body, opts) {
   fx.log = [];
-  fx.items = fx.items || { p24: item("p24", "plan", DESCRIPTION), t30: item("t30", "task", []) };
+  fx.items = fx.items || { p24: item("p24", "plan", DESCRIPTION), t30: item("t30", "task", "") };
   fx.questions = fx.questions || [{ id: 2, state: "open", acknowledged: true, replies: 1 }];
   fx.thread = fx.thread || ((id, after) => ({ item: id, messages: BASE.filter((m) => m.id > after), questions: fx.questions, next: 4, more: false }));
   const fetchImpl = async (url) => {
@@ -130,27 +129,20 @@ const scenarios = {
     });
   },
 
-  async "descriptions render the Markdown subset and keep HTML and unsafe links inert"() {
+  async "descriptions insert the server's HTML, with code blocks focusable"() {
     await page("#/plans/p24?panel=p24", {}, async (t) => {
       const box = t.$("view-description");
       assert.equal(box.querySelector("h4").textContent, "Outcome");
       assert.equal(box.querySelectorAll("li").length, 2);
-      assert.equal(box.querySelector("pre").textContent, "func main() {}");
-      assert.equal(box.querySelector("code").textContent, "./dev test");
+      assert.equal(box.querySelector("pre").textContent, "func main() {}\n");
+      assert.equal(box.querySelector("pre").getAttribute("tabindex"), "0");
+      assert.equal(box.querySelectorAll("code")[0].textContent, "./dev test");
       assert.equal(box.querySelector("script"), null);
       assert.ok(box.textContent.includes("<script>alert(1)</script> bad docs"));
       const links = box.querySelectorAll("a");
       assert.equal(links.length, 1);
       assert.equal(links[0].getAttribute("href"), "https://example.com/d");
       assert.equal(links[0].getAttribute("rel"), "noopener noreferrer");
-    });
-  },
-
-  async "the page refuses an unsafe link even if the server sent one"() {
-    const bad = [{ type: "paragraph", inline: [{ text: "x", href: "javascript:alert(1)" }, { text: "y", href: " https://example.com" }, { text: "z", href: "data:text/html,x" }] }];
-    await page("#/plans/p24?panel=p24", { items: { p24: item("p24", "plan", bad) } }, async (t) => {
-      assert.equal(t.$("view-description").querySelectorAll("a").length, 0);
-      assert.equal(t.text("view-description"), "xyz");
     });
   },
 

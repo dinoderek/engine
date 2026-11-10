@@ -43,7 +43,7 @@ func TestDashboardInBrowser(t *testing.T) {
 	}
 
 	browsePlans(t, b, w, shots)
-	readPanels(t, b, w)
+	readPanels(t, b, w, shots)
 	sessionsAndOutage(t, b, s, w, shots)
 	narrowLayout(t, b, w, shots)
 }
@@ -98,7 +98,7 @@ func browsePlans(t *testing.T, b *browser, w *world, shots string) {
 // readPanels opens task and plan panels from the keyboard: tabs by arrow
 // keys, Escape closing with focus returned, Markdown rendered safely, and
 // thread paging and direct links to one message.
-func readPanels(t *testing.T, b *browser, w *world) {
+func readPanels(t *testing.T, b *browser, w *world, shots string) {
 	b.do("Runtime.evaluate", map[string]any{"expression": fmt.Sprintf("location.hash = '#/plans/%s'", w.rollout.ID)})
 	opener := fmt.Sprintf(`a[data-key="open-%s"]`, w.links.ID)
 	b.waitFor("the rollout pane", "document.querySelector('"+opener+"') !== null")
@@ -118,18 +118,25 @@ func readPanels(t *testing.T, b *browser, w *world) {
 	b.press("Enter")
 	b.waitFor("the plan description", "document.querySelector('#view-description pre code') !== null")
 	var md struct {
-		Heading, Code, Text string
-		Items, Scripts      int
-		Links               []string
+		Heading, Code, Text, Align string
+		Nested, Cells, Scripts     int
+		Images, Handlers           int
+		CodeFocus                  string
+		Links                      []string
 	}
 	b.value(`(() => { const v = document.getElementById('view-description'); return {
 		Heading: v.querySelector('h1, h2, h3, h4, h5, h6').innerText, Code: v.querySelector('pre code').innerText, Text: v.innerText,
-		Items: v.querySelectorAll('ul li').length, Scripts: v.querySelectorAll('script').length,
+		Align: getComputedStyle(v.querySelector('td:last-child')).textAlign, Nested: v.querySelectorAll('ul ul ol li').length,
+		Cells: v.querySelectorAll('table td').length, Scripts: v.querySelectorAll('script').length, Images: v.querySelectorAll('img').length,
+		Handlers: [...v.querySelectorAll('*')].filter((n) => [...n.attributes].some((a) => a.name.startsWith('on'))).length,
+		CodeFocus: v.querySelector('pre').getAttribute('tabindex'),
 		Links: [...v.querySelectorAll('a')].map((a) => a.getAttribute('href')) }; })()`, &md)
-	if md.Heading != "Outcome" || strings.TrimSpace(md.Code) != "engine ui" || md.Items != 2 || md.Scripts != 0 ||
+	if md.Heading != "Outcome" || strings.TrimSpace(md.Code) != "engine ui" || md.Nested != 1 || md.Cells != 4 || md.Align != "right" ||
+		md.Scripts != 0 || md.Images != 0 || md.Handlers != 0 || md.CodeFocus != "0" ||
 		strings.Join(md.Links, " ") != "https://example.test/control" || !strings.Contains(md.Text, "<script>alert(1)</script>") {
 		t.Errorf("rendered description: %+v", md)
 	}
+	b.screenshot(shots, "description")
 	b.press("Escape")
 
 	b.do("Runtime.evaluate", map[string]any{"expression": fmt.Sprintf("location.hash = '#/plans/%s?panel=%s&tab=communications'", w.rollout.ID, w.sessionsUI.ID)})
@@ -191,7 +198,8 @@ func sessionsAndOutage(t *testing.T, b *browser, s *controlStack, w *world, shot
 }
 
 // narrowLayout checks the stacked layout on a phone-sized screen, with the
-// panel over the page and the page behind it inert.
+// panel over the page and the page behind it inert, and a description's
+// table kept a table.
 func narrowLayout(t *testing.T, b *browser, w *world, shots string) {
 	b.viewport(390, 844, true)
 	b.do("Runtime.evaluate", map[string]any{"expression": fmt.Sprintf("location.hash = '#/plans/%s'", w.rollout.ID)})
@@ -216,4 +224,8 @@ func narrowLayout(t *testing.T, b *browser, w *world, shots string) {
 	b.screenshot(shots, "panel-narrow")
 	b.press("Escape")
 	b.waitFor("the page usable again", "!document.getElementById('pane').inert && document.activeElement.dataset.key === 'open-"+w.links.ID+"'")
+	b.do("Runtime.evaluate", map[string]any{"expression": fmt.Sprintf("location.hash = '#/plans/%s?panel=%s'", w.rollout.ID, w.rollout.ID)})
+	b.waitFor("a description table that stays a table", "(() => { const t = document.querySelector('#view-description table'); return t !== null && "+
+		"getComputedStyle(t.querySelector('thead')).display === 'table-header-group' && getComputedStyle(t.querySelector('td')).display === 'table-cell'; })()")
+	b.screenshot(shots, "description-narrow")
 }

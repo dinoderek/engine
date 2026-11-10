@@ -60,7 +60,7 @@ async function page(hash, fx, body) {
       return reply(200, { data: { item: m[1], messages, questions: [{ id: 12, state: "open" }, { id: 40, state: "open", replies: 1 }], next: 41, more: false }, fetched: AT });
     }
     if ((m = u.pathname.match(/^\/api\/items\/([pt]\d+)$/))) {
-      return reply(200, { data: { id: m[1], kind: m[1][0] === "p" ? "plan" : "task", repo: "r1", title: "Title " + m[1], state: "running", description: [] }, fetched: AT });
+      return reply(200, { data: { id: m[1], kind: m[1][0] === "p" ? "plan" : "task", repo: "r1", title: "Title " + m[1], state: "running", description_html: "" }, fetched: AT });
     }
     return reply(404, { error: "not found" });
   };

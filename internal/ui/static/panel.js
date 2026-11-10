@@ -1,14 +1,13 @@
 "use strict";
 // The item side panel: a plan or task's Description and Communications.
-// The server renders descriptions to blocks and projects the thread; this
-// file builds DOM nodes from them, always as text, and owns keyboard focus.
+// The server renders descriptions to inert HTML and projects the thread; this
+// file inserts the one and builds the other as text, and owns keyboard focus.
 window.engine = window.engine || {};
 window.engine.panel = function (ctx) {
   const { el, label, load, failed } = window.engine.dom;
   const $ = ctx.$;
   const view = ctx.view;
   const TABS = ["description", "communications"];
-  const SAFE = /^(https?:\/\/|mailto:)/i;
   const KINDS = { say: "Message", ask: "Question", reply: "Reply", acknowledged: "Acknowledged", resolved: "Decision", ruling: "Plan ruling" };
 
   // shown is the open item's ID. item and threadEnv are envelopes in the page's
@@ -18,31 +17,9 @@ window.engine.panel = function (ctx) {
     nodes: new Map(), badges: new Map(), update: 0, want: 0, itemSeq: 0, threadSeq: 0, statusSeq: 0,
   };
 
-  function inline(runs) {
-    return (runs || []).map((r) => {
-      if (r.href && SAFE.test(r.href)) return el("a", { href: r.href, target: "_blank", rel: "noopener noreferrer" }, r.text);
-      return r.code ? el("code", {}, r.text) : r.text;
-    });
-  }
-
-  function block(b) {
-    switch (b.type) {
-      case "heading":
-        return el("h" + Math.min(6, b.level + 2), {}, ...inline(b.inline));
-      case "paragraph":
-        return el("p", {}, ...inline(b.inline));
-      case "list":
-        return el(b.ordered ? "ol" : "ul", {}, ...b.items.map((it) => el("li", {}, ...inline(it))));
-      case "code":
-        return el("pre", { tabindex: "0" }, el("code", b.lang ? { "data-lang": b.lang } : {}, b.text));
-      default:
-        return null;
-    }
-  }
-
   function renderDescription() {
     const env = st.item;
-    const key = JSON.stringify(env && (env.data ? env.data.description : env.error));
+    const key = JSON.stringify(env && (env.data ? env.data.description_html : env.error));
     if (key === st.rendered) return;
     st.rendered = key;
     const box = $("view-description");
@@ -50,10 +27,13 @@ window.engine.panel = function (ctx) {
       box.replaceChildren(el("p", { class: "empty" }, "Loading…"));
     } else if (!env.data) {
       box.replaceChildren(el("p", { class: "empty" }, env.error));
-    } else if (!env.data.description.length) {
+    } else if (!env.data.description_html) {
       box.replaceChildren(el("p", { class: "empty" }, "No description."));
     } else {
-      box.replaceChildren(...env.data.description.map(block).filter(Boolean));
+      // The server's RenderMarkdown output: only plain elements, live links
+      // only to http, https and mailto, and the page's CSP forbids inline script.
+      box.innerHTML = env.data.description_html;
+      for (const pre of box.querySelectorAll("pre")) pre.setAttribute("tabindex", "0");
     }
   }
 
