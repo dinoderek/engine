@@ -188,3 +188,26 @@ func TestTheRegistrysStepNamesAreUnique(t *testing.T) {
 		t.Errorf("adapters %d, want %d", len(runner.adapters), len(set.Names()))
 	}
 }
+
+// A local check brings a harness's own copies to the user's plugin on this
+// host, so engine's Codex home cannot stay behind it; with no plugin
+// installed here, the check still runs and wants none.
+func TestALocalCheckWantsThisHostsPlugin(t *testing.T) {
+	for _, plugin := range []string{callerPlugin, ""} {
+		r := newCodexRig(t)
+		r.claude.PluginVersion = plugin
+		var got []string
+		for i := range r.codex.Steps {
+			if r.codex.Steps[i].Name == "codex plugin" {
+				r.codex.Steps[i].Run = func(tg harness.Target) (harness.Outcome, error) {
+					got = append(got, tg.Plugin())
+					return harness.Passed(""), nil
+				}
+			}
+		}
+		mustRun(t, r, "")
+		if !slices.Equal(got, []string{plugin}) {
+			t.Errorf("plugin %q: the codex plugin step wanted %q", plugin, got)
+		}
+	}
+}

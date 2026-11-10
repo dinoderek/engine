@@ -1,6 +1,6 @@
 # Operator setup
 
-> **Owns:** what an operator does by hand: the one-time setup (GitHub access, notifications, harnesses, remote access) and watching a run. **Not here:** how the coordinator reaches hosts (`coordinator.md`), host config (`hosts-and-sessions.md`).
+> **Owns:** what an operator does by hand: the one-time setup (GitHub access, notifications, harnesses, remote access), upgrading the fleet and watching a run. **Not here:** how the coordinator reaches hosts (`coordinator.md`), host config (`hosts-and-sessions.md`).
 
 ## GitHub access
 
@@ -54,7 +54,7 @@ with `codex plugin marketplace add dinoderek/engine` and `codex plugin add
 engine@engine`. Setup prints these when the plugin is missing there. In a
 Codex session engine did not launch, Codex runs the plugin's hooks only once
 reviewed: review them in the first such session after each install and
-update (`codex plugin update`).
+update (`codex plugin marketplace upgrade engine`, then `codex plugin add engine@engine`).
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
@@ -138,6 +138,32 @@ then run `engine setup --host devbox`.
 
 - Confirm the host's `gh` and Git access to the repo.
 - Enable the `engine` plugin in its `.claude/settings.json`.
+
+## Upgrading
+
+Upgrade while `engine ps` shows nothing running: the server restarts.
+
+1. **The Mac.** In a clean checkout of pushed `main`:
+
+   ```sh
+   GOTOOLCHAIN=$(awk '/^toolchain/{print $2}' go.mod) GOBIN=~/.local/bin go install ./cmd/engine
+   claude plugin marketplace update engine
+   claude plugin update engine@engine --scope user
+   codex plugin marketplace upgrade engine && codex plugin add engine@engine
+   engine setup
+   ```
+
+   Local setup also brings engine's own Codex home to the user's plugin.
+2. **Stop the server** and back it up (`control-server.md`, "Start"). A
+   running server keeps the binary it started with, and an older server
+   rejects request fields a newer CLI sends.
+3. **Every other host:** `engine setup --host <name>` for each machine in
+   `hosts.toml`.
+4. **Start the server** again, then restart `engine ui` wherever it runs: it
+   also keeps its old binary.
+
+Run any command setup prints, such as a Claude one-time prompt after a
+Claude Code update, and rerun it until the host is set up.
 
 ## Watching a run
 
