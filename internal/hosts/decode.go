@@ -11,8 +11,8 @@ import (
 // file whatever order the rules ran in.
 type validator struct{ errs []*Error }
 
-func (v *validator) fail(line int, format string, args ...any) {
-	v.errs = append(v.errs, &Error{Line: line, Msg: fmt.Sprintf(format, args...)})
+func (v *validator) fail(pos int, format string, args ...any) {
+	v.errs = append(v.errs, &Error{Msg: fmt.Sprintf(format, args...), pos: pos})
 }
 
 func (v *validator) first() *Error {
@@ -21,7 +21,7 @@ func (v *validator) first() *Error {
 	}
 	first := v.errs[0]
 	for _, e := range v.errs[1:] {
-		if e.Line < first.Line {
+		if e.pos < first.pos {
 			first = e
 		}
 	}
@@ -46,10 +46,10 @@ func (r *reader) lookup(key string, k kind, required bool) *node {
 	n := r.n.entries[key]
 	switch {
 	case n == nil && required:
-		r.v.fail(r.n.line, "%s: missing %s", r.where, key)
+		r.v.fail(r.n.pos, "%s: missing %s", r.where, key)
 	case n == nil:
 	case n.kind != k:
-		r.v.fail(n.line, "%s: %s must be %s", r.where, key, k)
+		r.v.fail(n.pos, "%s: %s must be %s", r.where, key, k)
 	default:
 		return n
 	}
@@ -63,7 +63,7 @@ func (r *reader) text(key string, required bool) (string, *node) {
 		return "", nil
 	}
 	if n.str == "" {
-		r.v.fail(n.line, "%s: %s must not be empty", r.where, key)
+		r.v.fail(n.pos, "%s: %s must not be empty", r.where, key)
 	}
 	return n.str, n
 }
@@ -75,7 +75,7 @@ func (r *reader) number(key string, required bool, lo int) (int, bool) {
 		return 0, false
 	}
 	if n.num < lo {
-		r.v.fail(n.line, "%s: %s must be at least %d", r.where, key, lo)
+		r.v.fail(n.pos, "%s: %s must be at least %d", r.where, key, lo)
 	}
 	return n.num, true
 }
@@ -96,7 +96,7 @@ func (r *reader) table(key string, required bool) *node {
 func (r *reader) finish() {
 	for _, key := range r.n.order {
 		if !r.used[key] {
-			r.v.fail(r.n.entries[key].line, "%s: unknown key %s", r.where, key)
+			r.v.fail(r.n.entries[key].pos, "%s: unknown key %s", r.where, key)
 		}
 	}
 }
@@ -109,7 +109,7 @@ func (v *validator) children(n *node, where string, each func(name string, child
 	for _, name := range n.order {
 		child := n.entries[name]
 		if child.kind != kTable {
-			v.fail(child.line, "%s.%s must be a table", where, name)
+			v.fail(child.pos, "%s.%s must be a table", where, name)
 			continue
 		}
 		each(name, child)
@@ -134,14 +134,14 @@ func decode(root *node) (*Config, *Error) {
 	c.HarnessRatio = v.ratio(c, r)
 	r.finish()
 	if hosts != nil && len(hosts.order) == 0 {
-		v.fail(hosts.line, "top level: no [host.<name>] is defined")
+		v.fail(hosts.pos, "top level: no [host.<name>] is defined")
 	}
 	if harnesses != nil && len(harnesses.order) == 0 {
-		v.fail(harnesses.line, "top level: no [harness.<name>] is defined")
+		v.fail(harnesses.pos, "top level: no [harness.<name>] is defined")
 	}
 	if defaultAt != nil && len(c.Harnesses) > 0 {
 		if _, ok := c.Harnesses[c.DefaultHarness]; !ok {
-			v.fail(defaultAt.line, "top level: default_harness %q is not defined under [harness]", c.DefaultHarness)
+			v.fail(defaultAt.pos, "top level: default_harness %q is not defined under [harness]", c.DefaultHarness)
 		}
 	}
 	return c, v.first()
@@ -159,7 +159,7 @@ func (v *validator) harness(name string, n *node) Harness {
 	h.MaxSessions, _ = r.number("max_sessions", true, 1)
 	launch, at := r.text("launch", true)
 	if at != nil {
-		v.checkLaunch(where, launch, at.line)
+		v.checkLaunch(where, launch, at.pos)
 		h.Launch = launch
 	}
 	if tiers := r.table("tiers", true); tiers != nil {
@@ -186,16 +186,16 @@ func (v *validator) tier(tiers *reader, where string, tier Tier) TierModel {
 	return m
 }
 
-func (v *validator) checkLaunch(where, launch string, line int) {
+func (v *validator) checkLaunch(where, launch string, pos int) {
 	if launch != "{bin}" && !strings.HasPrefix(launch, "{bin} ") {
-		v.fail(line, "%s: launch must start with {bin}, so it never runs whichever install is first on PATH", where)
+		v.fail(pos, "%s: launch must start with {bin}, so it never runs whichever install is first on PATH", where)
 	}
 	if !strings.Contains(launch, "{model}") {
-		v.fail(line, "%s: launch must contain {model}", where)
+		v.fail(pos, "%s: launch must contain {model}", where)
 	}
 	for _, m := range placeholder.FindAllStringSubmatch(launch, -1) {
 		if !slices.Contains(launchPlaceholders, m[1]) {
-			v.fail(line, "%s: launch uses unknown placeholder {%s}; known: %s", where, m[1], strings.Join(launchPlaceholders, ", "))
+			v.fail(pos, "%s: launch uses unknown placeholder {%s}; known: %s", where, m[1], strings.Join(launchPlaceholders, ", "))
 		}
 	}
 }
@@ -207,7 +207,7 @@ func (v *validator) host(c *Config, name string, n *node) Host {
 	if addr, at := r.text("address", true); at != nil {
 		h.Address = addr
 		if user, machine, ok := strings.Cut(addr, "@"); !ok || user == "" || machine == "" || strings.Contains(machine, "@") || strings.HasPrefix(addr, "-") {
-			v.fail(at.line, "%s: address %q must be <user>@<tailscale name>", where, addr)
+			v.fail(at.pos, "%s: address %q must be <user>@<tailscale name>", where, addr)
 		}
 	}
 	v.hostHarnesses(c, r, &h)
@@ -224,14 +224,14 @@ func (v *validator) hostHarnesses(c *Config, r *reader, h *Host) {
 		return
 	}
 	if len(list) == 0 {
-		v.fail(at.line, "%s: harnesses must list at least one harness", r.where)
+		v.fail(at.pos, "%s: harnesses must list at least one harness", r.where)
 	}
 	for i, name := range list {
 		if _, ok := c.Harnesses[name]; !ok {
-			v.fail(at.line, "%s: harnesses lists %q, which is not defined under [harness]", r.where, name)
+			v.fail(at.pos, "%s: harnesses lists %q, which is not defined under [harness]", r.where, name)
 		}
 		if slices.Contains(list[:i], name) {
-			v.fail(at.line, "%s: harnesses lists %q twice", r.where, name)
+			v.fail(at.pos, "%s: harnesses lists %q twice", r.where, name)
 		}
 	}
 	h.Harnesses = list
@@ -249,7 +249,7 @@ func (v *validator) hostLimits(r *reader, h *Host) {
 	if n, ok := r.number("max_heavy_sessions", false, 1); ok {
 		h.MaxHeavySessions = n
 		if slots := h.Slots(); n > slots {
-			v.fail(r.n.entries["max_heavy_sessions"].line, "%s: max_heavy_sessions (%d) must not exceed the host's %d sessions", r.where, n, slots)
+			v.fail(r.n.entries["max_heavy_sessions"].pos, "%s: max_heavy_sessions (%d) must not exceed the host's %d sessions", r.where, n, slots)
 		}
 	}
 }
@@ -266,10 +266,10 @@ func (v *validator) capabilities(r *reader, key string) []string {
 	}
 	for i, name := range list {
 		if !slices.Contains(Capabilities, name) {
-			v.fail(at.line, "%s: unknown capability %q; known: %s", r.where, name, strings.Join(Capabilities, ", "))
+			v.fail(at.pos, "%s: unknown capability %q; known: %s", r.where, name, strings.Join(Capabilities, ", "))
 		}
 		if slices.Contains(list[:i], name) {
-			v.fail(at.line, "%s: %s lists %q twice", r.where, key, name)
+			v.fail(at.pos, "%s: %s lists %q twice", r.where, key, name)
 		}
 	}
 	return list
@@ -300,11 +300,13 @@ func (v *validator) ratio(c *Config, r *reader) map[string]int {
 	}
 	rr := v.reader(n, "harness_ratio")
 	weights := map[string]int{}
+	before := len(v.errs)
 	for _, name := range n.order {
 		weights[name], _ = rr.number(name, true, 0)
 	}
-	if err := c.ValidateRatio(weights); err != nil {
-		v.fail(n.line, "%v", err)
+	// The ratio as a whole is judged only once every weight reads.
+	if err := c.ValidateRatio(weights); err != nil && len(v.errs) == before {
+		v.fail(n.pos, "%v", err)
 	}
 	return weights
 }

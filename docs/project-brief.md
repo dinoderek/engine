@@ -43,7 +43,7 @@ engine is the first worked example of the project context guideline's core.
 ## Stack
 
 - Go, one module, version pinned in `go.mod`. The runtime uses the standard
-  library only. Dev tools (golangci-lint, govulncheck) are go.mod tools.
+  library and approved libraries (`architecture.md`). Dev tools (golangci-lint, govulncheck) are go.mod tools.
 - External tools: `git`, `gh`, `tmux`, `ssh`, `sqlite3` and the harnesses.
   Engine clients use the server's versioned HTTP API.
 - GitHub Actions CI, and Dependabot for version freshness.

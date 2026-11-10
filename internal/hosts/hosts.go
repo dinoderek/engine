@@ -1,8 +1,8 @@
 // Package hosts reads engine's host config: the harnesses and machines of
 // ~/.config/engine/hosts.toml, and this machine's name from
-// ~/.config/engine/host. It parses the TOML subset the config uses itself,
-// because the runtime is standard library only, and reports the first
-// violation of the config's rules with its line number.
+// ~/.config/engine/host. It parses the file with the TOML library and reports
+// the first violation in the file: a syntax error with its line, a rule
+// violation with its table and key.
 package hosts
 
 import (

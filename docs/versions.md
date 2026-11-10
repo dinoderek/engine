@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Go toolchain | `go.mod`: the `toolchain` line is the exact Go every gate runs; the `go` line is the language version, the same minor at patch 0 | hand, below |
 | golangci-lint, govulncheck | `go.mod`: the `tool` block, with versions in the require lines and sums in `go.sum` | Dependabot, weekly |
-| Go modules | `go.mod` and `go.sum` | Dependabot, weekly |
+| Go modules | `go.mod` and `go.sum`: the runtime's libraries are the direct requirements | Dependabot, weekly |
 | GitHub Actions | a commit SHA plus a `# vX.Y.Z` comment in `.github/workflows/` | Dependabot, weekly |
 
 Nothing else names a version. `./dev` exports `GOTOOLCHAIN` from the
@@ -51,7 +51,9 @@ CI's setup-go reads the same line. Docs cite `go.mod`, never the version.
   Go, and runs govulncheck. It fails only on a vulnerability. Fix one by
   upgrading the module that carries it, in its own PR.
 
-Dependabot names the two tool modules in its `allow` list, because their
+A runtime library a tool also requires, such as the TOML library, takes the
+higher of the two versions, so a tool bump can move it: check its release
+notes in that PR. Dependabot names the two tool modules in its `allow` list, because their
 requirements are marked `// indirect`. If no tool update has arrived for a
 month while `./dev deps` reports one, read the Dependabot job log in the repo's
 Insights tab and bump the tool by hand with `go get -tool <module>@<version>`.
