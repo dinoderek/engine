@@ -97,8 +97,18 @@ func TestServeReportsASystemdUnitThatStopsAfterItsStart(t *testing.T) {
 	}
 }
 
-func TestServeStillHopsToARemoteServerHostWhoseUnitIsLocal(t *testing.T) {
+func TestServeStillHopsToARemoteServerHostThatRecordsSystemd(t *testing.T) {
 	s := newSystemdEnv(t, "devbox")
+	path := filepath.Join(hosts.ConfigDir(s.Home), "hosts.toml")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The server host records systemd itself: the caller still forwards.
+	toml := strings.Replace(string(b), "[host.devbox]\n", "[host.devbox.services]\nmanager = \"systemd\"\nserver = \"engine-server.service\"\n\n[host.devbox]\n", 1)
+	if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	var got []string
 	s.deps.Exec = func(_ io.Reader, _, _ io.Writer, name string, args ...string) (int, error) {
 		got = append([]string{name}, args...)

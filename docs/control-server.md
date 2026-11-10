@@ -28,7 +28,7 @@ keeps credentials confidential. To restart, close its window and rerun.
 
 A host whose `hosts.toml` entry records `services` starts through its systemd
 unit (`systemctl --user start`), never a second tmux server. A start that
-leaves the unit inactive exits 1, naming its `journalctl --user -u`.
+fails or leaves the unit inactive exits 1, naming its `journalctl --user -u`.
 
 `--foreground` runs it in place. For other networks, use an SSH tunnel or a
 TLS reverse proxy, set `[server] url` instead of `host`, and use
