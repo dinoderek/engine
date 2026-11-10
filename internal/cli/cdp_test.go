@@ -47,9 +47,6 @@ func findBrowser() (string, bool) {
 	return "", false
 }
 
-// browser is a headless Chromium driven over the DevTools protocol on a
-// pipe (--remote-debugging-pipe): NUL-terminated JSON on file descriptors 3
-// and 4, so no network port or WebSocket client is needed.
 // replyWait bounds a reply to one call; startupWait bounds the first, which
 // waits for the browser to finish starting. On a loaded CI runner, with
 // every package's tests running under coverage, starting takes over 30s.
@@ -58,6 +55,9 @@ const (
 	startupWait = 3 * time.Minute
 )
 
+// browser is a headless Chromium driven over the DevTools protocol on a
+// pipe (--remote-debugging-pipe): NUL-terminated JSON on file descriptors 3
+// and 4, so no network port or WebSocket client is needed.
 type browser struct {
 	t       *testing.T
 	cmd     *exec.Cmd
