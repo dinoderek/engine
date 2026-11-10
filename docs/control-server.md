@@ -68,7 +68,8 @@ transitions still require an execution for running and in-review.
 
 `POST /v1/command` accepts the Request in `internal/control/types.go`.
 Unknown fields, missing credentials and unknown operations fail; the
-credential sets authorship. Storage details remain in server logs.
+credential sets authorship. Errors include an HTTP status; storage details
+remain in server logs.
 
 Every write has a request key; a key reused for a different command fails.
 The CLI retries uncertain delivery once with the same key. Version conflicts
@@ -118,8 +119,13 @@ The process forwards only read operations (`list`, `plan-view`, `attempts`,
 host name on any port, so an SSH tunnel works. It sends
 `Cache-Control: no-store`. When the control server fails, the page keeps its
 last data, marked stale. Descriptions render as CommonMark plus tables: raw
-HTML stays text, and only absolute http, https and mailto links act. Messages
-are text; the CSP allows only the page's scripts.
+HTML stays text, images show alt text, and only absolute http, https and
+mailto links act. Messages are text; the CSP allows only the page's scripts.
+
+The per-plan view lists unfinished prerequisites, including other plans'
+tasks. A queued task's feedback is the plan's question. On both tabs, "Needs
+feedback" opens the question's thread at its update over the tab, on the
+plan's thread when it asked (`internal/ui/static/sessions.js`).
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review, is in progress. Otherwise an
@@ -149,7 +155,8 @@ run files, item bodies and full update bodies never join them.
 
 Observations live in an in-memory cache keyed by attempt, so a request never
 contacts a host. Coordinator passes store their host reads; a background loop
-reads each host whose active attempts lack a fresh observation. An unreachable
-host, unreadable run records or an old observation give `unknown`. The cache
-starts empty with the server; its timings are the constants in
+reads each host whose active attempts lack a fresh observation, one read in
+flight per host. The cache drops ended and replaced attempts and starts empty
+with the server. An unreachable host, unreadable run records or an old
+observation give `unknown`; the timings are the constants in
 `internal/controlrun/observe.go`.

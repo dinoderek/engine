@@ -51,7 +51,7 @@ Passes run the queues first. The head, the first eligible entry in request
 order (in-review, coordinated, no unresolved question), stays head until it
 merges or leaves. Only the head is called, through its task host's `merge` op
 (the server has no GitHub credential): at once when it becomes head or
-requests again, then once per `CheckEvery` from the entry's stored last call,
+requests again, then once per `CheckEvery` (`internal/reconcile/queue.go`) from the entry's stored last call,
 so a restart adds none. A merge marks the task done with its PR. Otherwise the
 code routes it: behind, conflicting or moved gets `merge-turn`, waking the
 executor to refresh and request again; red, closed or a branch rule ends the
@@ -62,10 +62,10 @@ is done, and the operator told; pending waits.
 ending in `engine task cleaned`. Idle after that, it is released; `--left`
 tells the operator. Without it, it is released once idle `CleanupWait` after
 the merge, or at once if its window is gone, telling the operator where it
-ran; one in a turn at `CleanupCap` is noticed. Other done tasks' sessions go
+ran; one in a turn at `CleanupCap` is noticed (`internal/reconcile/session.go`). Other done tasks' sessions go
 once idle 10 minutes. Releasing a running background job is a notice.
 
-Every wait is bounded. A head outstaying one,
+Every wait is bounded (`internal/reconcile/queue.go`). A head outstaying one,
 failing `gh` repeatedly, or whose host is not in `hosts.toml` ends
 `merge-refused` with the reason, telling the operator; the executor fixes it
 and requests again. A waiting PR's changes are found at its turn. Leaving
@@ -89,8 +89,8 @@ host's own `gh` and Git configuration (`operator-setup.md`).
 | --- | --- |
 | `control-spawn` | Syncs engine's clone, then runs `spawn` with the run's credentials. |
 | `sync-repo` | Fetches engine's clone; returns the default branch. |
-| `spawn` | Starts a session (`hosts-and-sessions.md`). |
-| `status` | Windows with their state and, unless working, last screen lines and a waiting window's newest denial; newest runs; quota, free slots and signed-out harnesses. |
+| `spawn` | Starts a session; the kickoff arrives on stdin (`hosts-and-sessions.md`). |
+| `status` | Windows with their state and, unless working, last 20 screen lines and a waiting window's newest denial (`telemetry.md`); newest runs; quota, free slots and signed-out harnesses (`internal/hostops/status.go`). |
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
 | `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Already merged is done. |
 | `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or it has changes. Engine never deletes the branch. |
