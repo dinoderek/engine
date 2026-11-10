@@ -1,6 +1,6 @@
 {
   "name": "engine",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "Two skills, with a merge guard: build takes one task to a merged PR in any repo; engine holds the server roles, planner and executor.",
   "author": {
     "name": "dinoderek"

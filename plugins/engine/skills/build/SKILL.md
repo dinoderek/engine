@@ -1,6 +1,6 @@
 ---
 name: build
-description: Build one task to a merged PR in any repo, outside the engine process. Use when the operator asks you to build, implement or ship one task, issue or change in this repo through review to a merged PR (gated by default, hands-off on request), or when you are spawned as a reviewer of another session's diff (`review`).
+description: Build one task to a merged PR in any repo, outside the engine process. Use when the operator asks you to build, implement or ship one task, issue or change in this repo through review to a merged PR (gated unless the request or the repo says hands-off), or when you are spawned as a reviewer of another session's diff (`review`).
 argument-hint: "[<task>] [gated | hands-off] | review"
 ---
 
@@ -13,9 +13,10 @@ PR.
 
 ## Modes
 
-The kickoff names the mode. If it names none, run **gated**.
+The kickoff names the mode. If it names none, run the default the repo's
+`AGENTS.md` (or `CLAUDE.md`) sets; if it sets none, run **gated**.
 
-| | Gated (default) | Hands-off |
+| | Gated | Hands-off |
 | --- | --- | --- |
 | Open questions | Present each with your recommendation; wait for the answer | Decide each yourself |
 | Hard stops | Ask in the session and wait (`references/hard-stops.md`) | The same |
