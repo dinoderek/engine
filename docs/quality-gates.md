@@ -4,21 +4,15 @@
 
 ## Run the gates
 
-```bash
-./dev test                  # every required lane, in parallel, no fail-fast
-./dev test <lane>...        # named lanes, e.g. ./dev test unit coverage
-./dev test for <path>...    # the required lanes those paths trigger
-./dev test --list           # the lane registry
-```
-
-`./dev help` lists every verb. There is no `deploy` verb: engine has nothing
-to deploy yet.
+`./dev test` runs every required lane in parallel, with no fail-fast;
+`./dev test <lane>...` runs named lanes, and `./dev test for <path>...` the
+lanes those paths trigger.
 
 Every `required` lane in `scripts/lanes.tsv` must be green before a PR. CI
-(`.github/workflows/ci.yml`) runs `./dev test` on every pull request and every
-push to `main`, and uploads `.test-ai-results/` as the `test-ai-results`
-artifact. Every lane runs in CI; none is local-only. CI installs `tmux` and `node` when
-the runner lacks them, and requires a Chromium browser, because their tests skip without them.
+runs `./dev test` on every pull request and every push to `main`, and uploads
+`.test-ai-results/` as the `test-ai-results` artifact; no lane is local-only.
+CI installs the tools whose tests skip without them (`tmux`, `node`) and
+requires a Chromium browser.
 
 ## What each lane enforces
 
@@ -35,83 +29,63 @@ the runner lacks them, and requires a Chromium browser, because their tests skip
 | `docs-check` | the doc rules below | `scripts/doc-budgets.tsv` |
 | `harness-names` | no string literal or identifier names a harness outside the adapters | `scripts/lanes.tsv` (flags) |
 
-Per function (`lint`): cognitive complexity **≤ 25** (gocognit), **≤ 200**
-lines (funlen), control nesting **≤ 4** and **≤ 5** parameters (revive). Every
-finding counts, including several on one line.
+Per function (`lint`): cognitive complexity **≤ 25**, **≤ 200** lines,
+control nesting **≤ 4** and **≤ 5** parameters. Every finding counts,
+including several on one line.
 
-**Go has no branch coverage.** Its cover tool counts statements, so the
-coverage target is statements only. Tests run with `-coverpkg=./...`, so code
-counts as covered when any package's tests run it.
+Go has no branch coverage, so the target is statements. Tests run with
+`-coverpkg=./...`: code counts as covered when any package's tests run it.
 
-## Import rules
-
-The Go compiler rejects import cycles, so `imports` checks only the layers in
-`scripts/import-rules.tsv`, on non-test imports, for the files built on the
-host OS. A rule whose importer or target matches no package fails the lane.
+`imports` checks only layers (the compiler rejects cycles), on non-test
+imports. A rule whose importer or target matches no package fails the lane.
 Load `architecture.md` before changing a rule.
 
 ## Baselines only shrink
 
 Each baseline row tolerates up to its count. Above the count the lane fails;
 below it the lane also fails until you lower or delete the row. All baselines
-are empty. A `//nolint` directive, in any form golangci-lint honours, is a lint
-finding (linter `nolint`) and needs a baseline row.
+are empty. A `//nolint` directive, in any form, is a lint finding and needs a
+baseline row.
 
 Adding a row, raising a count, lowering a threshold or excluding a linter is a
 hard stop: it needs the operator's agreement, stated in the PR's
-**Deviations**. Meet a target by adding tests, splitting the function or
-moving the code.
+**Deviations**. Meet a target with tests, a split function or moved code.
 
 ## Doc rules
 
 `docs-check` treats every tracked Markdown file as a persistent doc, except
 under the `exempt`, `ephemeral` and `budget-only` prefixes in
-`scripts/doc-budgets.tsv`.
-`.github/` is exempt: its templates need no header, budget or index row.
-`design/` is ephemeral: drafts there follow no rule at all. `plugins/` is
-budget-only: a skill is not a doc and cites paths in the repos that use it, so
-it keeps only rule 1, and rule 6 as every file does. It enforces:
+`scripts/doc-budgets.tsv`. `.github/` is exempt (no header, budget or index
+row), `design/` ephemeral (no rule applies), and `plugins/` budget-only: a
+skill is not a doc and cites paths in the repos that use it, so it keeps rules
+1 and 6 only. It enforces:
 
-1. **Word budgets** (whitespace-separated words). Each doc has its own budget
-   or the default. A `set` row caps docs loaded together. The `always-load`
-   set must hold exactly `AGENTS.md` and the docs listed under its "Always
-   load" heading. The lane output lists every count against its budget.
-2. **Links resolve and cited paths exist.** Every relative link (inline,
-   reference definition or `href`), and every code-span word that names a
-   repository path, must exist relative to the doc or the root, outside fenced
-   blocks. Gitignored outputs count as existing. Cite a file, never a line:
-   line numbers rot.
+1. **Word budgets** (whitespace-separated words): each doc's own or the
+   default. A `set` row caps docs loaded together; the `always-load` set must
+   hold exactly `AGENTS.md` and the docs under its "Always load" heading.
+2. **Links resolve and cited paths exist.** Every relative link, and every
+   code-span word naming a repository path, must exist relative to the doc or
+   the root, outside fenced blocks. Gitignored outputs count. Cite a file,
+   never a line.
 3. **The header.** The first lines carry exactly one
    `> **Owns:** … **Not here:** …` line, with no load trigger.
 4. **The index is complete.** Every doc except the entrypoints (`AGENTS.md`
-   and `README.md`) appears under "Always load" or "Load on demand" in
-   `AGENTS.md`. `CLAUDE.md` is a symlink to `AGENTS.md`.
+   and `README.md`) appears in `AGENTS.md`'s "Always load" or "Load on
+   demand". `CLAUDE.md` is a symlink to `AGENTS.md`.
 5. **Lane citations are real.** Every `./dev test <lane>` names a lane.
 6. **No tracker or ephemeral references** in any file outside an ephemeral
-   directory, docs and code alike, `.github/` included: no issue or PR number
-   (alone, after `owner/repo`, or after a word like "issue", "PR" or "GH"), no
-   issue or PR URL, no plan file path, and no path, however relative, to a
-   file in an ephemeral directory. The bare directory name is fine.
-   Placeholders such as `#<task>` pass.
+   directory, `.github/` included: no issue or PR number or URL, no plan file
+   path, and no path to a file in an ephemeral directory. The bare directory
+   name is fine, and so are placeholders such as `#<task>`.
 
 The check does not judge link wording, one place per fact, or whether a doc
 is still true; the reviewer does.
 
-## Setup
+## Setup and debugging
 
-Run `./dev doctor`. It installs Go with Homebrew if no Go is on `PATH`, then
-checks git, gh, sqlite3, the pinned toolchain, a C compiler for the race detector,
-the modules, and the go.mod tools (golangci-lint, govulncheck), installing
-what Homebrew can. Anything else it reports as a gap with its fix. Any Go
-release can bootstrap: `./dev` sets `GOTOOLCHAIN` from go.mod, and Go downloads
-that toolchain.
-
-## Debugging a failed gate
-
-1. Read `.test-ai-results/summary.md`: one PASS or FAIL line per lane of the
-   last run. Each run replaces the directory.
-2. Read that lane's `.test-ai-results/<lane>.txt`. It starts with the command
-   and exit code.
-3. Rerun just that lane: `./dev test <lane>`.
-4. `format`: run `gofmt -w` on the files it names. `coverage`: the lane lists
-   every file below the target.
+`./dev doctor` installs what Homebrew can and reports any other gap with its
+fix. For a failed gate, read
+`.test-ai-results/summary.md` (one PASS or FAIL line per lane), then
+`.test-ai-results/<lane>.txt`, which starts with the command and exit code,
+and rerun it with `./dev test <lane>`. `format`: run `gofmt -w` on the files
+it names. `coverage` lists every file below the target.
