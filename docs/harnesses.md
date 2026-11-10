@@ -4,37 +4,34 @@
 
 ## The contract
 
-The core knows a harness only through `internal/harness`'s `Adapter`, by
-the name `hosts.toml` and `run.json` spell. The interface's doc comments are
-the contract; what each answer drives:
+The core knows a harness only through `internal/harness`'s `Adapter`; its
+doc comments are the contract. What each answer drives:
 
 | An adapter provides | The core |
 | --- | --- |
-| a session's launch: config location, trust, flags after the line, the kickoff last | opens the window and runs the host's line with them; `release` asks every adapter to delete its per-session files, whatever the run's harness |
-| whether a session joins the host's remote-control daemon, and why not | joins only when the caller allows it; a warning reaches `spawn`'s reply, and a down daemon never refuses a spawn |
-| one observation per `status`: quota, signed out, each live window's state | unknown is never dead: a window's own exit decides that. Fleet consumers use the newest quota reading per harness and clear usage after its reset |
-| hook events in engine's terms, its denial, its unattended policy | runs the core hooks, the same for every harness: `pre-tool-use` is the merge guard; `permission` logs and applies the policy; `state` writes the run's state file |
-| its own hook entries, and whether its hooks find their run by `cwd` | resolves `engine hook <entry> --harness <name>`; a missing or unknown name or entry exits 1 and blocks nothing |
-| `engine setup` steps and the preflight's failure advice | runs them after the host's steps, only on a host that lists the harness |
-| the preflight kickoff, and whether state comes from hooks alone | fails a check whose window stayed open, skipped a step, or, with hooked state, wrote no state file |
+| a session's launch: config, trust, flags, kickoff | runs the host's line with them; `release` asks every adapter to delete its per-session files |
+| whether a session joins the remote-control daemon | joins only when allowed; a down daemon never refuses a spawn |
+| one observation per `status`: quota, signed out, window state | unknown is never dead; a window's own exit decides that |
+| hook events in engine's terms, its denial, its unattended policy | runs the core hooks: `pre-tool-use` is the merge guard, `permission` applies the policy, `state` writes the run's state file |
+| its own hook entries | resolves `engine hook <entry> --harness <name>`; an unknown name or entry exits 1 and blocks nothing |
+| `engine setup` steps and preflight failure advice | runs them after the host's steps, on hosts that list the harness |
+| the preflight kickoff, and whether state comes from hooks alone | fails a check whose window stayed open, skipped a step, or wrote no state file |
 
 What each harness answers today:
 
 | | Claude Code | Codex |
 | --- | --- | --- |
 | unattended permission request | denied, naming the Permission hard stop | left to Codex's auto-review, which never prompts |
-| session state | its own session list; `background` is working with the turn ended, and typed input is taken | the hooks' state file; a missing file is unknown |
+| session state | its own session list | the hooks' state file; a missing file is unknown |
 
 **Adding a harness:** a package under `internal/harness/` that passes
-`harnesstest`'s contract suite, a line in `internal/harness/registry`, its
-row in `scripts/import-rules.tsv`, and its name in the `harness-names`
-lane's flags in `scripts/lanes.tsv`. No other package names it.
+`harnesstest`'s contract suite, a registry line, its `scripts/import-rules.tsv`
+row, and its name in the `harness-names` lane. No other package names it.
 
 ## Launch lines and tiers
 
-They live only in the operator's `hosts.toml`. A host lists each harness in
-`harnesses` and pins its `bin`. `{model}` and `{effort}` come from the
-task's tier; `{name}` is `<repo>-<task>`.
+They live only in the operator's `hosts.toml`. `{model}` and `{effort}`
+come from the task's tier; `{name}` is `<repo>-<task>`.
 
 ```toml
 [harness.claude]
@@ -58,7 +55,7 @@ Rules for the lines:
   actions without a prompt, and `-n {name} --remote-control {name}`, which
   name the session in the apps.
 - **Codex:** keep the `workspace-write` sandbox with auto-review deciding
-  what crosses it; never `approval_policy = "never"`, which leaves it
-  nothing to review. Keep network access, for `gh` and `git push`. Set no
-  writable root and no `--add-dir`: a joined session refuses both, so a line
-  with either keeps every session embedded, and `spawn` warns.
+  what crosses it (never `approval_policy = "never"`, which leaves it nothing
+  to review), and keep network access, for `gh` and `git push`. Set no
+  writable root and no `--add-dir`: a joined session refuses both, so such a
+  line keeps every session embedded, and `spawn` warns.
