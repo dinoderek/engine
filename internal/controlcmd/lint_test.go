@@ -59,17 +59,18 @@ func TestServerLintErrors(t *testing.T) {
 func TestExternalCompletionCLI(t *testing.T) {
 	e, _ := environment(t)
 	repo := command(t, e, "repo", "add", "--title", "Demo", "--slug", "owner/demo", "--remote", "remote").Item
-	task := command(t, e, "task", "create", "--repo", repo.ID, "--title", "Done elsewhere").Item
+	plan := command(t, e, "plan", "create", "--repo", repo.ID, "--title", "Feature").Item
+	task := command(t, e, "task", "create", "--repo", repo.ID, "--plan", plan.ID, "--title", "Done elsewhere").Item
 	pr := "https://github.com/" + repo.Slug + "/pull/" + itoa(42)
 	done := command(t, e, "task", "complete-external", task.ID, "--version", "1", "--pr", pr).Item
 	if done.State != "done" || done.PR != pr || done.Attempt != "" {
 		t.Fatal(done)
 	}
-	if _, err := Parse([]string{"plan", "complete-external", "p2", "--version", "1", "--pr", pr}, e); err == nil {
+	if _, err := Parse([]string{"plan", "complete-external", plan.ID, "--version", "1", "--pr", pr}, e); err == nil {
 		t.Fatal("accepted plan operation")
 	}
 	// Ordinary workflow transitions are not loosened by this command.
-	task = command(t, e, "task", "create", "--repo", repo.ID, "--title", "Still todo").Item
+	task = command(t, e, "task", "create", "--repo", repo.ID, "--plan", plan.ID, "--title", "Still todo").Item
 	if code := Main([]string{"task", "state", task.ID, "--version", "1", "--state", "done"}, e); code != 1 {
 		t.Fatal(code)
 	}

@@ -191,13 +191,7 @@ func (s Service) create(st *State, a Actor, r Request) (Response, error) {
 	}
 	item.ID = st.id(map[string]string{"repo": "r", "plan": "p", "task": "t"}[item.Kind])
 	item.Version = 1
-	item.State = "prepare"
-	if item.Kind == "repo" {
-		item.State = "active"
-	}
-	if item.Kind == "task" && item.Plan != "" {
-		item.State = "todo"
-	}
+	item.State = map[string]string{"repo": "active", "plan": "prepare", "task": "todo"}[item.Kind]
 	st.Items[item.ID] = item
 	if err := validateGraph(st, item); err != nil {
 		return Response{}, err
@@ -222,21 +216,31 @@ func validateCreation(st *State, a Actor, item Item) error {
 			}
 		}
 	case "plan", "task":
-		repo, ok := st.Items[item.Repo]
-		if !ok || repo.Kind != "repo" {
-			return problem(400, "unknown repository")
-		}
-		if item.Plan != "" {
-			parent, ok := st.Items[item.Plan]
-			if !ok || parent.Kind != "plan" || parent.Repo != item.Repo || item.Kind != "task" || parent.State == "done" {
-				return problem(400, "invalid parent plan")
-			}
-		}
-		if a.Role == "worker" && (item.Plan == "" || !workerItem(st, a, item.Plan)) {
-			return problem(403, "worker can only create tasks in its own plan")
-		}
+		return validateWork(st, a, item)
 	default:
 		return problem(400, "kind must be repo, plan or task")
+	}
+	return nil
+}
+
+// validateWork checks a new plan or task: a task belongs to an unfinished
+// plan in its repository, and a worker creates only its own plan's tasks.
+func validateWork(st *State, a Actor, item Item) error {
+	repo, ok := st.Items[item.Repo]
+	if !ok || repo.Kind != "repo" {
+		return problem(400, "unknown repository")
+	}
+	if item.Kind == "task" && item.Plan == "" {
+		return problem(400, "a task requires its plan; build one task outside a plan with the build skill")
+	}
+	if item.Plan != "" {
+		parent, ok := st.Items[item.Plan]
+		if !ok || parent.Kind != "plan" || parent.Repo != item.Repo || item.Kind != "task" || parent.State == "done" {
+			return problem(400, "invalid parent plan")
+		}
+	}
+	if a.Role == "worker" && (item.Kind != "task" || !workerItem(st, a, item.Plan)) {
+		return problem(403, "worker can only create tasks in its own plan")
 	}
 	return nil
 }
@@ -266,8 +270,8 @@ func (s Service) edit(st *State, a Actor, r Request) (Response, error) {
 	old.Title, old.Body, old.Depends, old.Requires = item.Title, item.Body, item.Depends, item.Requires
 	old.Harness, old.Tier = item.Harness, item.Tier
 	old.Version++
-	old.ApprovedVersion = 0
-	if old.Kind == "plan" || old.Plan == "" {
+	if old.Kind == "plan" {
+		old.ApprovedVersion = 0
 		old.State = "prepare"
 		old.Coordinating = false
 	}

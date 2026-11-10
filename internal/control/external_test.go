@@ -85,13 +85,13 @@ func TestExternalCompletionValidationIsAtomic(t *testing.T) {
 }
 
 func TestExternalCompletionInactiveStatesAndQuestions(t *testing.T) {
-	for _, state := range []string{"prepare", "approved", "todo", "failed"} {
+	for _, state := range []string{"todo", "failed"} {
 		t.Run(state, func(t *testing.T) {
 			s := service(t)
-			repo, _ := repoPlan(t, s)
-			task := newTask(t, s, repo.ID, "")
+			repo, plan := repoPlan(t, s)
+			task := newTask(t, s, repo.ID, plan.ID)
 			if err := s.Store.Transaction(func(st *State) error {
-				task.State, task.Coordinating, task.Attempt = state, true, "a99"
+				task.State, task.Attempt = state, "a99"
 				st.Attempts[task.Attempt] = Attempt{ID: task.Attempt, Item: task.ID, State: "ended"}
 				st.Items[task.ID] = task
 				return nil
@@ -99,8 +99,8 @@ func TestExternalCompletionInactiveStatesAndQuestions(t *testing.T) {
 				t.Fatal(err)
 			}
 			done := call(t, s, op, Request{Op: "complete-external", ID: task.ID, Version: task.Version, Item: Item{PR: externalPR(repo.Slug)}}).Item
-			if done.Coordinating || done.Attempt != task.Attempt {
-				t.Fatal("completion lost attempt history or retained coordination")
+			if done.State != "done" || done.Attempt != task.Attempt {
+				t.Fatal("completion lost attempt history or did not finish the task")
 			}
 		})
 	}

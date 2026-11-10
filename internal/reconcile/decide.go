@@ -18,22 +18,14 @@ func Decide(v View) []Action {
 	case len(v.Lint) > 0 && v.Root.State != "approved":
 		return append(acts, notice(v.Root, fmt.Sprintf("lint/%d", v.Root.Version), "Plan lint failed: "+fmt.Sprint(v.Lint)))
 	}
-	if v.Root.Kind == "plan" {
-		if plan, done := planStep(v); done {
-			return append(acts, plan...)
-		}
+	if plan, done := planStep(v); done {
+		return append(acts, plan...)
 	}
 	acts = append(acts, deadSessions(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, reaps(v)...)
 	placed := place(v)
 	acts = append(acts, placed...)
-	if v.Root.Kind == "task" {
-		if v.Root.state() == "failed" {
-			acts = append(acts, Action{Kind: Stop, Item: v.Root.ID, Text: v.Root.ID + " is failed"})
-		}
-		return acts
-	}
 	if len(v.Tasks) > 0 && !slices.ContainsFunc(v.Tasks, Item.open) {
 		acts = append(acts, Action{Kind: SetState, Item: v.Root.ID, State: "done", Key: "finished", Text: summary(v)})
 	}

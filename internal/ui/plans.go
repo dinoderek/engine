@@ -141,7 +141,7 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 		}
 		row := TaskRow{ID: t.ID, Title: t.Title, State: t.State, Host: hosts[t.Attempt], Waiting: []Prerequisite{}, Feedback: feedback[t.ID]}
 		// The plan's open question holds up every task waiting to start.
-		held := asked != nil && row.Host == "" && (t.State == "todo" || t.State == "approved")
+		held := asked != nil && row.Host == "" && t.State == "todo"
 		if held && row.Feedback == nil {
 			row.Feedback = asked
 		}
@@ -199,7 +199,7 @@ func group(state string, active, waiting, held, approved bool) string {
 		return groupInProgress
 	case waiting || held:
 		return groupBlocked
-	case approved && (state == "todo" || state == "approved"):
+	case approved && state == "todo":
 		return groupReady
 	default:
 		return groupBlocked

@@ -41,7 +41,8 @@ and never overwrite a file. Test restores in an isolated database first.
 
 IDs belong to engine: repositories, plans, tasks and attempts have separate
 prefixes and globally unique numeric parts. A plan is a feature-level
-requirements/design document. Standalone tasks have no parent plan.
+requirements/design document. Every task belongs to one plan; creating a
+task without `--plan` fails.
 `engine ps` lists server tasks. `engine help` lists server command groups; the
 source of the flags is `internal/controlcmd/command.go`.
 
@@ -58,9 +59,9 @@ engine attempt list t3
 engine merge-queue r1
 ```
 
-Edits, approvals and workflow changes require the current `--version`. An
-edit invalidates a plan's or standalone task's approval; an active
-execution, a plan's children included, prevents it. Run/stop commands persist
+Edits, approvals and workflow changes require the current `--version`. A
+plan's edit invalidates its approval; an active execution, a plan's children
+included, prevents an edit. Approve, run and stop take a plan and persist its
 coordination intent (`coordinator.md`).
 Retrying a failed task is an explicit operator state change.
 `get`, `list` and `plan-view` add a plan's derived, unstored `status` (`execution-protocol.md`, "States").
@@ -71,11 +72,11 @@ Open question. It reads one snapshot, including outside dependencies, and
 changes nothing.
 
 `engine task complete-external <task-id> --version <n> --pr <url>` records
-work finished outside engine. It is operator-only, for an inactive task in
-todo, prepare, approved or failed with no unresolved question, and takes a
+work finished outside engine on a plan's task. It is operator-only, for an
+inactive task in todo or failed with no unresolved question, and takes a
 PR URL in the task's repository without verifying the merge. It records done
-and the PR in versioned history, stops coordination for the task, keeps
-dependencies and prior attempts, and needs no approval or attempt.
+and the PR in versioned history, keeps dependencies and prior attempts, and
+needs no attempt.
 Ordinary state transitions still require an execution for running and
 in-review.
 
@@ -166,7 +167,7 @@ update over the tab, on the plan's thread when it asked.
 Each task has one summary. Done is done. Failed and needs-human are blocked.
 An active attempt, running or in-review is in progress. Otherwise an
 unfinished prerequisite or the plan's open question (as sessions report
-it) blocks it, todo or approved under an approved plan is ready to run, and
+it) blocks it, todo under an approved plan is ready to run, and
 anything else is blocked.
 Coordination does not change it.
 
@@ -178,7 +179,7 @@ ordered by item number. The row and reference fields in
 run files, item bodies and full update bodies never join them.
 
 - `role` is `planner` for a plan and `executor` for a task. `plan` is the
-  planner's own plan or a child task's parent; a standalone task has none.
+  planner's own plan or the task's plan.
 - `observed` is the harness's `working`, `waiting` or `limited`, `live` for
   an open window without a harness state, `exited` once a reachable host shows
   the window closed or gone, and otherwise `unknown`. An exited attempt stays

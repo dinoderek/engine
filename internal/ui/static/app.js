@@ -176,7 +176,6 @@
   function waitingCell(t) {
     const items = t.waiting.map((w) => {
       const name = w.id + (w.title ? " · " + w.title : "") + " (" + w.state + ")";
-      if (!w.plan) return el("li", {}, name + " · standalone task");
       return el("li", {}, el("a", { href: link(w.plan, w.id), "data-key": "dep-" + t.id + "-" + w.id }, name));
     });
     return el("td", { "data-label": "Waiting for" }, items.length ? el("ul", { class: "waiting" }, ...items) : "—");

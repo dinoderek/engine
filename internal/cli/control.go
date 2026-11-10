@@ -24,7 +24,7 @@ func controlEnv(e Env) controlcmd.Env {
 // removedUsage is what a form that named a GitHub issue, a task by its repo,
 // or a task another way than its server ID gets: the server form.
 var removedUsage = map[string]string{
-	"run":    "usage: engine run <plan-or-task-id>  (p<n> or t<n>)\n",
+	"run":    "usage: engine run <plan-id>  (p<n>)\n",
 	"ps":     "usage: engine ps [--json]  (lists server tasks)\n",
 	"attach": "usage: engine attach <task-id>  (t<n>)\n",
 	"tell":   "usage: engine tell <task-id> <text...|->  (t<n>)\n",

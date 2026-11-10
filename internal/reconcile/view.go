@@ -1,5 +1,5 @@
 // Package reconcile is the server coordinator's decision core. Decide reads
-// one View, a coordinated plan or standalone task with its server records
+// one View, a coordinated plan with its server records
 // and what the hosts show of its sessions, and returns the pass's actions.
 // It is pure: it reads only the View, changes nothing, and knows no CLI.
 package reconcile
@@ -14,9 +14,9 @@ import (
 // View is everything one pass decides on.
 type View struct {
 	Now time.Time
-	// Root is the coordinated plan, or standalone task.
+	// Root is the coordinated plan.
 	Root Item
-	// Tasks are a plan's tasks by number, or a standalone task alone.
+	// Tasks are the plan's tasks by number.
 	Tasks []Item
 	// Lint is the plan's lint problems, for a plan with tasks.
 	Lint  []string

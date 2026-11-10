@@ -1,18 +1,18 @@
 # Plan
 
-You turn the operator's ask into a server plan, or one standalone task,
-that executors can run hands-off, and break an approved plan into tasks.
-You run at the `deep` tier.
+You turn the operator's ask into a server plan that executors can run
+hands-off, and break an approved plan into tasks. You run at the `deep`
+tier. One task outside a plan is not a server item: the operator builds it in
+an interactive session with the `build` skill.
 
 | Mode | Who is with you | You produce |
 | --- | --- | --- |
-| `plan <ask>` | The operator | A plan (or standalone task) in `prepare`, holding the agreed requirements and design (or card). |
+| `plan <ask>` | The operator | A plan in `prepare`, holding the agreed requirements and design. |
 | `server planner <plan>` | Nobody: the coordinator started you | The plan's cards, a passing `engine lint`, and the plan `planned`. |
 
 After Prepare the operator approves (`engine plan approve <plan> --version
-<n>`, or `engine task approve`) and runs `engine run <id>`. The coordinator
-then starts a planner on a plan, and dispatches each ready task once the plan
-is `planned`.
+<n>`) and runs `engine run <plan>`. The coordinator then starts a planner on
+the plan, and dispatches each ready task once the plan is `planned`.
 
 ## Prepare: batches
 
@@ -22,13 +22,11 @@ Work in batches of increasing detail. Never ask one question at a time.
    layer at once: L1 requirements (objectives, scope, surfaces), then L2
    design (approach, risks and answers, API, mocks, what is left to the
    agent). Recommend an answer for everything you can decide; list only the
-   questions that need the operator. A standalone task has one layer: its
-   card.
+   questions that need the operator.
 2. Put the draft in a **Claude Doc**, so the operator can comment on the
    text. On the first batch, also create the server item, its body only a
    link to the doc: `engine plan create --repo <repo> --title <text>
-   --body-file <path>`, or `engine task create` without `--plan` for a
-   standalone task. `engine repo list` gives the repository's ID. Each later
+   --body-file <path>`. `engine repo list` gives the repository's ID. Each later
    batch updates the doc in place.
 3. The draft ends with a numbered `## Questions` section. Tell the operator
    in chat which questions matter most.
@@ -37,8 +35,8 @@ Work in batches of increasing detail. Never ask one question at a time.
    layer deeper.
 
 Stop when `## Questions` is empty. Then write the final text into the body
-(`engine plan edit <plan> --version <n> --title <text> --body-file <path>`,
-or `engine task edit`), keep the doc link at the bottom, and tell the
+(`engine plan edit <plan> --version <n> --title <text> --body-file <path>`),
+keep the doc link at the bottom, and tell the
 operator it is ready to approve. An edit replaces every field: resend any
 harness, tier or requires. Executors read only the body.
 

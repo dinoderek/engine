@@ -217,30 +217,6 @@ func TestAPlanQuestionParksAVanishedTaskUntilAnswered(t *testing.T) {
 	}
 }
 
-func TestRebootWhileAStandaloneTaskIsStoppedLeavesItResumable(t *testing.T) {
-	c, h, repo, plan, _ := setup(t)
-	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
-	c.Service.Now = func() time.Time { return now }
-	execute(t, c.Service, control.Request{Op: "stop", ID: plan.ID})
-	task := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Alone", Repo: repo.ID, Body: "## Outcome\nWorks\n## Tests\nProve it"}})
-	task = execute(t, c.Service, control.Request{Op: "approve", ID: task.ID, Version: task.Version})
-	execute(t, c.Service, control.Request{Op: "run", ID: task.ID, Version: task.Version})
-	pass(t, c)
-	pass(t, c)
-	now = now.Add(time.Minute)
-	execute(t, c.Service, control.Request{Op: "stop", ID: task.ID})
-	h.status.Windows = nil
-	now = now.Add(time.Hour)
-	execute(t, c.Service, control.Request{Op: "run", ID: task.ID})
-	pass(t, c)
-	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
-	resumed := st.Attempts[st.Items[task.ID].Attempt]
-	if st.Items[task.ID].State != "running" || h.calls != 2 || !h.launches[resumed.RunID].Spawn.Resume {
-		t.Fatalf("a standalone task stopped across a reboot was not resumed: %s %+v", st.Items[task.ID].State, resumed)
-	}
-}
-
 func TestAPassRecordsASightingOnlyWhileCoordinating(t *testing.T) {
 	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
 	if at := kept(control.Attempt{}, reconcile.Session{Live: true}, now, false); !at.LiveAt.IsZero() {

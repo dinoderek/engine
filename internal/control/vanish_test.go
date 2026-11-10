@@ -22,7 +22,7 @@ func TestResumableWhenWorkRemainsAfterTheWindowWentAway(t *testing.T) {
 		{name: "open question but was never seen live", question: true, at: Attempt{Started: start}},
 		{name: "open operator question", question: true, at: Attempt{Started: start, LiveAt: live}, want: true},
 		{name: "plan stopped after last seen live", plan: Item{StoppedAt: live.Add(time.Minute)}, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "task stopped after last seen live", task: Item{StoppedAt: live}, at: Attempt{Started: start, LiveAt: live}, want: true},
+		{name: "plan stopped as it was last seen live", plan: Item{StoppedAt: live}, at: Attempt{Started: start, LiveAt: live}, want: true},
 		{name: "stopped before it was dispatched", plan: Item{StoppedAt: start.Add(-time.Minute)}, at: Attempt{Started: start}},
 		{name: "stopped, then seen live after the restart", plan: Item{StoppedAt: live.Add(-time.Minute)}, at: Attempt{Started: start, LiveAt: live}},
 		{name: "resume of a vanished attempt", prev: EndVanished, task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}},

@@ -94,12 +94,10 @@ func TestGroup(t *testing.T) {
 		{state: "running", waiting: true, want: groupInProgress},
 		{state: "todo", waiting: true, want: groupBlocked},
 		{state: "todo", want: groupReady},
-		{state: "approved", want: groupReady},
 		{state: "prepare", want: groupBlocked},
 		{state: "todo", unplanned: true, want: groupBlocked},
 		{state: "running", unplanned: true, want: groupInProgress},
 		{state: "todo", held: true, want: groupBlocked},
-		{state: "approved", held: true, want: groupBlocked},
 		{state: "running", held: true, want: groupInProgress},
 		{state: "done", held: true, want: groupDone},
 	} {
@@ -110,7 +108,7 @@ func TestGroup(t *testing.T) {
 }
 
 // fixtureView is a plan view: the plan, its repository, its tasks and their
-// prerequisites, one in another plan and one standalone.
+// prerequisites, two in other plans.
 func fixtureView() []control.Item {
 	return []control.Item{
 		{ID: "p24", Kind: "plan", Repo: "r1", Title: "Control server rollout", State: "planned", Status: "executing", ApprovedVersion: 2},
@@ -123,7 +121,7 @@ func fixtureView() []control.Item {
 		{ID: "t32", Kind: "task", Plan: "p24", Title: "Migrate", State: "todo", Depends: []string{"t7"}},
 		{ID: "t33", Kind: "task", Plan: "p24", Title: "Retry me", State: "failed", Attempt: "a39"},
 		{ID: "t7", Kind: "task", Plan: "p2", Title: "Schema in another plan", State: "in-review"},
-		{ID: "t5", Kind: "task", Title: "Standalone fix", State: "approved"},
+		{ID: "t5", Kind: "task", Plan: "p3", Title: "Fix in another plan", State: "todo"},
 	}
 }
 
@@ -147,7 +145,7 @@ func TestPlanDetail(t *testing.T) {
 	want := []TaskRow{
 		{ID: "t26", Title: "Store", State: "done", Group: groupDone, Waiting: []Prerequisite{}},
 		{ID: "t28", Title: "API", State: "running", Group: groupInProgress, Host: "devbox",
-			Waiting: []Prerequisite{{ID: "t5", Title: "Standalone fix", State: "approved"}}},
+			Waiting: []Prerequisite{{ID: "t5", Title: "Fix in another plan", State: "todo", Plan: "p3"}}},
 		{ID: "t29", Title: "Review", State: "in-review", Group: groupInProgress, Host: "mac", Waiting: []Prerequisite{}},
 		{ID: "t30", Title: "Acceptance", State: "todo", Group: groupBlocked, Waiting: []Prerequisite{
 			{ID: "t28", Title: "API", State: "running", Plan: "p24"}, {ID: "t29", Title: "Review", State: "in-review", Plan: "p24"}}},

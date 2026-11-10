@@ -155,40 +155,17 @@ func TestDecide(t *testing.T) {
 			[]string{"notice p1 lint/2"}},
 
 		// Stop, and cleanup once done.
-		{"a failed standalone task stops", view(task(5, "failed")), []string{"stop t5"}},
 		{"a done plan with no session left stops", view(plan("done"), ended(with(task(2, "done"), gone()))), []string{"stop p1"}},
 		{"a done plan waits for a working session", view(plan("done"), with(task(2, "done"), working())), nil},
 		{"a done plan releases a waiting session, then stops", view(plan("done"), with(task(2, "done"), waiting(time.Minute))), []string{"release t2 a2", "stop p1"}},
 		{"a done plan releases a session busy only in a background job", view(plan("done"), with(task(2, "done"), background(time.Minute))), []string{"release t2 a2", "stop p1"}},
 		{"a done plan waits for an unknown session", view(plan("done"), with(task(2, "done"), Session{Unknown: true})), nil},
-		{"a done standalone task keeps a just-merged window", view(mergedAt(with(task(5, "done"), waiting(time.Minute)), time.Minute)), nil},
+		{"a done plan keeps a just-merged window", view(plan("done"), mergedAt(with(task(2, "done"), waiting(time.Minute)), time.Minute)), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got, want := shows(Decide(tc.v)), strings.Join(tc.want, "\n"); got != want {
 				t.Errorf("actions:\n%s\nwant:\n%s", got, want)
 			}
 		})
-	}
-}
-
-// A standalone task and a plan drive the same task the same way; only a
-// plan's own state moves.
-func TestAStandaloneTaskAndAPlanDriveAlike(t *testing.T) {
-	alone := task(5, "approved")
-	alone.Plan = ""
-	if got := shows(Decide(view(alone))); got != "dispatch t5 devbox claude false" {
-		t.Errorf("standalone: %s", got)
-	}
-	if got := shows(Decide(view(plan("planned"), task(5, "todo")))); got != "dispatch t5 devbox claude false" {
-		t.Errorf("plan: %s", got)
-	}
-	for _, v := range []View{view(with(task(5, "running"), gone())), view(plan("planned"), with(task(5, "running"), gone()))} {
-		if got := shows(Decide(v)); got != "end t5 a5" {
-			t.Errorf("%s: %s", v.Root.ID, got)
-		}
-	}
-	done := with(task(5, "done"), waiting(time.Minute))
-	if got := shows(Decide(view(done))); got != "release t5 a5\nstop t5" {
-		t.Errorf("done standalone: %s", got)
 	}
 }

@@ -15,12 +15,12 @@ func ref(item string, update int) *control.UpdateRef {
 }
 
 // fixtureSessions: t28 asks its own question, t29 inherits the plan's older
-// one, t5 is a standalone task waiting without a question, p24's planner has
+// one, t5 is another plan's task waiting without a question, p24's planner has
 // a resolved (so absent) question, and t9's host is gone.
 func fixtureSessions() []control.SessionRow {
 	return []control.SessionRow{
 		{Item: "p24", Kind: "plan", Role: "planner", Plan: "p24", Observed: "waiting", Host: "mac", Harness: "claude"},
-		{Item: "t5", Kind: "task", Role: "executor", Observed: "waiting", Host: "mac", Harness: "codex"},
+		{Item: "t5", Kind: "task", Role: "executor", Plan: "p3", Observed: "waiting", Host: "mac", Harness: "codex"},
 		{Item: "t9", Kind: "task", Role: "executor", Plan: "p24", Observed: "unknown", Host: "devbox", Harness: "claude"},
 		{Item: "t28", Kind: "task", Role: "executor", Plan: "p24", Observed: "working", Host: "devbox", Harness: "claude", Feedback: ref("t28", 40)},
 		{Item: "t29", Kind: "task", Role: "executor", Plan: "p24", Observed: "exited", Host: "mac", Harness: "claude", Feedback: ref("p24", 12)},

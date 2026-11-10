@@ -17,13 +17,16 @@ func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
 	if item.Kind == "repo" {
 		return Response{}, problem(400, "repository has no workflow state")
 	}
+	if item.Kind != "plan" && r.Op != "state" {
+		return Response{}, problem(400, "only a plan is approved, run or stopped")
+	}
 	switch r.Op {
 	case "approve":
 		if err := operator(a); err != nil {
 			return Response{}, err
 		}
 		if item.State != "prepare" {
-			return Response{}, problem(409, "only a prepared item can be approved")
+			return Response{}, problem(409, "only a prepared plan can be approved")
 		}
 		item.State = "approved"
 		item.ApprovedVersion = item.Version
@@ -52,13 +55,14 @@ func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
 	return Response{Item: &item}, nil
 }
 
-// coordinate records run or stop intent; a stop records when coordination stopped.
+// coordinate records a plan's run or stop intent; a stop records when
+// coordination stopped.
 func (s Service) coordinate(st *State, a Actor, item *Item, op string) error {
 	if err := operator(a); err != nil {
 		return err
 	}
 	if op == "run" && (!approved(st, *item) || item.State == "done") {
-		return problem(409, "item requires approval before coordination")
+		return problem(409, "plan requires approval before coordination")
 	}
 	if op == "stop" && item.Coordinating {
 		item.StoppedAt = s.now()
@@ -67,11 +71,19 @@ func (s Service) coordinate(st *State, a Actor, item *Item, op string) error {
 	return nil
 }
 
+// approved reports whether item's plan, or the plan item itself, is approved.
 func approved(st *State, item Item) bool {
-	if item.Plan != "" {
-		item = st.Items[item.Plan]
+	plan := Root(st, item)
+	return plan.ApprovedVersion > 0 && plan.State != "prepare"
+}
+
+// Root is the plan that approves and coordinates item: a task's plan, or a
+// plan itself.
+func Root(st *State, item Item) Item {
+	if item.Kind == "task" {
+		return st.Items[item.Plan]
 	}
-	return item.ApprovedVersion > 0 && item.State != "prepare"
+	return item
 }
 
 func stateChange(st *State, a Actor, item Item, want string) error {
@@ -79,7 +91,7 @@ func stateChange(st *State, a Actor, item Item, want string) error {
 		return problem(409, "running state requires a current execution")
 	}
 	allowed := map[string][]string{
-		"approved":    {"planned", "running", "failed"},
+		"approved":    {"planned"},
 		"planned":     {"done"},
 		"todo":        {"running", "failed"},
 		"running":     {"in-review", "needs-human", "failed", "done"},
@@ -201,7 +213,7 @@ func (s Service) SetAttempt(id, state, window string) error {
 }
 
 func dispatchIntent(st *State, item Item) bool {
-	return item.Coordinating || item.Plan != "" && st.Items[item.Plan].Coordinating
+	return Root(st, item).Coordinating
 }
 
 // CheckDispatch rechecks durable intent before a reserved dispatch reaches a host.

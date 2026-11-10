@@ -12,27 +12,29 @@ import (
 
 // Item is a repository, a feature-level plan, or a task. Version protects edits.
 type Item struct {
-	ID              string   `json:"id"`
-	Kind            string   `json:"kind"`
-	Version         int      `json:"version"`
-	Repo            string   `json:"repo,omitempty"`
-	Plan            string   `json:"plan,omitempty"`
-	Title           string   `json:"title"`
-	Body            string   `json:"body,omitempty"`
-	Slug            string   `json:"slug,omitempty"`
-	Remote          string   `json:"remote,omitempty"`
-	State           string   `json:"state"`
-	Depends         []string `json:"depends,omitempty"`
-	Requires        []string `json:"requires,omitempty"`
-	Harness         string   `json:"harness,omitempty"`
-	Tier            string   `json:"tier,omitempty"`
-	PR              string   `json:"pr,omitempty"`
-	Attempt         string   `json:"attempt,omitempty"`
-	Coordinating    bool     `json:"coordinating,omitempty"`
-	ApprovedVersion int      `json:"approved_version,omitempty"`
+	ID       string   `json:"id"`
+	Kind     string   `json:"kind"`
+	Version  int      `json:"version"`
+	Repo     string   `json:"repo,omitempty"`
+	Plan     string   `json:"plan,omitempty"`
+	Title    string   `json:"title"`
+	Body     string   `json:"body,omitempty"`
+	Slug     string   `json:"slug,omitempty"`
+	Remote   string   `json:"remote,omitempty"`
+	State    string   `json:"state"`
+	Depends  []string `json:"depends,omitempty"`
+	Requires []string `json:"requires,omitempty"`
+	Harness  string   `json:"harness,omitempty"`
+	Tier     string   `json:"tier,omitempty"`
+	PR       string   `json:"pr,omitempty"`
+	Attempt  string   `json:"attempt,omitempty"`
+	// Coordinating and ApprovedVersion are a plan's run intent and the
+	// version the operator approved; a task follows its plan's.
+	Coordinating    bool `json:"coordinating,omitempty"`
+	ApprovedVersion int  `json:"approved_version,omitempty"`
 	// Status is a plan's PlanStatus in read responses. It is never stored.
 	Status string `json:"status,omitempty"`
-	// StoppedAt is when the operator last stopped this item's coordination.
+	// StoppedAt is when the operator last stopped this plan's coordination.
 	StoppedAt time.Time `json:"stopped_at,omitzero"`
 }
 
