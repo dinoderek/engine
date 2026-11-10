@@ -33,7 +33,7 @@ Per function (`lint`): cognitive complexity **≤ 25**, **≤ 200** lines,
 control nesting **≤ 4** and **≤ 5** parameters. Every finding counts,
 including several on one line.
 
-Go has no branch coverage, so the target is statements. Tests run with
+Go has no branch coverage, so the target is statements, with
 `-coverpkg=./...`: code counts as covered when any package's tests run it.
 
 `imports` checks only layers (the compiler rejects cycles), on non-test
@@ -49,7 +49,7 @@ baseline row.
 
 Adding a row, raising a count, lowering a threshold or excluding a linter is a
 hard stop: it needs the operator's agreement, stated in the PR's
-**Deviations**. Meet a target with tests, a split function or moved code.
+**Deviations**.
 
 ## Doc rules
 
@@ -84,8 +84,7 @@ is still true; the reviewer does.
 ## Setup and debugging
 
 `./dev doctor` installs what Homebrew can and reports any other gap with its
-fix. For a failed gate, read
+fix (with Homebrew, Go too; `./dev` fetches the pinned toolchain). For a failed gate, read
 `.test-ai-results/summary.md` (one PASS or FAIL line per lane), then
 `.test-ai-results/<lane>.txt`, which starts with the command and exit code,
-and rerun it with `./dev test <lane>`. `format`: run `gofmt -w` on the files
-it names. `coverage` lists every file below the target.
+and rerun it with `./dev test <lane>`.

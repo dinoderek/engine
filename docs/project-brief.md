@@ -36,5 +36,4 @@ verb.
 
 Go, one module, version pinned in `go.mod`; the runtime uses the standard
 library and approved libraries (`architecture.md`). External tools: `git`,
-`gh`, `tmux`, `ssh`, `sqlite3` and the harnesses. GitHub Actions CI and
-Dependabot.
+`gh`, `tmux`, `ssh`, `sqlite3` and the harnesses.

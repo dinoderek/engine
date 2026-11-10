@@ -2,8 +2,8 @@
 
 > **Owns:** the principles, the phases at a glance, task and plan states and who moves them, the inbox, merge conflicts, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does (the `build` and `engine` skills, `plugins/engine/skills/`), what each harness's adapter provides (`harnesses.md`), dispatch and merges (`coordinator.md`), records and the inbox's storage (`control-server.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
-The `build` and `engine` skills hold agent behaviour; this doc never
-restates a rule they hold.
+The `build` and `engine` skills hold agent behaviour; this doc never restates
+their rules.
 
 ## Principles
 
@@ -23,10 +23,10 @@ restates a rule they hold.
 | 3. Execute: one task, from card to merged PR | One executor per task | The coordinator merges the PR on green. |
 
 Prepare is the only time you are consulted, so every open question is
-answered there or explicitly left to the agent. It also settles any target
-repo rule that would stop a hands-off run, such as approving merges: you
-change the rule or override it for the feature. A plan's approval covers its
-tasks. For watching a run, load `operator-setup.md`, "Watching a run".
+answered there or left to the agent. It also settles any target repo rule
+that would stop a hands-off run, such as approving merges: you change the
+rule or override it for the feature. A plan's approval covers its tasks. For
+watching a run, load `operator-setup.md`, "Watching a run".
 
 Cards and roles name a tier (`deep`, `standard`, `light`), never a model;
 host config maps each tier to a model and effort per harness
@@ -36,7 +36,7 @@ host config maps each tier to a model and effort per harness
 
 - **You read only what is costly to undo.** One grade reaches you, `review`: a
   decision whose undo needs another PR and touches persisted data, a surface
-  others use, or a shape another task builds on. A task sends its rulings as
+  others use, or a shape another task builds on. A task sends its `review` rulings as
   one inbox digest with its merge request and never waits for it. Anything
   smaller is at most a `low` note in the PR body. More than two `review`
   rulings mean Prepare under-specified the card.
@@ -61,8 +61,7 @@ merge marks the task `done`. The coordinator sets a plan `done` and a task
 
 A task's updates in the server are the asynchronous channel to a running
 session: the operator answers a hard stop or adds an instruction, and a task
-tells another when its outcome affects it (`engine tell`). Attaching is the
-interactive channel.
+tells another when its outcome affects it (`engine tell`).
 
 There is no file ownership: parallelism comes only from dependencies, and an
 executor resolves conflicts by merging the default branch. Each repository has

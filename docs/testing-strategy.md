@@ -17,7 +17,7 @@ a fake would assume the behaviour under test.
 ## Rules
 
 - **A gate proves it fails.** Every check has a test that feeds it a
-  violation and expects the failing exit code and message, plus one that
+  violation and expects the failing exit code and message, and one that
   passes.
 - **No network, no home directory.** Use `httptest`, and write only under
   `t.TempDir()`.

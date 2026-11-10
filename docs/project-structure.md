@@ -12,7 +12,7 @@
 | `devtools/cmd/dev/`, `devtools/internal/`, `dev` | `./dev`: the main package; the verbs, lane runner, lane checks, baselines and helpers; the shell entrypoint |
 | `scripts/` | registries: lanes, import rules, doc budgets and baselines |
 | `docs/`, `design/` | the persistent docs; ephemeral drafts, never cited |
-| `plugins/engine/` | the plugin: skills in `skills/<name>/SKILL.md`, Claude hooks in `plugins/engine/hooks/hooks.json`, Codex manifest and hooks in `plugins/engine/.codex-plugin/plugin.json` |
+| `plugins/engine/` | the plugin: skills, Claude hooks in `plugins/engine/hooks/hooks.json`, Codex manifest and hooks in `plugins/engine/.codex-plugin/plugin.json` |
 | `.claude-plugin/`, `.agents/plugins/` | the Claude and Codex marketplaces that publish `plugins/` |
 
 `.dev/` and `.test-ai-results/` are gitignored outputs.

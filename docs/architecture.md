@@ -24,7 +24,7 @@ Two programs share one Go module:
 `scripts/import-rules.tsv` is the source; the `imports` lane enforces it on
 non-test imports. The reasons:
 
-- **Product never imports tooling, and tooling never imports product.** The
+- **Product never imports tooling, and tooling never imports product:** the
   gates cannot depend on the code they check, and `engine` ships nothing from
   `devtools/`.
 - **Each package may import only what its rule lists.** Leaf packages import
@@ -33,7 +33,7 @@ non-test imports. The reasons:
 
 ## Decisions new code must respect
 
-- **One binary, `engine`, for macOS and Linux**, the same on every host.
+- **One binary, `engine`, for macOS and Linux.**
 - **The runtime is the standard library plus approved libraries:** `go.mod`'s
   direct requirements, each with no requirements and no cgo. A new one is a
   hard stop (`AGENTS.md`).
