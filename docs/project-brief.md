@@ -20,8 +20,8 @@ session through to a merged PR.
 
 ## State
 
-Built: every part above, with a read-only local dashboard, plus the repo's
-own `./dev` gates.
+Built: every part above, with a read-only local dashboard and
+`engine upgrade` for the fleet, plus the repo's own `./dev` gates.
 
 ## Scope
 

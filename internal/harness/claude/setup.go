@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/hosts"
 )
 
 // Setup is Claude Code's part of engine setup: engine's plugin installed for
@@ -43,6 +44,12 @@ func (s setup) Steps(t harness.Target) []harness.Step {
 func (setup) CheckFailed(t harness.Target) (string, string) {
 	return "an unattended session there would stop; answer each prompt in a folder you trust, then rerun",
 		t.OnHost("claude --permission-mode auto --remote-control", true)
+}
+
+// PluginUpdate refreshes engine's marketplace, then updates the user's copy
+// of the plugin from it.
+func (setup) PluginUpdate(hosts.Host, string) ([]string, error) {
+	return []string{"claude plugin marketplace update engine", "claude plugin update " + harness.PluginID + " --scope user"}, nil
 }
 
 // blocked is a step that needs claude, which the tools step did not find.

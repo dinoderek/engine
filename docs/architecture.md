@@ -12,8 +12,8 @@ Two programs share one Go module:
   observations; `internal/controlrun` builds the View and applies the
   actions. Hosts are reached through `internal/remote`, whose peer
   `internal/hostops` runs on the host. A harness is the `internal/harness`
-  `Adapter` interface, one package per harness; `internal/hostops` and
-  `internal/setup` see only the interface.
+  `Adapter` interface, one package per harness; `internal/hostops`,
+  `internal/setup` and `internal/upgrade` see only the interface.
 - **`dev`**, the tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (verbs) → `lanes`, `checks` → `baseline`, `repo`.
 

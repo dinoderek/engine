@@ -29,6 +29,12 @@ type Setup interface {
 	// CheckFailed is the open item when this harness's preflight finds that
 	// an unattended session on the host would stop.
 	CheckFailed(t Target) (detail, command string)
+	// PluginUpdate are the commands, in order, that bring engine's plugin for
+	// the user on h, this host, to the marketplace's latest; home is the
+	// user's home directory there. engine upgrade runs them on the caller
+	// before it sets up the other hosts, which setup brings to the caller's
+	// version.
+	PluginUpdate(h hosts.Host, home string) ([]string, error)
 }
 
 // Shell runs a command line on a host.

@@ -219,3 +219,13 @@ func TestPluginReadsTheUsersVersion(t *testing.T) {
 		t.Error("found a plugin with none installed")
 	}
 }
+
+// The caller's plugin update refreshes engine's marketplace, then updates the
+// user's copy, exactly.
+func TestPluginUpdateCommands(t *testing.T) {
+	got, err := Adapter{}.Setup().PluginUpdate(hosts.Host{Name: "mac"}, "/Users/me")
+	want := []string{"claude plugin marketplace update engine", "claude plugin update engine@engine --scope user"}
+	if err != nil || strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("PluginUpdate = %q, %v; want %q", got, err, want)
+	}
+}

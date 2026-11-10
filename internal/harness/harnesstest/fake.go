@@ -41,6 +41,9 @@ type Fake struct {
 	PluginVersion string
 	Failed        [2]string
 	Steps         []FakeStep
+	// PluginUpdate and PluginUpdateErr are PluginUpdate's answer.
+	PluginUpdate    []string
+	PluginUpdateErr error
 
 	mu        sync.Mutex
 	calls     []string
@@ -185,5 +188,9 @@ func (s fakeSetup) Steps(t harness.Target) []harness.Step {
 }
 
 func (s fakeSetup) CheckFailed(harness.Target) (string, string) { return s.f.Failed[0], s.f.Failed[1] }
+
+func (s fakeSetup) PluginUpdate(hosts.Host, string) ([]string, error) {
+	return s.f.PluginUpdate, s.f.PluginUpdateErr
+}
 
 var _ harness.Adapter = (*Fake)(nil)

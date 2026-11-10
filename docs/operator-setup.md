@@ -132,29 +132,45 @@ then run `engine setup --host devbox`.
 
 ## Upgrading
 
-Upgrade while `engine ps` shows nothing running: the server restarts.
+`engine upgrade`, from any host in `hosts.toml`, brings every host to the
+head of `main`. It stops the server's unit and backs up the database with
+the old binary, installs the new engine and your plugins on this host, sets
+up the server's host and starts the server, then sets up every other host.
+The server starts again even when a step fails. `--dry-run` prints the steps
+and changes nothing.
 
-1. **The Mac.** In a clean checkout of pushed `main`:
+It refuses, changing nothing, while a task is `running`, `in-review` or
+`needs-human`, or when the server's host records no `services` table, does
+not answer, or its unit is not active. A host that is unreachable or stays
+open does not stop the others: run the commands the report lists, then rerun
+it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
+it by hand, in the same order: stop and back up the server
+(`control-server.md`, "Start"), install the engine and your plugins, run
+`engine setup` here and `engine setup --host <name>` for each other host,
+then start the server.
 
-   ```sh
-   GOTOOLCHAIN=$(awk '/^toolchain/{print $2}' go.mod) GOBIN=~/.local/bin go install ./cmd/engine
-   claude plugin marketplace update engine
-   claude plugin update engine@engine --scope user
-   codex plugin marketplace upgrade engine && codex plugin add engine@engine
-   engine setup
-   ```
+**The server's unit.** Write it once, by hand, on the server's host, as
+`~/.config/systemd/user/engine-server.service`. It runs `~/.local/bin/engine`,
+the binary setup replaces; keep no copy elsewhere.
 
-   Local setup also brings both Codex homes, engine's and yours, to the user's plugin.
-2. **Stop the server** and back it up (`control-server.md`, "Start"). A
-   running server keeps the binary it started with, and an older server
-   rejects request fields a newer CLI sends.
-3. **Every other host:** `engine setup --host <name>` for each machine in
-   `hosts.toml`.
-4. **Start the server** again, then restart `engine ui` wherever it runs: it
-   also keeps its old binary.
+```ini
+[Service]
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/engine serve --foreground --listen <tailscale IP>:7331 --advertise http://<tailscale name>:7331
+Restart=on-failure
 
-Run any command setup prints, such as a Claude one-time prompt after a
-Claude Code update, and rerun it until the host is set up.
+[Install]
+WantedBy=default.target
+```
+
+A user unit reads no shell rc file. Its `PATH` must find `tmux`, `ssh`,
+`gh`, `git` and the harness CLIs, and ssh to the other hosts must work
+without an interactive agent: a key the unit can use, or `SSH_AUTH_SOCK` set
+in the unit. Then run `systemctl --user daemon-reload`,
+`systemctl --user enable --now engine-server.service` and
+`loginctl enable-linger <user>`, so the unit outlives your login, and record
+it in the host's `hosts.toml` entry as `[host.<name>.services]` with
+`manager = "systemd"` and `server = "engine-server.service"`.
 
 ## Watching a run
 

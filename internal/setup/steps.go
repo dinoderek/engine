@@ -98,6 +98,12 @@ func (r *runner) hostEngine() (engineBuild, error) {
 	return engineBuild{rev: rev, goVersion: info.Go}, nil
 }
 
+// InstallCommand is the shell command that builds engine at commit with the
+// Go toolchain into ~/.local/bin/engine.
+func InstallCommand(toolchain, commit string) string {
+	return fmt.Sprintf(`GOBIN="$HOME/.local/bin" GOTOOLCHAIN=%s go install %s@%s`, toolchain, engineModule, commit)
+}
+
 // shortRev is how much of a commit setup compares.
 const shortRev = 7
 
@@ -116,7 +122,7 @@ func (r *runner) installEngine() (harness.Outcome, error) {
 	if r.missing["go"] {
 		return r.blocked("go"), nil
 	}
-	install := fmt.Sprintf(`GOBIN="$HOME/.local/bin" GOTOOLCHAIN=%s go install %s@%s`, want.goVersion, engineModule, r.want.commit)
+	install := InstallCommand(want.goVersion, r.want.commit)
 	res, err := r.t.Sh(install, "")
 	if err != nil {
 		return harness.Outcome{}, err
