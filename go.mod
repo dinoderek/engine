@@ -11,6 +11,7 @@ tool (
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/coder/websocket v1.8.15
 	github.com/yuin/goldmark v1.8.7
 )
 

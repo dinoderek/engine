@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -161,8 +163,8 @@ func (a Adapter) sendLabel(req LabelRequest) error {
 // labelThroughDaemon sets the title first, since thread/name/set is stable
 // and the project calls are experimental.
 func labelThroughDaemon(ctx context.Context, bin, home string, req LabelRequest) error {
-	return codexDaemon(ctx, bin, home, func(c *wsConn) error {
-		return exchangeLabel(&rpcClient{c: c}, req)
+	return codexDaemon(ctx, bin, home, func(ctx context.Context, c *websocket.Conn) error {
+		return exchangeLabel(&rpcClient{ctx: ctx, c: c}, req)
 	})
 }
 
@@ -245,9 +247,11 @@ func findProject(rpc *rpcClient, req LabelRequest) (string, error) {
 	return created.Project.ID, nil
 }
 
-// rpcClient is a JSON-RPC client over the daemon's WebSocket.
+// rpcClient is a JSON-RPC client over the daemon's WebSocket. ctx bounds
+// every write and read.
 type rpcClient struct {
-	c    *wsConn
+	ctx  context.Context
+	c    *websocket.Conn
 	next int
 }
 
@@ -256,7 +260,7 @@ func (r *rpcClient) notify(method string) error {
 	if err != nil {
 		return err
 	}
-	return r.c.WriteText(line)
+	return r.c.Write(r.ctx, websocket.MessageText, line)
 }
 
 // call sends a request and returns its result, skipping the notifications
@@ -268,11 +272,11 @@ func (r *rpcClient) call(method string, params any) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := r.c.WriteText(line); err != nil {
-		return nil, err
+	if err := r.c.Write(r.ctx, websocket.MessageText, line); err != nil {
+		return nil, fmt.Errorf("%s: %w", method, err)
 	}
 	for {
-		msg, err := r.c.ReadMessage()
+		_, msg, err := r.c.Read(r.ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", method, err)
 		}
