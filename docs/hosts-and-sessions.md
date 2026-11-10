@@ -95,7 +95,7 @@ then:
 4. writes `run.json` (`telemetry.md`), before the window opens for a
    daemon-joined session, since its hooks find their run by it.
 
-Spawn refuses a missing host entry or host file, an unknown or unrunnable
+Spawn refuses a missing host file, `hosts.toml` or host entry, an unknown or unrunnable
 harness, or an existing window. Slots, capabilities and caps are placement's
 alone. A host on another protocol fails, naming `engine setup --host <name>`.
 

@@ -51,8 +51,11 @@ tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 
 Rules for the lines:
 
-- **Claude:** keep `--permission-mode auto` and `-n {name} --remote-control {name}`.
-- **Codex:** keep the `workspace-write` sandbox with auto-review, never
-  `approval_policy = "never"`, and network access, for `gh` and `git push`.
-  Set no writable root and no `--add-dir`: a joined session refuses both, so
-  such a line keeps every session embedded, and `spawn` warns.
+- **Claude:** keep `--permission-mode auto`, whose classifier decides most
+  actions without a prompt, and `-n {name} --remote-control {name}`, which
+  name the session in the apps.
+- **Codex:** keep the `workspace-write` sandbox with auto-review deciding
+  what crosses it (never `approval_policy = "never"`, which leaves it nothing
+  to review), and keep network access, for `gh` and `git push`. Set no
+  writable root and no `--add-dir`: a joined session refuses both, so such a
+  line keeps every session embedded, and `spawn` warns.
