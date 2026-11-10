@@ -9,20 +9,18 @@ target repositories, plus normal Git authentication and commit identity.
 Engine uses that configuration for GitHub calls, clones, pushes and PRs.
 Check access with `gh api user` and `gh repo view <owner/repo>`.
 
-On a Mac, store gh's token in gh's own config file, not the login keychain.
-Every window of the `engine` tmux server inherits the context of whoever
-started it. After a reboot that is usually the first dispatch, over ssh, and
-such a server cannot read the keychain, so every gh call in its sessions fails with a
-401. A server started from a Terminal can, so `engine start --check` passes
-there until the next reboot. In a Terminal on the Mac, after
+On a Mac, keep gh's token in gh's own config file, not the login keychain.
+After a reboot the `engine` tmux server starts over ssh, and it cannot read the
+keychain, so every gh call in its sessions fails with a 401 (`engine start
+--check` passes from a Terminal until the next reboot). In a Terminal, after
 `gh auth login -h github.com`, run
 
 ```
 gh auth token | gh auth login -h github.com --with-token --insecure-storage
 ```
 
-which keeps the token in plaintext in `~/.config/gh/hosts.yml`. Setup's
-`gh auth` step runs `gh auth status` on the host, over ssh for `--host`, and is
+which keeps the token in plaintext in `~/.config/gh/hosts.yml`. Setup's `gh
+auth` step runs `gh auth status` on the host (over ssh for `--host`) and stays
 open while gh fails there or, on macOS, keeps its token in the keychain.
 
 ## Notifications
@@ -58,20 +56,15 @@ update (`codex plugin marketplace upgrade engine`, then `codex plugin add engine
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
-config, and ends with `engine start --check --host <name>`, which reads the
-host's protocol from the refusal of the undefined op `protocol`, then streams
-`ssh <address> engine start --check` and keeps its exit code. The engine is built
+config, and ends with `engine start --check --host <name>`. The engine is built
 with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
-from GitHub, and counts as current only on that commit and that Go. It changes
-only engine's own files (`~/.config/engine/`, `~/.local/bin/engine`,
-`~/.local/share/engine/`), Claude's plugin, and Codex's plugin and daemon in
-engine's own Codex home; Go's own cache holds the toolchain download. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one exact
-command, and it exits 1 while any item is open. It refuses a build that is
-dirty or not on GitHub, and a name that is not a machine in `hosts.toml`.
-With no `--host` it checks this host, apart from the Codex steps, which act.
-A host gets only the steps of the harnesses it lists: the host's own steps
-first, then each harness's, then gh's sign-in and the preflight, which checks
-every harness the host lists, the default first.
+from GitHub. Setup changes only engine's own files (`~/.config/engine/`,
+`~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, and Codex's
+plugin and daemon in engine's own Codex home. For anything else (`~/.bashrc`,
+`sudo`, `/login`) it prints one exact command, and it exits 1 while any item is
+open. It refuses a build that is dirty or not on GitHub, and a name that is not
+a machine in `hosts.toml`. With no `--host` it checks this host. A host gets
+only the steps of the harnesses it lists.
 
 **Codex, on a host that lists it.** The Mac too. Setup checks that the pinned Codex runs and is signed in, then builds engine's own
 Codex home, and never edits `~/.codex`. Starting engine's
@@ -128,11 +121,11 @@ then run `engine setup --host devbox`.
    `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
    prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
    "Names and addresses"), which goes in `hosts.toml` on the Mac.
-4. **Install the tools** `go`, `tmux`, `gh` and `git` on the devbox,
-   `claude` if it runs Claude, and `sqlite3` if it runs Codex.
-   `engine setup` lists what is missing and prints the `PATH` line for
-   `~/.bashrc`, and the `sudo systemctl mask` line that stops the devbox
-   suspending. Sign in once over SSH: `ssh -t <address> claude /login`.
+4. **Install the tools** `go`, `tmux`, `gh` and `git` on the devbox, plus
+   `claude` if it runs Claude and `sqlite3` if it runs Codex. `engine setup`
+   lists what is missing, and prints the `PATH` line and the `sudo systemctl
+   mask` line that stops the devbox suspending. Sign in once over SSH:
+   `ssh -t <address> claude /login`.
 
 ## Each target repo
 

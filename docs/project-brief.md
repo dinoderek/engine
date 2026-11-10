@@ -22,13 +22,10 @@ asks.
 
 ## State
 
-Built: the control server and its CLI with the one coordinator it runs
-(dispatch, recovery and merges across hosts), `engine version`, `engine start --check` (the
-preflight session), `engine host`, `engine ps`, `engine attach`, `engine tell`,
-`engine lint`, `engine run`, `engine ui` (a read-only local dashboard), the
-host config reader (`internal/hosts`), the `build` and `engine` skills and
-their merge guard (a plugin this repo publishes), and the repo's own tooling:
-`./dev` and its quality gates.
+Built: the control server with its one coordinator (dispatch, recovery and
+merges across hosts), the `engine` CLI, the host config reader, a read-only
+local dashboard, the `build` and `engine` skills with their merge guard (a
+plugin this repo publishes), and the repo's own `./dev` quality gates.
 engine is the first worked example of the project context guideline's core.
 
 ## Scope
