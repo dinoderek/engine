@@ -15,7 +15,7 @@ type Client interface {
 	Spawn(r hostops.SpawnRequest) (hostops.Spawned, error)
 	Status() (hostops.Status, error)
 	Collect(runID string) (hostops.Collected, error)
-	Release(name string, failed bool) (hostops.Released, error)
+	Release(name string, outcome hostops.Outcome) (hostops.Released, error)
 	// Check runs the preflight check of the harness (the default when empty) on
 	// the host, prints its report to out, and reports whether an unattended
 	// session there would run without a prompt.
@@ -39,8 +39,8 @@ func (l Local) Collect(runID string) (hostops.Collected, error) {
 	return hostops.Collect(l.Deps, runID)
 }
 
-func (l Local) Release(name string, failed bool) (hostops.Released, error) {
-	return hostops.Release(l.Deps, name, failed)
+func (l Local) Release(name string, outcome hostops.Outcome) (hostops.Released, error) {
+	return hostops.Release(l.Deps, name, outcome)
 }
 
 func (l Local) Check(harness string, out io.Writer) (bool, error) {

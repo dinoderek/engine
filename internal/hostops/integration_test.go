@@ -138,7 +138,7 @@ func TestRealSpawnStatusRelease(t *testing.T) {
 
 	strayWindowsTakeNoSlot(t, d, tm, h.dir, 1)
 
-	done, err := Release(d, "r-7", false)
+	done, err := Release(d, "r-7", RunEnded)
 	if err != nil || !done.WindowClosed || done.WorktreeKept {
 		t.Errorf("released r-7: %+v, %v", done, err)
 	}
@@ -146,7 +146,7 @@ func TestRealSpawnStatusRelease(t *testing.T) {
 		t.Errorf("r-7's worktree is still there: %v", err)
 	}
 	mustGit(t, synced.Clone, "rev-parse", "--verify", "--quiet", "refs/heads/task/r-7") // the branch stays
-	failed, err := Release(d, "r-8", true)
+	failed, err := Release(d, "r-8", RunFailed)
 	if err != nil || !failed.WindowClosed || !failed.WorktreeKept {
 		t.Errorf("released r-8: %+v, %v", failed, err)
 	}

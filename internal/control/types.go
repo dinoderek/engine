@@ -82,6 +82,8 @@ type Update struct {
 	Snapshot *Item  `json:"snapshot,omitempty"`
 	// Merge is a merge request's details; only merge-request updates carry it.
 	Merge *MergeRequest `json:"merge,omitempty"`
+	// Left is what a cleaned update says the session could not remove.
+	Left string `json:"left,omitempty"`
 }
 
 // QueueEntry is a task's place in its repository's merge queue, from its

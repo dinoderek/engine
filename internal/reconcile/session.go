@@ -20,9 +20,12 @@ const (
 	// stops soon after a denial it has no route around, and the coordinator
 	// sees the wait on a later pass.
 	DenialLead = 10 * time.Minute
-	// ReportWindow is how long a merged task's session keeps its window,
-	// while waiting, to report before it is released.
-	ReportWindow = 10 * time.Minute
+	// CleanupWait is how long after its merge an idle session that has not
+	// reported its cleanup keeps its window before it is released.
+	CleanupWait = 15 * time.Minute
+	// CleanupCap is how long after its merge a session still in a turn,
+	// with no cleanup reported, runs before the operator is told.
+	CleanupCap = 30 * time.Minute
 )
 
 // Session is the newest run of a task, or of a plan's planner, on any host.
@@ -73,6 +76,10 @@ type Session struct {
 	// says that harness is signed out there.
 	Harness   string
 	SignedOut bool
+	// Worktree and Branch are the attempt's run's, when its host lists that
+	// run.
+	Worktree string
+	Branch   string
 }
 
 // Flagged reports whether at, the session's start or the start of its

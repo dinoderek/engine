@@ -68,6 +68,9 @@ type Repos struct {
 	// carry a deadline (RunCommandWithin), since that `dev` is arbitrary code.
 	// Nil uses Run.
 	Probe RunFunc
+	// Teardown runs a repo's own `dev worktree release`. It should carry a
+	// deadline (TeardownLimit). Nil uses Run.
+	Teardown RunFunc
 }
 
 // Path is where the clone of repo lives.

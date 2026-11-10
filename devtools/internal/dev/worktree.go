@@ -1,7 +1,10 @@
 package dev
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -10,7 +13,8 @@ import (
 // Worktrees live outside the checkout, in <checkout>-worktrees/ beside the
 // main checkout. Release removes the worktree, then deletes the branch when
 // git sees it as merged or its PR is merged; it deletes the remote branch
-// only when a PR merged the tip and the remote is still at it.
+// only when a PR merged the tip and the remote is still at it. Release is
+// idempotent: with no worktree on the branch it changes nothing and exits 0.
 func (t Tool) Worktree(args []string) int {
 	if len(args) != 2 || (args[0] != "create" && args[0] != "release") {
 		fmt.Fprintln(t.Stderr, "usage: ./dev worktree create|release <branch>")
@@ -111,9 +115,18 @@ func (t Tool) releaseWorktree(main, branch string) error {
 	}
 	switch dir {
 	case "":
-		return fmt.Errorf("no worktree has branch %s checked out", branch)
+		fmt.Fprintf(t.Stdout, "no worktree has branch %s checked out; nothing to release\n", branch)
+		return nil
 	case main:
 		return fmt.Errorf("%s is the main checkout; release only removes task worktrees", dir)
+	}
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+		// Its folder is already gone: forget the worktree instead.
+		if _, err := t.git(main, "worktree", "prune"); err != nil {
+			return err
+		}
+		fmt.Fprintf(t.Stdout, "pruned worktree %s, already gone\n", dir)
+		return t.deleteBranch(main, branch)
 	}
 	if _, err := t.git(main, "worktree", "remove", dir); err != nil {
 		return fmt.Errorf("worktree kept (commit or discard its changes first): %w", err)

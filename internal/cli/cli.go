@@ -130,6 +130,6 @@ func runHost(args []string, env Env) int {
 
 // hostDeps is what this host's ops run with.
 func hostDeps(env Env) hostops.Deps {
-	return hostops.Deps{Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now, JoinRemote: true,
+	return hostops.Deps{Run: env.Run, Probe: session.RunCommandWithin(session.ProbeLimit), Teardown: session.RunCommandWithin(session.TeardownLimit), Exec: env.Local, Tmux: env.Tmux, Home: env.Home, Getenv: env.Getenv, Now: env.Now, JoinRemote: true,
 		Harnesses: adapters(env)}
 }

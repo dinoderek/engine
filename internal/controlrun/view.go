@@ -54,6 +54,9 @@ func record(st control.State, item control.Item) reconcile.Item {
 	if req, ok := control.PendingMerge(&st, item.ID); ok {
 		t.Merge = &req
 	}
+	if u, ok := control.CleanedUp(&st, item.ID); ok {
+		t.Cleaned = &u
+	}
 	return t
 }
 
@@ -93,6 +96,11 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 		if h.Unreachable != "" || h.Status.RunsError != "" {
 			s.Unknown = true
 			return s
+		}
+		for _, r := range h.Status.Runs {
+			if r.Name == s.Name && r.Record.RunID == at.RunID {
+				s.Worktree, s.Branch = r.Record.Worktree, r.Record.Branch
+			}
 		}
 		if w, ok := matchWindow(at, h.Status, s.Name); ok {
 			s.Live = w.Alive

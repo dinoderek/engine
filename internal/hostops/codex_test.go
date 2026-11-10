@@ -106,7 +106,7 @@ func TestReleaseDeletesTheCodexProfile(t *testing.T) {
 	profile := filepath.Join(h.dir, ".codex", "engine-r-7.config.toml")
 	write(t, profile, "x\n", 0o600)
 	tm := &tmuxFake{windows: []string{"@5 %5 0 r-7"}}
-	r, err := Release(Deps{Tmux: tm.tmux(), Home: h.dir}, "r-7", true)
+	r, err := Release(Deps{Tmux: tm.tmux(), Home: h.dir}, "r-7", RunFailed)
 	if err != nil || !r.WindowClosed || r.Note != "" {
 		t.Errorf("released %+v, %v", r, err)
 	}
@@ -114,7 +114,7 @@ func TestReleaseDeletesTheCodexProfile(t *testing.T) {
 		t.Errorf("profile left: %v", err)
 	}
 	// With none to delete, release says nothing of it.
-	if r, err := Release(Deps{Tmux: tm.tmux(), Home: h.dir}, "r-8", false); err != nil || r.Note != "" {
+	if r, err := Release(Deps{Tmux: tm.tmux(), Home: h.dir}, "r-8", RunEnded); err != nil || r.Note != "" {
 		t.Errorf("released %+v, %v", r, err)
 	}
 }
@@ -123,7 +123,7 @@ func TestReleaseNotesAProfileItCannotDelete(t *testing.T) {
 	h := newHome(t, "mac")
 	// A directory with something in it is a profile os.Remove refuses.
 	write(t, filepath.Join(h.dir, ".codex", "engine-r-7.config.toml", "x"), "x\n", 0o600)
-	r, err := Release(Deps{Tmux: (&tmuxFake{windows: []string{"@1 %1 0 other"}}).tmux(), Home: h.dir}, "r-7", false)
+	r, err := Release(Deps{Tmux: (&tmuxFake{windows: []string{"@1 %1 0 other"}}).tmux(), Home: h.dir}, "r-7", RunEnded)
 	if err != nil || !strings.Contains(r.Note, "engine-r-7.config.toml") {
 		t.Errorf("released %+v, %v", r, err)
 	}

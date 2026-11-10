@@ -2,6 +2,7 @@
 package controlcmd
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"flag"
@@ -41,6 +42,7 @@ const Usage = "engine serve\n" +
 	"engine lint <plan-id>\n" +
 	"engine task complete-external <task-id> --version <n> --pr <url>\n" +
 	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
+	"engine task cleaned <task-id> [--left <text>]\n" +
 	"engine ps\nengine run <plan-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
@@ -156,6 +158,8 @@ func Parse(args []string, e Env) (control.Request, error) {
 	fs.StringVar(&merge.Head, "head", "", "")
 	fs.StringVar(&merge.Method, "method", "", "")
 	fs.StringVar(&merge.Verdict, "verdict", "", "")
+	left := ""
+	fs.StringVar(&left, "left", "", "")
 	depends, requires := "", ""
 	fs.StringVar(&depends, "depends", "", "")
 	fs.StringVar(&requires, "requires", "", "")
@@ -171,6 +175,10 @@ func Parse(args []string, e Env) (control.Request, error) {
 		merge.PR, r.Item.PR = r.Item.PR, ""
 		r.Merge = &merge
 	}
+	if left != "" && r.Op != "cleaned" {
+		return r, fmt.Errorf("--left is only for task cleaned")
+	}
+	r.Body = cmp.Or(left, r.Body)
 	r.Item.Depends = words(depends)
 	r.Item.Requires = words(requires)
 	if bodyFile != "" {
@@ -240,6 +248,11 @@ func operation(args []string) (control.Request, []string, error) {
 				return r, nil, fmt.Errorf("merge-ready requires a task")
 			}
 			r.Op = "merge-request"
+		case "cleaned":
+			if head != "task" {
+				return r, nil, fmt.Errorf("cleaned requires a task")
+			}
+			r.Op = op
 		case "approve", "stop":
 			if head != "plan" {
 				return r, nil, fmt.Errorf("%s requires a plan", op)

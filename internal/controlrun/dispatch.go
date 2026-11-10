@@ -111,7 +111,7 @@ func (c *Coordinator) releaseEnded(st control.State, item control.Item, at contr
 			return
 		}
 	}
-	if _, err := client.Release(name, false); err != nil {
+	if _, err := client.Release(name, hostops.RunEnded); err != nil {
 		c.log("release the ended session %s on %s: %v", name, at.Host, err)
 	}
 }

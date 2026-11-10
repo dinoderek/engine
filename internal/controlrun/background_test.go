@@ -30,7 +30,7 @@ func TestASessionBusyOnlyInABackgroundJobIsWokenAndReleased(t *testing.T) {
 	if len(texts) != 1 {
 		t.Fatalf("woke %d times for one merge", len(texts))
 	}
-	later := c.Service.Now().Add(reconcile.ReportWindow)
+	later := c.Service.Now().Add(reconcile.CleanupWait)
 	c.Service.Now = func() time.Time { return later }
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
@@ -50,7 +50,7 @@ func TestASessionBusyInATurnIsLeftAlone(t *testing.T) {
 	woke := 0
 	c.Wake = func(reconcile.Session, string) error { woke++; return nil }
 	pass(t, c)
-	later := c.Service.Now().Add(reconcile.ReportWindow + reconcile.StallWait)
+	later := c.Service.Now().Add(reconcile.CleanupWait + reconcile.StallWait)
 	c.Service.Now = func() time.Time { return later }
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()

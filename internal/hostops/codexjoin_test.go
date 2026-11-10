@@ -354,7 +354,7 @@ func TestCodexJoinedTrustIsRemoved(t *testing.T) {
 		t.Fatal("the spawn trusted nothing")
 	}
 	tm.windows = []string{"@9 %9 0 r-7"}
-	if r, err := Release(Deps{Run: (&gitFake{}).run, Tmux: tm.tmux(), Home: h.dir}, "r-7", true); err != nil || r.Note != "" {
+	if r, err := Release(Deps{Run: (&gitFake{}).run, Tmux: tm.tmux(), Home: h.dir}, "r-7", RunFailed); err != nil || r.Note != "" {
 		t.Errorf("released %+v, %v", r, err)
 	}
 	if got, _ := os.ReadFile(config); string(got) != before {

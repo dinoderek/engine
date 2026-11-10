@@ -20,7 +20,7 @@ func TestLocalRunsTheOps(t *testing.T) {
 		"spawn":     func() error { _, err := l.Spawn(hostops.SpawnRequest{Repo: "o/r"}); return err },
 		"status":    func() error { _, err := l.Status(); return err },
 		"collect":   func() error { _, err := l.Collect("none"); return err },
-		"release":   func() error { _, err := l.Release("-x", false); return err },
+		"release":   func() error { _, err := l.Release("-x", hostops.RunEnded); return err },
 		"check": func() error {
 			ok, err := l.Check("", &bytes.Buffer{})
 			if ok {
