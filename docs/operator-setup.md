@@ -41,16 +41,13 @@ with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
 plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
 `claude plugin install engine@engine --scope user`, and for Codex
 `codex plugin marketplace add dinoderek/engine` and `codex plugin add
-engine@engine`. Sign in to Claude Code
+engine@engine` (setup repeats this for the Codex copy). Sign in to Claude Code
 with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex (`codex login`). Setup copies the Mac's
 engine commit and Claude plugin version to the other hosts, so update both here
-first. Setup installs the Codex plugin only into engine's own Codex home, and
-embedded sessions that cannot join engine's daemon use the host's own: install
-it there by hand on each Codex host,
-with `codex plugin marketplace add dinoderek/engine` and `codex plugin add
-engine@engine`. Setup prints these when the plugin is missing there. In a
-Codex session engine did not launch, Codex runs the plugin's hooks only once
+first. Setup installs the Codex plugin into both Codex homes, engine's own
+and yours (embedded sessions that cannot join engine's daemon use yours),
+through Codex's own `codex plugin` commands. In a Codex session engine did not launch, Codex runs the plugin's hooks only once
 reviewed: review them in the first such session after each install and
 update (`codex plugin marketplace upgrade engine`, then `codex plugin add engine@engine`).
 
@@ -59,8 +56,9 @@ to rerun. It brings the host to the Mac's pushed engine commit, plugin and
 config, and ends with `engine start --check --host <name>`. The engine is built
 with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
 from GitHub. Setup changes only engine's own files (`~/.config/engine/`,
-`~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, and Codex's
-plugin and daemon in engine's own Codex home. For anything else (`~/.bashrc`,
+`~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, Codex's
+plugin in your Codex home (through `codex plugin` only, never another file in
+`~/.codex`), and Codex's plugin and daemon in engine's own Codex home. For anything else (`~/.bashrc`,
 `sudo`, `/login`) it prints one exact command, and it exits 1 while any item is
 open. It refuses a build that is dirty or not on GitHub, and a name that is not
 a machine in `hosts.toml`. With no `--host` it checks this host. A host gets
@@ -146,7 +144,7 @@ Upgrade while `engine ps` shows nothing running: the server restarts.
    engine setup
    ```
 
-   Local setup also brings engine's own Codex home to the user's plugin.
+   Local setup also brings both Codex homes, engine's and yours, to the user's plugin.
 2. **Stop the server** and back it up (`control-server.md`, "Start"). A
    running server keeps the binary it started with, and an older server
    rejects request fields a newer CLI sends.

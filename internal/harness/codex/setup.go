@@ -26,8 +26,9 @@ type setupRun struct {
 
 // Setup is Codex's part of engine setup: the pinned binary, the operator's
 // sign-in, engine's own Codex home with its config, login link and plugin,
-// and engine's remote-control daemon there. The steps act on this host too:
-// they change only engine's Codex home, never the operator's.
+// engine's plugin in the operator's Codex home, and engine's remote-control
+// daemon. The steps act on this host too. They change engine's Codex home,
+// and the operator's only through Codex's own plugin commands.
 func (Adapter) Setup() harness.Setup { return setup{} }
 
 type setup struct{}
@@ -274,68 +275,6 @@ func (r *setupRun) makeLink(source, link string) (piece, error) {
 		return stopped("link the login failed: "+res.Why(), r.t.Rerun()), nil
 	}
 	return piece{}, nil
-}
-
-// engineCodexPlugin is the version of engine's plugin in engine's Codex home,
-// and whether it is installed and enabled.
-func (r *setupRun) engineCodexPlugin() (string, bool, error) {
-	res, err := r.t.Sh(r.inEngine("plugin list --json"), "")
-	if err != nil {
-		return "", false, err
-	}
-	version, found := installedCodexPlugin(res.Out)
-	return version, found, nil
-}
-
-// codexPluginStep installs engine's plugin into engine's Codex home, and
-// checks the operator's for embedded sessions, whose hooks report their state.
-// Setup leaves the operator's home alone: it prints the
-// install for the operator to run.
-func (r *setupRun) codexPluginStep() (harness.Outcome, error) {
-	if r.missing {
-		return r.codexBlocked(), nil
-	}
-	res, err := r.installEnginePlugin()
-	if err != nil || res.State == harness.StepOpen {
-		return res, err
-	}
-	list, err := r.t.Sh(r.run("plugin list --json"), "")
-	if err != nil {
-		return harness.Outcome{}, err
-	}
-	if _, found := installedCodexPlugin(list.Out); found {
-		return res, nil
-	}
-	install := r.run("plugin marketplace add "+harness.PluginRepo) + " && " + r.run("plugin add "+harness.PluginID)
-	return harness.Open("the Codex plugin is not installed in the operator's Codex home, which embedded sessions use when they cannot join engine's daemon", r.t.OnHost(install, false)), nil
-}
-
-// installEnginePlugin installs engine's plugin from this repo's marketplace
-// into engine's Codex home, or brings it to the caller's version.
-func (r *setupRun) installEnginePlugin() (harness.Outcome, error) {
-	have, installed, err := r.engineCodexPlugin()
-	if err != nil || (installed && atLeast(have, r.t.Plugin())) {
-		return harness.Passed(have), err
-	}
-	for _, args := range []string{"plugin marketplace add " + harness.PluginRepo, "plugin marketplace upgrade engine", "plugin add " + harness.PluginID} {
-		res, err := r.t.Sh(r.inEngine(args), "")
-		if err != nil {
-			return harness.Outcome{}, err
-		}
-		if res.Code != 0 {
-			return harness.Open("codex "+args+" failed: "+res.Why(), r.t.OnHost(r.inEngine(args), false)), nil
-		}
-	}
-	after, found, err := r.engineCodexPlugin()
-	switch {
-	case err != nil:
-		return harness.Outcome{}, err
-	case !found:
-		return harness.Open(harness.PluginID+" is not enabled in engine's Codex home after the install", r.t.Rerun()), nil
-	case !atLeast(after, r.t.Plugin()):
-		return harness.Open(fmt.Sprintf("the marketplace gives Codex plugin %s there, older than this host's %s; merge the plugin change first", after, r.t.Plugin()), r.t.Rerun()), nil
-	}
-	return harness.Changed(fmt.Sprintf("%s, was %s", after, harness.OrNone(have))), nil
 }
 
 // remoteOnCommand prints on when a process runs from the Codex home's packages

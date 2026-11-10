@@ -128,16 +128,20 @@ func TestACodexStepThatFailsStaysOpen(t *testing.T) {
 			func(c *codexState) { c.authLink, c.userAuth = "", false }},
 		{"engine's home rejects the login", "9. codex home: OPEN (engine's Codex home is not signed in)", "", "login'",
 			func(c *codexState) { c.loginBroken = true }},
-		{"the operator's home lacks the plugin", "10. codex plugin: OPEN", "not installed in the operator's Codex home, which embedded sessions use when they cannot join engine's daemon",
-			"ssh dev@box '" + boxCodex + " plugin marketplace add dinoderek/engine && " + boxCodex + " plugin add engine@engine'",
-			func(c *codexState) { c.userPlugin = "" }},
-		{"the marketplace is unreachable", "10. codex plugin: OPEN", "codex plugin marketplace add dinoderek/engine failed: marketplace unreachable",
+		{"the marketplace is unreachable", "10. codex plugin: OPEN", "codex plugin marketplace add dinoderek/engine failed in engine's Codex home: marketplace unreachable",
 			"ssh dev@box 'CODEX_HOME=" + boxEngineH + " " + boxCodex + " plugin marketplace add dinoderek/engine'",
 			func(c *codexState) { c.plugin, c.marketFail = "", true }},
 		{"the plugin is not enabled after the install", "10. codex plugin: OPEN", "is not enabled in engine's Codex home after the install", "engine setup --host box",
 			func(c *codexState) { c.plugin, c.leavesNothing = "", true }},
-		{"the marketplace is older than the caller", "10. codex plugin: OPEN", "gives Codex plugin 0.6.0 there, older than this host's 0.7.1", "engine setup --host box",
+		{"the marketplace is older than the caller", "10. codex plugin: OPEN", "gives Codex plugin 0.6.0 in engine's Codex home, older than this host's 0.7.1", "engine setup --host box",
 			func(c *codexState) { c.plugin, c.pluginLeaves = "0.2.0", "0.6.0" }},
+		{"the operator's marketplace is unreachable", "10. codex plugin: OPEN", "codex plugin marketplace add dinoderek/engine failed in the operator's Codex home: marketplace unreachable",
+			"ssh dev@box '" + boxCodex + " plugin marketplace add dinoderek/engine'",
+			func(c *codexState) { c.userPlugin, c.userMarketFail = "", true }},
+		{"the operator's copy is not enabled after the install", "10. codex plugin: OPEN", "is not enabled in the operator's Codex home after the install", "engine setup --host box",
+			func(c *codexState) { c.userPlugin, c.leavesNothing = "", true }},
+		{"the marketplace leaves the operator's copy older than the caller", "10. codex plugin: OPEN", "gives Codex plugin 0.6.0 in the operator's Codex home, older than this host's 0.7.1", "engine setup --host box",
+			func(c *codexState) { c.userPlugin, c.pluginLeaves = "0.2.0", "0.6.0" }},
 		{"the daemon cannot start", "11. codex daemon: OPEN", "engine's daemon is not running after the start: remote control failed",
 			"ssh dev@box 'unset ENGINE_RUN_DIR",
 			func(c *codexState) { c.daemonUp, c.rcOn, c.startFail = false, false, true }},
@@ -252,6 +256,56 @@ func TestWithoutAnOperatorDaemonNothingIsRead(t *testing.T) {
 	}
 }
 
+// Setup installs the operator's own copy of the plugin, and the only commands
+// it runs there are Codex's plugin commands.
+func TestCodexInstallsAndUpdatesTheOperatorsPlugin(t *testing.T) {
+	operatorInstall := []string{"operator: plugin marketplace add dinoderek/engine", "operator: plugin marketplace upgrade engine", "operator: plugin add engine@engine"}
+	for _, c := range []struct {
+		name, have, want string
+		changed          bool
+	}{
+		{"absent", "", "10. codex plugin: changed (the operator's home 0.7.1, was none)", true},
+		{"older than the caller", "0.2.0", "10. codex plugin: changed (the operator's home 0.7.1, was 0.2.0)", true},
+		{"up to date", callerPlugin, "10. codex plugin: ok (0.7.1)", false},
+		{"newer than the caller", "0.9.0", "10. codex plugin: ok (0.7.1)", false},
+	} {
+		codex := settledCodex(boxHome)
+		codex.userPlugin = c.have
+		r := newCodexRig(t, codex)
+		if !mustRun(t, r) || !strings.Contains(r.out.String(), c.want) {
+			t.Errorf("%s: want %q:\n%s", c.name, c.want, r.out.String())
+		}
+		if got := strings.Join(r.box.mutations, ","); c.changed != (got == strings.Join(operatorInstall, ",")) || (!c.changed && got != "") {
+			t.Errorf("%s: ran %q", c.name, r.box.mutations)
+		}
+		for _, cmd := range r.box.commands {
+			if strings.Contains(cmd, " plugin ") && strings.Contains(cmd, "CODEX_HOME") && !strings.HasPrefix(cmd, "CODEX_HOME="+boxEngineH+" ") {
+				t.Errorf("%s: a plugin command points at another Codex home: %q", c.name, cmd)
+			}
+		}
+	}
+}
+
+// Both copies are reported when both change; only Codex's own commands touch
+// ~/.codex.
+func TestCodexInstallsBothCopiesAndTouchesTheOperatorsHomeOnlyThroughCodex(t *testing.T) {
+	codex := freshCodex(boxHome)
+	codex.userPlugin = ""
+	r := newCodexRig(t, codex)
+	if !mustRun(t, r) || !strings.Contains(r.out.String(), "10. codex plugin: changed (0.7.1, was none; the operator's home 0.7.1, was none)") {
+		t.Fatalf("both copies:\n%s", r.out.String())
+	}
+	for _, cmd := range r.box.mutations {
+		// The login link only reads the operator's auth.json.
+		if strings.Contains(cmd, boxHome+"/.codex") && !strings.HasPrefix(cmd, "umask 077 && mkdir -p "+boxEngineH+" && ln -sfn ") {
+			t.Errorf("a change names the operator's home directly: %q", cmd)
+		}
+	}
+	if codex.userPlugin != callerPlugin {
+		t.Errorf("operator's plugin %q", codex.userPlugin)
+	}
+}
+
 func TestACodexHostCheckingItselfAlsoActs(t *testing.T) {
 	codex := freshCodex("/Users/me")
 	codex.plugin = ""
@@ -275,6 +329,21 @@ func TestACodexHostCheckingItselfAlsoActs(t *testing.T) {
 	codex.plugin = "0.1.0"
 	if !mustRun(t, r) || !strings.Contains(r.out.String(), "9. codex plugin: ok (0.1.0)") {
 		t.Errorf("a local host holds any installed version:\n%s", r.out.String())
+	}
+	// With the user's plugin as the wanted version, an older operator copy is
+	// updated; with none wanted, an absent copy is installed.
+	r.tgt.Version, codex.userPlugin = "0.7.1", "0.1.0"
+	if !mustRun(t, r) || !strings.Contains(r.out.String(), "9. codex plugin: changed") || codex.userPlugin != callerPlugin || codex.plugin != callerPlugin {
+		t.Errorf("a local host brings both copies to the user's plugin:\n%s", r.out.String())
+	}
+	r.tgt.Version, codex.userPlugin = "", ""
+	if !mustRun(t, r) || codex.userPlugin != callerPlugin {
+		t.Errorf("an absent operator copy is installed with no wanted version:\n%s", r.out.String())
+	}
+	codex.userPlugin = "0.1.0"
+	before := len(r.box.mutations)
+	if !mustRun(t, r) || len(r.box.mutations) != before || codex.userPlugin != "0.1.0" {
+		t.Errorf("a present operator copy is left alone with no wanted version:\n%s", r.out.String())
 	}
 	acting := 0
 	for _, s := range New(harness.Env{}, Options{}).Setup().Steps(r.tgt) {
