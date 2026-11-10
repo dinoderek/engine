@@ -12,7 +12,8 @@ The host reads it, and the coordinator reads it through the `collect` and
 with the caller's identity, the session name, tmux target, branch, worktree,
 pane log path and spawn time; `Record` in `internal/session/record.go` holds
 the field names. Run IDs are `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, using
-launch time. A preflight check's directory, `check-<time>`, has no `run.json`.
+launch time. A preflight check's directory, `check-<time>`, stays, with no
+`run.json`.
 A hook that finds no `ENGINE_RUN_DIR` scans these directories for the
 `run.json` whose worktree holds the event's `cwd`.
 
@@ -26,5 +27,6 @@ newest quota reading a harness's hooks record. Each adapter may keep its own
 files there too, named in its package under `internal/harness/`.
 
 The coordinator logs each resume attempt with the task, timestamp and
-`resumed-for=<resets_at>`; for recovery semantics, load `coordinator.md`,
+`resumed-for=<resets_at>`, and its notes retain the attempt and limit-alert
+times per reset and session. For recovery semantics, load `coordinator.md`,
 "Limit recovery".

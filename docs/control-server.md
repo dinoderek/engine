@@ -59,8 +59,9 @@ nothing; it reads one snapshot, including outside dependencies.
 `engine task complete-external <task-id> --version <n> --pr <url>` records
 work finished outside engine on a plan's task. It is operator-only, for an
 inactive task in todo or failed with no unresolved question. It takes a PR URL
-in the task's repository and does not verify the merge. It records done and the PR in versioned history, keeps
-dependencies and prior attempts, and needs no attempt. Ordinary state
+in the task's repository and does not verify the merge. It records done and
+the PR in versioned history, keeps dependencies and prior attempts, and needs
+no attempt. Ordinary state
 transitions still require an execution for running and in-review.
 
 ## API and storage
@@ -134,6 +135,8 @@ or vanished attempt, ordered by item number. The row fields in
 run files, item bodies and full update bodies never join them.
 
 - `role` is `planner` for a plan and `executor` for a task.
+- `last_seen` is when a host last reported the window live; it survives
+  `unknown` and `exited` observations.
 - `observed` is the harness's `working`, `waiting` or `limited`; `live` for an
   open window without a harness state; `exited` once a reachable host shows the
   window closed or gone; otherwise `unknown`. An exited attempt stays listed

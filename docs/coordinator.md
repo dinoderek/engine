@@ -27,8 +27,9 @@ retries each pass, noticing once per attempt.
 
 The host serializes dispatches by run ID and returns an existing run on
 replay. It uses the host's Git credentials and identity, with isolated clones
-under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin into an owner-only run file whose
-path the window command exports; hooks recover their connection from the
+under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin
+into an owner-only run file whose path the window command exports; hooks
+recover their connection from the
 worktree's server-session record. Credential files are never collected.
 
 A window gone from a host that answered ends its attempt `vanished` if the
@@ -80,7 +81,9 @@ and kickoff; the host reads `hosts.toml` only for its launch line, harness
 binary and slots. The coordinator calls its own host's ops in-process and
 another machine's over `ssh` (`internal/remote/ssh.go`), and refuses to run
 unless `~/.config/engine/host` names a machine in `hosts.toml`
-(`hosts-and-sessions.md`).
+(`hosts-and-sessions.md`). An SSH host needs key-based SSH, `engine`, `tmux`,
+`gh` and the harness CLIs signed in; the coordinator and sessions use the
+host's own `gh` and Git configuration (`operator-setup.md`).
 
 | Op | Does |
 | --- | --- |
