@@ -7,8 +7,7 @@
 Two programs share one Go module:
 
 - **`engine`**, the product: `cmd/engine` → `internal/cli` → one package per
-  command. `internal/cli` only parses arguments and dispatches. The server
-  side: `internal/control` holds records, transactions and HTTP;
+  command. The server side: `internal/control` holds records, transactions and HTTP;
   `internal/reconcile` decides each pass from a View of records and host
   observations; `internal/controlrun` builds the View and applies the
   actions. Hosts are reached through `internal/remote`, whose peer
@@ -44,5 +43,5 @@ non-test imports. The reasons:
   For server records and API, load `control-server.md`; for dispatch, merges,
   host reach and session signals, load `coordinator.md`.
 - **The reconcile core reads only its View**, with no CLI assumptions.
-- **Tooling is Go too.** A lane is one external command or a `dev check`
-  subcommand, tested like product code.
+- **Tooling is Go too:** a lane is one external command or a tested
+  `dev check` subcommand.

@@ -25,12 +25,7 @@ their rules.
 Prepare is the only time you are consulted, so every open question is
 answered there or left to the agent. It also settles any target repo rule
 that would stop a hands-off run, such as approving merges: you change the
-rule or override it for the feature. A plan's approval covers its tasks. For
-watching a run, load `operator-setup.md`, "Watching a run".
-
-Cards and roles name a tier (`deep`, `standard`, `light`), never a model;
-host config maps each tier to a model and effort per harness
-(`hosts-and-sessions.md`).
+rule or override it for the feature. For watching a run, load `operator-setup.md`, "Watching a run".
 
 ## Rulings and hard stops
 

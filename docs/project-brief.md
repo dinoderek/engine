@@ -21,8 +21,7 @@ session through to a merged PR.
 ## State
 
 Built: every part above, with a read-only local dashboard, plus the repo's
-own `./dev` gates. engine is the first worked example of the project context
-guideline's core.
+own `./dev` gates.
 
 ## Scope
 

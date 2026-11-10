@@ -11,14 +11,14 @@ paths' lanes.
 Every `required` lane in `scripts/lanes.tsv` must be green before a PR. CI
 runs `./dev test` on every pull request and every push to `main`, and uploads
 `.test-ai-results/` as the `test-ai-results` artifact; no lane is local-only.
-CI installs the tools whose tests skip without them (`tmux`, `node`) and
-requires a Chromium browser.
+CI installs the tools whose tests skip without them and requires a Chromium
+browser.
 
 ## What each lane enforces
 
 | Lane | Enforces | Configured in |
 | --- | --- | --- |
-| `format` | `gofmt` layout, using the pinned toolchain's gofmt | — |
+| `format` | `gofmt` layout, with the pinned toolchain | — |
 | `vet` | `go vet` | — |
 | `lint` | golangci-lint's standard linters plus the per-function targets below | `.golangci.yml`, `scripts/lint-baseline.tsv` |
 | `unit` | the whole test suite passes under the race detector | — |

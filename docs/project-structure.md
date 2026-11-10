@@ -7,7 +7,6 @@
 | Path | Holds |
 | --- | --- |
 | `cmd/engine/`, `internal/` | the entrypoint and product packages, one per component or command (`internal/cli` dispatches) |
-| `internal/hostops/`, `internal/remote/` | a host's own ops (`engine host <op> --json`), and their client: `Local` in-process, `SSH` to another machine |
 | `internal/harness/` | the `Adapter` interface and one package per harness; `registry/` is the only importer of an adapter; `harnesstest/` holds the adapter contract and a fake |
 | `devtools/cmd/dev/`, `devtools/internal/`, `dev` | `./dev`: the main package; the verbs, lane runner, lane checks, baselines and helpers; the shell entrypoint |
 | `scripts/` | registries: lanes, import rules, doc budgets and baselines |
@@ -15,14 +14,12 @@
 | `plugins/engine/` | the plugin: skills, Claude hooks in `plugins/engine/hooks/hooks.json`, Codex manifest and hooks in `plugins/engine/.codex-plugin/plugin.json` |
 | `.claude-plugin/`, `.agents/plugins/` | the Claude and Codex marketplaces that publish `plugins/` |
 
-`.dev/` and `.test-ai-results/` are gitignored outputs.
-
 ## Where new things go
 
 - **A product feature:** a new package under `internal/<name>/`, wired into
   `internal/cli`, with its row in `scripts/import-rules.tsv`. A command's
   logic never lives in `internal/cli`.
-- **Tests:** a `_test.go` beside the code; fixtures in `testdata/`.
+- **Tests:** a `_test.go` in the same package; fixtures in `testdata/`.
 - **A gate lane:** a row in `scripts/lanes.tsv`. If no single command does
   the job, add a `dev check` subcommand in `devtools/internal/checks`, then a
   row in the lane table of `quality-gates.md`.

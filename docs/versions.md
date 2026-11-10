@@ -11,13 +11,13 @@
 | Go modules | `go.mod` and `go.sum` | Dependabot, weekly |
 | GitHub Actions | a commit SHA plus a `# vX.Y.Z` comment in `.github/workflows/` | Dependabot, weekly |
 
-Nothing else names a version: `./dev` exports `GOTOOLCHAIN` from the
-`toolchain` line, CI's setup-go reads it, and docs cite `go.mod`.
+Nothing else names a version: `./dev` and CI's setup-go read the `toolchain`
+line, and docs cite `go.mod`.
 
 ## The versions lane
 
 `./dev test versions` fails when the `go` or `toolchain` line is missing,
-the two name different minors, or put the toolchain below the language version; when
+the two name different minors, or the toolchain is older than the language version; when
 the gates run on another Go; when a workflow sets its own Go version, uses
 setup-go without `go-version-file: go.mod`, or pins an action by tag instead
 of a commit SHA with a version comment; when `.golangci.yml` sets a Go version; when a plugin's Claude
@@ -37,9 +37,9 @@ restates a Go version.
   update, say in the PR what the release notes change for engine. Fix lint
   findings a tool bump adds in the same PR. To decline a version, add an
   `ignore` entry to `.github/dependabot.yml` with the reason as a comment.
-- **Vulnerabilities.** `./dev deps` reports newer Go and modules and runs
-  govulncheck, failing only on a vulnerability; fix it by upgrading the
-  module that carries it, in its own PR.
+- **Vulnerabilities.** `./dev deps` reports newer Go, modules and tools and
+  fails only on a govulncheck finding; fix it by upgrading the module that
+  carries it, in its own PR.
 
 A runtime library a tool also requires, such as the TOML library, takes the
 higher of the two versions, so a tool bump can move it: check its release
