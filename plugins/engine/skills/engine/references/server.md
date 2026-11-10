@@ -82,8 +82,9 @@ repo's own merge and cleanup steps; the merge guard enforces it.
        for the new head, within the time it names.
      - `merge-refused`: the entry has ended. Act on its reason (a red
        check, a closed PR, checks or a refresh that took too long; a branch
-       rule, a host or `gh` failure to ask the operator about), then
-       request again.
+       rule to ask the operator about), then request again. For a host or
+       `gh` failure the operator is already told: end your turn, and
+       request again once they say it is fixed.
      - `merge-withdrawn`: read why.
   5. To rework the PR, set the task `running`: it leaves the queue. A resumed
      session finds its task still in-review; `engine task show <task>` shows
