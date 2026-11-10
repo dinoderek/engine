@@ -38,18 +38,16 @@ open while gh fails there or, on macOS, keeps its token in the keychain.
 name, one line, as attempts and every surface show it: `hosts-and-sessions.md`, "Hosts") and
 `~/.config/engine/hosts.toml` (the same file on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
-plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
-`claude plugin install engine@engine --scope user`, and for Codex
-`codex plugin marketplace add dinoderek/engine` and `codex plugin add
-engine@engine` (setup installs the Codex copy itself if it is missing). Sign in to Claude Code
+Claude plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
+`claude plugin install engine@engine --scope user`. Sign in to Claude Code
 with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex (`codex login`). Setup copies the Mac's
 engine commit and Claude plugin version to the other hosts, so update both here
-first. Setup installs the Codex plugin into both Codex homes, engine's own
-and yours (embedded sessions that cannot join engine's daemon use yours),
-through Codex's own `codex plugin` commands. In a Codex session engine did not launch, Codex runs the plugin's hooks only once
-reviewed: review them in the first such session after each install and
-update (`codex plugin marketplace upgrade engine`, then `codex plugin add engine@engine`).
+first. Setup installs and updates the Codex plugin itself, in both Codex
+homes, engine's own and yours (embedded sessions that cannot join engine's
+daemon use yours), through Codex's own `codex plugin` commands. In a Codex session engine did not launch, Codex runs the plugin's hooks only once
+reviewed: review them in the first such session after each install or
+update.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
@@ -65,7 +63,7 @@ a machine in `hosts.toml`. With no `--host` it checks this host. A host gets
 only the steps of the harnesses it lists.
 
 **Codex, on a host that lists it.** The Mac too. Setup checks that the pinned Codex runs and is signed in, then builds engine's own
-Codex home, and never edits `~/.codex`. Starting engine's
+Codex home. Starting engine's
 daemon turns on remote control, which opens a connection to OpenAI's service for
 the ChatGPT and Codex apps. Signing in is yours: setup prints `codex login`, or,
 on another host, `ssh -t <address> codex login --device-auth`. After a reboot, rerun setup

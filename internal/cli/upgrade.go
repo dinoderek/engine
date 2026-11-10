@@ -39,14 +39,18 @@ func runUpgrade(args []string, env Env) int {
 }
 
 // upgradeDeps are what the upgrade runs with: env's runners, the server's
-// task list through the operator's client, and the real clock.
+// task list through the operator's client, and env's clock.
 func upgradeDeps(env Env, ctx context.Context) upgrade.Deps {
 	exec := env.SSH
 	if exec == nil {
 		exec = remote.ExecCommand
 	}
+	sleep := env.Sleep
+	if sleep == nil {
+		sleep = time.Sleep
+	}
 	return upgrade.Deps{
-		Home: env.Home, Exec: exec, GH: env.Run, Harnesses: adapters(env), Now: env.Now, Sleep: time.Sleep, Context: ctx,
+		Home: env.Home, Exec: exec, GH: env.Run, Harnesses: adapters(env), Now: env.Now, Sleep: sleep, Context: ctx,
 		Tasks: func() ([]upgrade.Task, error) { return serverTasks(env) },
 	}
 }
