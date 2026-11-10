@@ -8,7 +8,7 @@
 - **Stateless.** Each pass derives everything from the server's records and
   each host's tmux sessions, harness observations and run directories.
 - **One pass** runs every 30 seconds and once at start, reading every host's
-  `status` in parallel (`internal/reconcile`); the session view's observer
+  `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer
   reuses those reads (`control-server.md`, "Session view"). Stopping
   coordination leaves sessions running. Plans move only to `planned` and `done`.
 
@@ -57,9 +57,10 @@ because the server has no GitHub credential, at once when it becomes head or
 requests again, then once per `CheckEvery` (`internal/reconcile/queue.go`). A
 restart adds no call. A merge marks the task done with its PR. A head that is
 behind, conflicting or moved gets `merge-turn`, waking the executor to refresh
-and request again. A red, closed or branch-ruled head ends `merge-refused`.
-Every `merge-refused` tells the operator, with the reason. A PR merged elsewhere
-is done, and the operator told.
+and request again. A closed or branch-ruled head ends `merge-refused` and tells
+the operator; a red head ends `merge-refused` without a notice. Every bounded-wait
+refusal tells the operator, with the reason. A PR merged elsewhere is done, and
+the operator told.
 
 **After the merge**, the `merged` update gives the session a cleanup turn,
 ending in `engine task cleaned`. Idle after that, it is released; `--left`
