@@ -63,8 +63,11 @@ type Env struct {
 	// Run runs git and gh for engine's clones.
 	Run  session.RunFunc
 	Tmux *session.Tmux
-	// SSH runs ssh to reach another host's ops; nil starts real processes.
+	// SSH runs ssh to reach another host's ops, and systemctl for a server
+	// host that records a service manager; nil starts real processes.
 	SSH remote.Exec
+	// Sleep waits for a started server to settle; nil is time.Sleep.
+	Sleep func(time.Duration)
 	// Build is this engine's own build, whose commit engine setup installs on
 	// another host.
 	Build  version.Info

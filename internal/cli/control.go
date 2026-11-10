@@ -9,7 +9,18 @@ import (
 )
 
 func controlEnv(e Env) controlcmd.Env {
-	return controlcmd.Env{In: e.In, Out: e.Out, Err: e.Err, Home: e.Home, Getenv: e.Getenv, Attach: func(args []string) error {
+	var server *controlcmd.ServerDeps
+	if e.SSH != nil || e.Sleep != nil {
+		d := controlcmd.RealServerDeps()
+		if e.SSH != nil {
+			d.Exec = e.SSH
+		}
+		if e.Sleep != nil {
+			d.Sleep = e.Sleep
+		}
+		server = &d
+	}
+	return controlcmd.Env{In: e.In, Out: e.Out, Err: e.Err, Home: e.Home, Getenv: e.Getenv, Server: server, Attach: func(args []string) error {
 		code, err := e.Stream(nil, Streams{In: e.In, Out: e.Out, Err: e.Err}, args[0], args[1:]...)
 		if err != nil {
 			return err

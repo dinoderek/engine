@@ -7,144 +7,104 @@ repo picks the tools for its stack.
 
 ## Core (every repo)
 
-### 1. Entrypoint
+### 1. Entrypoint and loading
 
 - `AGENTS.md` is the single entrypoint; `CLAUDE.md` symlinks to it. **Rules
-  live in the file; links are for depth, never for rules.**
-- At most 1000 words: Non-negotiables (with the repo's extra hard-stop
-  classes), Always load, Load on demand, Docs, Workflow.
-
-### 2. Loading
-
+  live in the file; links are for depth, never for rules.** At most 1000
+  words: Non-negotiables (with the repo's extra hard-stop classes), Always
+  load, Load on demand, Docs, Workflow.
 - **Always load:** brief (what, state, scope, stack), architecture, project
-  structure, testing strategy, quality gates. With `AGENTS.md` the set is
-  capped at about 4000 words by the check.
+  structure, testing strategy, quality gates: capped at about 4000 words with
+  `AGENTS.md`, by the check.
 - **Load on demand:** a trigger table in `AGENTS.md` ("if your task… load…")
-  is the **only** routing: the README points to `AGENTS.md` and keeps no doc
-  table. Every persistent doc appears in it or in always-load, and the check
-  enforces that.
+  is the **only** routing; the README keeps no doc table. Every persistent
+  doc, except the entrypoints (`AGENTS.md`, `README.md`), appears in it or in
+  always-load.
 - **Persistent docs** are every tracked Markdown file outside the ephemeral
-  (`design/`) and exempt directories (such as `.github/`) the docs registry
-  names. The entrypoints need no index row. Tracker references are banned outside
-  the ephemeral directories.
-- **Doc header:** one line, `> **Owns:** … **Not here:** …`, under the title
-  of every persistent doc. It stops duplication and carries no "load when",
-  which would restate the index.
-- **Links inside a doc** say when to follow them. No unconditional "see also".
+  (`design/`) and exempt directories the docs registry names (such as
+  `.github/`). Each opens with one `> **Owns:** … **Not here:** …` line with
+  no load trigger; its links say when to follow them.
 
-### 3. One command per job
+### 2. One command per job
 
-A single script (e.g. `./dev`) has these verbs:
+A single script (e.g. `./dev`) has the verbs `doctor` (fixes "can't run"), `run`, `test [lane | for <paths>]` (`for` runs the required lanes whose trigger
+patterns match the paths), `worktree create | release`, `deploy` and `deps`. A verb with no use is left out, and the usage says so.
+Run with no verb, the script prints that usage and does nothing else (engine
+reads it). Docs cite verbs, not commands.
 
-- `doctor`: sets up the machine, turning "can't run" into a fix;
-- `run`;
-- `test [lane | for <paths>]`: `for` runs the required lanes whose trigger
-  patterns in the lane registry match the paths;
-- `worktree create | release`;
-- `deploy`;
-- `deps`.
+### 3. Worktrees
 
-A verb the repo has no use for, such as `deploy` with nothing to deploy, is
-left out, and the usage says so. Run with no verb, the script prints that
-usage and does nothing else: engine reads it. Docs cite verbs, not commands.
+- Work in a worktree, never the main checkout; never stash (it is shared).
+- `worktree create` branches from the remote's current default branch into a
+  worktree outside the checkout, provisions what the task needs, and checks
+  out a branch that already exists locally as it is. `worktree release` tears it down and is idempotent.
+- Engine runs `dev worktree create <branch>` when the repo's executable `dev`
+  at its root lists `worktree create` in the usage it prints with no verb
+  (within three minutes); otherwise a plain `git worktree add`. When a task
+  is done, it runs `dev worktree release` if the usage lists it, then
+  `git worktree remove` on any worktree left, which keeps the branch.
 
-### 4. Worktrees
-
-- Always work in a worktree, never in the main checkout. One task, one
-  worktree, one branch, one PR.
-- `worktree create` branches from the remote's current default branch and
-  provisions anything the task needs. Given a branch that already exists
-  locally, it checks that branch out as it is. The worktree sits outside the
-  checkout. `worktree release` tears it down and is idempotent: a repeat run
-  exits 0 and changes nothing. Engine runs `dev worktree create <branch>` when
-  the repo's executable `dev` at its root lists `worktree create` in the usage
-  it prints with no verb (within three minutes); otherwise it runs a plain
-  `git worktree add`. When a task is done, it runs `dev worktree release` if
-  the usage lists it, then `git worktree remove` on any worktree left, which
-  keeps the branch.
-- Commit work in progress rather than stashing: the stash is shared across
-  worktrees.
-
-### 5. Quality gates
+### 4. Quality gates
 
 - The lanes are listed in a registry (`lanes.tsv`). `./dev test` runs them in
-  parallel with no fail-fast and writes `.test-ai-results/summary.md`.
-- **CI runs the same command.** A lane CI cannot run, such as one that needs a
-  simulator, runs locally with its evidence in the PR. Merge on green means
-  local gates plus every CI check.
-- **Few operator checkpoints.** A rule that makes an agent involve the
-  operator mid-task (agreeing lanes, approving a merge) blocks a hands-off
-  run; Prepare finds it and the operator changes it or overrides it.
-- Default targets:
-
-| Target | Default |
-| --- | --- |
-| Coverage | 80% lines, 80% branches; a stack with no branch coverage (Go) gates statements. |
-| Per function | cognitive complexity ≤ 25, ≤ 200 lines, nesting ≤ 4, ≤ 5 parameters |
-| Per file | ≤ 500 lines of code or config; docs have word budgets instead |
-| Import direction | No cycles, plus layer rules (`import-rules.tsv`); where the compiler rejects cycles (Go), the lane checks layers only. |
-| Always | Lint, format, types, docs check |
-
+  parallel, with no fail-fast, and writes `.test-ai-results/summary.md`. **CI
+  runs the same command.** A lane CI cannot run runs locally, with its
+  evidence in the PR. Merge on green means local gates plus every CI check.
+- A rule that makes an agent involve the operator mid-task (agreeing lanes,
+  approving a merge) blocks a hands-off run: Prepare finds it, and the
+  operator changes or overrides it.
+- Default targets: coverage 80% of lines and of branches (statements where
+  the stack has no branch coverage, as in Go); per function, cognitive
+  complexity ≤ 25, ≤ 200 lines, nesting ≤ 4, ≤ 5 parameters; per file, ≤ 500
+  lines of code or config (docs have word budgets); no import cycles, plus layer rules (where the compiler rejects
+  cycles, as in Go, the lane checks layers only); lint, format, types and the
+  docs check.
 - Existing violations go in baselines that only shrink: a row the code no
   longer needs fails its lane until lowered or deleted. An inline suppression
-  needs a row. Loosening a target is a hard stop.
+  needs a row; loosening a target is a hard stop.
+- A testing-strategy doc says which layer a claim belongs in; a
+  project-structure doc, where new code goes; one runbook for humans covers
+  hosted operations and release. The import-rules lane enforces module
+  boundaries; prose does not.
 
-### 6. Run, test, deploy
+### 5. Versions and freshness
 
-- `./dev` verbs for agents; one runbook for humans, covering hosted
-  operations and release.
-- A testing-strategy doc that says which layer a claim belongs in.
+Every version has one source file (a lockfile, say) that docs cite, never
+restate. The gates run on exactly that version, locally and in CI, and a
+versions lane fails when anything runs another or the pins drift apart. Dev
+tools are pinned in the stack's own lockfile where it allows, so the
+dependency bot bumps them. `./dev deps` reports outdated packages and audit
+findings; a `versions.md` doc says where each version lives and the upgrade
+policy. Dependabot or Renovate runs weekly, grouped, with a cooldown; patch
+and minor updates merge on green.
 
-### 7. Structure and modularisation
+### 6. Docs discipline
 
-- The project-structure doc says where things live and where new code goes.
-- The import-rules lane enforces module boundaries; prose does not.
-
-### 8. Tech stack
-
-- Summarised in the brief. Every version has one source file (a lockfile,
-  say); docs cite it, never restate it.
-- The gates run on exactly that version, locally and in CI: the gate command
-  takes it from the source file, and the versions lane fails when anything
-  runs another. Dev tools are pinned in the stack's own lockfile where it
-  allows, so the dependency bot bumps them too.
-
-### 9. Docs discipline
-
-- **Budgets:** every persistent doc has a word budget in `doc-budgets.tsv`
-  (its own or the default). A doc over budget is split or trimmed, never given
-  a bigger budget without the operator; adding or widening an exempt,
-  ephemeral or set row loosens the check the same way.
+- **Budgets:** every persistent doc has a word budget in `doc-budgets.tsv`.
+  A doc over budget is split or trimmed, never given a bigger budget without
+  the operator; adding or widening an exempt, ephemeral or set row loosens the
+  check the same way.
 - **One place per fact:** docs cite the registry or code that is the source.
-- **The docs check** verifies budgets, the always-load set (against
-  `AGENTS.md`'s list), links and cited paths (files, never lines), headers,
-  the index, cited gate lanes, and the tracker and ephemeral references of
-  §10. It is written in the repo's own stack.
-
-### 10. Current state only, no chronicle
-
-- Docs describe how things are: no "previously", no dated entries, no
-  changelog. History is in git and the PRs.
-- Plans and task cards live in the engine server, never in the repo. Docs and
-  code never cite an issue, a PR or a task; commit messages and PR bodies may.
-  The docs check greps for issue and PR numbers and URLs and plan file paths.
-- Drafts that must sit in the repo live in one ephemeral directory, exempt
-  from every doc rule and never cited.
-
-### 11. Dependency freshness
-
-- **Point in time:** `./dev deps` reports outdated packages and audit
-  findings. A `versions.md` doc says where each version lives and states the
-  upgrade policy, e.g. never more than one minor version behind.
-- **Continuous:** Dependabot or Renovate, weekly, grouped, with a cooldown. A
-  versions lane fails on drift between pins. Patch and minor updates merge on
-  green, as executor PRs do.
+- **A docs check**, written in the repo's own stack, verifies budgets, the
+  always-load set, links and cited paths (files, never lines), headers, the index, cited gate
+  lanes, and tracker and ephemeral references.
+- **Current state only:** no "previously" or changelog; history is in git and
+  the PRs. Plans and task cards live in the engine server, never in the repo;
+  docs and code never cite an issue, a PR or a task (commit messages and PR
+  bodies may). Drafts live in one ephemeral directory, exempt from every doc
+  rule and never cited.
 
 ## Optional modules
 
-| Module | Adopt when | Mechanism |
-| --- | --- | --- |
-| Product facts | Agents keep re-deciding product behaviour | One stable ID per decision (`<subject>.<slug>`), with kind, status, why, code. Fact tables run as tests. An `open` fact is a hard stop. |
-| Design system | The repo has a UI | A catalog of **which component to reach for**, never its props: the component file and its tests are the spec. The check fails when a component folder is missing from the catalog. Tokens are the only source of colour, spacing and type, and a lint ratchet bans literals. |
-| Isolated environments | The repo has stateful infrastructure (DBs, ports, simulators) | A slot lease per worktree, with derived ports. Commands that need the lease refuse to run without it. |
-| Test-directory READMEs | Test layers have local conventions | Read a directory's README before editing its tests. |
+- **Product facts**, when agents keep re-deciding product behaviour: one
+  stable ID per decision (`<subject>.<slug>`) with kind, status, why and code,
+  run as tests; an `open` fact is a hard stop.
+- **Design system**, when the repo has a UI: a catalog of **which component to
+  reach for**, never its props, and the check fails when a component folder is
+  missing from it; tokens are the only source of colour, spacing and type, and
+  a lint ratchet bans literals.
+- **Isolated environments**, for stateful infrastructure: a slot lease per
+  worktree, with derived ports; commands that need it refuse to run without
+  it.
+- **Test-directory READMEs**, for local test conventions: read one before
+  editing that directory's tests.
