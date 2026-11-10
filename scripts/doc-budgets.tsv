@@ -26,7 +26,7 @@ budget	docs/quality-gates.md	1100
 budget	docs/control-server.md	1500
 budget	docs/coordinator.md	1400
 budget	docs/execution-protocol.md	900
-budget	docs/hosts-and-sessions.md	1400
+budget	docs/hosts-and-sessions.md	1350
 budget	docs/harnesses.md	700
 budget	docs/project-context.md	1400
 # Read at the start of every session: AGENTS.md plus its "Always load" list.

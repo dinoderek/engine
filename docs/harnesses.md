@@ -4,9 +4,8 @@
 
 ## The contract
 
-The core knows a harness only through `internal/harness`'s `Adapter`, by
-the name `hosts.toml` and `run.json` spell. The interface's doc comments are
-the contract; what each answer drives:
+The core knows a harness only through `internal/harness`'s `Adapter`; its
+doc comments are the contract. What each answer drives:
 
 | An adapter provides | The core |
 | --- | --- |
@@ -32,9 +31,8 @@ lane's flags in `scripts/lanes.tsv`. No other package names it.
 
 ## Launch lines and tiers
 
-They live only in the operator's `hosts.toml`. A host lists each harness in
-`harnesses` and pins its `bin`. `{model}` and `{effort}` come from the
-task's tier; `{name}` is `<repo>-<task>`.
+They live only in the operator's `hosts.toml`. `{model}` and `{effort}`
+come from the task's tier; `{name}` is `<repo>-<task>`.
 
 ```toml
 [harness.claude]
@@ -58,7 +56,6 @@ Rules for the lines:
   actions without a prompt, and `-n {name} --remote-control {name}`, which
   name the session in the apps.
 - **Codex:** keep the `workspace-write` sandbox with auto-review deciding
-  what crosses it; never `approval_policy = "never"`, which leaves it
-  nothing to review. Keep network access, for `gh` and `git push`. Set no
-  writable root and no `--add-dir`: a joined session refuses both, so a line
-  with either keeps every session embedded, and `spawn` warns.
+  what crosses it; never `approval_policy = "never"`. Keep network access,
+  for `gh` and `git push`. Set no writable root and no `--add-dir`: a joined
+  session refuses both, and `spawn` warns.
