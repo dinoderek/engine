@@ -7,9 +7,9 @@
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
 - **Stateless.** Each pass derives everything from the server's records and
   each host's tmux sessions, harness observations and run directories.
-- **One pass** runs every 30 seconds and once at start. It reads every host's
-  `status` in parallel. Stopping coordination leaves sessions running. Plans
-  move only to `planned` and `done`.
+- **One pass** runs every 30 seconds and once at start, reading every host's
+  `status` in parallel (`internal/reconcile`). Stopping coordination leaves
+  sessions running. Plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -29,8 +29,8 @@ The host serializes dispatches by run ID and returns an existing run on
 replay. It uses the host's Git credentials and identity, with isolated clones
 under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin
 into an owner-only run file whose path the window command exports; hooks
-recover their connection from the
-worktree's server-session record. Credential files are never collected.
+recover their connection from the worktree's server-session record. Credential
+files are never collected.
 
 A window gone from a host that answered ends its attempt `vanished` if the
 task is resumable: coordination stopped after the window was last seen live,
@@ -47,31 +47,28 @@ Each repository has one merge queue across its plans. `engine task
 merge-ready`, for the in-review PR at its reviewed, pushed head, queues the
 task; a later request keeps the place.
 
-Passes run the queues first. The head, the first eligible entry in request
-order (in-review, coordinated, no unresolved question), stays head until it
-merges or leaves. Only the head is called, through its task host's `merge` op
-(the server has no GitHub credential): at once when it becomes head or
-requests again, then once per `CheckEvery` (`internal/reconcile/queue.go`) from the entry's stored last call,
-so a restart adds none. A merge marks the task done with its PR. Otherwise the
-code routes it: behind, conflicting or moved gets `merge-turn`, waking the
-executor to refresh and request again; red, closed or a branch rule ends the
-entry `merge-refused`, telling the operator of the last two; merged elsewhere
-is done, and the operator told; pending waits.
+Only the queue's head is called, the first eligible entry in request order
+(in-review, coordinated, no unresolved question). It is called through its
+task host's `merge` op, because the server has no GitHub credential, at once
+when it becomes head or requests again, then once per `CheckEvery`
+(`internal/reconcile/queue.go`). A restart adds no call. A merge marks the
+task done with its PR. A head that is behind, conflicting or moved gets
+`merge-turn`, waking the executor to refresh and request again. A red, closed
+or branch-ruled head ends `merge-refused`, and the operator hears of the last
+two. A PR merged elsewhere is done. Otherwise it waits.
 
 **After the merge**, the `merged` update gives the session a cleanup turn,
-ending in `engine task cleaned`. Idle after that, it is released; `--left`
-tells the operator. Without it, it is released once idle `CleanupWait` after
-the merge, or at once if its window is gone, telling the operator where it
-ran; one in a turn at `CleanupCap` is noticed (`internal/reconcile/session.go`). Other done tasks' sessions go
-once idle 10 minutes. Releasing a running background job is a notice.
+ending in `engine task cleaned`. Without that, the session is released once
+idle `CleanupWait` after the merge, or at once if its window is gone; a
+cleanup turn that stays busy at `CleanupCap` is noticed
+(`internal/reconcile/session.go`). Other done tasks' sessions go once idle 10
+minutes. Releasing a running background job is a notice.
 
-Every wait is bounded (`internal/reconcile/queue.go`). A head outstaying one,
-failing `gh` repeatedly, or whose host is not in `hosts.toml` ends
-`merge-refused` with the reason, telling the operator; the executor fixes it
-and requests again. A waiting PR's changes are found at its turn. Leaving
-in-review except for `needs-human` withdraws the entry (`merge-withdrawn`); a
-vanished task resumes in-review, keeping its entry. A lost merge result reads
-as merged.
+Every wait is bounded. A head outstaying its bound, failing `gh` repeatedly,
+or whose host is not in `hosts.toml` ends `merge-refused` with the reason; the
+executor fixes it and requests again. Leaving in-review except for
+`needs-human` withdraws the entry (`merge-withdrawn`); a vanished task resumes
+in-review, keeping its entry. A lost merge result reads as merged.
 
 ## Reaching hosts
 
@@ -112,8 +109,8 @@ server records. Two sources say whether a session is alive and takes input:
 
 1. **The harness** gives each window of session `engine` a `state` (`working`,
    `waiting` or `limited`) from the observation of the harness its newest
-   `run.json` names (how each harness reads it: `harnesses.md`). Anything
-   else, a window with no run included, is unknown.
+   `run.json` names (how each harness reads it: `harnesses.md`). A window with
+   no run included is unknown.
 2. **tmux.** A window whose command has not exited is alive; a dead window is
    dead whatever the harness says.
 
@@ -134,8 +131,7 @@ before typing. Each check types literal `continue` then Enter into a window
 still `limited`, or `waiting` with a positive limit `resets_at`, once the
 reset plus 2 minutes has passed; other sessions and unknown resets are left
 alone. The attempt is noted first, so a failed Enter never duplicates text.
-Waiting with a limit reset also clears the stall timer.
-
-Still `limited` 10 minutes after the attempt, or a reset over 24 hours away
-(no typing), gives one notice per reset and session. Recovery covers planners,
-executors and cleanup turns.
+Waiting with a limit reset also clears the stall timer. Still `limited` 10
+minutes after the attempt, or a reset over 24 hours away (no typing), gives one
+notice per reset and session. Recovery covers planners, executors and cleanup
+turns.
