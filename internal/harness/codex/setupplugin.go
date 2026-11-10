@@ -66,6 +66,7 @@ func (r *setupRun) installPlugin(h pluginHome) (harness.Outcome, error) {
 	if err != nil || (installed && atLeast(have, r.t.Plugin())) {
 		return harness.Passed(have), err
 	}
+	// Adding the marketplace again is harmless, so no check for it comes first.
 	for _, args := range []string{"plugin marketplace add " + harness.PluginRepo, "plugin marketplace upgrade engine", "plugin add " + harness.PluginID} {
 		res, err := r.t.Sh(h.cmd(args), "")
 		if err != nil {

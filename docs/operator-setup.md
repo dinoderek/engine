@@ -41,7 +41,7 @@ with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
 plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
 `claude plugin install engine@engine --scope user`, and for Codex
 `codex plugin marketplace add dinoderek/engine` and `codex plugin add
-engine@engine` (setup repeats this for the Codex copy). Sign in to Claude Code
+engine@engine` (setup installs the Codex copy itself if it is missing). Sign in to Claude Code
 with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex (`codex login`). Setup copies the Mac's
 engine commit and Claude plugin version to the other hosts, so update both here
@@ -58,9 +58,9 @@ with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
 from GitHub. Setup changes only engine's own files (`~/.config/engine/`,
 `~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, Codex's
 plugin in your Codex home (through `codex plugin` only, never another file in
-`~/.codex`), and Codex's plugin and daemon in engine's own Codex home. For anything else (`~/.bashrc`,
-`sudo`, `/login`) it prints one exact command, and it exits 1 while any item is
-open. It refuses a build that is dirty or not on GitHub, and a name that is not
+`~/.codex`), and Codex's plugin and daemon in engine's own Codex home. For
+anything else (`~/.bashrc`, `sudo`, `/login`) it prints one exact command, and
+it exits 1 while any item is open. It refuses a build that is dirty or not on GitHub, and a name that is not
 a machine in `hosts.toml`. With no `--host` it checks this host. A host gets
 only the steps of the harnesses it lists.
 
