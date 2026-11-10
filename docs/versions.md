@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Go toolchain | `go.mod`: the `toolchain` line is the exact Go every gate runs; the `go` line is the language version, the same minor at patch 0 | hand, below |
 | golangci-lint, govulncheck | `go.mod`: the `tool` block, with versions in the require lines and sums in `go.sum` | Dependabot, weekly |
-| Go modules | `go.mod` and `go.sum`: the runtime's libraries are the direct requirements | Dependabot, weekly |
+| Go modules | `go.mod` and `go.sum` | Dependabot, weekly |
 | GitHub Actions | a commit SHA plus a `# vX.Y.Z` comment in `.github/workflows/` | Dependabot, weekly |
 
 Nothing else names a version. `./dev` exports `GOTOOLCHAIN` from the

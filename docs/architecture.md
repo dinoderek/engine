@@ -24,8 +24,8 @@ Two programs share one Go module:
   (`engine ui`: the loopback dashboard, which holds the operator credential and
   forwards only fixed control reads). The commands
   share `internal/hosts`, the host config: it parses and validates
-  `hosts.toml`, works out each machine's slots and expands launch lines. `internal/session` is the
-  host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
+  `hosts.toml`, works out each machine's slots and expands launch lines.
+  `internal/session` is the host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
   worktrees, the tmux session, windows and pane logs, the run record and the
   harness's state file. `internal/harness` is the `Adapter` interface engine
   asks of a harness; each harness is a package below it, listed by

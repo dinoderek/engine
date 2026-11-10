@@ -82,8 +82,8 @@ func TestParseOtherTypes(t *testing.T) {
 	}
 }
 
-// Syntax the in-house subset rejected and the library accepts: it yields
-// only values the subset could already express.
+// Wider TOML syntax yields only strings and integers, which escapes and
+// plain integers already express.
 func TestParseWiderSyntax(t *testing.T) {
 	root := mustParse(t, "hex = 0x10\nbig = 1_000\nml = \"\"\"\nx\"\"\"\nlit = '''y'''\nt = {\n a = 1 }\n")
 	e := root.entries
