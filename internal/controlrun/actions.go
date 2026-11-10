@@ -1,9 +1,11 @@
 package controlrun
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/reconcile"
 )
@@ -100,13 +102,25 @@ func (c *Coordinator) now() time.Time {
 }
 
 // release closes a finished session's window and worktree on its host, and
-// ends its attempt. A release with a Key tells the operator, once.
+// ends its attempt. A release with a Key tells the operator, once, and so
+// does a done task's release whose host replied with a note, such as the
+// repo's own worktree release failing.
 func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
-	if _, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, false); err != nil {
+	outcome := hostops.RunEnded
+	if a.Done {
+		outcome = hostops.RunDone
+	}
+	reply, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, outcome)
+	if err != nil {
 		return err
 	}
 	if a.Key != "" {
 		if err := c.notice(a.Item, a.Key, a.Text); err != nil {
+			return err
+		}
+	}
+	if a.Done && reply.Note != "" && a.Attempt != "" {
+		if err := c.notice(a.Item, "release-note/"+a.Attempt, fmt.Sprintf("Releasing %s on host %s left a note: %s", a.Session.Name, a.Session.Host, reply.Note)); err != nil {
 			return err
 		}
 	}

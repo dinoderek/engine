@@ -86,7 +86,7 @@ func (h *fakeHost) Spawn(hostops.SpawnRequest) (hostops.Spawned, error) {
 func (h *fakeHost) Collect(string) (hostops.Collected, error) {
 	return hostops.Collected{}, errors.New("unused")
 }
-func (h *fakeHost) Release(string, bool) (hostops.Released, error) {
+func (h *fakeHost) Release(string, hostops.Outcome) (hostops.Released, error) {
 	return hostops.Released{}, errors.New("unused")
 }
 func (h *fakeHost) Check(string, io.Writer) (bool, error) { return false, errors.New("unused") }

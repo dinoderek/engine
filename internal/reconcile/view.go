@@ -50,6 +50,8 @@ type Item struct {
 	Merge *control.Update
 	// MergedAt is when the coordinator recorded the item's merge, or zero.
 	MergedAt time.Time
+	// Cleaned is the task's newest cleanup report, nil when it has none.
+	Cleaned *control.Update
 }
 
 // Kind is what an action does.
@@ -110,6 +112,9 @@ type Action struct {
 	ResetsAt int64
 	// Session is the window a Resume types into or a Release closes.
 	Session Session
+	// Done is a Release of a done task's session: the host runs the repo's
+	// own worktree release too.
+	Done bool
 	// Entry is the merge queue entry a Merge acts on, Request its newest
 	// request.
 	Entry   control.QueueEntry

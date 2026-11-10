@@ -2,6 +2,7 @@
 package controlcmd
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"flag"
@@ -41,6 +42,7 @@ const Usage = "engine serve\n" +
 	"engine lint <plan-id>\n" +
 	"engine task complete-external <task-id> --version <n> --pr <url>\n" +
 	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
+	"engine task cleaned <task-id> [--left <text>]\n" +
 	"engine ps\nengine run <plan-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
@@ -156,6 +158,8 @@ func Parse(args []string, e Env) (control.Request, error) {
 	fs.StringVar(&merge.Head, "head", "", "")
 	fs.StringVar(&merge.Method, "method", "", "")
 	fs.StringVar(&merge.Verdict, "verdict", "", "")
+	left := ""
+	fs.StringVar(&left, "left", "", "")
 	depends, requires := "", ""
 	fs.StringVar(&depends, "depends", "", "")
 	fs.StringVar(&requires, "requires", "", "")
@@ -171,6 +175,10 @@ func Parse(args []string, e Env) (control.Request, error) {
 		merge.PR, r.Item.PR = r.Item.PR, ""
 		r.Merge = &merge
 	}
+	if left != "" && r.Op != "cleaned" {
+		return r, fmt.Errorf("--left is only for task cleaned")
+	}
+	r.Body = cmp.Or(left, r.Body)
 	r.Item.Depends = words(depends)
 	r.Item.Requires = words(requires)
 	if bodyFile != "" {
@@ -201,6 +209,10 @@ func Parse(args []string, e Env) (control.Request, error) {
 	return r, nil
 }
 
+// taskOps are the operations only a task has: the CLI's name for each, and
+// the request's.
+var taskOps = map[string]string{"complete-external": "complete-external", "merge-ready": "merge-request", "cleaned": "cleaned"}
+
 func operation(args []string) (control.Request, []string, error) {
 	r := control.Request{}
 	head, rest := args[0], args[1:]
@@ -230,16 +242,11 @@ func operation(args []string) (control.Request, []string, error) {
 		case "list":
 			r.Op = "list"
 			r.State = head
-		case "complete-external":
+		case "complete-external", "merge-ready", "cleaned":
 			if head != "task" {
-				return r, nil, fmt.Errorf("complete-external requires a task")
+				return r, nil, fmt.Errorf("%s requires a task", op)
 			}
-			r.Op = op
-		case "merge-ready":
-			if head != "task" {
-				return r, nil, fmt.Errorf("merge-ready requires a task")
-			}
-			r.Op = "merge-request"
+			r.Op = taskOps[op]
 		case "approve", "stop":
 			if head != "plan" {
 				return r, nil, fmt.Errorf("%s requires a plan", op)

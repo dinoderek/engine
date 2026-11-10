@@ -18,7 +18,7 @@ type flaky struct {
 	fails int
 }
 
-func (f *flaky) Release(name string, keep bool) (hostops.Released, error) {
+func (f *flaky) Release(name string, keep hostops.Outcome) (hostops.Released, error) {
 	if f.fails > 0 {
 		f.fails--
 		return hostops.Released{}, errors.New("tmux is busy")

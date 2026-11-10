@@ -94,7 +94,7 @@ func TestReleaseAsksEveryAdapter(t *testing.T) {
 	writeRun(t, h, session.Record{RunID: "r-7-a", Name: "r-7", Harness: "alpha", Spawned: fixedNow()})
 	alpha := &harnesstest.Fake{Called: "alpha"}
 	beta := &harnesstest.Fake{Called: "beta", ReleaseErr: errors.New("beta's profile is stuck")}
-	r, err := Release(Deps{Home: h.dir, Tmux: (&tmuxFake{}).tmux(), Harnesses: harness.NewAdapters(alpha, beta)}, "r-7", false)
+	r, err := Release(Deps{Home: h.dir, Tmux: (&tmuxFake{}).tmux(), Harnesses: harness.NewAdapters(alpha, beta)}, "r-7", RunEnded)
 	if err != nil || r.Note != "beta's profile is stuck" {
 		t.Fatalf("%+v, %v", r, err)
 	}
@@ -111,7 +111,7 @@ func TestOpsRefuseWithoutAdapters(t *testing.T) {
 	if _, err := ReadStatus(d); !isRefusal(err) || !strings.Contains(err.Error(), "no harness adapters") {
 		t.Errorf("status: %v", err)
 	}
-	if _, err := Release(d, "r-7", false); !isRefusal(err) {
+	if _, err := Release(d, "r-7", RunEnded); !isRefusal(err) {
 		t.Errorf("release: %v", err)
 	}
 	if _, err := Spawn(d, request()); !isRefusal(err) || !strings.Contains(err.Error(), "no harness adapters") {

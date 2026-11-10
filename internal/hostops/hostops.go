@@ -18,7 +18,7 @@ import (
 
 // Protocol is the version of the ops' wire format. A caller refuses a reply
 // that carries another.
-const Protocol = 6
+const Protocol = 7
 
 // The executor's modes. The kickoff names one, and a hands-off session is
 // marked unattended.
@@ -34,6 +34,9 @@ type Deps struct {
 	Run session.RunFunc
 	// Probe reads a repo's own `dev` usage under a deadline; nil uses Run.
 	Probe session.RunFunc
+	// Teardown runs a repo's own `dev worktree release` under a deadline
+	// (session.TeardownLimit); nil uses Run.
+	Teardown session.RunFunc
 	// Exec runs the host's own CLIs, such as the harness binaries.
 	Exec session.Runner
 	Tmux *session.Tmux

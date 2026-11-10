@@ -317,7 +317,7 @@ func TestPlanTaskSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, windows %v, attempt %s: reaped as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
 	}
-	later(c, reconcile.ReportWindow)
+	later(c, reconcile.CleanupWait)
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
 	if len(m.status.Windows) != 0 || st.Attempts[at.ID].State != "ended" {

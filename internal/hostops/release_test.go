@@ -25,7 +25,11 @@ func released(t *testing.T, open, failed bool, git *gitFake) (Released, string, 
 	if open {
 		tm.windows = append(tm.windows, "@5 %5 1 r-7")
 	}
-	r, err := Release(Deps{Run: git.run, Tmux: tm.tmux(), Home: h.dir}, "r-7", failed)
+	outcome := RunEnded
+	if failed {
+		outcome = RunFailed
+	}
+	r, err := Release(Deps{Run: git.run, Tmux: tm.tmux(), Home: h.dir}, "r-7", outcome)
 	return r, worktree, tm, err
 }
 
@@ -71,7 +75,7 @@ func TestReleaseReadsPastAnotherBadRun(t *testing.T) {
 	// Repo r-7's task 12 is the session r-7-12, whose runs LatestRun also reads.
 	write(t, filepath.Join(h.dir, session.RunsDir, "r-7-12-a", session.RecordFile), "{", 0o644)
 	git := &gitFake{}
-	r, err := Release(Deps{Run: git.run, Tmux: (&tmuxFake{}).tmux(), Home: h.dir}, "r-7", false)
+	r, err := Release(Deps{Run: git.run, Tmux: (&tmuxFake{}).tmux(), Home: h.dir}, "r-7", RunEnded)
 	if err != nil || r.WorktreeKept || r.Worktree != worktree || !strings.Contains(r.Note, "r-7-12-a") || len(git.calls) != 1 {
 		t.Errorf("released %+v, %v, git %v", r, err, git.calls)
 	}
@@ -82,7 +86,7 @@ func TestReleaseWithNothingLeft(t *testing.T) {
 	writeRun(t, h, session.Record{RunID: "r-7-a", Repo: "o/r", Name: "r-7", Worktree: filepath.Join(h.dir, "gone"), Spawned: fixedNow()})
 	git := &gitFake{}
 	for _, name := range []string{"r-7", "r-8"} {
-		r, err := Release(Deps{Run: git.run, Tmux: (&tmuxFake{}).tmux(), Home: h.dir}, name, false)
+		r, err := Release(Deps{Run: git.run, Tmux: (&tmuxFake{}).tmux(), Home: h.dir}, name, RunEnded)
 		if err != nil || r != (Released{Name: name}) || len(git.calls) != 0 {
 			t.Errorf("%s: released %+v, %v, git %v", name, r, err, git.calls)
 		}
@@ -90,11 +94,11 @@ func TestReleaseWithNothingLeft(t *testing.T) {
 }
 
 func TestReleaseFailures(t *testing.T) {
-	if _, err := Release(Deps{Home: t.TempDir()}, "-x", false); !isRefusal(err) {
+	if _, err := Release(Deps{Home: t.TempDir()}, "-x", RunEnded); !isRefusal(err) {
 		t.Errorf("a bad name: %v", err)
 	}
 	tm := &tmuxFake{fail: errors.New("tmux died"), windows: []string{}}
-	if _, err := Release(Deps{Tmux: tm.tmux(), Home: t.TempDir()}, "r-7", false); err == nil || isRefusal(err) {
+	if _, err := Release(Deps{Tmux: tm.tmux(), Home: t.TempDir()}, "r-7", RunEnded); err == nil || isRefusal(err) {
 		t.Errorf("tmux down: %v", err)
 	}
 }

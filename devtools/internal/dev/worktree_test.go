@@ -241,10 +241,38 @@ func TestWorktreeCreateChecksOutAnExistingBranchAsItIs(t *testing.T) {
 	want(t, 0, 0, stdout, "on existing branch feat/e")
 }
 
+// A repeat release, or one after the worktree is already gone, exits 0, and
+// one with nothing left changes nothing.
+func TestWorktreeReleaseIsIdempotent(t *testing.T) {
+	tool, stdout, stderr := clone(t)
+	if code := tool.Worktree([]string{"create", "feat/i"}); code != 0 {
+		t.Fatalf("create: %d\n%s", code, stderr)
+	}
+	dir := WorktreePath(tool.Root, "feat/i")
+	// Someone removed the folder by hand: release prunes it and goes on.
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if code := tool.Worktree([]string{"release", "feat/i"}); code != 0 {
+		t.Fatalf("release of a gone worktree: %d\n%s", code, stderr)
+	}
+	want(t, 0, 0, stdout, "pruned worktree", filepath.Base(dir)+", already gone", "deleted branch feat/i")
+	before := gitIn(t, tool.Root, "for-each-ref")
+	for _, branch := range []string{"feat/i", "never-made"} {
+		stdout.Reset()
+		if code := tool.Worktree([]string{"release", branch}); code != 0 {
+			t.Fatalf("repeat release of %s: %d\n%s", branch, code, stderr)
+		}
+		want(t, 0, 0, stdout, "nothing to release")
+	}
+	if after := gitIn(t, tool.Root, "for-each-ref"); after != before {
+		t.Errorf("a repeat release changed the refs:\n%s\nwant\n%s", after, before)
+	}
+}
+
 func TestWorktreeRefusals(t *testing.T) {
 	tool, _, stderr := clone(t)
 	want(t, tool.Worktree([]string{"create"}), 2, stderr, "usage: ./dev worktree")
-	want(t, tool.Worktree([]string{"release", "nope"}), 1, stderr, "no worktree has branch nope")
 	want(t, tool.Worktree([]string{"release", "main"}), 1, stderr, "is the main checkout")
 
 	if code := tool.Worktree([]string{"create", "feat/z"}); code != 0 {

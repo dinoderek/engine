@@ -22,7 +22,7 @@ func TestControlDispatchCarriesCredentialsOnlyOnStdin(t *testing.T) {
 		if !strings.Contains(string(b), r.Credential) {
 			t.Fatal("missing stdin credential")
 		}
-		_, err = io.WriteString(out, `{"protocol":6,"engine":"test","host":"devbox","name":"demo-1","window":"@1"}`)
+		_, err = io.WriteString(out, `{"protocol":7,"engine":"test","host":"devbox","name":"demo-1","window":"@1"}`)
 		return 0, err
 	}}
 	got, err := ControlSpawn(ssh, r)
@@ -36,7 +36,7 @@ func TestControlMergeRunsTheHostsMergeOp(t *testing.T) {
 	var command string
 	ssh := SSH{Name: "devbox", Address: "devbox", Exec: func(_ io.Reader, out, _ io.Writer, _ string, args ...string) (int, error) {
 		command = strings.Join(args, " ")
-		_, err := io.WriteString(out, `{"protocol":6,"engine":"test","host":"devbox","outcome":"merged","reason":"merged at `+head+`"}`)
+		_, err := io.WriteString(out, `{"protocol":7,"engine":"test","host":"devbox","outcome":"merged","reason":"merged at `+head+`"}`)
 		return 0, err
 	}}
 	got, err := ControlMerge(ssh, hostops.MergeRequest{Repo: "o/r", PR: 42, Head: head, Method: "squash"})

@@ -26,6 +26,9 @@ type host struct {
 	calls     int
 	launches  map[string]hostops.ControlRequest
 	released  []string
+	outcomes  []hostops.Outcome
+	// note is what each release replies with in its note.
+	note string
 	// refuse, when set, is the reason the host refuses a new dispatch.
 	refuse string
 	// unresolved makes a dispatch fail with no reply and no effect.
@@ -36,15 +39,16 @@ func (h *host) SyncRepo(string) (hostops.Synced, error)             { panic("leg
 func (h *host) Spawn(hostops.SpawnRequest) (hostops.Spawned, error) { panic("legacy GitHub path used") }
 func (h *host) Collect(string) (hostops.Collected, error)           { return hostops.Collected{}, nil }
 func (h *host) Check(string, io.Writer) (bool, error)               { return true, nil }
-func (h *host) Release(name string, _ bool) (hostops.Released, error) {
+func (h *host) Release(name string, outcome hostops.Outcome) (hostops.Released, error) {
 	h.released = append(h.released, name)
+	h.outcomes = append(h.outcomes, outcome)
 	for i, w := range h.status.Windows {
 		if w.Name == name {
 			h.status.Windows = append(h.status.Windows[:i], h.status.Windows[i+1:]...)
 			break
 		}
 	}
-	return hostops.Released{}, nil
+	return hostops.Released{Name: name, Note: h.note}, nil
 }
 func (h *host) Status() (hostops.Status, error) {
 	if h.outage {

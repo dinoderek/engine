@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// worktreeCommand is the script a repo provides for creating a task
-// worktree: `<clone>/dev worktree create <branch>`.
+// worktreeCommand is the script a repo provides for creating and releasing
+// a task worktree: `<clone>/dev worktree create|release <branch>`.
 const worktreeCommand = "dev"
 
 // Worktree is a task's worktree.
@@ -65,7 +65,7 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, err
 	if existing != "" {
 		return Worktree{Path: existing, Branch: branch}, nil
 	}
-	if script := filepath.Join(clone.Path, worktreeCommand); r.createsWorktrees(clone, script) {
+	if script := filepath.Join(clone.Path, worktreeCommand); r.provides(clone.Path, script, "worktree create") {
 		// The repo's command checks out a local branch that exists as it is.
 		_, err = r.Run(clone.Path, []string{"GIT_TERMINAL_PROMPT=0"}, script, "worktree", "create", branch)
 	} else {
@@ -228,13 +228,13 @@ func (r Repos) worktreeOf(clone Clone, branch string) (string, error) {
 // generous because a `dev` may build itself, or fetch a toolchain, first.
 const ProbeLimit = 3 * time.Minute
 
-// createsWorktrees reports whether script is a `dev` that provides `worktree
-// create`. A repo may have its own unrelated `dev`, so being executable is not
-// enough: run with no verb, a `dev` prints its usage, which lists the verbs it
-// has. Its exit status is ignored, since printing usage usually fails. A `dev`
-// that fails or times out before printing a usage that lists the verb counts
-// as not providing it.
-func (r Repos) createsWorktrees(clone Clone, script string) bool {
+// provides reports whether script is a `dev` whose usage lists verb. A repo
+// may have its own unrelated `dev`, so being executable is not enough: run
+// with no verb, a `dev` prints its usage, which lists the verbs it has. Its
+// exit status is ignored, since printing usage usually fails. A `dev` that
+// fails or times out before printing a usage that lists the verb counts as
+// not providing it.
+func (r Repos) provides(dir, script, verb string) bool {
 	if !isExecutable(script) {
 		return false
 	}
@@ -242,8 +242,37 @@ func (r Repos) createsWorktrees(clone Clone, script string) bool {
 	if probe == nil {
 		probe = r.Run
 	}
-	usage, _ := probe(clone.Path, []string{"GIT_TERMINAL_PROMPT=0"}, script)
-	return strings.Contains(usage, "worktree create")
+	usage, _ := probe(dir, []string{"GIT_TERMINAL_PROMPT=0"}, script)
+	return strings.Contains(usage, verb)
+}
+
+// TeardownLimit bounds the repo's own `worktree release`, which is arbitrary
+// code, so a hung teardown never holds up a release for long.
+const TeardownLimit = 2 * time.Minute
+
+// ReleaseWorktree runs the repo's own `dev worktree release <branch>` in
+// engine's clone at clonePath, when the clone's `dev` lists that verb, under
+// the Teardown runner. It reports whether the repo provides the verb. The
+// repo's contract makes the command idempotent, so it runs whether or not
+// the session already tore everything down.
+func (r Repos) ReleaseWorktree(clonePath, branch string) (bool, error) {
+	script := filepath.Join(clonePath, worktreeCommand)
+	if !r.provides(clonePath, script, "worktree release") {
+		return false, nil
+	}
+	unlock, err := lock(clonePath + ".lock")
+	if err != nil {
+		return true, err
+	}
+	defer unlock()
+	run := r.Teardown
+	if run == nil {
+		run = r.Run
+	}
+	if _, err := run(clonePath, []string{"GIT_TERMINAL_PROMPT=0"}, script, "worktree", "release", branch); err != nil {
+		return true, fmt.Errorf("the repo's worktree release for %s: %w", branch, err)
+	}
+	return true, nil
 }
 
 func isExecutable(path string) bool {
