@@ -10,10 +10,13 @@ import (
 
 func controlEnv(e Env) controlcmd.Env {
 	var server *controlcmd.ServerDeps
-	if e.SSH != nil || e.Sleep != nil {
+	if e.SSH != nil || e.Sleep != nil || e.ServerTmux != nil {
 		d := controlcmd.RealServerDeps()
 		if e.SSH != nil {
 			d.Exec = e.SSH
+		}
+		if e.ServerTmux != nil {
+			d.Tmux = e.ServerTmux
 		}
 		if e.Sleep != nil {
 			d.Sleep = e.Sleep
