@@ -214,6 +214,7 @@ func (v *validator) host(c *Config, name string, n *node) Host {
 	v.hostLimits(r, &h)
 	v.hostCapabilities(r, &h)
 	v.hostBin(r, &h)
+	v.hostServices(r, &h)
 	r.finish()
 	return h
 }
