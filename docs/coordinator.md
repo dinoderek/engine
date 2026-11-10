@@ -8,8 +8,9 @@
 - **Stateless.** Each pass derives everything from the server's records and
   each host's tmux sessions, harness observations and run directories.
 - **One pass** runs every 30 seconds and once at start, reading every host's
-  `status` in parallel (`internal/reconcile`). Stopping coordination leaves
-  sessions running. Plans move only to `planned` and `done`.
+  `status` in parallel (`internal/reconcile`); the session view's observer
+  reuses those reads (`control-server.md`, "Session view"). Stopping
+  coordination leaves sessions running. Plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`,
 "Placement". For changes to lint, load
@@ -47,20 +48,24 @@ Each repository has one merge queue across its plans. `engine task
 merge-ready`, for the in-review PR at its reviewed, pushed head, queues the
 task; a later request keeps the place.
 
-Only the queue's head is called, the first eligible entry in request order
-(in-review, coordinated, no unresolved question). It is called through its
-task host's `merge` op, because the server has no GitHub credential, at once
-when it becomes head or requests again, then once per `CheckEvery`
-(`internal/reconcile/queue.go`). A restart adds no call. A merge marks the
-task done with its PR. A head that is behind, conflicting or moved gets
-`merge-turn`, waking the executor to refresh and request again. A red, closed
-or branch-ruled head ends `merge-refused`, and the operator hears of the last
-two. A PR merged elsewhere is done. Otherwise it waits.
+Only the queue's head is called. The head is the first eligible entry in
+request order (in-review, coordinated, no unresolved question); it stays head
+until it merges or leaves, and an entry that stops being eligible waits but
+keeps its place. Waiting entries are never called, so a queued PR's changes are
+found at its turn. The head is called through its task host's `merge` op,
+because the server has no GitHub credential, at once when it becomes head or
+requests again, then once per `CheckEvery` (`internal/reconcile/queue.go`). A
+restart adds no call. A merge marks the task done with its PR. A head that is
+behind, conflicting or moved gets `merge-turn`, waking the executor to refresh
+and request again. A red, closed or branch-ruled head ends `merge-refused`.
+Every `merge-refused` tells the operator, with the reason. A PR merged elsewhere
+is done, and the operator told.
 
 **After the merge**, the `merged` update gives the session a cleanup turn,
-ending in `engine task cleaned`. Without that, the session is released once
-idle `CleanupWait` after the merge, or at once if its window is gone; a
-cleanup turn that stays busy at `CleanupCap` is noticed
+ending in `engine task cleaned`. Idle after that, it is released; `--left`
+tells the operator. Without that, it is released once idle `CleanupWait` after
+the merge, or at once if its window is gone, telling the operator where it ran;
+a cleanup turn that stays busy at `CleanupCap` is noticed
 (`internal/reconcile/session.go`). Other done tasks' sessions go once idle 10
 minutes. Releasing a running background job is a notice.
 
@@ -114,9 +119,8 @@ server records. Two sources say whether a session is alive and takes input:
 2. **tmux.** A window whose command has not exited is alive; a dead window is
    dead whatever the harness says.
 
-A session is **idle** when `waiting`, or `working` with `background` set: only
-a background job runs, so typing cuts into no turn. Only idle sessions get
-wake-up pointers.
+A session is **idle** when `waiting`, or `working` with `background` set. Only
+idle sessions get wake-up pointers.
 
 **Stalls.** Limited, queued and background-only sessions never stall. A
 dispatched session that has not claimed its task 5 minutes after it started is
