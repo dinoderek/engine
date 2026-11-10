@@ -40,9 +40,6 @@ func ControlMerge(client Client, r hostops.MergeRequest) (hostops.Merged, error)
 	case SSH:
 		var reply hostops.Merged
 		args := []string{"--repo", r.Repo, "--pr", strconv.Itoa(r.PR), "--head", r.Head, "--method", r.Method}
-		if r.Check {
-			args = append(args, "--check")
-		}
 		return reply, c.call("merge", args, "", &reply)
 	default:
 		if c, ok := client.(interface {

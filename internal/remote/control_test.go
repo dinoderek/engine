@@ -46,9 +46,6 @@ func TestControlMergeRunsTheHostsMergeOp(t *testing.T) {
 	if want := ShellJoin([]string{"engine", "host", "merge", "--json", "--repo", "o/r", "--pr", "42", "--head", head, "--method", "squash"}); !strings.HasSuffix(command, want) {
 		t.Errorf("command %q, want suffix %q", command, want)
 	}
-	if _, err = ControlMerge(ssh, hostops.MergeRequest{Repo: "o/r", PR: 42, Head: head, Method: "squash", Check: true}); err != nil || !strings.HasSuffix(command, " '--check'") {
-		t.Errorf("check command %q, %v", command, err)
-	}
 	local, err := ControlMerge(Local{Deps: hostops.Deps{Run: func(string, []string, string, ...string) (string, error) {
 		return `{"state":"MERGED","headRefOid":"` + head + `"}`, nil
 	}}}, hostops.MergeRequest{Repo: "o/r", PR: 42, Head: head, Method: "squash"})

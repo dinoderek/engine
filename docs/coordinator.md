@@ -50,24 +50,24 @@ Each repository has one merge queue across its plans.
 queues the task; a later request keeps the place.
 
 Passes run the queues first. The head, the first eligible entry in
-request order (in-review, coordinated, no unresolved question or
-unacknowledged hold), stays head until it merges, leaves or is demoted. Only
-the head merges, through its task host's `merge` op; the server has
-no GitHub credential. A merge marks the task done with its PR; the session
-keeps its window 10 minutes to report. A done task's session is released
-once idle 10 minutes; releasing one whose background job still runs is a
-notice. Otherwise the op's code routes it: a
-head behind, conflicting or moved gets `merge-turn`, waking the executor to
-refresh (merge the default branch, gate, review, push) and request again;
-red, closed or a branch rule ends the entry `merge-refused`, telling the
-operator of the last two; merged elsewhere is done, and the operator told; pending waits.
+request order (in-review, coordinated, no unresolved question), stays head
+until it merges or leaves. Only the head is called, through its task host's
+`merge` op (the server has no GitHub credential): at once when it becomes
+head or requests again, then once per `CheckEvery`, timed from the entry's
+stored last call, so a restart adds none. Waiting entries cost no calls. A
+merge marks the task done with its PR; the session keeps its window 10
+minutes to report. A done task's session is released once idle 10 minutes;
+releasing one whose background job still runs is a notice. Otherwise the
+code routes it: behind, conflicting or moved gets `merge-turn`, waking the
+executor to refresh and request again; red, closed or a branch rule ends
+the entry `merge-refused`, telling the operator of the last two; merged
+elsewhere is done, and the operator told; pending waits.
 
 Every wait is bounded in `internal/reconcile/queue.go`. A head outstaying
-one (refresh, checks, mergeability, an unreachable host) goes to the back
-(`merge-demoted`, with an operator notice); repeated demotions drop it.
-Repeated `gh` failures hold it until the operator acknowledges;
-the next entry proceeds. Waiting PRs are read periodically, catching a red,
-closed or merged one early. Leaving in-review except for
+one (refresh, checks, mergeability, an unreachable host), failing `gh`
+repeatedly, or whose host is not in `hosts.toml` ends `merge-refused` with
+the reason, telling the operator; the executor fixes it and requests again.
+A waiting PR's changes are found at its turn. Leaving in-review except for
 `needs-human` withdraws the entry (`merge-withdrawn`); a vanished task
 resumes in-review, keeping its entry. A lost merge result reads as merged.
 
@@ -88,7 +88,7 @@ a machine in `hosts.toml` (`hosts-and-sessions.md`).
 | `spawn` | Creates the worktree, trusts it for the harness, opens the tmux window, launches the harness with the caller's model, effort and kickoff (stdin), writes `run.json`. |
 | `status` | Lists each window of session `engine` (alive, exit code, harness, state, background, the last 20 screen lines unless working, a waiting window's newest `permissions.jsonl` denial (`telemetry.md`)), each session name's newest run, quota per harness, free and heavy slots, the harnesses signed out by their own CLI, and `harness_errors`. |
 | `collect` | Returns a run directory, its `run.json` and file list; nothing is uploaded. |
-| `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base; replies with a code. `--check` only judges. Already merged is done. |
+| `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base; replies with a code. Already merged is done. |
 | `release` | Closes the session's window, deletes each harness's files for it, removes its worktree unless the run failed or the worktree has changes; the branch stays. |
 
 **The envelope.** Every reply, a failure too, carries `protocol` (an integer),

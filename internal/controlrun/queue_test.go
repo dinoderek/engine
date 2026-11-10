@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
@@ -11,60 +12,62 @@ import (
 	"github.com/dinoderek/engine/internal/remote"
 )
 
-func TestAHeadThatDoesNotRefreshIsDemotedThenDropped(t *testing.T) {
-	c, _, task, _ := requested(t, reply(hostops.CodeBehind, "main moved"))
-	for i := 1; i < reconcile.MaxDemotions; i++ {
-		pass(t, c) // its turn
-		later(c, reconcile.TurnWait)
-		pass(t, c)
-		if e, ok := entry(t, c, task.ID); !ok || e.Demotions != i {
-			t.Fatalf("after %d turns: %+v", i, e)
-		}
-		if _, ok := lastUpdate(t, c, task.ID, control.MergeDemoted); !ok {
-			t.Fatal("the executor was not told it was demoted")
-		}
+// refusedOnce checks that task's entry ended with a merge-refused update
+// whose body has want, and that the operator was told once.
+func refusedOnce(t *testing.T, c *Coordinator, id, want string) {
+	t.Helper()
+	if e, ok := entry(t, c, id); ok {
+		t.Fatalf("still queued: %+v", e)
 	}
-	pass(t, c)
-	later(c, reconcile.TurnWait)
-	pass(t, c)
-	if _, ok := entry(t, c, task.ID); ok {
-		t.Fatal("still queued after the last demotion")
+	u, ok := lastUpdate(t, c, id, control.MergeRefused)
+	if notices := operatorNotices(t, c, id); !ok || !strings.Contains(u.Body, want) || len(notices) != 1 {
+		t.Fatalf("refusal %+v; %d operator notices", u, len(notices))
 	}
-	if u, ok := lastUpdate(t, c, task.ID, control.MergeRefused); !ok || !strings.Contains(u.Body, "Dropped") || len(operatorNotices(t, c, task.ID)) != reconcile.MaxDemotions {
-		t.Fatalf("drop %+v; notices %d", u, len(operatorNotices(t, c, task.ID)))
+	st, _ := c.Service.Store.Snapshot()
+	if st.Items[id].State != "in-review" {
+		t.Fatalf("task %s after the refusal", st.Items[id].State)
 	}
 }
 
-func TestChecksPendingTooLongDemoteTheHead(t *testing.T) {
+func TestAHeadThatDoesNotRefreshIsRefused(t *testing.T) {
+	c, _, task, _ := requested(t, reply(hostops.CodeBehind, "main moved"))
+	pass(t, c) // its turn
+	later(c, reconcile.TurnWait)
+	pass(t, c)
+	refusedOnce(t, c, task.ID, "not refreshed")
+}
+
+func TestChecksPendingTooLongRefuseTheHead(t *testing.T) {
 	c, _, task, _ := requested(t, reply(hostops.CodePendingChecks, "check test is still running"))
 	pass(t, c)
 	later(c, reconcile.ChecksWait)
 	pass(t, c)
-	if e, _ := entry(t, c, task.ID); e.Demotions != 1 || len(operatorNotices(t, c, task.ID)) != 1 {
-		t.Fatalf("entry %+v", e)
-	}
+	refusedOnce(t, c, task.ID, "check test is still running")
 }
 
-func TestRepeatedGhFailuresHoldTheHeadUntilTheOperatorAcknowledges(t *testing.T) {
+func TestMergeabilityUnknownTooLongRefusesTheHead(t *testing.T) {
+	c, _, task, _ := requested(t, reply(hostops.CodePendingMergeable, "unknown"))
+	pass(t, c)
+	later(c, reconcile.MergeableWait)
+	pass(t, c)
+	refusedOnce(t, c, task.ID, "mergeable")
+}
+
+func TestRepeatedGhFailuresRefuseTheHead(t *testing.T) {
 	c, m, task, _ := requested(t, func(hostops.MergeRequest) (hostops.Merged, error) {
 		return hostops.Merged{}, errors.New("gh: authentication required")
 	})
 	for range reconcile.GhFailures + 2 {
 		pass(t, c)
+		later(c, reconcile.CheckEvery)
 	}
-	notices := operatorNotices(t, c, task.ID)
-	e, _ := entry(t, c, task.ID)
-	if len(notices) != 1 || !strings.Contains(notices[0].Body, "gh auth status") || len(m.merges()) != reconcile.GhFailures || e.Held != notices[0].ID {
-		t.Fatalf("%d notices after %d merges; entry %+v", len(notices), len(m.merges()), e)
+	if len(m.merges()) != reconcile.GhFailures {
+		t.Fatalf("%d calls, want %d", len(m.merges()), reconcile.GhFailures)
 	}
-	acknowledge(t, c, notices[0])
-	pass(t, c)
-	if len(m.merges()) != reconcile.GhFailures+1 {
-		t.Fatalf("%d merges once acknowledged", len(m.merges()))
-	}
+	refusedOnce(t, c, task.ID, "gh auth status")
 }
 
-func TestAnUnreachableHostLeavesTheMergeUnknownThenDemotesIt(t *testing.T) {
+func TestAnUnreachableHostLeavesTheMergeUnknownThenRefusesIt(t *testing.T) {
 	c, _, task, _ := requested(t, func(hostops.MergeRequest) (hostops.Merged, error) {
 		return hostops.Merged{}, &remote.UnreachableError{Host: "devbox", Address: "devbox", Detail: "timeout"}
 	})
@@ -75,9 +78,26 @@ func TestAnUnreachableHostLeavesTheMergeUnknownThenDemotesIt(t *testing.T) {
 	}
 	later(c, reconcile.HostWait)
 	pass(t, c)
-	if e, _ := entry(t, c, task.ID); e.Demotions != 1 || len(operatorNotices(t, c, task.ID)) != 1 {
-		t.Fatalf("after %s: %+v", reconcile.HostWait, e)
+	refusedOnce(t, c, task.ID, "unreachable")
+}
+
+func TestAHostMissingFromTheConfigRefusesTheHead(t *testing.T) {
+	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged"))
+	if err := c.Service.Store.Transaction(func(st *control.State) error {
+		at := st.Attempts[st.Items[task.ID].Attempt]
+		at.Host = "gone"
+		st.Attempts[at.ID] = at
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
+	if err := c.queues(c.Config); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.requests) != 0 {
+		t.Fatalf("calls %+v", m.requests)
+	}
+	refusedOnce(t, c, task.ID, "hosts.toml")
 }
 
 // queuedTask adds task id of plan, in-review on devbox with a live attempt,
@@ -104,24 +124,53 @@ func TestOneMergeInFlightPerRepositoryInRequestOrder(t *testing.T) {
 	if err := c.queues(c.Config); err != nil {
 		t.Fatal(err)
 	}
-	if got := m.merges(); len(got) != 1 || len(m.requests) != 2 || !m.requests[1].Check {
-		t.Fatalf("calls %+v: want the head merged and the next only read", m.requests)
+	if len(m.requests) != 1 || m.requests[0].Head != reviewedHead {
+		t.Fatalf("calls %+v: want the head alone called", m.requests)
 	}
-	// The head's host keeps failing: it is held, and the next entry merges.
+	// The head's host keeps failing: it is refused, and on the next pass the
+	// next entry becomes head and is called at once.
 	m.reply = func(r hostops.MergeRequest) (hostops.Merged, error) {
-		if len(m.merges()) <= 1+reconcile.GhFailures {
+		if len(m.requests) <= 1+reconcile.GhFailures {
 			return hostops.Merged{}, errors.New("gh: authentication required")
 		}
 		return hostops.Merged{Outcome: hostops.MergeDone, Code: hostops.CodeMerged, Reason: "merged"}, nil
 	}
-	for range reconcile.GhFailures + 1 {
+	for range reconcile.GhFailures {
+		later(c, reconcile.CheckEvery)
 		if err := c.queues(c.Config); err != nil {
 			t.Fatal(err)
 		}
 	}
+	if err := c.queues(c.Config); err != nil {
+		t.Fatal(err)
+	}
 	st, _ := c.Service.Store.Snapshot()
-	if st.Items["t90"].State != "done" || !control.QueueHeld(&st, st.Queue[task.ID]) {
-		t.Fatalf("t90 %s, head %+v", st.Items["t90"].State, st.Queue[task.ID])
+	if _, queued := st.Queue[task.ID]; queued || st.Items["t90"].State != "done" || len(m.requests) != 2+reconcile.GhFailures {
+		t.Fatalf("t90 %s, head queued %v, %d calls", st.Items["t90"].State, queued, len(m.requests))
+	}
+}
+
+// A head waiting on checks is called once per interval, and at once when
+// its executor requests again; the waiting entry behind it is never called.
+func TestTheHeadIsCalledOncePerIntervalAndAtOnceOnANewRequest(t *testing.T) {
+	c, m, task, worker := requested(t, reply(hostops.CodePendingChecks, "running"))
+	queuedTask(t, c, task.Repo, task.Plan, "t90")
+	pass(t, c)
+	pass(t, c)
+	later(c, reconcile.CheckEvery-time.Second)
+	pass(t, c)
+	if len(m.requests) != 1 {
+		t.Fatalf("%d calls within one interval, want 1", len(m.requests))
+	}
+	later(c, time.Second)
+	pass(t, c)
+	if len(m.requests) != 2 {
+		t.Fatalf("%d calls once the interval passed, want 2", len(m.requests))
+	}
+	request(t, c, worker, task.ID, strings.Repeat("b", 40))
+	pass(t, c)
+	if len(m.requests) != 3 || m.requests[2].Head != strings.Repeat("b", 40) {
+		t.Fatalf("calls %+v: want the new request called at once", m.requests)
 	}
 }
 
@@ -152,23 +201,14 @@ func TestAMergeRereadsTheServerBeforeTheHostCall(t *testing.T) {
 	}
 }
 
-func acknowledge(t *testing.T, c *Coordinator, u control.Update) {
-	t.Helper()
-	if _, err := c.Service.Execute(control.Actor{Name: "operator", Role: "operator"}, control.Request{Op: "ack", ReplyTo: u.ID, Key: control.Secret()}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // A merge that lands while the executor withdraws the task is still
 // recorded, and the operator is told of the race.
 func TestAMergeRacingAWithdrawalIsRecorded(t *testing.T) {
 	c, m, task, worker := requested(t, nil)
 	m.reply = func(r hostops.MergeRequest) (hostops.Merged, error) {
-		if !r.Check {
-			st, _ := c.Service.Store.Snapshot()
-			if _, err := c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "running", Key: control.Secret()}); err != nil {
-				t.Fatal(err)
-			}
+		st, _ := c.Service.Store.Snapshot()
+		if _, err := c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "running", Key: control.Secret()}); err != nil {
+			t.Fatal(err)
 		}
 		return hostops.Merged{Outcome: hostops.MergeDone, Code: hostops.CodeMerged, Reason: "merged at " + reviewedHead}, nil
 	}
@@ -182,7 +222,7 @@ func TestAMergeRacingAWithdrawalIsRecorded(t *testing.T) {
 }
 
 // A head whose session vanishes during its turn is resumed in-review, and
-// its turn's bound still demotes it.
+// its turn's bound still refuses it.
 func TestAResumedHeadKeepsItsTurnsBound(t *testing.T) {
 	c, m, task, _ := requested(t, reply(hostops.CodeBehind, "main moved"))
 	pass(t, c) // its turn; the window was seen live
@@ -195,26 +235,10 @@ func TestAResumedHeadKeepsItsTurnsBound(t *testing.T) {
 	}
 	later(c, reconcile.TurnWait)
 	pass(t, c)
-	if e, _ := entry(t, c, task.ID); e.Demotions != 1 {
-		t.Fatalf("entry %+v", e)
+	if _, ok := entry(t, c, task.ID); ok {
+		t.Fatal("still queued after its turn's bound")
 	}
-}
-
-func TestAHostMissingFromTheConfigHoldsTheHead(t *testing.T) {
-	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged"))
-	if err := c.Service.Store.Transaction(func(st *control.State) error {
-		at := st.Attempts[st.Items[task.ID].Attempt]
-		at.Host = "gone"
-		st.Attempts[at.ID] = at
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.queues(c.Config); err != nil {
-		t.Fatal(err)
-	}
-	notices := operatorNotices(t, c, task.ID)
-	if e, _ := entry(t, c, task.ID); len(notices) != 1 || !strings.Contains(notices[0].Body, "hosts.toml") || e.Held != notices[0].ID || len(m.requests) != 0 {
-		t.Fatalf("entry %+v, notices %+v", e, notices)
+	if _, ok := lastUpdate(t, c, task.ID, control.MergeRefused); !ok {
+		t.Fatal("not refused")
 	}
 }

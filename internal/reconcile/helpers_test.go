@@ -84,10 +84,6 @@ func show(a Action) string {
 		parts = append(parts, a.Key)
 	case EndAttempt, Resume, Release:
 		parts = append(parts, a.Attempt)
-	case Merge:
-		if a.Check {
-			parts = append(parts, "check")
-		}
 	case QueueStep:
 		parts = append(parts, showStep(*a.Step)...)
 	}

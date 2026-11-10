@@ -9,7 +9,8 @@ import (
 )
 
 // The merge queue's bounds. Each wait is fixed here, so no request waits
-// silently and none holds its repository's queue for longer.
+// silently and none holds its repository's queue for longer. A head that
+// outstays one is refused, and its executor requests the merge again.
 const (
 	// TurnWait is how long a head told to refresh has to request again.
 	TurnWait = 45 * time.Minute
@@ -20,13 +21,11 @@ const (
 	MergeableWait = 10 * time.Minute
 	// HostWait is how long the head's host may stay unreachable.
 	HostWait = 15 * time.Minute
-	// GhFailures is how many failed merge calls in a row hold the head for
-	// the operator.
+	// GhFailures is how many failed merge calls in a row refuse the head.
 	GhFailures = 3
-	// MaxDemotions in a row drop an entry from the queue.
-	MaxDemotions = 3
-	// ProbeEvery is how often a waiting entry's PR is read.
-	ProbeEvery = 10 * time.Minute
+	// CheckEvery is how often the head's host call runs. A new head, or a
+	// head with a new request, is called at once.
+	CheckEvery = 2 * time.Minute
 )
 
 // QueueView is one repository's merge queue as a pass decides on it.
@@ -46,19 +45,16 @@ type QueueItem struct {
 	Question int
 	// Stopped is true when the task's coordination, or its plan's, is stopped.
 	Stopped bool
-	// Held is true while the operator has not acknowledged the notice that
-	// held the entry.
-	Held bool
 	// Host is where the task's latest attempt ran: its PR merges there.
 	Host string
 }
 
 // eligible reports whether the entry may be the head.
 func (q QueueItem) eligible() bool {
-	return q.State == "in-review" && q.Question == 0 && !q.Stopped && !q.Held
+	return q.State == "in-review" && q.Question == 0 && !q.Stopped
 }
 
-// Probe is what one host call said of an entry's PR.
+// Probe is what the head's host call said of its PR.
 type Probe struct {
 	Reply hostops.Merged
 	// Unreachable is true when the host could not be reached: nothing about
@@ -73,9 +69,9 @@ type Probe struct {
 
 // DecideQueue is one pass over a repository's queue. It keeps the head, or
 // picks the first eligible entry, and returns the steps that change entries
-// first; with none, the host calls: the head's merge and the reads of the
-// waiting entries that are due one. A head that stops being eligible gives
-// up the head and keeps its place.
+// first; with none, the head's merge call when one is due. Waiting entries
+// are never called. A head that stops being eligible gives up the head and
+// keeps its place.
 func DecideQueue(v QueueView) []Action {
 	head := -1
 	for i, q := range v.Entries {
@@ -96,27 +92,17 @@ func DecideQueue(v QueueView) []Action {
 				return []Action{step(q, control.QueueStep{To: &to})}
 			}
 		}
+		return nil
 	}
-	var acts []Action
-	if head >= 0 {
-		q := v.Entries[head]
-		switch {
-		case q.Phase == control.QueueRefresh && v.Now.Sub(q.TurnAt) >= TurnWait:
-			return []Action{demote(q, "it was not refreshed within "+TurnWait.String()+" of its turn", true)}
-		case q.Phase == control.QueueCheck:
-			acts = append(acts, call(q, false))
-		}
+	q := v.Entries[head]
+	switch {
+	case q.Phase == control.QueueRefresh && v.Now.Sub(q.TurnAt) >= TurnWait:
+		return []Action{giveUp(q, "it was not refreshed within "+TurnWait.String()+" of its turn",
+			"Merge the default branch in, rerun the gates and the fresh review and push")}
+	case q.Phase == control.QueueCheck && (q.CheckedAt.IsZero() || v.Now.Sub(q.CheckedAt) >= CheckEvery):
+		return []Action{{Kind: Merge, Item: q.Task, Host: q.Host, Entry: q.QueueEntry, Request: q.Request}}
 	}
-	for _, q := range v.Entries {
-		if q.Phase == control.QueueWaiting && !q.Stopped && !q.Held && v.Now.Sub(q.ProbedAt) >= ProbeEvery {
-			acts = append(acts, call(q, true))
-		}
-	}
-	return acts
-}
-
-func call(q QueueItem, check bool) Action {
-	return Action{Kind: Merge, Item: q.Task, Host: q.Host, Entry: q.QueueEntry, Check: check, Request: q.Request}
+	return nil
 }
 
 func step(q QueueItem, s control.QueueStep) Action {
@@ -127,70 +113,44 @@ func step(q QueueItem, s control.QueueStep) Action {
 // unheaded is e back in the queue, no longer the head.
 func unheaded(e control.QueueEntry) control.QueueEntry {
 	e.Phase = control.QueueWaiting
-	e.HeadAt, e.TurnAt, e.WaitSince, e.FailSince, e.Failures = time.Time{}, time.Time{}, time.Time{}, time.Time{}, 0
+	e.HeadAt, e.TurnAt, e.CheckedAt, e.WaitSince, e.FailSince, e.Failures = time.Time{}, time.Time{}, time.Time{}, time.Time{}, time.Time{}, 0
 	return e
 }
 
-// demote sends q to the back of the queue, or drops it after MaxDemotions
-// in a row. The executor is told, and the operator when operator is set or
-// the entry is dropped.
-func demote(q QueueItem, why string, operator bool) Action {
-	if q.Demotions+1 >= MaxDemotions {
-		why = fmt.Sprintf("it was moved to the back %d times in a row; last, %s", MaxDemotions, why)
-		return drop(q, "Dropped from the merge queue: "+why+". Request the merge again once that is fixed.", why)
-	}
-	to := unheaded(q.QueueEntry)
-	to.Demotions++
-	to.Reason = why
-	s := control.QueueStep{To: &to, Kind: control.MergeDemoted, Demote: true,
-		Text: "Moved to the back of the merge queue: " + why + ". Your request stays queued; a newer request keeps this place."}
-	if operator {
-		s.Notice = fmt.Sprintf("%s moved to the back of the merge queue: %s.", q.PR, why)
-	}
-	return step(q, s)
-}
-
-// drop ends q's entry with a merge-refused answer, telling the executor
-// text and the operator why.
-func drop(q QueueItem, text, why string) Action {
-	return step(q, control.QueueStep{Kind: control.MergeRefused, Text: text,
+// giveUp ends q's entry with a merge-refused answer: the executor is told
+// why and what to do, then requests the merge again; the operator is told
+// why.
+func giveUp(q QueueItem, why, fix string) Action {
+	return step(q, control.QueueStep{Kind: control.MergeRefused,
+		Text:   "Not merged: " + why + ". " + fix + ", then request the merge again.",
 		Notice: fmt.Sprintf("%s left the merge queue: %s.", q.PR, why)})
 }
 
-// Answer is the step that what a host call said of q's PR calls for, if any.
+// Answer is the step that what the head's host call said of its PR calls
+// for, if any.
 func Answer(now time.Time, q QueueItem, p Probe) []Action {
-	if q.Phase == control.QueueWaiting {
-		return answerProbe(now, q, p)
-	}
 	to := q.QueueEntry
-	to.FailSince, to.Failures = time.Time{}, 0
+	to.CheckedAt, to.FailSince, to.Failures = now, time.Time{}, 0
 	switch {
 	case p.Missing:
-		held := unheaded(q.QueueEntry)
-		held.Reason = "held: host " + q.Host + " is not in hosts.toml"
-		return []Action{step(q, control.QueueStep{To: &held, Hold: true, Notice: fmt.Sprintf(
-			"Cannot merge %s: its task's host %q is not in hosts.toml. Fix the host config, then acknowledge this message to put it back in the merge queue.",
-			q.PR, q.Host)})}
+		return []Action{giveUp(q, fmt.Sprintf("its task's host %q is not in hosts.toml", q.Host),
+			"The operator is told to fix the host config; wait until they have")}
 	case p.Unreachable:
-		to.Failures = q.Failures
+		to.FailSince, to.Failures = q.FailSince, q.Failures
 		if q.FailSince.IsZero() {
 			to.FailSince = now
-			return []Action{step(q, control.QueueStep{To: &to})}
+		} else if now.Sub(q.FailSince) >= HostWait {
+			return []Action{giveUp(q, fmt.Sprintf("host %s was unreachable for %s", q.Host, HostWait),
+				"The operator is told; wait until the host is back")}
 		}
-		if now.Sub(q.FailSince) >= HostWait {
-			return []Action{demote(q, fmt.Sprintf("host %s was unreachable for %s", q.Host, HostWait), true)}
-		}
-		return nil
+		return []Action{step(q, control.QueueStep{To: &to})}
 	case p.Err != "":
 		to.FailSince, to.Failures = q.FailSince, q.Failures+1
-		if to.Failures < GhFailures {
-			return []Action{step(q, control.QueueStep{To: &to})}
+		if to.Failures >= GhFailures {
+			return []Action{giveUp(q, fmt.Sprintf("merging at %s failed %d times on host %s: %s", q.Head, GhFailures, q.Host, p.Err),
+				"The operator is told to check gh auth status and engine setup there; wait until they have")}
 		}
-		held := unheaded(q.QueueEntry)
-		held.Reason = "held: " + p.Err
-		return []Action{step(q, control.QueueStep{To: &held, Hold: true, Notice: fmt.Sprintf(
-			"Merging %s at %s failed %d times on host %s: %s. Check gh auth status and engine setup there; acknowledge this message to put it back in the merge queue.",
-			q.PR, q.Head, GhFailures, q.Host, p.Err)})}
+		return []Action{step(q, control.QueueStep{To: &to})}
 	}
 	return answerHead(now, q, to, p.Reply)
 }
@@ -198,12 +158,7 @@ func Answer(now time.Time, q QueueItem, p Probe) []Action {
 // answerHead is the step for what the head's merge call reported. to is the
 // head with its failure counts cleared.
 func answerHead(now time.Time, q QueueItem, to control.QueueEntry, r hostops.Merged) []Action {
-	healthy := func() []Action {
-		if to == q.QueueEntry {
-			return nil
-		}
-		return []Action{step(q, control.QueueStep{To: &to})}
-	}
+	healthy := func() []Action { return []Action{step(q, control.QueueStep{To: &to})} }
 	switch r.Code {
 	case hostops.CodeMerged, hostops.CodeMergedElsewhere:
 		return []Action{merged(q, r)}
@@ -215,16 +170,16 @@ func answerHead(now time.Time, q QueueItem, to control.QueueEntry, r hostops.Mer
 			since = q.Request.At
 		}
 		if now.Sub(since) >= ChecksWait {
-			return []Action{demote(q, fmt.Sprintf("its checks were pending for %s (%s)", ChecksWait, r.Reason), true)}
+			return []Action{giveUp(q, fmt.Sprintf("its checks were pending for %s (%s)", ChecksWait, r.Reason),
+				"Find out why the checks do not finish, fix it and push")}
 		}
 		return healthy()
 	case hostops.CodePendingMergeable:
 		if q.WaitSince.IsZero() {
 			to.WaitSince = now
-			return []Action{step(q, control.QueueStep{To: &to})}
-		}
-		if now.Sub(q.WaitSince) >= MergeableWait {
-			return []Action{demote(q, "GitHub did not work out whether it is mergeable within "+MergeableWait.String(), true)}
+		} else if now.Sub(q.WaitSince) >= MergeableWait {
+			return []Action{giveUp(q, "GitHub did not work out whether it is mergeable within "+MergeableWait.String(),
+				"Merge the default branch in, rerun the gates and the fresh review and push")}
 		}
 		return healthy()
 	case hostops.CodeBehind, hostops.CodeConflict, hostops.CodeHeadMoved:
@@ -232,35 +187,8 @@ func answerHead(now time.Time, q QueueItem, to control.QueueEntry, r hostops.Mer
 		return []Action{step(q, control.QueueStep{To: &to, Kind: control.MergeTurn, Text: fmt.Sprintf(
 			"Your turn in the merge queue: %s. Merge the default branch in, rerun the gates and the fresh review, push, then run engine task merge-ready for the new head within %s.",
 			r.Reason, TurnWait)})}
-	case hostops.CodeReady:
-		return healthy()
 	}
 	return []Action{refused(q, r)}
-}
-
-// answerProbe is the step for what a waiting entry's read reported: an
-// outcome that ends the entry is acted on before its turn, and a moved head
-// is told once, so the executor requests again before its turn.
-func answerProbe(now time.Time, q QueueItem, p Probe) []Action {
-	to := q.QueueEntry
-	to.ProbedAt = now
-	if p.Unreachable || p.Err != "" || p.Missing {
-		return []Action{step(q, control.QueueStep{To: &to})}
-	}
-	switch p.Reply.Code {
-	case hostops.CodeHeadMoved:
-		if q.Reason == p.Reply.Reason {
-			break
-		}
-		to.Reason = p.Reply.Reason
-		return []Action{step(q, control.QueueStep{To: &to, Kind: "say", Text: "Your queued merge request is stale: " + p.Reply.Reason +
-			". Request the merge again for the new head once it is gated and reviewed; the entry keeps its place."})}
-	case hostops.CodeMerged, hostops.CodeMergedElsewhere:
-		return []Action{merged(q, p.Reply)}
-	case hostops.CodeRed, hostops.CodeClosed, hostops.CodeBlocked, hostops.CodeInvalid:
-		return []Action{refused(q, p.Reply)}
-	}
-	return []Action{step(q, control.QueueStep{To: &to})}
 }
 
 // merged completes q's task. A PR merged at a head other than the reviewed

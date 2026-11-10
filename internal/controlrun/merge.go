@@ -36,9 +36,9 @@ func (c *Coordinator) queues(cfg *hosts.Config) error {
 	return nil
 }
 
-// queue settles repo's queue's steps, then makes its host calls. Each step
-// can at most promote one head or demote one entry, so the loop ends within
-// two rounds per entry.
+// queue settles repo's queue's steps, then makes the head's host call. Each
+// step can at most promote one head, unhead one entry or end one, so the
+// loop ends within two rounds per entry.
 func (c *Coordinator) queue(repo string, cfg *hosts.Config) error {
 	for range 2*len(c.mustSnapshot().Queue) + 2 {
 		v, err := c.queueView(repo)
@@ -94,7 +94,7 @@ func (c *Coordinator) call(repo string, a reconcile.Action, cfg *hosts.Config) e
 		return err
 	}
 	if !slices.ContainsFunc(reconcile.DecideQueue(v), func(b reconcile.Action) bool {
-		return b.Kind == reconcile.Merge && b.Entry == a.Entry && b.Check == a.Check
+		return b.Kind == reconcile.Merge && b.Entry == a.Entry
 	}) {
 		return nil
 	}
@@ -130,7 +130,7 @@ func (c *Coordinator) probe(st control.State, a reconcile.Action, cfg *hosts.Con
 		method = a.Request.Merge.Method
 	}
 	got, err := remote.ControlMerge(c.Client(host), hostops.MergeRequest{Repo: st.Items[a.Entry.Repo].Slug,
-		PR: control.PRNumber(a.Entry.PR), Head: a.Entry.Head, Method: method, Check: a.Check})
+		PR: control.PRNumber(a.Entry.PR), Head: a.Entry.Head, Method: method})
 	var unreachable *remote.UnreachableError
 	switch {
 	case errors.As(err, &unreachable):
@@ -151,7 +151,7 @@ func (c *Coordinator) queueView(repo string) (reconcile.QueueView, error) {
 	for _, e := range control.Queue(&st, repo) {
 		item := st.Items[e.Task]
 		q := reconcile.QueueItem{QueueEntry: e, State: item.State, Question: control.PendingQuestion(&st, item.ID),
-			Stopped: !coordinating(&st, item), Held: control.QueueHeld(&st, e), Host: st.Attempts[item.Attempt].Host}
+			Stopped: !coordinating(&st, item), Host: st.Attempts[item.Attempt].Host}
 		if u, ok := control.PendingMerge(&st, item.ID); ok {
 			q.Request = u
 		}

@@ -25,7 +25,6 @@ const (
 	MergeMerged    = "merged"
 	MergeRefused   = "merge-refused"
 	MergeTurn      = "merge-turn"
-	MergeDemoted   = "merge-demoted"
 	MergeWithdrawn = "merge-withdrawn"
 )
 
@@ -46,7 +45,7 @@ func PRNumber(url string) int {
 
 // mergeRequest records a worker's merge request for its own task and puts
 // the task in its repository's merge queue. A task already queued keeps its
-// place with the new head, and a head told to refresh is checked again.
+// place with the new head, and a head is checked again at once.
 func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if a.Role != "worker" {
 		return Response{}, problem(403, "only the task's execution can request its merge")
@@ -76,7 +75,7 @@ func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if !queued {
 		e = QueueEntry{Task: item.ID, Repo: item.Repo, Seq: u.ID, Phase: QueueWaiting}
 	}
-	e.Request, e.PR, e.Head, e.WaitSince, e.Reason = u.ID, m.PR, m.Head, time.Time{}, ""
+	e.Request, e.PR, e.Head, e.CheckedAt, e.WaitSince, e.Reason = u.ID, m.PR, m.Head, time.Time{}, time.Time{}, ""
 	if e.Phase == QueueRefresh {
 		e.Phase, e.TurnAt = QueueCheck, time.Time{}
 	}
@@ -131,13 +130,8 @@ type QueueStep struct {
 	// Kind and Text, when Kind is set, are the update on the task that
 	// wakes its executor, as a reply to the request.
 	Kind, Text string
-	// Notice, when set, tells the operator; Hold keeps the entry out of the
-	// head until they acknowledge it.
+	// Notice, when set, tells the operator.
 	Notice string
-	Hold   bool
-	// Demote sends the entry to the back of the queue: its Seq becomes the
-	// update's sequence. It needs Kind.
-	Demote bool
 	// Done records the task done with the entry's PR.
 	Done bool
 }
@@ -165,16 +159,10 @@ func (s Service) QueueStep(q QueueStep) (bool, error) {
 			st.Items[item.ID] = item
 		}
 		if q.Kind != "" {
-			u := st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request}, q.Kind, q.Text, now)
-			if q.Demote && next != nil {
-				next.Seq = u.ID
-			}
+			st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request}, q.Kind, q.Text, now)
 		}
 		if q.Notice != "" {
-			n := st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request, Recipient: "operator"}, "say", q.Notice, now)
-			if q.Hold && next != nil {
-				next.Held = n.ID
-			}
+			st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request, Recipient: "operator"}, "say", q.Notice, now)
 		}
 		if next == nil {
 			delete(st.Queue, cur.Task)
@@ -210,12 +198,6 @@ func (s Service) RecordMerged(id, pr, body string) error {
 			fmt.Sprintf("%s merged while its merge queue entry was changing (%s); the task is done. Check that the merged commit is the one you expect.", pr, body), now)
 		return nil
 	})
-}
-
-// QueueHeld reports whether e waits for the operator to acknowledge the
-// notice that held it.
-func QueueHeld(st *State, e QueueEntry) bool {
-	return e.Held > 0 && !acknowledged(st, e.Held)
 }
 
 // Queue is repo's merge queue in order.
