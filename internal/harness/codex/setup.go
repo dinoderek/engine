@@ -60,6 +60,17 @@ func (setup) CheckFailed(t harness.Target) (string, string) {
 	return "an unattended Codex session there would stop; read the report above, then rerun", command
 }
 
+// PluginUpdate upgrades engine's marketplace in the operator's Codex home,
+// then adds the plugin from it, with the binary hosts.toml pins for h.
+func (setup) PluginUpdate(h hosts.Host, home string) ([]string, error) {
+	bin, err := h.BinPath(Name, home)
+	if err != nil {
+		return nil, err
+	}
+	word := hosts.ShellWord(bin)
+	return []string{word + " plugin marketplace upgrade engine", word + " plugin add " + harness.PluginID}, nil
+}
+
 // engineHome is engine's own Codex home on the host.
 func (r *setupRun) engineHome() string { return r.home + "/" + HomeDir }
 

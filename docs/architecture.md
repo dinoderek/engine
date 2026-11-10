@@ -18,8 +18,11 @@ Two programs share one Go module:
   shares. `internal/session` runs a host's sessions through `git`, `gh` and
   `tmux`. A harness is the `internal/harness` `Adapter` interface; each
   harness is a package below it, listed by `internal/harness/registry`. The
-  commands build the adapters and hand them to `internal/hostops` and
-  `internal/setup`, which see only the interface.
+  commands build the adapters and hand them to `internal/hostops`,
+  `internal/setup` and `internal/upgrade`, which see only the interface.
+  `internal/upgrade` is a fleet loop around `engine setup`, run as a
+  subprocess of the new binary; it reaches the server only through a task
+  list it is handed.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →

@@ -13,11 +13,12 @@
 | `internal/controlrun/` | server coordination and host observations |
 | `internal/controlcmd/` | server CLI and lifecycle |
 | `internal/hosts/` | host config: parsing, validation, slots, launch lines |
-| `internal/hostops/` | `engine host <op> --json`: a host's own ops, and the preflight check |
+| `internal/hostops/` | `engine host <op> --json`: a host's own ops and preflight |
 | `internal/remote/` | a host's ops client: `Local` in-process, `SSH` to another machine, with its tmux-over-SSH runner |
 | `internal/session/` | local clones, worktrees, tmux and run files |
 | `internal/harness/` | the harness `Adapter` interface; one adapter package per harness (`claude/`, `codex/`); `registry/`, the only importer of an adapter; `harnesstest/`, the adapter contract and a fake for tests |
-| `internal/setup/` | `engine setup`: the steps that bring a host to the caller's engine commit, plugin and config |
+| `internal/setup/` | `engine setup`: a host to the caller's commit, plugin and config |
+| `internal/upgrade/` | `engine upgrade`: every host to `main`'s head |
 | `internal/lint/` | `engine lint`: the plan rules |
 | `internal/ui/` | `engine ui` and its embedded page |
 | `internal/start/` | `engine start --check` |

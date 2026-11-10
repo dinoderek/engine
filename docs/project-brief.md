@@ -23,7 +23,7 @@ asks.
 ## State
 
 Built: the control server with its one coordinator (dispatch, recovery and
-merges across hosts), the `engine` CLI, the host config reader, a read-only
+merges across hosts), the `engine` CLI with `engine upgrade` for the whole fleet, the host config reader, a read-only
 local dashboard, the `build` and `engine` skills with their merge guard (a
 plugin this repo publishes), and the repo's own `./dev` quality gates.
 engine is the first worked example of the project context guideline's core.

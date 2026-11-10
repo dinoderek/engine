@@ -86,6 +86,22 @@ func (t target) onHost(command string, tty bool) string {
 	return "ssh " + flags + t.address + " " + remote.ShellJoin([]string{command})
 }
 
+// Shell is a host's shell as setup reaches it: ssh to address, or this
+// host's sh when address is empty.
+type Shell struct{ t target }
+
+// NewShell is the shell of the host called name at address.
+func NewShell(name, address string, exec remote.Exec) Shell {
+	return Shell{target{name: name, address: address, exec: exec}}
+}
+
+// Sh runs a command line on the host, as a setup step does: a host that does
+// not answer is an *remote.UnreachableError.
+func (s Shell) Sh(command, stdin string) (harness.Result, error) { return s.t.Sh(command, stdin) }
+
+// OnHost is the command as the operator would run it on the host.
+func (s Shell) OnHost(command string, tty bool) string { return s.t.onHost(command, tty) }
+
 // stepTarget is the target as the adapters' steps see it, with what the
 // run has found so far.
 type stepTarget struct{ r *runner }

@@ -43,6 +43,9 @@ commands:
                             stop an unattended one
   setup [--host <name>]     bring a host to this engine's commit, plugin and config,
                             or check this one; exits 1 while any item is open
+  upgrade [--dry-run]       bring every host to the head of main: stop the server,
+                            back it up, install, set up each host, start it again;
+                            exits 1 while any item is open
   host <op> --json          run one of this host's ops for a caller on any host:
                             sync-repo, spawn, status, collect or release
 `
@@ -109,6 +112,8 @@ func Run(args []string, env Env) int {
 		return runHost(args[1:], env)
 	case "setup":
 		return runSetup(args[1:], env)
+	case "upgrade":
+		return runUpgrade(args[1:], env)
 	case "ui":
 		return ui.Main(args[1:], ui.Env{Out: env.Out, Err: env.Err, Now: env.Now, Connect: func() (ui.Caller, error) {
 			return controlcmd.Connect(controlEnv(env))

@@ -13,9 +13,9 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// engineRepo is where the caller's commit must be, for another host to
+// EngineRepo is where the caller's commit must be, for another host to
 // install it.
-const engineRepo = "dinoderek/engine"
+const EngineRepo = "dinoderek/engine"
 
 // configFile is a file of ~/.config/engine that setup copies or writes.
 type configFile struct{ name, content string }
@@ -43,15 +43,15 @@ func (r *runner) resolveWanted() (wanted, error) {
 	case info.Dirty():
 		return wanted{}, refuse("this engine was built from a modified working tree; build it from a pushed commit")
 	}
-	out, err := r.d.GH("", nil, "gh", "api", "repos/"+engineRepo+"/commits/"+commit, "--jq", ".sha")
+	out, err := r.d.GH("", nil, "gh", "api", "repos/"+EngineRepo+"/commits/"+commit, "--jq", ".sha")
 	switch {
 	case err != nil:
-		return wanted{}, refuse("could not confirm commit %s is on GitHub (%s): %v", commit, engineRepo, err)
+		return wanted{}, refuse("could not confirm commit %s is on GitHub (%s): %v", commit, EngineRepo, err)
 	case !strings.HasPrefix(strings.TrimSpace(out), commit):
-		return wanted{}, refuse("commit %s is not on GitHub (%s); push it, or build this engine from a pushed commit", commit, engineRepo)
+		return wanted{}, refuse("commit %s is not on GitHub (%s); push it, or build this engine from a pushed commit", commit, EngineRepo)
 	}
 	w := wanted{commit: commit}
-	w.toolchain, w.toolchainErr = readToolchain(r.d.GH, strings.TrimSpace(out))
+	w.toolchain, w.toolchainErr = ReadToolchain(r.d.GH, strings.TrimSpace(out))
 	if w.files, err = r.configFiles(); err != nil {
 		return wanted{}, err
 	}
@@ -155,13 +155,13 @@ var (
 	goName = regexp.MustCompile(`^go[0-9][0-9a-z.]*$`)
 )
 
-// readToolchain is the Go that go.mod's toolchain line names at the commit,
+// ReadToolchain is the Go that go.mod's toolchain line names at the commit,
 // read from GitHub, which has already confirmed the commit.
-func readToolchain(gh session.RunFunc, commit string) (string, error) {
+func ReadToolchain(gh session.RunFunc, commit string) (string, error) {
 	out, err := gh("", nil, "gh", "api", "-H", "Accept: application/vnd.github.raw",
-		"repos/"+engineRepo+"/contents/go.mod?ref="+commit)
+		"repos/"+EngineRepo+"/contents/go.mod?ref="+commit)
 	if err != nil {
-		return "", fmt.Errorf("could not read go.mod at %s (%s): %w", commit[:shortRev], engineRepo, err)
+		return "", fmt.Errorf("could not read go.mod at %s (%s): %w", commit[:shortRev], EngineRepo, err)
 	}
 	m := toolchainLine.FindStringSubmatch(out)
 	switch {

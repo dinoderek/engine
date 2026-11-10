@@ -14,7 +14,7 @@ doc comments are the contract. What each answer drives:
 | one observation per `status`: quota, signed out, window state | unknown is never dead; a window's own exit decides that |
 | hook events in engine's terms, its denial, its unattended policy | runs the core hooks: `pre-tool-use` is the merge guard, `permission` applies the policy, `state` writes the run's state file |
 | its own hook entries | resolves `engine hook <entry> --harness <name>`; an unknown name or entry exits 1 and blocks nothing |
-| `engine setup` steps and preflight failure advice | runs them after the host's steps, on hosts that list the harness |
+| `engine setup` steps, preflight failure advice, the user's plugin update | runs the steps after the host's, on hosts that list the harness; `engine upgrade` runs the update on the caller first |
 | the preflight kickoff, and whether state comes from hooks alone | fails a check whose window stayed open, skipped a step, or wrote no state file |
 
 What each harness answers today:
