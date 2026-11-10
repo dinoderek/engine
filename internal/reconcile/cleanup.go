@@ -30,9 +30,9 @@ func reaps(v View) []Action {
 // session. The merged update gives the session a turn to tear down what it
 // provisioned and report it with engine task cleaned. It is released once
 // idle after that report; or, without one, once idle CleanupWait after the
-// merge, or at once when its window is gone, telling the operator. One still
-// in a turn CleanupCap after the merge, without a report, is noticed once
-// and released when it goes idle.
+// merge with no limit reset pending, or at once when its window is gone,
+// telling the operator. One still in a turn CleanupCap after the merge is
+// noticed once and released when it goes idle.
 func afterMerge(v View, t Item) ([]Action, bool) {
 	s := *t.Session
 	since := v.Now.Sub(t.MergedAt)
@@ -45,16 +45,18 @@ func afterMerge(v View, t Item) ([]Action, bool) {
 				s.Name, t.ID, s.Host, t.Cleaned.Left))
 		}
 		return []Action{a}, true
-	case t.Cleaned != nil:
-		return nil, false
-	case !s.Live || s.Idle() && since >= CleanupWait:
+	case t.Cleaned == nil && (!s.Live || s.Idle() && s.ResetsAt <= 0 && since >= CleanupWait):
 		a := release(t, "its task is merged")
 		return []Action{told(a, "uncleaned/"+t.Current.ID, fmt.Sprintf("%s was released without confirming cleanup after %s merged: %s",
 			s.Name, t.ID, where(s)))}, true
 	case busy && since >= CleanupCap:
+		how := "without confirming cleanup"
+		if t.Cleaned != nil {
+			how = "after reporting its cleanup"
+		}
 		return []Action{notice(t, "cleanup-busy/"+t.Current.ID, fmt.Sprintf(
-			"%s on host %s is still in a turn %s after %s merged, without confirming cleanup. It is released once it goes idle",
-			s.Name, s.Host, CleanupCap, t.ID))}, false
+			"%s on host %s is still in a turn %s after %s merged, %s. It is released once it goes idle",
+			s.Name, s.Host, CleanupCap, t.ID, how))}, false
 	}
 	return nil, false
 }

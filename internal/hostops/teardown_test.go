@@ -134,3 +134,12 @@ func TestReleaseOpTakesOneOutcome(t *testing.T) {
 		t.Errorf("--done: exit %d, %v", code, reply)
 	}
 }
+
+// A failed run keeps everything: the repo's release is not even probed.
+func TestAFailedRunNeverRunsTheReposRelease(t *testing.T) {
+	f := &teardown{usage: releaseUsage}
+	r, _, _, git := doneRelease(t, f, RunFailed, false)
+	if f.probed != 0 || len(f.released) != 0 || !r.WorktreeKept || len(git.calls) != 0 {
+		t.Errorf("released %+v, probed %d, teardown %v, git %v", r, f.probed, f.released, git.calls)
+	}
+}

@@ -76,10 +76,10 @@ repo's own merge step; the merge guard enforces it.
      the update it shows.
   4. The updates on the task:
      - `merged`: the task is `done`. Record the outcome with `engine tell
-       <task>`; from outside the worktree, tear down what you provisioned by
-       the repo's post-merge cleanup rules (no new work, commits or pushes);
-       run `engine task cleaned <task> [--left <what remains>]`; end your
-       turn. The coordinator closes the window.
+       <task>`; from the repo's main checkout, tear down what you provisioned
+       by its post-merge cleanup rules, and do nothing else; run `engine task
+       cleaned <task> [--left <what remains>]`; end your turn. The
+       coordinator closes the window.
      - `merge-turn`: your turn. Redo step 7 (fetch, merge the default
        branch in, rerun the gates and the review, push), then request again
        for the new head, within the time it names.

@@ -88,3 +88,21 @@ func TestAGoneSessionWithoutAReportIsReleasedAndTold(t *testing.T) {
 		t.Fatalf("notices %q, released %v; want %q", got, m.released, want)
 	}
 }
+
+// A session still in a turn at the cap is noticed once and kept; once it
+// goes idle it is released, without a second notice for the same wait.
+func TestABusySessionIsNoticedAtTheCapThenReleasedWhenIdle(t *testing.T) {
+	c, m, task, _ := merged(t)
+	m.status.Windows[0].State = "working"
+	later(c, reconcile.CleanupCap)
+	pass(t, c)
+	pass(t, c)
+	if got := releaseTexts(t, c, task.ID); len(got) != 1 || !strings.Contains(got[0], "is still in a turn") || len(m.released) != 0 {
+		t.Fatalf("notices %q, released %v; want one cap notice and the window kept", got, m.released)
+	}
+	m.status.Windows[0].State = "waiting"
+	pass(t, c)
+	if got := releaseTexts(t, c, task.ID); len(got) != 2 || !strings.Contains(got[1], "was released without confirming cleanup") || !slices.Equal(m.released, []string{"demo-3"}) {
+		t.Fatalf("notices %q, released %v", got, m.released)
+	}
+}

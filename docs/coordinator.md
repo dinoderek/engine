@@ -94,7 +94,7 @@ a machine in `hosts.toml` (`hosts-and-sessions.md`).
 | `status` | Each window of session `engine` with its state and, unless working, its last 20 screen lines and a waiting window's newest denial (`telemetry.md`); each session's newest run; quota, free slots and signed-out harnesses (`internal/hostops/status.go`). |
 | `collect` | Returns a run directory, its `run.json` and file list; nothing is uploaded. |
 | `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base; replies with a code. Already merged is done. |
-| `release` | Closes the window, deletes each harness's files for it; for a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note); removes a remaining worktree unless the run failed or it has changes. Never deletes the branch. |
+| `release` | Closes the window, deletes each harness's files for it; for a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note); removes a remaining worktree unless the run failed or it has changes. Engine itself never deletes the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`,
 `engine` (the build) and `host`. A failure is `{"error": …, "refused":
