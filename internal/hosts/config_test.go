@@ -99,87 +99,75 @@ func TestBaseIsValid(t *testing.T) {
 	}
 }
 
-// lineOf is the 1-based line of src that holds needle.
-func lineOf(t *testing.T, src, needle string) int {
-	t.Helper()
-	for i, line := range strings.Split(src, "\n") {
-		if strings.Contains(line, needle) {
-			return i + 1
-		}
-	}
-	t.Fatalf("%q is not in:\n%s", needle, src)
-	return 0
-}
-
 func TestValidationRules(t *testing.T) {
 	// Each case replaces old with new (once) in base, and expects the
-	// violation on the line holding at.
+	// violation, which names its table and key and carries no line.
 	cases := []struct {
-		name, old, new, at, want string
+		name, old, new, want string
 	}{
-		{"missing default_harness", "default_harness = \"claude\"\n", "", "gb_per_session", "missing default_harness"},
+		{"missing default_harness", "default_harness = \"claude\"\n", "", "missing default_harness"},
 		{"empty default_harness", `"claude"
 gb`, `""
-gb`, "default_harness", "must not be empty"},
-		{"undefined default_harness", `default_harness = "claude"`, `default_harness = "codex"`, "default_harness", `"codex" is not defined`},
-		{"missing gb_per_session", "gb_per_session = 8\n", "", "default_harness", "missing gb_per_session"},
-		{"zero gb_per_session", "gb_per_session = 8", "gb_per_session = 0", "gb_per_session", "at least 1"},
-		{"missing reserve_gb", "reserve_gb = 8\n", "", "default_harness", "missing reserve_gb"},
-		{"negative reserve_gb", "reserve_gb = 8", "reserve_gb = -1", "reserve_gb = -1", "at least 0"},
-		{"unknown top-level key", "gb_per_session = 8", "gb_per_session = 8\nbogus = 1", "bogus", "unknown key bogus"},
-		{"wrong type", "gb_per_session = 8", `gb_per_session = "8"`, "gb_per_session", "must be an integer"},
-		{"no harness", "[harness.claude]", "[harnes.claude]", "default_harness", "missing harness"},
-		{"harness not a table", "[harness.claude]", "[harness]\nx = 1\n[harness.claude]", "x = 1", "harness.x must be a table"},
-		{"harness missing max_sessions", "max_sessions = 8\n", "", "[harness.claude]", "missing max_sessions"},
-		{"harness zero max_sessions", "max_sessions = 8", "max_sessions = 0", "max_sessions", "at least 1"},
-		{"harness missing launch", `launch = "{bin} --model {model} --effort {effort} -n {name}"`, "", "[harness.claude]", "missing launch"},
-		{"launch without bin", `"{bin} --model`, `"claude --model`, "launch", "must start with {bin}"},
-		{"launch bin elsewhere", `"{bin} --model {model}`, `"x {bin} --model {model}`, "launch", "must start with {bin}"},
-		{"launch bin glued", `"{bin} --model`, `"{bin}x --model`, "launch", "must start with {bin}"},
-		{"launch without model", "--model {model} ", "", "launch", "must contain {model}"},
-		{"launch unknown placeholder", "-n {name}", "-n {bogus}", "launch", "unknown placeholder {bogus}"},
-		{"harness unknown key", "max_sessions = 8", "max_sessions = 8\nextra = 1", "extra", "unknown key extra"},
-		{"harness missing tiers", "tiers.deep     = { model = \"opus\", effort = \"high\" }\ntiers.standard = { model = \"sonnet\", effort = \"high\" }\ntiers.light    = { model = \"haiku\", effort = \"medium\" }\n", "", "[harness.claude]", "missing tiers"},
-		{"harness missing tier", "tiers.light    = { model = \"haiku\", effort = \"medium\" }\n", "", "tiers.deep", "harness.claude.tiers: missing light"},
-		{"unknown tier", "tiers.light ", "tiers.huge = { model = \"m\", effort = \"e\" }\ntiers.light ", "tiers.huge", "unknown key huge"},
-		{"tier missing effort", `{ model = "haiku", effort = "medium" }`, `{ model = "haiku" }`, "tiers.light", "missing effort"},
-		{"tier missing model", `{ model = "sonnet", effort = "high" }`, `{ effort = "high" }`, "tiers.standard", "missing model"},
-		{"tier empty model", `{ model = "opus",`, `{ model = "",`, "tiers.deep", "must not be empty"},
-		{"tier not a table", `tiers.deep     = { model = "opus", effort = "high" }`, `tiers.deep = "opus"`, "tiers.deep", "must be a table"},
-		{"tier unknown key", `{ model = "haiku", effort = "medium" }`, `{ model = "haiku", effort = "medium", cost = "low" }`, "tiers.light", "unknown key cost"},
-		{"no host", "[host.mac]", "[hosting.mac]", "default_harness", "missing host"},
-		{"host not a table", "[host.mac]", "[host]\nx = 1\n[host.mac]", "x = 1", "host.x must be a table"},
-		{"missing address", "address = \"me@mac\"\n", "", "[host.mac]", "missing address"},
-		{"address without @", `"me@mac"`, `"mac"`, "address", "must be <user>@<tailscale name>"},
-		{"address without user", `"me@mac"`, `"@mac"`, "address", "must be <user>@<tailscale name>"},
-		{"address without machine", `"me@mac"`, `"me@"`, "address", "must be <user>@<tailscale name>"},
-		{"address that looks like an ssh option", `"me@mac"`, `"-oProxyCommand=x@mac"`, "address", "must be <user>@<tailscale name>"},
-		{"bin skipped when harnesses is malformed", `harnesses = ["claude"]`, `harnesses = 5`, "harnesses =", "must be an array of strings"},
-		{"address with two @", `"me@mac"`, `"me@mac@x"`, "address", "must be <user>@<tailscale name>"},
-		{"missing harnesses", "harnesses = [\"claude\"]\n", "", "[host.mac]", "missing harnesses"},
-		{"empty harnesses", `["claude"]`, `[]`, "harnesses = []", "at least one harness"},
-		{"unknown host harness", `["claude"]`, `["claude", "codex"]`, "harnesses =", `"codex", which is not defined`},
-		{"duplicate host harness", `["claude"]`, `["claude", "claude"]`, "harnesses =", `"claude" twice`},
-		{"missing ram_gb", "ram_gb = 48\n", "", "[host.mac]", "missing ram_gb"},
-		{"zero ram_gb", "ram_gb = 48", "ram_gb = 0", "ram_gb", "at least 1"},
-		{"negative host reserve_gb", "reserve_gb = 16", "reserve_gb = -2", "reserve_gb = -2", "at least 0"},
-		{"zero host gb_per_session", "reserve_gb = 16", "reserve_gb = 16\ngb_per_session = 0", "gb_per_session = 0", "at least 1"},
-		{"zero host max_sessions", "reserve_gb = 16", "reserve_gb = 16\nmax_sessions = 0", "max_sessions = 0", "at least 1"},
-		{"unknown heavy capability", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = [\"ios\", \"gpu\"]", "heavy_capabilities", `top level: unknown capability "gpu"`},
-		{"duplicate heavy capability", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = [\"vm\", \"vm\"]", "heavy_capabilities", `heavy_capabilities lists "vm" twice`},
-		{"heavy capabilities not an array", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = \"ios\"", "heavy_capabilities", "must be an array of strings"},
-		{"zero max_heavy_sessions", "ram_gb = 48", "ram_gb = 48\nmax_heavy_sessions = 0", "max_heavy_sessions", "at least 1"},
-		{"max_heavy_sessions above the derived slots", "ram_gb = 48", "ram_gb = 48\nmax_heavy_sessions = 5", "max_heavy_sessions", "host.mac: max_heavy_sessions (5) must not exceed the host's 4 sessions"},
-		{"max_heavy_sessions above max_sessions", "ram_gb = 48", "ram_gb = 48\nmax_sessions = 6\nmax_heavy_sessions = 7", "max_heavy_sessions", "max_heavy_sessions (7) must not exceed the host's 6 sessions"},
-		{"unknown capability", `["macos"]`, `["macos", "gpu"]`, "capabilities", `unknown capability "gpu"`},
-		{"duplicate capability", `["macos"]`, `["macos", "macos"]`, "capabilities", `"macos" twice`},
-		{"capabilities not an array", `["macos"]`, `"macos"`, "capabilities", "must be an array of strings"},
-		{"missing bin", "bin = { claude = \"~/bin/claude\" }\n", "", "[host.mac]", "missing bin"},
-		{"bin lacks a harness", `{ claude = "~/bin/claude" }`, `{}`, "bin =", "host.mac.bin: missing claude"},
-		{"bin names another harness", `{ claude = "~/bin/claude" }`, `{ claude = "~/bin/claude", codex = "x" }`, "bin =", "unknown key codex"},
-		{"empty bin path", `"~/bin/claude"`, `""`, "bin =", "must not be empty"},
-		{"unknown host key", "ram_gb = 48", "ram_gb = 48\ncolor = \"red\"", "color", "unknown key color"},
-		{"cloud host", "[host.mac]", "[host.cloud]\nkind = \"cloud\"\nharnesses = [\"claude\"]\nmax_sessions = 4\n[host.mac]", "[host.cloud]", "host.cloud: missing address"},
+gb`, "top level: default_harness must not be empty"},
+		{"undefined default_harness", `default_harness = "claude"`, `default_harness = "codex"`, `"codex" is not defined`},
+		{"missing gb_per_session", "gb_per_session = 8\n", "", "missing gb_per_session"},
+		{"zero gb_per_session", "gb_per_session = 8", "gb_per_session = 0", "at least 1"},
+		{"missing reserve_gb", "reserve_gb = 8\n", "", "missing reserve_gb"},
+		{"negative reserve_gb", "reserve_gb = 8", "reserve_gb = -1", "at least 0"},
+		{"unknown top-level key", "gb_per_session = 8", "gb_per_session = 8\nbogus = 1", "unknown key bogus"},
+		{"wrong type", "gb_per_session = 8", `gb_per_session = "8"`, "must be an integer"},
+		{"no harness", "[harness.claude]", "[harnes.claude]", "missing harness"},
+		{"harness not a table", "[harness.claude]", "[harness]\nx = 1\n[harness.claude]", "harness.x must be a table"},
+		{"harness missing max_sessions", "max_sessions = 8\n", "", "missing max_sessions"},
+		{"harness zero max_sessions", "max_sessions = 8", "max_sessions = 0", "at least 1"},
+		{"harness missing launch", `launch = "{bin} --model {model} --effort {effort} -n {name}"`, "", "missing launch"},
+		{"launch without bin", `"{bin} --model`, `"claude --model`, "must start with {bin}"},
+		{"launch bin elsewhere", `"{bin} --model {model}`, `"x {bin} --model {model}`, "must start with {bin}"},
+		{"launch bin glued", `"{bin} --model`, `"{bin}x --model`, "must start with {bin}"},
+		{"launch without model", "--model {model} ", "", "must contain {model}"},
+		{"launch unknown placeholder", "-n {name}", "-n {bogus}", "unknown placeholder {bogus}"},
+		{"harness unknown key", "max_sessions = 8", "max_sessions = 8\nextra = 1", "unknown key extra"},
+		{"harness missing tiers", "tiers.deep     = { model = \"opus\", effort = \"high\" }\ntiers.standard = { model = \"sonnet\", effort = \"high\" }\ntiers.light    = { model = \"haiku\", effort = \"medium\" }\n", "", "missing tiers"},
+		{"harness missing tier", "tiers.light    = { model = \"haiku\", effort = \"medium\" }\n", "", "harness.claude.tiers: missing light"},
+		{"unknown tier", "tiers.light ", "tiers.huge = { model = \"m\", effort = \"e\" }\ntiers.light ", "unknown key huge"},
+		{"tier missing effort", `{ model = "haiku", effort = "medium" }`, `{ model = "haiku" }`, "missing effort"},
+		{"tier missing model", `{ model = "sonnet", effort = "high" }`, `{ effort = "high" }`, "missing model"},
+		{"tier empty model", `{ model = "opus",`, `{ model = "",`, "must not be empty"},
+		{"tier not a table", `tiers.deep     = { model = "opus", effort = "high" }`, `tiers.deep = "opus"`, "must be a table"},
+		{"tier unknown key", `{ model = "haiku", effort = "medium" }`, `{ model = "haiku", effort = "medium", cost = "low" }`, "unknown key cost"},
+		{"no host", "[host.mac]", "[hosting.mac]", "missing host"},
+		{"host not a table", "[host.mac]", "[host]\nx = 1\n[host.mac]", "host.x must be a table"},
+		{"missing address", "address = \"me@mac\"\n", "", "missing address"},
+		{"address without @", `"me@mac"`, `"mac"`, "must be <user>@<tailscale name>"},
+		{"address without user", `"me@mac"`, `"@mac"`, "must be <user>@<tailscale name>"},
+		{"address without machine", `"me@mac"`, `"me@"`, "must be <user>@<tailscale name>"},
+		{"address that looks like an ssh option", `"me@mac"`, `"-oProxyCommand=x@mac"`, "must be <user>@<tailscale name>"},
+		{"bin skipped when harnesses is malformed", `harnesses = ["claude"]`, `harnesses = 5`, "must be an array of strings"},
+		{"address with two @", `"me@mac"`, `"me@mac@x"`, "must be <user>@<tailscale name>"},
+		{"missing harnesses", "harnesses = [\"claude\"]\n", "", "missing harnesses"},
+		{"empty harnesses", `["claude"]`, `[]`, "at least one harness"},
+		{"unknown host harness", `["claude"]`, `["claude", "codex"]`, `"codex", which is not defined`},
+		{"duplicate host harness", `["claude"]`, `["claude", "claude"]`, `"claude" twice`},
+		{"missing ram_gb", "ram_gb = 48\n", "", "missing ram_gb"},
+		{"zero ram_gb", "ram_gb = 48", "ram_gb = 0", "at least 1"},
+		{"negative host reserve_gb", "reserve_gb = 16", "reserve_gb = -2", "at least 0"},
+		{"zero host gb_per_session", "reserve_gb = 16", "reserve_gb = 16\ngb_per_session = 0", "at least 1"},
+		{"zero host max_sessions", "reserve_gb = 16", "reserve_gb = 16\nmax_sessions = 0", "at least 1"},
+		{"unknown heavy capability", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = [\"ios\", \"gpu\"]", `top level: unknown capability "gpu"`},
+		{"duplicate heavy capability", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = [\"vm\", \"vm\"]", `heavy_capabilities lists "vm" twice`},
+		{"heavy capabilities not an array", "reserve_gb = 8", "reserve_gb = 8\nheavy_capabilities = \"ios\"", "must be an array of strings"},
+		{"zero max_heavy_sessions", "ram_gb = 48", "ram_gb = 48\nmax_heavy_sessions = 0", "at least 1"},
+		{"max_heavy_sessions above the derived slots", "ram_gb = 48", "ram_gb = 48\nmax_heavy_sessions = 5", "host.mac: max_heavy_sessions (5) must not exceed the host's 4 sessions"},
+		{"max_heavy_sessions above max_sessions", "ram_gb = 48", "ram_gb = 48\nmax_sessions = 6\nmax_heavy_sessions = 7", "max_heavy_sessions (7) must not exceed the host's 6 sessions"},
+		{"unknown capability", `["macos"]`, `["macos", "gpu"]`, `unknown capability "gpu"`},
+		{"duplicate capability", `["macos"]`, `["macos", "macos"]`, `"macos" twice`},
+		{"capabilities not an array", `["macos"]`, `"macos"`, "must be an array of strings"},
+		{"missing bin", "bin = { claude = \"~/bin/claude\" }\n", "", "missing bin"},
+		{"bin lacks a harness", `{ claude = "~/bin/claude" }`, `{}`, "host.mac.bin: missing claude"},
+		{"bin names another harness", `{ claude = "~/bin/claude" }`, `{ claude = "~/bin/claude", codex = "x" }`, "unknown key codex"},
+		{"empty bin path", `"~/bin/claude"`, `""`, "must not be empty"},
+		{"unknown host key", "ram_gb = 48", "ram_gb = 48\ncolor = \"red\"", "unknown key color"},
+		{"cloud host", "[host.mac]", "[host.cloud]\nkind = \"cloud\"\nharnesses = [\"claude\"]\nmax_sessions = 4\n[host.mac]", "host.cloud: missing address"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -192,9 +180,8 @@ gb`, "default_harness", "must not be empty"},
 			if !errors.As(err, &e) {
 				t.Fatalf("got %v, want an *Error\n%s", err, src)
 			}
-			line := lineOf(t, src, c.at)
-			if e.Line != line || !strings.Contains(e.Msg, c.want) {
-				t.Errorf("got line %d: %s\nwant line %d containing %q\n%s", e.Line, e.Msg, line, c.want, src)
+			if e.Line != 0 || !strings.Contains(e.Msg, c.want) {
+				t.Errorf("got line %d: %s\nwant no line and %q\n%s", e.Line, e.Msg, c.want, src)
 			}
 		})
 	}
@@ -207,8 +194,8 @@ func TestFirstViolationWins(t *testing.T) {
 	src = strings.Replace(src, "ram_gb = 48", "ram_gb = 0", 1)
 	_, err := Parse(src)
 	var e *Error
-	if !errors.As(err, &e) || e.Line != 3 || !strings.Contains(e.Msg, "unknown key bogus") {
-		t.Errorf("got %v, want the unknown key on line 3", err)
+	if !errors.As(err, &e) || e.Msg != "top level: unknown key bogus" {
+		t.Errorf("got %v, want the unknown key", err)
 	}
 }
 
@@ -239,13 +226,36 @@ host = {}
 }
 
 func TestSyntaxErrorsCarryTheirLine(t *testing.T) {
-	_, err := Parse(base + "\n[host.devbox]\naddress = \"\"\"x\"\"\"\n")
+	_, err := Parse(base + "\n[host.devbox]\naddress = \"x\n")
 	var e *Error
 	if !errors.As(err, &e) || e.Line != strings.Count(base, "\n")+3 {
 		t.Errorf("got %v", err)
 	}
 	_, err = Parse(base + "[host.mac]\n")
-	if !errors.As(err, &e) || e.Line != strings.Count(base, "\n")+1 || !strings.Contains(e.Msg, "table host.mac is defined twice") {
+	if !errors.As(err, &e) || e.Line != strings.Count(base, "\n")+1 || !strings.Contains(e.Msg, "Key 'host.mac' has already been defined") {
 		t.Errorf("duplicate host: %v", err)
+	}
+}
+
+// Values TOML allows that host config never uses are type errors naming the key.
+func TestOtherTypesAreTypeErrors(t *testing.T) {
+	for old, repl := range map[string]string{
+		"ram_gb = 48":            "ram_gb = 48.0",
+		"gb_per_session = 8":     "gb_per_session = true",
+		`harnesses = ["claude"]`: `harnesses = ["claude", 1]`,
+		`["macos"]`:              `[["macos"]]`,
+	} {
+		_, err := Parse(strings.Replace(base, old, repl, 1))
+		key, _, _ := strings.Cut(old, " ")
+		if old == `["macos"]` {
+			key = "capabilities"
+		}
+		if err == nil || !strings.Contains(err.Error(), key+" must be") {
+			t.Errorf("%s: got %v", repl, err)
+		}
+	}
+	_, err := Parse(strings.Replace(base, "[host.mac]", "[[host.mac]]", 1))
+	if err == nil || !strings.Contains(err.Error(), "host.mac must be a table") {
+		t.Errorf("array of tables: %v", err)
 	}
 }

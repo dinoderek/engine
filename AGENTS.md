@@ -34,8 +34,8 @@
      linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,
      `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`;
    - **a new runtime dependency:** any module in `go.mod` that the `engine`
-     binary links. Dev tools (go.mod's `tool` block) are yours to add, logged
-     as a ruling.
+     binary links. Dev tools (go.mod's `tool`
+     block) are yours to add, logged as a ruling.
 5. **One Go version.** `go.mod`'s `toolchain` line is the only source. Run
    every verb and lane through `./dev`, which pins it. Docs cite `go.mod`,
    never the version.

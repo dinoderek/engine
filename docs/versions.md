@@ -51,7 +51,9 @@ CI's setup-go reads the same line. Docs cite `go.mod`, never the version.
   Go, and runs govulncheck. It fails only on a vulnerability. Fix one by
   upgrading the module that carries it, in its own PR.
 
-Dependabot names the two tool modules in its `allow` list, because their
+A runtime library a tool also requires, such as the TOML library, takes the
+higher of the two versions, so a tool bump can move it: check its release
+notes in that PR. Dependabot names the two tool modules in its `allow` list, because their
 requirements are marked `// indirect`. If no tool update has arrived for a
 month while `./dev deps` reports one, read the Dependabot job log in the repo's
 Insights tab and bump the tool by hand with `go get -tool <module>@<version>`.

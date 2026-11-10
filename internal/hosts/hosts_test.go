@@ -169,7 +169,7 @@ func TestOpenFailures(t *testing.T) {
 		{"two words in the host file", writeConfig(t, base, "mac mini\n"), "one host name on one line"},
 		{"two lines in the host file", writeConfig(t, base, "mac\nlinux\n"), "one host name on one line"},
 		{"host not configured", writeConfig(t, base, "laptop\n"), `host "laptop" is not in hosts.toml`},
-		{"invalid config", writeConfig(t, "a = 1\n\na = 2\n", "mac\n"), "hosts.toml: line 3: key a is defined twice"},
+		{"invalid config", writeConfig(t, "a = 1\n\na = 2\n", "mac\n"), "hosts.toml: line 3: Key 'a' has already been defined"},
 	}
 	for _, c := range cases {
 		_, _, err := Open(c.dir)
@@ -179,10 +179,10 @@ func TestOpenFailures(t *testing.T) {
 	}
 }
 
-func TestLoadKeepsTheLine(t *testing.T) {
+func TestLoadNamesTheFile(t *testing.T) {
 	_, err := Load(filepath.Join(writeConfig(t, strings.Replace(base, "ram_gb = 48", "ram_gb = 0", 1), ""), "hosts.toml"))
 	var e *Error
-	if !errors.As(err, &e) || e.Line != 15 || !strings.Contains(err.Error(), "hosts.toml: line 15: host.mac: ram_gb must be at least 1") {
+	if !errors.As(err, &e) || !strings.HasSuffix(err.Error(), "hosts.toml: host.mac: ram_gb must be at least 1") {
 		t.Errorf("got %v", err)
 	}
 }

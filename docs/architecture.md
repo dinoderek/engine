@@ -23,10 +23,9 @@ Two programs share one Go module:
   `internal/lint` (`engine lint`: a plan's rules), `internal/ui`
   (`engine ui`: the loopback dashboard, which holds the operator credential and
   forwards only fixed control reads). The commands
-  share `internal/hosts`, the host config: it parses `hosts.toml` with an
-  in-house reader of the TOML subset the config uses, validates it, works out
-  each machine's slots and expands launch lines. `internal/session` is the
-  host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
+  share `internal/hosts`, the host config: it parses and validates
+  `hosts.toml`, works out each machine's slots and expands launch lines.
+  `internal/session` is the host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
   worktrees, the tmux session, windows and pane logs, the run record and the
   harness's state file. `internal/harness` is the `Adapter` interface engine
   asks of a harness; each harness is a package below it, listed by
@@ -60,8 +59,9 @@ non-test imports. The reasons:
 
 - **One binary, `engine`, for macOS and Linux.** The same binary runs on every
   host.
-- **Standard library only at runtime.** A new runtime dependency is a hard
-  stop (`AGENTS.md`).
+- **The runtime is the standard library plus approved libraries:** `go.mod`'s
+  direct requirements. Each has no requirements and no cgo, so the build stays
+  cgo-free. A new one is a hard stop (`AGENTS.md`).
 - **External tools use injectable CLI runners**, including `sqlite3`.
   Engine's own server exposes a versioned HTTP API.
 - **Coordination derives decisions from authoritative records and host
