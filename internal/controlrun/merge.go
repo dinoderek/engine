@@ -37,8 +37,8 @@ func (c *Coordinator) queues(cfg *hosts.Config) error {
 }
 
 // queue settles repo's queue's steps, then makes the head's host call. Each
-// step can at most promote one head or unhead one entry, so the loop ends
-// within two rounds per entry.
+// step can at most promote one head, unhead one entry or end one, so the
+// loop ends within two rounds per entry.
 func (c *Coordinator) queue(repo string, cfg *hosts.Config) error {
 	for range 2*len(c.mustSnapshot().Queue) + 2 {
 		v, err := c.queueView(repo)

@@ -98,7 +98,7 @@ func DecideQueue(v QueueView) []Action {
 	switch {
 	case q.Phase == control.QueueRefresh && v.Now.Sub(q.TurnAt) >= TurnWait:
 		return []Action{giveUp(q, "it was not refreshed within "+TurnWait.String()+" of its turn",
-			"Merge the default branch in, rerun the gates and the fresh review, push")}
+			"Merge the default branch in, rerun the gates and the fresh review and push")}
 	case q.Phase == control.QueueCheck && (q.CheckedAt.IsZero() || v.Now.Sub(q.CheckedAt) >= CheckEvery):
 		return []Action{{Kind: Merge, Item: q.Task, Host: q.Host, Entry: q.QueueEntry, Request: q.Request}}
 	}
@@ -134,21 +134,21 @@ func Answer(now time.Time, q QueueItem, p Probe) []Action {
 	switch {
 	case p.Missing:
 		return []Action{giveUp(q, fmt.Sprintf("its task's host %q is not in hosts.toml", q.Host),
-			"Ask the operator to fix the host config with engine ask")}
+			"The operator is told to fix the host config; wait until they have")}
 	case p.Unreachable:
 		to.FailSince, to.Failures = q.FailSince, q.Failures
 		if q.FailSince.IsZero() {
 			to.FailSince = now
 		} else if now.Sub(q.FailSince) >= HostWait {
 			return []Action{giveUp(q, fmt.Sprintf("host %s was unreachable for %s", q.Host, HostWait),
-				"Ask the operator to bring the host back with engine ask")}
+				"The operator is told; wait until the host is back")}
 		}
 		return []Action{step(q, control.QueueStep{To: &to})}
 	case p.Err != "":
 		to.FailSince, to.Failures = q.FailSince, q.Failures+1
 		if to.Failures >= GhFailures {
 			return []Action{giveUp(q, fmt.Sprintf("merging at %s failed %d times on host %s: %s", q.Head, GhFailures, q.Host, p.Err),
-				"Ask the operator to check gh auth status and engine setup there with engine ask")}
+				"The operator is told to check gh auth status and engine setup there; wait until they have")}
 		}
 		return []Action{step(q, control.QueueStep{To: &to})}
 	}
@@ -171,7 +171,7 @@ func answerHead(now time.Time, q QueueItem, to control.QueueEntry, r hostops.Mer
 		}
 		if now.Sub(since) >= ChecksWait {
 			return []Action{giveUp(q, fmt.Sprintf("its checks were pending for %s (%s)", ChecksWait, r.Reason),
-				"Find out why the checks do not finish, fix it, push")}
+				"Find out why the checks do not finish, fix it and push")}
 		}
 		return healthy()
 	case hostops.CodePendingMergeable:
@@ -179,7 +179,7 @@ func answerHead(now time.Time, q QueueItem, to control.QueueEntry, r hostops.Mer
 			to.WaitSince = now
 		} else if now.Sub(q.WaitSince) >= MergeableWait {
 			return []Action{giveUp(q, "GitHub did not work out whether it is mergeable within "+MergeableWait.String(),
-				"Merge the default branch in, rerun the gates and the fresh review, push")}
+				"Merge the default branch in, rerun the gates and the fresh review and push")}
 		}
 		return healthy()
 	case hostops.CodeBehind, hostops.CodeConflict, hostops.CodeHeadMoved:
