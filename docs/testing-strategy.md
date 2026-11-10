@@ -12,7 +12,7 @@
 | Command line | `cli.Run` or `dev.Tool.Main` with buffers for stdout and stderr | exit codes, usage text and verb dispatch |
 
 Pick the lowest layer that can prove the claim. Use a real process only when
-a fake would assume the very behaviour under test.
+a fake would assume the behaviour under test.
 
 ## Rules
 

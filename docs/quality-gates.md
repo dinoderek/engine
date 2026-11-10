@@ -46,20 +46,16 @@ counts as covered when any package's tests run it.
 ## Import rules
 
 The Go compiler rejects import cycles, so `imports` checks only the layers in
-`scripts/import-rules.tsv`, on non-test imports. Test files may import
-anything. It sees the files built for the host OS, so CI on Linux also covers
-any Linux-only file. A rule whose importer or a target matches no package
-fails the lane. If you are adding a package or changing a rule, load
-`architecture.md`, which owns the reasons.
+`scripts/import-rules.tsv`, on non-test imports, for the files built on the
+host OS. A rule whose importer or target matches no package fails the lane.
+Load `architecture.md` before changing a rule.
 
 ## Baselines only shrink
 
-Violations that existed when a gate landed are recorded in the baseline files
-named above. All are empty. Each row tolerates up to its count. Above the count
-the lane fails; below it the lane also fails until you lower or delete the row,
-so a baseline only shrinks. A `//nolint` directive, in any form golangci-lint
-honours, counts as a lint finding (linter `nolint`), so it needs a baseline row
-too.
+Each baseline row tolerates up to its count. Above the count the lane fails;
+below it the lane also fails until you lower or delete the row. All baselines
+are empty. A `//nolint` directive, in any form golangci-lint honours, is a lint
+finding (linter `nolint`) and needs a baseline row.
 
 Adding a row, raising a count, lowering a threshold or excluding a linter is a
 hard stop: it needs the operator's agreement, stated in the PR's
