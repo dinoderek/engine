@@ -31,20 +31,26 @@ const serverSettle = 2 * time.Second
 type ServerDeps struct {
 	// Tmux drives ServerSocket on this host.
 	Tmux *session.Tmux
-	// Exec runs ssh to reach the server's host.
+	// Exec runs ssh to reach the server's host, and systemctl on this host
+	// when it records a service manager.
 	Exec remote.Exec
 	// Executable is this engine binary, which the window runs.
 	Executable func() (string, error)
 	Sleep      func(time.Duration)
 }
 
+// RealServerDeps are the real tmux, ssh and systemctl, binary and clock.
+func RealServerDeps() ServerDeps {
+	tm := session.New()
+	tm.Socket = ServerSocket
+	return ServerDeps{Tmux: tm, Exec: remote.ExecCommand, Executable: os.Executable, Sleep: time.Sleep}
+}
+
 func (e Env) serverDeps() ServerDeps {
 	if e.Server != nil {
 		return *e.Server
 	}
-	tm := session.New()
-	tm.Socket = ServerSocket
-	return ServerDeps{Tmux: tm, Exec: remote.ExecCommand, Executable: os.Executable, Sleep: time.Sleep}
+	return RealServerDeps()
 }
 
 // launchServer starts the control server on the host config.toml names, or
@@ -115,6 +121,9 @@ func forward(e Env, d ServerDeps, h hosts.Host) error {
 }
 
 func startHere(e Env, d ServerDeps, h hosts.Host) error {
+	if h.Services.Recorded() {
+		return startSystemd(e, d, h)
+	}
 	listen, origin := hosts.ServerAddress(h)
 	attach := "tmux -L " + ServerSocket + " attach"
 	windows, err := d.Tmux.Windows()

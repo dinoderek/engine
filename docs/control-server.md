@@ -26,6 +26,10 @@ returns. It runs in the private tmux server `engine-server`
 in the host's address: the origin it advertises and the CLI uses. The tailnet
 keeps credentials confidential. To restart, close its window and rerun.
 
+A host whose `hosts.toml` entry records `services` starts through its systemd
+unit (`systemctl --user start`), never a second tmux server. A start that
+fails or leaves the unit inactive exits 1, naming its `journalctl --user -u`.
+
 `--foreground` runs it in place. For other networks, use an SSH tunnel or a
 TLS reverse proxy, set `[server] url` instead of `host`, and use
 `--foreground`. Without config.toml, the CLI uses `http://devbox:7331`;
