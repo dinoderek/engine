@@ -53,5 +53,6 @@ Rules for the lines:
 
 - **Claude:** keep `--permission-mode auto` and `-n {name} --remote-control {name}`.
 - **Codex:** keep the `workspace-write` sandbox with auto-review, never
-  `approval_policy = "never"`, and network access. Set no writable root and no
-  `--add-dir`: a joined session refuses both, and `spawn` warns.
+  `approval_policy = "never"`, and network access, for `gh` and `git push`.
+  Set no writable root and no `--add-dir`: a joined session refuses both, so
+  such a line keeps every session embedded, and `spawn` warns.

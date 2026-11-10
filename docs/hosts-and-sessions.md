@@ -22,6 +22,9 @@ with a run recorded under its name takes a slot.
 top-level `heavy_capabilities`. A host's `max_heavy_sessions` caps them below
 its slots; without it every slot may be heavy.
 
+**Capabilities** are declared per host and named by a card's `requires`. The
+one list is `hosts.Capabilities` in `internal/hosts/hosts.go`.
+
 ```toml
 default_harness = "claude"
 harness_ratio = { claude = 4, codex = 1 }
@@ -89,8 +92,8 @@ then:
    task or plan, the attempt and the reviewer model. `ENGINE_*` variables and
    `ENGINE_UNATTENDED=1` (hands-off) come from `/bin/sh`, or from the adapter
    when the session joins a remote-control daemon;
-4. writes `run.json` (`telemetry.md`), before step 2 for a daemon-joined
-   session, since its hooks find their run by it.
+4. writes `run.json` (`telemetry.md`), before the window opens for a
+   daemon-joined session, since its hooks find their run by it.
 
 Spawn refuses a missing host entry or host file, an unknown or unrunnable
 harness, or an existing window. Slots, capabilities and caps are placement's
