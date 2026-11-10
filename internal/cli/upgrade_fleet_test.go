@@ -320,8 +320,8 @@ func (f *upgradeFleet) writeBackup(h *fleetHost, rel string, errOut io.Writer) i
 
 // newEngine is the engine the caller on installed, run as a subprocess:
 // `setup` there, or `setup --host <name>` for another host. It brings the
-// host to its own build, the caller's Claude plugin and, on a host that
-// lists Codex, the marketplace's Codex plugin, unless that setup ends open.
+// host to its own build and the caller's plugin version, its Codex copy
+// included on a host that lists Codex, unless that setup ends open.
 func (f *upgradeFleet) newEngine(on string, out io.Writer, args []string) int {
 	caller := f.hosts[on]
 	name := on
@@ -341,7 +341,8 @@ func (f *upgradeFleet) newEngine(on string, out io.Writer, args []string) int {
 	}
 	h.engine, h.claude = caller.engine, caller.claude
 	if h.runs("codex") && name != on {
-		h.codex = marketPlugin
+		// Setup brings a Codex copy to the caller's plugin version.
+		h.codex = caller.claude
 	}
 	fmt.Fprintf(out, "%s is set up\n", name)
 	return 0

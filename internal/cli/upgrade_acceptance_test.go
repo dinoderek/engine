@@ -156,7 +156,9 @@ func TestUpgradeStopsBacksUpAndStartsTheServer(t *testing.T) {
 	wantRow(t, out.String(), "box", oldCommit[:7], oldCommit[:7], oldPlugin, "OPEN")
 	wantRow(t, out.String(), "lab", oldCommit[:7], headCommit[:7], marketPlugin, "set up")
 	wantIn(t, out.String(), "and started and answers", "box: setup ended open; its report is above: ~/.local/bin/engine setup --host box")
-	f.tasks()
+	if got := len(f.tasks()); got != 1 {
+		t.Errorf("the restarted server lists %d task(s); want 1", got)
+	}
 }
 
 // A task that is running, in review or waiting on the operator, a server
@@ -250,12 +252,10 @@ func TestServeStartsTheUnitAndOpensNoTmuxWindow(t *testing.T) {
 		}
 	}
 	// The same host without the table goes to tmux: the fake sees it.
-	f := newUpgradeFleet(t, "box", "mac")
-	f.hosts["mac"].services = ""
-	f.server = "box"
-	env, _, _ := f.env("box")
-	Run([]string{"serve"}, env)
-	if f.tmux == 0 || len(f.log) != 0 {
-		t.Errorf("a host with no services table: %d tmux call(s), changes %q", f.tmux, f.log)
+	f := newUpgradeFleet(t, "mac", "box")
+	f.hosts["box"].services = ""
+	env, _, errOut := f.env("box")
+	if code := Run([]string{"serve"}, env); code != 1 || !strings.Contains(errOut.String(), "no tmux in this test") || f.tmux == 0 || len(f.log) != 0 {
+		t.Errorf("a host with no services table: exit %d, err %q, %d tmux call(s), changes %q", code, errOut, f.tmux, f.log)
 	}
 }
