@@ -4,8 +4,9 @@
 // steps after them, through its adapter; gh's sign-in and the preflight
 // check come last. The report numbers the steps in order. It is safe to
 // rerun. It changes only engine's own files (~/.config/engine, ~/.local/bin,
-// ~/.local/share/engine) and what the adapters change, and for anything else
-// it prints the exact command for the operator to run. With no host it
+// ~/.local/share/engine) and what the adapters change (Codex's plugin in the
+// operator's Codex home, through Codex's own CLI), and for anything else it
+// prints the exact command for the operator to run. With no host it
 // checks this one; an adapter's steps may still act on it.
 package setup
 

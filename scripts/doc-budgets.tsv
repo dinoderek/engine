@@ -23,11 +23,12 @@ budget	docs/architecture.md	370
 budget	docs/project-structure.md	340
 budget	docs/testing-strategy.md	345
 budget	docs/quality-gates.md	845
-budget	docs/control-server.md	1500
-budget	docs/coordinator.md	1400
+budget	docs/control-server.md	1300
+budget	docs/coordinator.md	1375
+budget	docs/telemetry.md	240
 budget	docs/execution-protocol.md	675
-budget	docs/hosts-and-sessions.md	1400
-budget	docs/harnesses.md	700
+budget	docs/hosts-and-sessions.md	1050
+budget	docs/harnesses.md	580
 budget	docs/project-context.md	1105
 budget	docs/versions.md	515
 budget	docs/operator-setup.md	1710
