@@ -47,7 +47,18 @@ harnesses = ["claude", "codex"]
 ram_gb = 32
 capabilities = ["linux", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
+
+[host.devbox.services]
+manager = "systemd"     # the only value
+server = "engine-server.service"
 ```
+
+**Services.** The optional `services` table says how a host runs the control
+server: a `systemctl --user` unit. `config.toml`'s `[server] host` still says
+which host runs it. A manager other than systemd, either key without the
+other, and a unit that is not a `.service` name are refused at load.
+`Host.ServerCommand` and `Host.ServerShellLine` build the `start`, `stop` and
+`is-active` lines; callers run them, locally or over ssh.
 
 Each harness is run through its pinned `bin`; engine never uses whichever
 binary comes first on `PATH`. Launch lines and tiers are in `harnesses.md`.

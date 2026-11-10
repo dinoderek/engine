@@ -72,6 +72,9 @@ type Host struct {
 	Capabilities     []string
 	// Bin is the path of each harness binary, as written: it may start with ~.
 	Bin map[string]string
+	// Services records how the host runs the control server; the zero value
+	// records nothing.
+	Services Services
 }
 
 // Slots is how many sessions the host runs at once: MaxSessions when set,
