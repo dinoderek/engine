@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -40,9 +42,10 @@ type fakeDaemon struct {
 	params  []map[string]any
 }
 
-func (f *fakeDaemon) serve(t *testing.T, peer *wsPeer) {
+func (f *fakeDaemon) serve(t *testing.T, peer *websocket.Conn) {
+	ctx := context.Background()
 	for {
-		_, p, err := peer.recv()
+		_, p, err := peer.Read(ctx)
 		if err != nil {
 			return
 		}
@@ -65,22 +68,19 @@ func (f *fakeDaemon) serve(t *testing.T, peer *wsPeer) {
 			reply, f.replies[req.Method] = r[0], r[1:]
 		}
 		// A notification first: the client must skip it.
-		peer.send(t, true, 0x1, []byte(`{"method":"thread/name/updated","params":{}}`))
+		_ = peer.Write(ctx, websocket.MessageText, []byte(`{"method":"thread/name/updated","params":{}}`))
 		id, _ := json.Marshal(*req.ID)
-		peer.send(t, true, 0x1, []byte(`{"id":`+string(id)+`,`+strings.TrimPrefix(reply, "{")))
+		_ = peer.Write(ctx, websocket.MessageText, []byte(`{"id":`+string(id)+`,`+strings.TrimPrefix(reply, "{")))
 	}
 }
 
 func (f *fakeDaemon) exchange(t *testing.T, req LabelRequest) error {
 	t.Helper()
-	c, peer, err := newWSPair(t, "101 Switching Protocols", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	c, peer := newWSPair(t)
 	done := make(chan struct{})
 	go func() { defer close(done); f.serve(t, peer) }()
-	err = exchangeLabel(&rpcClient{c: c}, req)
-	_ = peer.conn.Close()
+	err := exchangeLabel(&rpcClient{ctx: context.Background(), c: c}, req)
+	_ = c.CloseNow()
 	<-done
 	return err
 }
@@ -164,12 +164,12 @@ func TestExchangeCodexLabelCreatesTheRepoProject(t *testing.T) {
 }
 
 func TestExchangeCodexLabelFailsWhenTheDaemonHangsUp(t *testing.T) {
-	c, peer, err := newWSPair(t, "101 Switching Protocols", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go func() { _, _, _ = peer.recv(); peer.send(t, true, 0x8, nil) }()
-	if err := exchangeLabel(&rpcClient{c: c}, labelReq); err == nil || !strings.Contains(err.Error(), "initialize") {
+	c, peer := newWSPair(t)
+	go func() {
+		_, _, _ = peer.Read(context.Background())
+		_ = peer.Close(websocket.StatusGoingAway, "bye")
+	}()
+	if err := exchangeLabel(&rpcClient{ctx: context.Background(), c: c}, labelReq); err == nil || !strings.Contains(err.Error(), "initialize") {
 		t.Errorf("err = %v, want an initialize error", err)
 	}
 }
