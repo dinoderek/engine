@@ -22,7 +22,7 @@ const row = (item, extra) => Object.assign({
 const ROWS = [
   row("t29", { plan: "p24", host: "mac", observed: "exited", state: "in-review", feedback: ref("p24", 12, { author: "p24" }), latest: ref("t29", 77, { kind: "say", summary: "<script>alert(1)</script> done" }) }),
   row("t28", { plan: "p24", feedback: ref("t28", 40), latest: ref("t28", 41, { kind: "reply", author: "operator", summary: "Yes" }) }),
-  row("t5", { observed: "waiting", harness: "codex", host: "mac" }),
+  row("t5", { plan: "p3", observed: "waiting", harness: "codex", host: "mac" }),
   row("t9", { plan: "p24", observed: "unknown", last_seen: undefined }),
   row("t11", { plan: "p24", observed: "limited", last_seen: undefined, latest: undefined }),
   row("p24", { observed: "waiting", plan: "p24", state: "executing" }),
@@ -144,7 +144,7 @@ const scenarios = {
       assert.equal(t.key("s-latest-t29").getAttribute("href"), "#/sessions?panel=t29&tab=communications&update=77");
       assert.equal(t.key("s-open-t29").getAttribute("href"), "#/sessions?panel=t29");
       assert.equal(t.key("s-plan-t29").getAttribute("href"), "#/plans/p24/t29");
-      assert.equal(t.key("s-plan-t5"), null, "a standalone task has no plan to go to");
+      assert.equal(t.key("s-plan-t5").getAttribute("href"), "#/plans/p3/t5");
       assert.equal(t.key("s-plan-p24"), null);
     });
   },
@@ -200,7 +200,7 @@ const scenarios = {
     });
   },
 
-  async "a standalone task opens its own panel directly"() {
+  async "a task's title opens its own panel, over Sessions"() {
     await page("#/sessions", {}, async (t) => {
       t.key("s-open-t5").click();
       await t.flush();

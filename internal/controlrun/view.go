@@ -10,13 +10,13 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// Tasks are a plan's tasks, or a standalone task alone, by number: the
-// read-only projection that lint and coordination share. It only reads the
-// snapshot; it never observes hosts or persists state.
+// Tasks are a plan's tasks by number: the read-only projection that lint and
+// coordination share. It only reads the snapshot; it never observes hosts or
+// persists state.
 func Tasks(st control.State, id string) []control.Item {
 	var items []control.Item
 	for _, t := range st.Items {
-		if t.Plan == id || t.ID == id && t.Kind == "task" {
+		if t.Kind == "task" && t.Plan == id {
 			items = append(items, t)
 		}
 	}
@@ -33,7 +33,7 @@ func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) r
 	for _, t := range tasks {
 		v.Tasks = append(v.Tasks, withSession(st, t, fleet))
 	}
-	if root.Kind == "plan" && len(tasks) > 0 {
+	if len(tasks) > 0 {
 		for _, p := range lint.Items(tasks) {
 			v.Lint = append(v.Lint, p.String())
 		}
@@ -128,10 +128,9 @@ func (c *Coordinator) keepObservations(v reconcile.View) error {
 	})
 }
 
-// coordinating reports whether item's coordination, its own or its plan's,
-// still runs.
+// coordinating reports whether item's plan coordination still runs.
 func coordinating(st *control.State, item control.Item) bool {
-	return item.Coordinating || item.Plan != "" && st.Items[item.Plan].Coordinating
+	return control.Root(st, item).Coordinating
 }
 
 // since is the start of a spell that holds now: the recorded start, or now

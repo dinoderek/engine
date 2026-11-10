@@ -20,10 +20,7 @@ func resumable(st *State, item Item, at Attempt) bool {
 	if work && !at.LiveAt.IsZero() && !resumedVanished(st, at) {
 		return true
 	}
-	stopped := item.StoppedAt
-	if plan, ok := st.Items[item.Plan]; ok && plan.StoppedAt.After(stopped) {
-		stopped = plan.StoppedAt
-	}
+	stopped := Root(st, item).StoppedAt
 	last := at.Started
 	if at.LiveAt.After(last) {
 		last = at.LiveAt

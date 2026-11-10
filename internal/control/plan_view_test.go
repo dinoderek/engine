@@ -9,10 +9,11 @@ import (
 func TestPlanViewIncludesTransitiveExternalDependencies(t *testing.T) {
 	s := service(t)
 	repo, plan := repoPlan(t, s)
-	upstream := newTask(t, s, repo.ID, "")
-	middle := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "task", Repo: repo.ID, Title: "Middle", Depends: []string{upstream.ID}}}).Item
+	elsewhere := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "plan", Repo: repo.ID, Title: "Elsewhere"}}).Item
+	upstream := newTask(t, s, repo.ID, elsewhere.ID)
+	middle := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "task", Repo: repo.ID, Plan: elsewhere.ID, Title: "Middle", Depends: []string{upstream.ID}}}).Item
 	child := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "task", Repo: repo.ID, Plan: plan.ID, Title: "Child", Depends: []string{middle.ID}}}).Item
-	other := newTask(t, s, repo.ID, "")
+	other := newTask(t, s, repo.ID, elsewhere.ID)
 	before := mustSnapshot(t, s)
 	view := call(t, s, op, Request{Op: "plan-view", ID: plan.ID})
 	var ids []string
@@ -24,7 +25,7 @@ func TestPlanViewIncludesTransitiveExternalDependencies(t *testing.T) {
 			t.Fatal("view omitted", id)
 		}
 	}
-	if len(ids) != 5 || slices.Contains(ids, other.ID) || !reflect.DeepEqual(before, mustSnapshot(t, s)) {
+	if len(ids) != 5 || slices.Contains(ids, other.ID) || slices.Contains(ids, elsewhere.ID) || !reflect.DeepEqual(before, mustSnapshot(t, s)) {
 		t.Fatal("view included unrelated items or changed state", ids)
 	}
 	reject(t, s, op, Request{Op: "plan-view", ID: child.ID}, 404)

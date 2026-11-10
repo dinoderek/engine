@@ -22,7 +22,7 @@ func (s Service) completeExternal(st *State, a Actor, r Request) (Response, erro
 	if item.Version != r.Version {
 		return Response{}, problem(409, "version is %d", item.Version)
 	}
-	if active(st, item) || !slices.Contains([]string{"todo", "prepare", "approved", "failed"}, item.State) {
+	if active(st, item) || !slices.Contains([]string{"todo", "failed"}, item.State) {
 		return Response{}, problem(409, "external completion requires an inactive, unfinished task without a hard stop")
 	}
 	if PendingQuestion(st, item.ID) > 0 {
@@ -31,7 +31,7 @@ func (s Service) completeExternal(st *State, a Actor, r Request) (Response, erro
 	if !completionPR(r.Item.PR, st.Items[item.Repo].Slug) {
 		return Response{}, problem(400, "a GitHub PR URL for this repository is required")
 	}
-	item.State, item.PR, item.Coordinating = "done", r.Item.PR, false
+	item.State, item.PR = "done", r.Item.PR
 	item.Version++
 	st.Items[item.ID] = item
 	st.update(a, r, "complete-external", fmt.Sprintf("done: %s (version %d)", item.PR, item.Version), s.now())

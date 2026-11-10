@@ -1,6 +1,6 @@
 ---
 name: engine
-description: Engine's server roles. Use when the operator asks you to plan work for engine as a server plan or task (Prepare), when you are started as a server planner (`server planner p<n>`) or server executor (`server executor t<n>`, or "Use the engine skill's server executor mode for t<n>"). For one task outside engine, use the `build` skill.
+description: Engine's server roles. Use when the operator asks you to plan work for engine as a server plan (Prepare), when you are started as a server planner (`server planner p<n>`) or server executor (`server executor t<n>`, or "Use the engine skill's server executor mode for t<n>"). For one task outside engine, use the `build` skill.
 argument-hint: "plan <ask> | server planner <plan> | server executor <task>"
 ---
 
@@ -19,7 +19,7 @@ and CI. Never record plan state in issues, labels or repo files.
 
 | Mode | You are | Load |
 | --- | --- | --- |
-| `plan <ask>` | Preparing a plan, or one standalone task, with the operator | `references/plan.md` |
+| `plan <ask>` | Preparing a plan with the operator | `references/plan.md` |
 | `server planner <plan>` | Breaking an approved plan into tasks, alone | `references/plan.md`, `references/server.md` |
 | `server executor <task>` | The executor of one task | the `build` skill (`../build/SKILL.md`, `../build/references/hard-stops.md`), then `references/server.md` |
 

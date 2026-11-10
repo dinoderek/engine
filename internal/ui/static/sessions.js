@@ -56,8 +56,7 @@ window.engine.sessions = function (ctx) {
     open.addEventListener("click", () => ctx.noteOpener(key));
     const parts = [r.item + " · " + (r.repo_slug || r.repo) + " · " + (r.role === "planner" ? "Planner" : "Executor")];
     const meta = el("div", { class: "muted" }, parts.join(""));
-    // A standalone task has no plan page to go to, so it only opens its panel.
-    if (r.kind === "task" && r.plan) {
+    if (r.kind === "task") {
       meta.append(" · ", el("a", { href: ctx.planHref(r.plan, r.item), "data-key": "s-plan-" + r.item }, "in " + r.plan));
     }
     return el("td", { "data-label": "Plan or task" }, open, meta);

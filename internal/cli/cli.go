@@ -35,7 +35,7 @@ commands:
   ps [--json]               list server tasks
   attach <task>             attach to a task's tmux window, here or over SSH
   tell <task> <text>        message a task; a lone - reads the text from stdin
-  run <plan|task>           run a plan, or one task, on the server: p<n> or t<n>
+  run <plan>                run a plan on the server: p<n>
   lint <plan>               check a plan: task sections, cycles, the acceptance
                             task and shared open questions
   start --check [--harness <name>] [--host <name>]

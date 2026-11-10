@@ -35,7 +35,8 @@ Prepare is the only time you are consulted, so every open question is
 answered there or explicitly left to the agent. It also settles the target
 repo's rules that would stop a hands-off run, such as approving merges: you
 change the rule or override it for the feature. A plan's approval covers its
-tasks; a standalone task carries its own.
+tasks, and every task belongs to a plan. One task outside a plan is built
+with the `build` skill.
 
 The executor reviews its own work with a fresh reviewer at `deep`, requests
 the merge, and the coordinator makes it. The operator watches the run
@@ -65,7 +66,7 @@ tier. Telemetry records the tier and model of every run.
 | Entity | States |
 | --- | --- |
 | Plan | `prepare` → `approved` (operator) → `planned` → `done`. Its status adds `blocked` while the operator is needed (a plan question, a task `needs-human` or `failed`) and `executing` once a task starts. |
-| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when the session dies. A standalone task starts at `prepare` → `approved`. |
+| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when the session dies. |
 
 "Ready" and plan status are computed (`control.PlanStatus`), never
 stored. The planner creates the plan and its tasks; you approve the plan. The

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -102,7 +103,7 @@ func TestPlanLifecycleAndVersionedEdits(t *testing.T) {
 	a, out := dispatch(t, s, task)
 	task = *out.Item
 	reject(t, s, a, Request{Op: "edit", ID: task.ID, Version: task.Version, Item: edited}, 409)
-	reject(t, s, a, Request{Op: "approve", ID: task.ID, Version: task.Version}, 403)
+	reject(t, s, a, Request{Op: "approve", ID: task.ID, Version: task.Version}, 400)
 	task = *call(t, s, a, Request{Op: "state", ID: task.ID, Version: task.Version, State: "in-review", Item: Item{PR: "https://example.test/pr"}}).Item
 	task = *call(t, s, a, Request{Op: "state", ID: task.ID, Version: task.Version, State: "done"}).Item
 	if task.PR == "" {
@@ -242,4 +243,32 @@ func TestInvalidCommandsDoNotChangeHistory(t *testing.T) {
 	reject(t, s, op, Request{Op: "edit", ID: "absent"}, 404)
 	reject(t, s, op, Request{Op: "state", ID: "absent"}, 404)
 	reject(t, s, op, Request{Op: "state", ID: repo.ID, Version: repo.Version, State: "running"}, 400)
+}
+
+// Every task belongs to a plan: a task without one is refused, and only its
+// plan is approved, run or stopped.
+func TestATaskRequiresAPlan(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	before := mustSnapshot(t, s)
+	reject(t, s, op, Request{Op: "create", Item: Item{Kind: "task", Repo: repo.ID, Title: "Alone", Body: "## Outcome\nWorks"}}, 400)
+	if !reflect.DeepEqual(before, mustSnapshot(t, s)) {
+		t.Fatal("a refused task changed storage")
+	}
+	task := newTask(t, s, repo.ID, plan.ID)
+	if task.State != "todo" {
+		t.Fatalf("a new task is %s, want todo", task.State)
+	}
+	for _, o := range []string{"approve", "run", "stop"} {
+		reject(t, s, op, Request{Op: o, ID: task.ID, Version: task.Version}, 400)
+	}
+	plan = approve(t, s, plan)
+	plan = *call(t, s, op, Request{Op: "run", ID: plan.ID, Version: plan.Version}).Item
+	edited := *call(t, s, op, Request{Op: "edit", ID: task.ID, Version: task.Version, Item: Item{Title: "Rebuilt"}}).Item
+	if edited.State != "todo" || edited.ApprovedVersion != 0 || edited.Coordinating {
+		t.Fatalf("a task edit changed its state: %+v", edited)
+	}
+	if p := call(t, s, op, Request{Op: "get", ID: plan.ID}).Item; !p.Coordinating || p.ApprovedVersion == 0 {
+		t.Fatalf("a task edit changed its plan's approval: %+v", p)
+	}
 }

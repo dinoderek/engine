@@ -26,7 +26,7 @@ func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
 			continue
 		}
 		text := fmt.Sprintf("Read the new task updates: engine updates %s --after %d", t.ID, at.Seen)
-		if t.Kind == "task" && t.Plan != "" {
+		if t.Kind == "task" {
 			text = fmt.Sprintf("Read the new task and plan updates: engine updates %s --after %d; engine updates %s --after %d",
 				t.ID, at.Seen, t.Plan, at.Seen)
 		}
@@ -69,6 +69,6 @@ var itemWakeKinds = []string{"say", "reply", "resolved", control.MergeMerged, co
 var planWakeKinds = []string{"say", "resolved"}
 
 func planWake(item control.Item, u control.Update) bool {
-	return item.Kind == "task" && item.Plan != "" && u.Item == item.Plan &&
+	return item.Kind == "task" && u.Item == item.Plan &&
 		u.Author != "coordinator" && u.Recipient != "operator" && slices.Contains(planWakeKinds, u.Kind)
 }

@@ -267,56 +267,13 @@ func TestADeadExecutionFailsAndLeavesTheQueue(t *testing.T) {
 	}
 }
 
-// standaloneMergeRequest is a standalone task, dispatched to a host whose
-// merges succeed, that has requested its merge.
-func standaloneMergeRequest(t *testing.T) (*Coordinator, *merger, control.Item, control.Attempt) {
+// mergeRequested is the plan's task, dispatched to a host whose merges
+// succeed, that has requested its merge, with its attempt.
+func mergeRequested(t *testing.T) (*Coordinator, *merger, control.Item, control.Attempt) {
 	t.Helper()
-	c, h, repo, _, _ := setup(t)
-	if err := c.Service.Store.Transaction(func(st *control.State) error {
-		for id, item := range st.Items {
-			if item.Kind == "plan" || item.Kind == "task" {
-				delete(st.Items, id)
-			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	task := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Alone", Repo: repo.ID, Body: "## Outcome\nWorks"}})
-	task = execute(t, c.Service, control.Request{Op: "approve", ID: task.ID, Version: task.Version})
-	execute(t, c.Service, control.Request{Op: "run", ID: task.ID, Version: task.Version})
-	m := &merger{host: h, reply: reply(hostops.CodeMerged, "merged at "+reviewedHead)}
-	c.Client = func(hosts.Host) remote.Client { return m }
-	pass(t, c)
+	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged at "+reviewedHead))
 	st, _ := c.Service.Store.Snapshot()
-	at := st.Attempts[st.Items[task.ID].Attempt]
-	worker, err := c.Service.Authenticate(m.launches[at.RunID].Credential, "operator")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "in-review",
-		Item: control.Item{PR: reviewedPR}, Key: control.Secret()}); err != nil {
-		t.Fatal(err)
-	}
-	request(t, c, worker, task.ID, reviewedHead)
-	return c, m, task, at
-}
-
-func TestStandaloneSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
-	c, m, task, at := standaloneMergeRequest(t)
-	m.status.Windows[0].State = "waiting"
-	c.Wake = func(reconcile.Session, string) error { return nil }
-	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
-	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
-		t.Fatalf("task %s, windows %v, attempt %s: the window closed as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
-	}
-	later(c, reconcile.ReportWindow)
-	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
-	if len(m.status.Windows) != 0 || st.Attempts[at.ID].State != "ended" {
-		t.Fatalf("windows %v, attempt %s after the report window", m.status.Windows, st.Attempts[at.ID].State)
-	}
+	return c, m, task, st.Attempts[st.Items[task.ID].Attempt]
 }
 
 // The command the host op runs passes the merge guard executors still run under.

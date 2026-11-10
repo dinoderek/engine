@@ -49,7 +49,7 @@ repo's own merge and cleanup steps; the merge guard enforces it.
 - **Step 1.** The server claimed the task and opened its worktree: work
   there, and create none.
 
-- **Step 2.** Also read the parent plan, if any, `engine updates` for the
+- **Step 2.** Also read the parent plan, `engine updates` for the
   task and the plan, and the card's and plan's `## Overrides`. Every dependency must be
   `done`; if not, it is a **Drift** hard stop.
 - **Updates are the inbox.** Read them before you change code, before the PR,

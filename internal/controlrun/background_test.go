@@ -14,7 +14,7 @@ import (
 // by the merge, and its window, still busy only in that job, is released
 // once the report window has passed, with a notice.
 func TestASessionBusyOnlyInABackgroundJobIsWokenAndReleased(t *testing.T) {
-	c, m, task, at := standaloneMergeRequest(t)
+	c, m, task, at := mergeRequested(t)
 	m.status.Windows[0].State, m.status.Windows[0].Background = session.StateWorking, true
 	var texts []string
 	c.Wake = func(_ reconcile.Session, text string) error { texts = append(texts, text); return nil }
@@ -45,7 +45,7 @@ func TestASessionBusyOnlyInABackgroundJobIsWokenAndReleased(t *testing.T) {
 // A session busy in a turn is never typed into, and its done task's window
 // stays open until it is idle.
 func TestASessionBusyInATurnIsLeftAlone(t *testing.T) {
-	c, m, task, at := standaloneMergeRequest(t)
+	c, m, task, at := mergeRequested(t)
 	m.status.Windows[0].State = session.StateWorking
 	woke := 0
 	c.Wake = func(reconcile.Session, string) error { woke++; return nil }

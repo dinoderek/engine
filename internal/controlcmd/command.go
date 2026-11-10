@@ -34,12 +34,14 @@ const Usage = "engine serve\n" +
 	"engine serve --foreground [--db <path>] [--token-file <path>] [--listen 127.0.0.1:7331] [--advertise <origin>]\n" +
 	"engine serve --backup <path> [--db <path>] [--token-file <path>]\n" +
 	"engine repo add --title <name> --slug <owner/name> --remote <git-url>\n" +
-	"engine plan|task create --repo <id> --title <text> --body-file <path|-> [--plan <id>]\n" +
-	"engine plan|task show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
+	"engine plan create --repo <id> --title <text> --body-file <path|->\n" +
+	"engine task create --repo <id> --plan <id> --title <text> --body-file <path|->\n" +
+	"engine plan show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
+	"engine task show|list|edit|state <id> [--version <n>] [--state <state>]\n" +
 	"engine lint <plan-id>\n" +
 	"engine task complete-external <task-id> --version <n> --pr <url>\n" +
 	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
-	"engine ps\nengine run <plan-or-task-id>\nengine updates <id> [--after <sequence>]\n" +
+	"engine ps\nengine run <plan-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
 	"engine merge-queue <repo-id>\n" +
@@ -238,7 +240,12 @@ func operation(args []string) (control.Request, []string, error) {
 				return r, nil, fmt.Errorf("merge-ready requires a task")
 			}
 			r.Op = "merge-request"
-		case "edit", "approve", "state", "stop":
+		case "approve", "stop":
+			if head != "plan" {
+				return r, nil, fmt.Errorf("%s requires a plan", op)
+			}
+			r.Op = op
+		case "edit", "state":
 			r.Op = op
 		default:
 			return r, nil, fmt.Errorf("unknown %s operation %s", head, op)

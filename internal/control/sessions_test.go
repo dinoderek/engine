@@ -26,14 +26,13 @@ func TestSessionViewListsCurrentPlannerAndExecutorAttempts(t *testing.T) {
 	repo, plan := repoPlan(t, s)
 	child, replaced, ended := newTask(t, s, repo.ID, plan.ID), newTask(t, s, repo.ID, plan.ID), newTask(t, s, repo.ID, plan.ID)
 	plan = approve(t, s, plan)
-	standalone := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "task", Repo: repo.ID, Title: "Standalone", Body: "## Outcome\nWorks"}}).Item
-	standalone = approve(t, s, standalone)
+	exited := newTask(t, s, repo.ID, plan.ID)
 	seen := time.Date(2026, 11, 7, 8, 59, 0, 0, time.UTC)
 	observed := map[string]Observation{}
 	s.Observe = func(id string) Observation { return observed[id] }
 	worker, planner := dispatch(t, s, plan)
 	_, childRun := dispatch(t, s, child)
-	_, standaloneRun := dispatch(t, s, standalone)
+	_, exitedRun := dispatch(t, s, exited)
 	_, old := dispatch(t, s, replaced)
 	_, gone := dispatch(t, s, ended)
 	for _, id := range []string{old.Attempt.ID, gone.Attempt.ID} {
@@ -43,7 +42,7 @@ func TestSessionViewListsCurrentPlannerAndExecutorAttempts(t *testing.T) {
 	}
 	_, current := dispatch(t, s, replaced)
 	observed[childRun.Attempt.ID] = Observation{State: "waiting", Seen: seen}
-	observed[standaloneRun.Attempt.ID] = Observation{State: "exited", Seen: seen}
+	observed[exitedRun.Attempt.ID] = Observation{State: "exited", Seen: seen}
 	observed[old.Attempt.ID] = Observation{State: "working", Seen: seen}
 
 	reject(t, s, worker, Request{Op: "session-view"}, 403)
@@ -52,7 +51,7 @@ func TestSessionViewListsCurrentPlannerAndExecutorAttempts(t *testing.T) {
 	for _, row := range out.Sessions {
 		order = append(order, row.Item)
 	}
-	if want := []string{plan.ID, child.ID, replaced.ID, standalone.ID}; !slices.Equal(order, want) {
+	if want := []string{plan.ID, child.ID, replaced.ID, exited.ID}; !slices.Equal(order, want) {
 		t.Fatalf("rows %v, want %v", order, want)
 	}
 	rows := sessionRows(t, s)
@@ -66,7 +65,7 @@ func TestSessionViewListsCurrentPlannerAndExecutorAttempts(t *testing.T) {
 	if r := rows[replaced.ID]; r.Attempt != current.Attempt.ID || r.Observed != "unknown" || !r.LastSeen.IsZero() {
 		t.Fatalf("replaced attempt leaked its observation: %+v", r)
 	}
-	if a := rows[standalone.ID]; a.Plan != "" || a.Observed != "exited" || !a.LastSeen.Equal(seen) {
+	if a := rows[exited.ID]; a.Plan != plan.ID || a.Observed != "exited" || !a.LastSeen.Equal(seen) {
 		t.Fatalf("confirmed exit must stay visible until the attempt ends: %+v", a)
 	}
 	s.Observe = nil

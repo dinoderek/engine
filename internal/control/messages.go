@@ -146,7 +146,7 @@ func pauseForQuestion(st *State, a Actor, id string) (string, error) {
 	}
 	held, asker := id, ""
 	owner := st.Items[st.Attempts[a.Attempt].Item]
-	if a.Role == "worker" && owner.Kind == "task" && owner.Plan != "" && owner.Plan == id {
+	if a.Role == "worker" && owner.Kind == "task" && owner.Plan == id {
 		held, asker = owner.ID, owner.ID
 	} else if !workerItem(st, a, id) {
 		return "", problem(403, "cannot stop another execution")

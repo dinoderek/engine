@@ -45,7 +45,7 @@ run, then applies the same rule. Unknown dispatch outcomes stay reserved.
 
 ## Merge queue
 
-Each repository has one merge queue across plans and standalone tasks.
+Each repository has one merge queue across its plans.
 `engine task merge-ready`, for the in-review PR at its reviewed, pushed head,
 queues the task; a later request keeps the place.
 

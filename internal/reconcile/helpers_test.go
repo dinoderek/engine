@@ -69,9 +69,6 @@ func afterBackground(wait, idle time.Duration) Session {
 }
 
 func view(root Item, tasks ...Item) View {
-	if root.Kind == "task" {
-		tasks = []Item{root}
-	}
 	return View{Now: t0, Root: root, Tasks: tasks, Fleet: fleet(2)}
 }
 
