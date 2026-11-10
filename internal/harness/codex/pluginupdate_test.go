@@ -9,7 +9,7 @@ import (
 
 // The caller's plugin update upgrades engine's marketplace, then adds the
 // plugin, exactly, with the binary hosts.toml pins; a host with no pinned
-// binary has no commands to run.
+// binary is an error naming the missing bin.
 func TestPluginUpdateCommands(t *testing.T) {
 	h := hosts.Host{Name: "mac", Bin: map[string]string{Name: "~/.local/bin/codex"}}
 	got, err := Adapter{}.Setup().PluginUpdate(h, boxHome)

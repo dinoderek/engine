@@ -194,3 +194,17 @@ func TestUpgradeInterruptedStillStartsTheServer(t *testing.T) {
 	wantChanges(t, f, "box: stop", "box: start")
 	wantOutput(t, f, "the upgrade was interrupted before step 2: engine upgrade", "box   d8c1744  -      -       not run")
 }
+
+// An interrupt before the stop changes nothing, and no start is shown.
+func TestUpgradeInterruptedBeforeTheStop(t *testing.T) {
+	f := newFleet(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f.ctx = ctx
+	wantOpen(t, f)
+	wantChanges(t, f)
+	wantOutput(t, f, "OPEN: the upgrade was interrupted before step 1", "was not stopped")
+	if strings.Contains(f.out.String(), "7. on box") {
+		t.Errorf("the start was shown though nothing stopped:\n%s", f.out.String())
+	}
+}

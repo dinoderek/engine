@@ -57,7 +57,8 @@ func (f *fleet) execute(out io.Writer) {
 			halted = true
 			f.openf(out, "engine upgrade", "the upgrade was interrupted before step %d", i+1)
 		}
-		if halted && !a.always {
+		// The start is only due once the stop was tried.
+		if halted && (!a.always || !f.stopped) {
 			continue
 		}
 		fmt.Fprintf(out, "%d. %s: %s\n", i+1, a.where, a.show)

@@ -144,7 +144,10 @@ It refuses, changing nothing, while a task is `running`, `in-review` or
 not answer, or its unit is not active. A host that is unreachable or stays
 open does not stop the others: run the commands the report lists, then rerun
 it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
-it by hand.
+it by hand, in the same order: stop and back up the server
+(`control-server.md`, "Start"), install the engine and your plugins, run
+`engine setup` here and `engine setup --host <name>` for each other host,
+then start the server.
 
 **The server's unit.** Write it once, by hand, on the server's host, as
 `~/.config/systemd/user/engine-server.service`. It runs `~/.local/bin/engine`,
