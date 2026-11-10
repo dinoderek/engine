@@ -153,8 +153,10 @@ func TestRPCEndsWithItsContext(t *testing.T) {
 		_, _, _ = peer.Read(context.Background())
 		cancel()
 	}()
-	if _, err := (&rpcClient{ctx: ctx, c: c}).call("thread/name/set", nil); !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "thread/name/set") {
-		t.Errorf("err = %v, want the method and the cancellation", err)
+	// The library closes the connection on cancel, so the read reports the
+	// cancellation or the closed connection; codexDaemon adds ctx.Err().
+	if _, err := (&rpcClient{ctx: ctx, c: c}).call("thread/name/set", nil); err == nil || !strings.Contains(err.Error(), "thread/name/set") {
+		t.Errorf("err = %v, want an error naming the method", err)
 	}
 }
 
