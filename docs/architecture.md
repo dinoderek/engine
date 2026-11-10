@@ -7,30 +7,19 @@
 Two programs share one Go module:
 
 - **`engine`**, the product: `cmd/engine` → `internal/cli` → one package per
-  command. `internal/cli` parses arguments and dispatches. `internal/control`
-  owns server records, transactions and HTTP; `internal/reconcile` decides
-  each server pass from a View of records and host observations;
-  `internal/controlrun` builds the View, applies its actions and caches host observations; `internal/controlcmd` supplies the CLI
-  and daemon lifecycle. The CLI and coordinator read a plan's tasks through
-  `internal/controlrun` and validate them with `internal/lint`.
-  Other packages:
-  `internal/version` (`engine version`), `internal/hook`
-  (the core hooks every harness runs: the merge guard, permissions and state),
-  `internal/start` (`engine start --check`: the preflight session on a host),
-  `internal/hostops` (`engine host <op> --json`: the ops a host runs on
-  itself for a caller), `internal/remote` (the client that reaches a host's
-  ops: `Local` calls them in-process, `SSH` over `ssh`),
-  `internal/lint` (`engine lint`: a plan's rules), `internal/ui`
-  (`engine ui`: the loopback dashboard, which holds the operator credential and
-  forwards only fixed control reads). The commands
-  share `internal/hosts`, the host config: it parses and validates
-  `hosts.toml`, works out each machine's slots and expands launch lines.
-  `internal/session` is the host's session ops, through `git`, `gh` and `tmux`: engine's clones and task
-  worktrees, the tmux session, windows and pane logs, the run record and the
-  harness's state file. `internal/harness` is the `Adapter` interface engine
-  asks of a harness; each harness is a package below it, listed by
-  `internal/harness/registry`. The commands build the adapters and hand them
-  to `internal/hostops` and `internal/setup`, which see only the interface.
+  command. `internal/cli` only parses arguments and dispatches; a command's
+  logic lives in its own package. The server side is `internal/control`
+  (records, transactions, HTTP), `internal/reconcile` (each server pass,
+  decided from a View of records and host observations),
+  `internal/controlrun` (builds the View, applies its actions, caches host
+  observations) and `internal/controlcmd` (the server's CLI and lifecycle).
+  Hosts are reached through `internal/remote`, and each host's own ops run in
+  `internal/hostops`. `internal/hosts` is the host config every command
+  shares. `internal/session` runs a host's sessions through `git`, `gh` and
+  `tmux`. A harness is the `internal/harness` `Adapter` interface; each
+  harness is a package below it, listed by `internal/harness/registry`. The
+  commands build the adapters and hand them to `internal/hostops` and
+  `internal/setup`, which see only the interface.
 - **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
   `devtools/internal/dev` (the verbs) → `lanes` (the registry and parallel
   runner) and `checks` (the lanes that are not one external command) →
@@ -46,14 +35,12 @@ non-test imports. The reasons:
   from `devtools/`. Go's `internal/` rule also keeps `devtools/internal/` out
   of the product's reach.
 - **Each package may import only what its rule lists.** `cmd/engine` sees only
-  `internal/cli`. Leaf packages (`internal/version`,
-  `internal/hosts`, `internal/session`,
-  `devtools/internal/repo`) import no first-party code, and `internal/hook`
-  only `internal/harness`; a command package
-  such as `internal/start` composes them. Only the registry imports a
-  concrete harness adapter; the `harness-names` lane keeps harness names out
-  of other code. A new package adds its rule in the
-  same PR.
+  `internal/cli`. Leaf packages (`internal/version`, `internal/hosts`,
+  `internal/session`, `devtools/internal/repo`) import no first-party code, and
+  `internal/hook` only `internal/harness`; a command package such as
+  `internal/start` composes them. Only the registry imports a concrete harness
+  adapter; the `harness-names` lane keeps harness names out of other code. A
+  new package adds its rule in the same PR.
 
 ## Decisions new code must respect
 

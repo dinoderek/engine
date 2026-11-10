@@ -54,17 +54,14 @@ usage and does nothing else: engine reads it. Docs cite verbs, not commands.
   worktree, one branch, one PR.
 - `worktree create` branches from the remote's current default branch and
   provisions anything the task needs. Given a branch that already exists
-  locally, it checks that branch out as it is: engine sets it to a resumed
-  task's work first. It puts the worktree outside the checkout, so the
-  checkout's tools and `git status` never walk it. `worktree release` tears it
-  all down, and is idempotent: a repeat run, or one after the session
-  already tore everything down, exits 0 and changes nothing. Engine runs `dev
-  worktree create <branch>` when the repo has an executable `dev` at its root
-  whose usage, printed with no verb, lists `worktree create`; otherwise,
-  including when `dev` prints no usage within three minutes, it uses a plain
-  `git worktree add`, which provisions nothing. When a task is done, engine
-  likewise runs `dev worktree release <branch>` if the usage lists it, then
-  `git worktree remove` on any worktree left, which keeps the branch.
+  locally, it checks that branch out as it is. The worktree sits outside the
+  checkout. `worktree release` tears it down and is idempotent: a repeat run
+  exits 0 and changes nothing. Engine runs `dev worktree create <branch>` when
+  the repo's executable `dev` at its root lists `worktree create` in the usage
+  it prints with no verb (within three minutes); otherwise it runs a plain
+  `git worktree add`. When a task is done, it runs `dev worktree release` if
+  the usage lists it, then `git worktree remove` on any worktree left, which
+  keeps the branch.
 - Commit work in progress rather than stashing: the stash is shared across
   worktrees.
 
@@ -119,22 +116,18 @@ usage and does nothing else: engine reads it. Docs cite verbs, not commands.
   a bigger budget without the operator; adding or widening an exempt,
   ephemeral or set row loosens the check the same way.
 - **One place per fact:** docs cite the registry or code that is the source.
-- **The docs check** verifies budgets (per doc, and for the always-load set,
-  which must match `AGENTS.md`'s list), that links resolve and cited paths
-  exist (files, never lines), the headers, that the index is complete and
-  `CLAUDE.md` is a symlink, that every cited gate lane exists, and that no
-  file holds a tracker reference (§10) or cites a file in an ephemeral
-  directory. It is written in the repo's own stack.
+- **The docs check** verifies budgets, the always-load set (against
+  `AGENTS.md`'s list), links and cited paths (files, never lines), headers,
+  the index, cited gate lanes, and the tracker and ephemeral references of
+  §10. It is written in the repo's own stack.
 
 ### 10. Current state only, no chronicle
 
 - Docs describe how things are: no "previously", no dated entries, no
   changelog. History is in git and the PRs.
 - Plans and task cards live in the engine server, never in the repo. Docs and
-  code never cite an issue, a PR or a task. The docs check greps for tracker
-  references: issue and PR numbers (alone, after `owner/repo`, or after a word
-  like "issue" or "PR"), issue and PR URLs, and plan file paths. Commit
-  messages and PR bodies may cite them.
+  code never cite an issue, a PR or a task; commit messages and PR bodies may.
+  The docs check greps for issue and PR numbers and URLs and plan file paths.
 - Drafts that must sit in the repo live in one ephemeral directory, exempt
   from every doc rule and never cited.
 
