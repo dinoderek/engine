@@ -94,6 +94,10 @@ func Run(host string, d Deps, out io.Writer) (bool, error) {
 		if r.want, err = r.resolveWanted(); err != nil {
 			return false, err
 		}
+	} else if r.want.plugin, err = r.callerPlugin(); err != nil {
+		// A local check brings a harness's own copies (engine's Codex home)
+		// to the user's plugin; with none installed, the plugin step says so.
+		return false, err
 	}
 	steps := r.steps(out)
 	fmt.Fprintf(out, "engine setup: %s\n", r.t.label())
