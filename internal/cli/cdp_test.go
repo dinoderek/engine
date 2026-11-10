@@ -47,6 +47,14 @@ func findBrowser() (string, bool) {
 	return "", false
 }
 
+// replyWait bounds a reply to one call; startupWait bounds the first, which
+// waits for the browser to finish starting. On a loaded CI runner, with
+// every package's tests running under coverage, starting takes over 30s.
+const (
+	replyWait   = 30 * time.Second
+	startupWait = 3 * time.Minute
+)
+
 // browser is a headless Chromium driven over the DevTools protocol on a
 // pipe (--remote-debugging-pipe): NUL-terminated JSON on file descriptors 3
 // and 4, so no network port or WebSocket client is needed.
@@ -180,6 +188,11 @@ func (b *browser) fail(err error) {
 
 // call sends one command, to the attached page unless browserWide, and decodes its result into out.
 func (b *browser) call(browserWide bool, method string, params, out any) error {
+	return b.callWithin(replyWait, browserWide, method, params, out)
+}
+
+// callWithin is call with its reply bounded by wait.
+func (b *browser) callWithin(wait time.Duration, browserWide bool, method string, params, out any) error {
 	b.mu.Lock()
 	if b.closed != nil {
 		b.mu.Unlock()
@@ -212,8 +225,8 @@ func (b *browser) call(browserWide bool, method string, params, out any) error {
 			return nil
 		}
 		return json.Unmarshal(got.Result, out)
-	case <-time.After(30 * time.Second):
-		return fmt.Errorf("%s: no reply from the browser", method)
+	case <-time.After(wait):
+		return fmt.Errorf("%s: no reply from the browser within %s", method, wait)
 	}
 }
 
@@ -230,7 +243,7 @@ func (b *browser) attach() {
 	var created struct {
 		TargetID string `json:"targetId"`
 	}
-	if err := b.call(true, "Target.createTarget", map[string]any{"url": "about:blank"}, &created); err != nil {
+	if err := b.callWithin(startupWait, true, "Target.createTarget", map[string]any{"url": "about:blank"}, &created); err != nil {
 		b.t.Fatalf("%v\n%s", err, b.stderr.String())
 	}
 	var attached struct {
@@ -392,5 +405,20 @@ func (b *browser) close() {
 	_ = b.send.Close()
 	if err := b.cmd.Wait(); err != nil && !errors.As(err, new(*exec.ExitError)) {
 		b.t.Errorf("browser: %v", err)
+	}
+}
+
+// A call nobody answers fails once its own wait runs out, naming it.
+func TestABrowserCallFailsAfterItsWait(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = r.Close(); _ = w.Close() })
+	go func() { _, _ = io.Copy(io.Discard, r) }()
+	b := &browser{t: t, send: w, stderr: &syncBuffer{}, pending: map[int]chan cdpMessage{}, done: make(chan struct{})}
+	err = b.callWithin(50*time.Millisecond, true, "Target.createTarget", nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "no reply from the browser within 50ms") {
+		t.Fatalf("err %v", err)
 	}
 }
