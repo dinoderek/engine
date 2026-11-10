@@ -95,10 +95,12 @@ type codexState struct {
 	plugin     string  // version of engine's plugin in engine's home; "" is none
 	marketFail bool
 	// pluginLeaves is the version an install leaves, when not the caller's;
-	// leavesNothing makes it leave none.
+	// leavesNothing makes it leave none. They apply to both homes.
 	pluginLeaves  string
 	leavesNothing bool
-	writeFail     bool
+	// userMarketFail makes the operator's home's plugin commands fail.
+	userMarketFail bool
+	writeFail      bool
 	// loginBroken makes engine's home reject the login it links.
 	loginBroken          bool
 	daemonUp             bool
@@ -211,7 +213,7 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 		return c.inEngine(b, args, out, errOut)
 	}
 	if args, found := strings.CutPrefix(cmd, c.bin+" "); found && c.bin != "" {
-		return c.operator(args, out, errOut)
+		return c.operator(b, args, out, errOut)
 	}
 	return 0, false
 }
@@ -234,7 +236,7 @@ func (c *codexState) linkState(out io.Writer) (int, bool) {
 }
 
 // operator answers the commands in the operator's Codex home.
-func (c *codexState) operator(args string, out, errOut io.Writer) (int, bool) {
+func (c *codexState) operator(b *box, args string, out, errOut io.Writer) (int, bool) {
 	switch args {
 	case "--version":
 		fmt.Fprintln(out, "codex-cli 0.164.0")
@@ -248,6 +250,16 @@ func (c *codexState) operator(args string, out, errOut io.Writer) (int, bool) {
 		return 0, true
 	case "plugin list --json":
 		fmt.Fprint(out, codexPluginList(c.userPlugin))
+		return 0, true
+	case "plugin marketplace add dinoderek/engine", "plugin marketplace upgrade engine", "plugin add engine@engine":
+		b.mutate("operator: " + args)
+		if c.userMarketFail {
+			fmt.Fprint(errOut, "marketplace unreachable")
+			return 1, true
+		}
+		if strings.HasPrefix(args, "plugin add") {
+			c.userPlugin = c.installed()
+		}
 		return 0, true
 	case "app-server daemon version":
 		if !c.operatorDaemon {
@@ -284,10 +296,7 @@ func (c *codexState) inEngine(b *box, args string, out, errOut io.Writer) (int, 
 			return 1, true
 		}
 		if strings.HasPrefix(args, "plugin add") {
-			c.plugin = cond(c.pluginLeaves != "", c.pluginLeaves, callerPlugin)
-			if c.leavesNothing {
-				c.plugin = ""
-			}
+			c.plugin = c.installed()
 		}
 		return 0, true
 	case "app-server daemon version":
@@ -315,6 +324,15 @@ func (c *codexState) start(b *box, cmd string, errOut io.Writer) (int, bool) {
 		return 1, true
 	}
 	return 0, true
+}
+
+// installed is the version a plugin install leaves: the caller's, unless the
+// case says otherwise.
+func (c *codexState) installed() string {
+	if c.leavesNothing {
+		return ""
+	}
+	return cond(c.pluginLeaves != "", c.pluginLeaves, callerPlugin)
 }
 
 func codexPluginList(version string) string {
