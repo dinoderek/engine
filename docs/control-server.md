@@ -137,22 +137,22 @@ persist when wake-up fails.
 
 `engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen`
 chooses another loopback address. It uses the CLI's server configuration and
-operator credential, and the credential never reaches the browser. Any local
-user reaching the port reads with operator rights; run it only on a
-single-user machine. The page calls fixed same-origin routes:
+operator credential, which never reaches the browser. Any local user reaching
+the port reads with operator rights; run it only on a single-user machine. The page calls fixed same-origin routes:
 
-- `/api/plans`: repositories and plans, filtered by `repo`, `state` (the plan's status) and a
-  case-insensitive `q` over plan ID, repository and title.
+- `/api/plans`: repositories and plans, filtered by `repo`, status `state`
+  and search `q`.
 - `/api/plans/<id>`: the plan's direct tasks with summary counts, hosts from
   active attempts, unfinished prerequisites, including other plans' tasks, and
   `feedback`: the session's, or the plan's question for a queued task.
 - `/api/sessions`: the `session-view` rows, feedback requests first.
-- `/api/items/<id>` and `/thread`: a plan or task with its description
-  rendered, and its messages, 50 after `after` (through `anchor`), with a
-  cursor and question statuses.
+- `/api/items/<id>` and `/thread`: a plan or task with its rendered
+  description, and its messages: 50 after `after` (through `anchor`), a cursor
+  and question statuses.
 
-Descriptions support headings, flat lists, code, links. Raw HTML and
-messages are text; only absolute http, https and mailto links act.
+Descriptions render to HTML as CommonMark plus tables: raw HTML stays text,
+images show alt text, only absolute http, https and mailto links act.
+Messages are text; the CSP allows only the page's scripts.
 
 The process forwards only the `list`, `plan-view`, `attempts`, `get`,
 `updates` and `session-view` reads. It answers GET and HEAD for a loopback

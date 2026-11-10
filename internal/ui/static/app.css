@@ -69,6 +69,15 @@ tr.selected td { background: var(--select); }
 .markdown p { margin: 6px 0; }
 .markdown pre { margin: 8px 0; padding: 8px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
 .markdown code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.markdown blockquote { margin: 6px 0; padding-left: 8px; border-left: 3px solid var(--line); color: var(--muted); }
+/* A description's table stays a table on every screen, scrolling if wide. */
+.markdown table { display: block; width: max-content; max-width: 100%; overflow-x: auto; margin: 8px 0; }
+.markdown thead { display: table-header-group; }
+.markdown tbody { display: table-row-group; }
+.markdown tr { display: table-row; padding: 0; }
+.markdown th, .markdown td { display: table-cell; padding: 4px 8px; border: 1px solid var(--line); }
+.markdown [align="center"] { text-align: center; }
+.markdown [align="right"] { text-align: right; }
 .messages { list-style: none; margin: 0; padding: 0; }
 .message { padding: 8px; border-top: 1px solid var(--line); border-radius: 6px; }
 .message.anchored { background: var(--select); }

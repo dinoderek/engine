@@ -1,96 +1,177 @@
 package ui
 
 import (
-	"encoding/json"
-	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-func text(s string) []Inline { return []Inline{{Text: s}} }
-
-func TestRenderMarkdownBlocks(t *testing.T) {
-	src := "## Outcome\n\nAn operator opens a panel,\nthen reads it.\n\n- one\n- two\n  continues here\n* three\n\n1. first\n2) second\n\n```go title\nfunc main() {}\n\n# not a heading\n```\n\n# Last ##\n"
-	want := []Block{
-		{Type: "heading", Level: 2, Inline: text("Outcome")},
-		{Type: "paragraph", Inline: text("An operator opens a panel, then reads it.")},
-		{Type: "list", Items: [][]Inline{text("one"), text("two continues here"), text("three")}},
-		{Type: "list", Ordered: true, Items: [][]Inline{text("first"), text("second")}},
-		{Type: "code", Lang: "go", Text: "func main() {}\n\n# not a heading"},
-		{Type: "heading", Level: 1, Inline: text("Last")},
-	}
-	if got := RenderMarkdown(src); !reflect.DeepEqual(got, want) {
-		t.Fatalf("blocks = %+v\nwant     %+v", got, want)
-	}
-}
-
-func TestRenderMarkdownEdges(t *testing.T) {
-	for _, tc := range []struct {
-		name, src string
-		want      []Block
-	}{
-		{"missing body", "", []Block{}},
-		{"blank body", " \n\t\n", []Block{}},
-		{"crlf", "# A\r\n\r\ntext\r\n", []Block{{Type: "heading", Level: 1, Inline: text("A")}, {Type: "paragraph", Inline: text("text")}}},
-		{"hash without space", "#hashtag and C#", []Block{{Type: "paragraph", Inline: text("#hashtag and C#")}}},
-		{"seven hashes", "####### x", []Block{{Type: "paragraph", Inline: text("####### x")}}},
-		{"heading closer kept in word", "## C#", []Block{{Type: "heading", Level: 2, Inline: text("C#")}}},
-		{"empty heading", "#\n", []Block{{Type: "heading", Level: 1}}},
-		{"unterminated fence runs to the end", "~~~\nraw <b>\n- x", []Block{{Type: "code", Text: "raw <b>\n- x"}}},
-		{"short fence does not close a long one", "````\n```\n````", []Block{{Type: "code", Text: "```"}}},
-		{"fence indented four is text", "    ```\n", []Block{{Type: "paragraph", Inline: text("```")}}},
-		{"list ends at other kind", "- a\n1. b", []Block{{Type: "list", Items: [][]Inline{text("a")}}, {Type: "list", Ordered: true, Items: [][]Inline{text("b")}}}},
-		{"list ends at text", "- a\nplain", []Block{{Type: "list", Items: [][]Inline{text("a")}}, {Type: "paragraph", Inline: text("plain")}}},
-		{"list ends at blank", "- a\n\n  indented paragraph", []Block{{Type: "list", Items: [][]Inline{text("a")}}, {Type: "paragraph", Inline: text("indented paragraph")}}},
-		{"marker needs a space", "-a\n1.b\n12345678901. c", []Block{{Type: "paragraph", Inline: text("-a 1.b 12345678901. c")}}},
+func TestRenderMarkdownFeatures(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"empty", "", ""},
+		{"blank", " \n\t\n", ""},
+		{"headings start at h3", "# A\n\n## B\n\n##### E\n", "<h3>A</h3>\n<h4>B</h4>\n<h6>E</h6>\n"},
+		{"setext heading", "A\n===\n", "<h3>A</h3>\n"},
+		{"emphasis and code", "**b** *i* `x < y`", "<p><strong>b</strong> <em>i</em> <code>x &lt; y</code></p>\n"},
+		{"nested lists", "- a\n  - b\n    1. c\n", "<ul>\n<li>a\n<ul>\n<li>b\n<ol>\n<li>c</li>\n</ol>\n</li>\n</ul>\n</li>\n</ul>\n"},
+		{"ordered start", "3. c\n", "<ol start=\"3\">\n<li>c</li>\n</ol>\n"},
+		{"fenced code", "```go title\nfunc main() {}\n```\n", "<pre><code class=\"language-go\">func main() {}\n</code></pre>\n"},
+		{"indented code", "    a\n", "<pre><code>a\n</code></pre>\n"},
+		{"blockquote and rule", "> q\n\n---\n", "<blockquote>\n<p>q</p>\n</blockquote>\n<hr>\n"},
+		{"table with alignment", "| a | b | c |\n|:-|:-:|-:|\n| 1 | 2 | 3 |\n",
+			"<table>\n<thead>\n<tr>\n<th align=\"left\">a</th>\n<th align=\"center\">b</th>\n<th align=\"right\">c</th>\n</tr>\n</thead>\n" +
+				"<tbody>\n<tr>\n<td align=\"left\">1</td>\n<td align=\"center\">2</td>\n<td align=\"right\">3</td>\n</tr>\n</tbody>\n</table>\n"},
+		{"safe links open in a new tab", "[docs](https://example.com/a_(b) \"T\") <mailto:ops@example.com> <ops@example.com>",
+			"<p><a href=\"https://example.com/a_(b)\" title=\"T\" target=\"_blank\" rel=\"noopener noreferrer\">docs</a> " +
+				"<a href=\"mailto:ops@example.com\" target=\"_blank\" rel=\"noopener noreferrer\">mailto:ops@example.com</a> " +
+				"<a href=\"mailto:ops@example.com\" target=\"_blank\" rel=\"noopener noreferrer\">ops@example.com</a></p>\n"},
+		{"reference link", "[docs][d]\n\n[d]: https://example.com\n", "<p><a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">docs</a></p>\n"},
+		{"relative link keeps its text", "[readme](docs/x.md) and [top](#top)", "<p>readme and top</p>\n"},
+		{"image keeps only its alt text", "![a *chart*](https://example.com/c.png)", "<p>a <em>chart</em></p>\n"},
+		{"linked image", "[![logo](https://example.com/l.png)](https://example.com)", "<p><a href=\"https://example.com\" target=\"_blank\" rel=\"noopener noreferrer\">logo</a></p>\n"},
 	} {
-		if got := RenderMarkdown(tc.src); !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("%s: blocks = %+v, want %+v", tc.name, got, tc.want)
+		if got := RenderMarkdown(tc.src); got != tc.want {
+			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
 		}
 	}
 }
 
-func TestBacktickFenceTakesNoBacktickInInfo(t *testing.T) {
-	if got := RenderMarkdown("``` a`b\ntext"); len(got) != 1 || got[0].Type != "paragraph" {
-		t.Fatalf("blocks = %+v, want one paragraph, not a code block", got)
+func TestRenderMarkdownShowsRawHTMLAsText(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"script block", "<script>alert(1)</script> and [x](https://example.com)", "<p>&lt;script&gt;alert(1)&lt;/script&gt; and [x](https://example.com)</p>\n"},
+		{"inline tag", "a <b onclick=\"x()\">b</b>", "<p>a &lt;b onclick=&quot;x()&quot;&gt;b&lt;/b&gt;</p>\n"},
+		{"multi-line block", "<div>\n<img src=x onerror=alert(1)>\n</div>\n", "<p>&lt;div&gt;\n&lt;img src=x onerror=alert(1)&gt;\n&lt;/div&gt;</p>\n"},
+		{"comment", "<!-- hidden -->", "<p>&lt;!-- hidden --&gt;</p>\n"},
+		{"html in a code span", "`<script>x</script>`", "<p><code>&lt;script&gt;x&lt;/script&gt;</code></p>\n"},
+		{"html in a fence", "```html\n<iframe src=\"//evil\"></iframe>\n```", "<pre><code class=\"language-html\">&lt;iframe src=&quot;//evil&quot;&gt;&lt;/iframe&gt;\n</code></pre>\n"},
+		{"entities stay text", "&lt;script&gt; &#60;b&#62;", "<p>&lt;script&gt; &lt;b&gt;</p>\n"},
+	} {
+		got := RenderMarkdown(tc.src)
+		if got != tc.want {
+			t.Errorf("%s:\n got %q\nwant %q", tc.name, got, tc.want)
+		}
+		assertInert(t, tc.name, got)
 	}
 }
 
-func TestRenderMarkdownKeepsRawHTMLAsText(t *testing.T) {
-	src := "<script>alert(1)</script> and <img src=x onerror=alert(2)>\n\n- <b>bold</b>\n\n```html\n<iframe src=\"//evil\"></iframe>\n```"
-	blocks := RenderMarkdown(src)
-	if got := blocks[0].Inline[0].Text; got != "<script>alert(1)</script> and <img src=x onerror=alert(2)>" {
-		t.Fatalf("paragraph text = %q, want the HTML verbatim as text", got)
-	}
-	if got := blocks[1].Items[0][0].Text; got != "<b>bold</b>" {
-		t.Fatalf("list item = %q, want the HTML verbatim as text", got)
-	}
-	if blocks[2].Text != `<iframe src="//evil"></iframe>` || blocks[2].Lang != "html" {
-		t.Fatalf("code = %+v, want the HTML verbatim", blocks[2])
-	}
-	b, _ := json.Marshal(blocks)
-	if strings.Contains(string(b), "<") {
-		t.Fatalf("encoded blocks contain a raw <: %s", b)
+// hostile are descriptions written to get markup, script or a live unsafe
+// link into the page.
+var hostileDescriptions = map[string]string{
+	"script":              "<script>alert(1)</script>",
+	"unclosed script":     "<script src=//evil.test/x.js",
+	"split script":        "<scr<script>ipt>alert(1)</script>",
+	"style":               "<style>body{display:none}</style>",
+	"iframe":              "text <iframe src=javascript:alert(1)></iframe>",
+	"svg onload":          "<svg/onload=alert(1)>",
+	"img onerror":         "x <img src=x onerror=alert(1)>",
+	"event in a link":     "<a href=\"https://example.com\" onmouseover=\"alert(1)\">x</a>",
+	"javascript link":     "[x](javascript:alert(1))",
+	"mixed case scheme":   "[x](JaVaScRiPt:alert(1))",
+	"entity in scheme":    "[x](&#106;avascript:alert(1)) [y](java&#x09;script:alert(1))",
+	"escaped colon":       "[x](javascript&#58;alert(1))",
+	"percent scheme":      "[x](javascript%3Aalert(1))",
+	"data link":           "[x](data:text/html;base64,PHNjcmlwdD4=)",
+	"vbscript link":       "[x](vbscript:msgbox(1))",
+	"file link":           "[x](file:///etc/passwd)",
+	"angle destination":   "[x](<javascript:alert(1)>)",
+	"autolinks":           "<javascript:alert(1)> <data:text/html,x> <vbscript:x>",
+	"reference":           "[x][r]\n\n[r]: javascript:alert(1)\n",
+	"image source":        "![x](javascript:alert(1)) ![y](data:image/svg+xml,<svg/onload=alert(1)>) ![z](https://evil.test/p.gif)",
+	"title breakout":      "[x](https://example.com \"\\\" onmouseover=\\\"alert(1)\")",
+	"autolink breakout":   "<https://example.com/\"onmouseover=\"alert(1)>",
+	"fence info breakout": "```x\" onclick=\"alert(1)\n<b>\n```",
+	"attribute syntax":    "# Title {onclick=alert(1)}\n\npara{#id .c onclick=x}",
+	"nested links":        "[[inner](javascript:alert(1))](https://example.com) [![i](javascript:1)](javascript:2)",
+	"link in a table":     "| a |\n|---|\n| [x](javascript:alert(1)) <b>c</b> |\n",
+	"html in a list":      "- <img src=x onerror=alert(1)>\n  - <script>alert(2)</script>",
+	"cdata and pi":        "<![CDATA[<script>]]> <?php echo 1 ?> <!DOCTYPE html>",
+	"nul byte":            "<scr\x00ipt>alert(1)</script> [x](java\x00script:1)",
+	"deep quote":          strings.Repeat(">", 2000) + " x",
+	"unclosed brackets":   strings.Repeat("[a](", 5000),
+	"deep list":           strings.Repeat("- ", 500) + "x",
+}
+
+func TestRenderMarkdownKeepsHostileInputInert(t *testing.T) {
+	for name, src := range hostileDescriptions {
+		assertInert(t, name, RenderMarkdown(src))
 	}
 }
 
-func TestRenderMarkdownInline(t *testing.T) {
-	got := parseInline("run `./dev test` then [the docs](https://example.com/a_(b) \"title\") or [x](<https://example.com/y z>) `open")
-	want := []Inline{
-		{Text: "run "}, {Text: "./dev test", Code: true}, {Text: " then "},
-		{Text: "the docs", Href: "https://example.com/a_(b)"}, {Text: " or "},
-		{Text: "x"}, {Text: " `open"},
+// The checker itself must catch each way markup could go live.
+func TestAssertInertFailsOnLiveMarkup(t *testing.T) {
+	for _, html := range []string{
+		"<script>x</script>", "<p onclick=\"x\">a</p>", `<a href="javascript:x">a</a>`, `<a href="/rel">a</a>`,
+		`<img src="https://example.com/i.png">`, "<!-- c -->", "<p>a > b</p>", `<code class="x">a</code>`, `<p title="t">a</p>`,
+	} {
+		if inertProblem(html) == "" {
+			t.Errorf("inertProblem(%q) passed live markup", html)
+		}
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("inline = %+v\nwant     %+v", got, want)
+	if p := inertProblem(RenderMarkdown("# A\n\n[x](https://example.com) `c`\n\n```go\nx\n```\n\n| a |\n|:-:|\n| b |\n\n3. x\n")); p != "" {
+		t.Errorf("inertProblem refused safe output: %s", p)
 	}
-	for _, src := range []string{"[open](https://x", "[a [b]](https://x)", "[](https://x)", "[a] (https://x)", "[a]"} {
-		for _, run := range parseInline(src) {
-			if run.Href != "" {
-				t.Errorf("%q produced a link: %+v", src, run)
+}
+
+func assertInert(t *testing.T, name, html string) {
+	t.Helper()
+	if p := inertProblem(html); p != "" {
+		t.Errorf("%s: %s in %.300q", name, p, html)
+	}
+}
+
+var (
+	tagRE  = regexp.MustCompile(`^<(/?)([a-z0-9]+)((?: [a-z]+="[^"<>]*")*)>`)
+	attrRE = regexp.MustCompile(` ([a-z]+)="([^"]*)"`)
+	// allowed is every element the renderer may emit, with the attributes
+	// each may carry and a pattern for each attribute's value.
+	allowed = map[string]map[string]*regexp.Regexp{
+		"p": nil, "h3": nil, "h4": nil, "h5": nil, "h6": nil, "ul": nil, "li": nil, "pre": nil, "em": nil, "strong": nil,
+		"blockquote": nil, "hr": nil, "br": nil, "table": nil, "thead": nil, "tbody": nil, "tr": nil,
+		"ol":   {"start": regexp.MustCompile(`^[0-9]+$`)},
+		"code": {"class": regexp.MustCompile(`^language-[^ ]+$`)},
+		"th":   {"align": regexp.MustCompile(`^(left|center|right)$`)},
+		"td":   {"align": regexp.MustCompile(`^(left|center|right)$`)},
+		"a": {
+			"href":   regexp.MustCompile(`^(https?://[^/]|mailto:.)`),
+			"title":  regexp.MustCompile(``),
+			"target": regexp.MustCompile(`^_blank$`),
+			"rel":    regexp.MustCompile(`^noopener noreferrer$`),
+		},
+	}
+)
+
+// inertProblem returns what makes html unsafe to insert, or "" when every
+// tag is an allowed element with allowed attributes, every link is an
+// absolute http, https or mailto link, and no other markup character
+// appears outside a tag.
+func inertProblem(html string) string {
+	for i := 0; i < len(html); {
+		switch html[i] {
+		case '>', '"':
+			return "a bare " + html[i:i+1]
+		case '<':
+			m := tagRE.FindStringSubmatch(html[i:])
+			if m == nil {
+				return "markup that is not a plain tag"
 			}
+			attrs, ok := allowed[m[2]]
+			if !ok {
+				return "element " + m[2]
+			}
+			for _, a := range attrRE.FindAllStringSubmatch(m[3], -1) {
+				if re := attrs[a[1]]; re == nil || !re.MatchString(a[2]) || m[1] == "/" {
+					return "attribute " + a[0] + " on " + m[2]
+				}
+			}
+			if m[2] == "a" && m[1] == "" && !strings.Contains(m[3], ` href="`) {
+				return "a link without a destination"
+			}
+			i += len(m[0])
+		default:
+			i++
 		}
 	}
+	return ""
 }
 
 func TestSafeLinkDestinations(t *testing.T) {
@@ -122,30 +203,5 @@ func TestSafeLinkDestinations(t *testing.T) {
 		if got := safeLink(dest); got != want {
 			t.Errorf("safeLink(%q) = %v, want %v", dest, got, want)
 		}
-	}
-}
-
-func TestUnsafeLinkKeepsOnlyItsText(t *testing.T) {
-	got := parseInline("[click me](javascript:alert(1)) or [docs](docs/x.md)")
-	want := []Inline{{Text: "click me"}, {Text: " or "}, {Text: "docs"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("inline = %+v, want %+v", got, want)
-	}
-}
-
-func TestLinkPartsAreBounded(t *testing.T) {
-	long := strings.Repeat("a", maxLinkPart+1)
-	for _, src := range []string{"[x](https://example.com/" + long + ")", "[" + long + "](https://example.com)"} {
-		for _, run := range parseInline(src) {
-			if run.Href != "" {
-				t.Errorf("an over-long link part still made a link: %.60q", src)
-			}
-		}
-	}
-	if got := parseInline("[x](https://example.com/" + strings.Repeat("a", 1000) + ")"); got[0].Href == "" {
-		t.Fatal("a link within the bound lost its destination")
-	}
-	if got := parseInline(strings.Repeat("[a](", 5000)); len(got) != 1 {
-		t.Fatalf("unclosed links = %d runs, want the text kept whole", len(got))
 	}
 }

@@ -136,7 +136,7 @@ func TestRoutesServePageAndReads(t *testing.T) {
 		{"/app.js", "text/javascript", "textContent"},
 		{"/app.css", "text/css", "prefers-color-scheme"},
 		{"/dom.js", "text/javascript", "window.engine.dom"},
-		{"/panel.js", "text/javascript", "noopener"},
+		{"/panel.js", "text/javascript", "description_html"},
 		{"/api/plans?repo=r1&state=executing&q=rollout", "application/json", `"id":"p24"`},
 		{"/api/plans/p24", "application/json", `"in_progress":2`},
 	} {
@@ -334,5 +334,29 @@ func TestRejectedCredentialKeepsTheLastViewStale(t *testing.T) {
 	res, body := d.get(t, "GET", "127.0.0.1", "/api/plans/p24")
 	if env := decode(t, body); res.StatusCode != 200 || !env.Stale || env.Error != "credential required" {
 		t.Fatalf("after a 401 = %d %s, want the last view marked stale", res.StatusCode, body)
+	}
+}
+
+// The page inserts server-rendered description HTML, so its policy must keep
+// script to the page's own files: no inline script, handlers or javascript:
+// URLs, no eval, and images only from the dashboard itself.
+func TestPolicyForbidsInlineScript(t *testing.T) {
+	d := newDashboard(newFakeControl(t).client())
+	res, _ := d.get(t, "GET", "127.0.0.1:7332", "/")
+	directives := map[string]string{}
+	for _, part := range strings.Split(res.Header.Get("Content-Security-Policy"), ";") {
+		if f := strings.Fields(part); len(f) > 0 {
+			directives[f[0]] = strings.Join(f[1:], " ")
+		}
+	}
+	script, ok := directives["script-src"]
+	if !ok {
+		script = directives["default-src"]
+	}
+	if script != "'self'" || directives["img-src"] != "'self'" {
+		t.Fatalf("policy %v must limit script and images to 'self'", directives)
+	}
+	if strings.Contains(res.Header.Get("Content-Security-Policy"), "unsafe-") {
+		t.Fatalf("policy %v must not relax with an unsafe- source", directives)
 	}
 }

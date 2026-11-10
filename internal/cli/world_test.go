@@ -10,13 +10,16 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// rolloutBody is a plan description with every supported Markdown feature,
-// raw HTML and a link the page must not make active.
+// rolloutBody is a plan description with headings, nested lists, a table,
+// code, links and an image, plus raw HTML and links the page must not make
+// active.
 const rolloutBody = "## Outcome\n\nShip the **dashboard** to operators.\n\n" +
-	"- Plans view\n- Sessions view\n\n" +
+	"- Plans view\n  - filters\n    1. by repo\n- Sessions view\n\n" +
+	"| View | Route |\n|:-----|------:|\n| Plans | `#/plans` |\n| Sessions | `#/sessions` |\n\n" +
 	"Read the [control server doc](https://example.test/control) first.\n\n" +
 	"```sh\nengine ui\n```\n\n" +
-	"<script>alert(1)</script> and a [bad link](javascript:alert(1)).\n"
+	"### Not live\n\n![a remote chart](https://example.test/chart.png) and a [bad link](javascript:alert(1)).\n\n" +
+	"<script>alert(1)</script> <img src=x onerror=alert(2)>\n"
 
 // progressSays is how many progress messages the Sessions UI task posts:
 // more than one thread page of 50, so the thread paginates.
