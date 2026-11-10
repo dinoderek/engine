@@ -54,7 +54,7 @@ server = "engine-server.service"
 ```
 
 **Services.** The optional `services` table says how a host runs the control
-server: a `systemctl --user` unit. `config.toml`'s `[server] host` still says
+server: a `systemctl --user` unit. `config.toml`'s `[server] host` says
 which host runs it. A manager other than systemd, either key without the
 other, and a unit that is not a `.service` name are refused at load.
 `Host.ServerCommand` and `Host.ServerShellLine` build the `start`, `stop` and
