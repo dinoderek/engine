@@ -91,7 +91,7 @@ host's own `gh` and Git configuration (`operator-setup.md`).
 | Op | Does |
 | --- | --- |
 | `control-spawn` | Syncs engine's clone, then runs `spawn` with the run's credentials. |
-| `sync-repo` | Fetches engine's clone; returns the default branch. |
+| `sync-repo` | Creates or fetches engine's clone; returns the default branch. |
 | `spawn` | Starts a session; the kickoff arrives on stdin (`hosts-and-sessions.md`). |
 | `status` | Windows with their state and, unless working, last 20 screen lines and a waiting window's newest denial (`telemetry.md`); newest runs; quota, free slots and signed-out harnesses (`internal/hostops/status.go`). |
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |

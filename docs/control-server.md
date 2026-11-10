@@ -128,7 +128,7 @@ feedback" opens the question's thread at its update over the tab, on the
 plan's thread when it asked (`internal/ui/static/sessions.js`).
 
 Each task has one summary. Done is done. Failed and needs-human are blocked.
-An active attempt, running or in-review, is in progress. Otherwise an
+An active attempt, or a running or in-review state, is in progress. Otherwise an
 unfinished prerequisite or the plan's open question (as sessions report it)
 blocks it, todo under an approved plan is ready to run, and anything else is
 blocked. Coordination does not change it.
