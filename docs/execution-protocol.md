@@ -2,20 +2,18 @@
 
 > **Owns:** the principles, the phases at a glance, task and plan states and who moves them, the inbox, merge conflicts, and why rulings and hard stops are shaped as they are. **Not here:** what an agent does (the `build` and `engine` skills, `plugins/engine/skills/`), what each harness's adapter provides (`harnesses.md`), dispatch and merges (`coordinator.md`), records and the inbox's storage (`control-server.md`), where sessions run (`hosts-and-sessions.md`), what a repo must provide (`project-context.md`).
 
-Two skills hold agent behaviour. `build` takes one task to a merged PR in any
-repo, outside the engine process, and holds the hard-stop classes and the
-reviewer. `engine` holds the server roles (planner, executor); its
-executor is `build` with changes. This doc never restates a rule they hold.
+Two skills hold agent behaviour: `build` (one task to a merged PR, and its
+reviewer) and `engine` (the server roles; its executor is `build` with
+changes). This doc never restates a rule they hold.
 
 ## Principles
 
 - **Hands-off when dispatched, stops by rule.** A dispatched executor decides
   open questions itself and stops only for a hard-stop class.
-- **Enforce in code, not prompts.** The coordinator is a program: its code
-  specifies a pass. Engine executors never merge; the coordinator merges the commit
-  that was reviewed and gated once its checks are green. The merge guard blocks every merge in an engine
-  session and any unpinned, auto or admin merge through `gh` elsewhere. A
-  guard reads the command's words and catches mistakes, not deliberate evasion.
+- **Enforce in code, not prompts.** Engine executors never merge; the
+  coordinator merges the commit that was reviewed and gated once its checks
+  are green. The merge guard blocks merges in an engine session and unpinned,
+  auto or admin merges elsewhere. It catches mistakes, not deliberate evasion.
 - **One task = one session = one worktree = one PR.**
 - **One plan source:** the engine server, with GitHub only for code, PRs and
   CI. For records and the inbox, load `control-server.md`.
@@ -32,14 +30,13 @@ executor is `build` with changes. This doc never restates a rule they hold.
 | 3. Execute: one task, from card to merged PR | One executor per task | The coordinator merges the PR on green. |
 
 Prepare is the only time you are consulted, so every open question is
-answered there or explicitly left to the agent. It also settles the target
-repo's rules that would stop a hands-off run, such as approving merges: you
+answered there or explicitly left to the agent. It also settles any target
+repo rule that would stop a hands-off run, such as approving merges: you
 change the rule or override it for the feature. A plan's approval covers its
-tasks, and every task belongs to a plan. One task outside a plan is built
-with the `build` skill.
+tasks; one task outside a plan is built with the `build` skill.
 
-The executor reviews its own work with a fresh reviewer at `deep`, requests
-the merge, and the coordinator makes it. The operator watches the run
+The executor reviews its own work with a fresh reviewer, requests the merge,
+and the coordinator makes it. The operator watches the run
 (`operator-setup.md`, "Watching a run").
 
 Cards and roles name a tier (`deep`, `standard`, `light`), never a model. Host
@@ -84,8 +81,6 @@ Attaching is the interactive channel.
 ## Merge conflicts
 
 There is no file ownership: parallelism comes only from dependencies, and an
-executor resolves conflicts by merging the default branch. Each merge moves
-the default branch and forces a re-gate of every other open PR, so each
-repository has one merge queue (`coordinator.md`, "Merge queue"): only its
-head refreshes from the default branch, gates and is merged, while the
-others wait their turn.
+executor resolves conflicts by merging the default branch. Each repository has
+one merge queue (`coordinator.md`, "Merge queue"): its head refreshes from the
+default branch, gates and merges, while the other PRs wait.
