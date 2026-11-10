@@ -83,7 +83,7 @@ Read these at each session start:
   (`scripts/lanes.tsv`, `scripts/import-rules.tsv`, `scripts/doc-budgets.tsv`,
   `go.mod`); never restate it.
 - **Budgets.** Every doc has a word budget in `scripts/doc-budgets.tsv`;
-  this file plus the always-load docs share about 4000 words. Over budget:
+  this file plus the always-load docs share the `always-load` set's budget. Over budget:
   split behind a load trigger, or cut what fails the bar.
 - **Keep the docs true.** A change to layout, layers, tests, gates or
   versions updates its owning doc in the same PR. A new persistent doc gets
