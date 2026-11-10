@@ -80,10 +80,11 @@ repo's own merge and cleanup steps; the merge guard enforces it.
      - `merge-turn`: your turn. Redo step 7 (fetch, merge the default
        branch in, rerun the gates and the review, push), then request again
        for the new head, within the time it names.
-     - `merge-refused`: act on its reason (a red check, a closed PR, a
-       branch rule to ask about), then request again.
-     - `merge-demoted` or `merge-withdrawn`: read why; a demoted request
-       stays queued.
+     - `merge-refused`: the entry has ended. Act on its reason (a red
+       check, a closed PR, checks or a refresh that took too long; a branch
+       rule, a host or `gh` failure to ask the operator about), then
+       request again.
+     - `merge-withdrawn`: read why.
   5. To rework the PR, set the task `running`: it leaves the queue. A resumed
      session finds its task still in-review; `engine task show <task>` shows
      its queue entry.

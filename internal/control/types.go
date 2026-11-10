@@ -92,25 +92,21 @@ type QueueEntry struct {
 	Request int    `json:"request"`
 	PR      string `json:"pr"`
 	Head    string `json:"head"`
-	// Seq orders the queue: the request that created the entry, or the
-	// demotion that sent it to the back.
+	// Seq orders the queue: the request that created the entry.
 	Seq int `json:"seq"`
 	// Phase is QueueWaiting, QueueCheck (the head, merged once current and
 	// green) or QueueRefresh (the head, told to refresh).
 	Phase  string    `json:"phase"`
 	HeadAt time.Time `json:"head_at,omitzero"`
 	TurnAt time.Time `json:"turn_at,omitzero"`
-	// ProbedAt is when a waiting entry's PR was last read.
-	ProbedAt time.Time `json:"probed_at,omitzero"`
+	// CheckedAt is the head's last host call; zero calls it at once.
+	CheckedAt time.Time `json:"checked_at,omitzero"`
 	// WaitSince is the head's first reading of unknown mergeability.
 	WaitSince time.Time `json:"wait_since,omitzero"`
 	// FailSince is the head's first unreachable host call; Failures counts
 	// its host's gh failures in a row.
 	FailSince time.Time `json:"fail_since,omitzero"`
 	Failures  int       `json:"failures,omitempty"`
-	// Held is the operator notice that holds the entry until acknowledged.
-	Held      int `json:"held,omitempty"`
-	Demotions int `json:"demotions,omitempty"`
 	// Reason is the last thing the queue said about the entry.
 	Reason string `json:"reason,omitempty"`
 }

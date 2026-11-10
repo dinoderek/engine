@@ -112,19 +112,6 @@ func TestMergeHandsBackOrWaits(t *testing.T) {
 	}
 }
 
-func TestACheckJudgesWithoutMerging(t *testing.T) {
-	for want, v := range map[string]string{
-		CodeReady: view("OPEN", reviewed, "MERGEABLE", green),
-		CodeRed:   view("OPEN", reviewed, "MERGEABLE", red),
-	} {
-		g := &ghFake{view: v, behind: "5"}
-		m, err := Merge(Deps{Run: g.run}, MergeRequest{Repo: "o/r", PR: 42, Head: reviewed, Method: "squash", Check: true})
-		if err != nil || m.Code != want || len(g.calls) != 1 {
-			t.Errorf("check %+v, %v, calls %v; want %s from one read", m, err, g.calls, want)
-		}
-	}
-}
-
 func TestMergeFailuresAreErrors(t *testing.T) {
 	auth := errors.New("gh: authentication required")
 	for name, g := range map[string]*ghFake{

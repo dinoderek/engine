@@ -110,11 +110,10 @@ type Action struct {
 	ResetsAt int64
 	// Session is the window a Resume types into or a Release closes.
 	Session Session
-	// Entry is the merge queue entry a Merge reads, Request its newest
-	// request, and Check is true for a read that never merges.
+	// Entry is the merge queue entry a Merge acts on, Request its newest
+	// request.
 	Entry   control.QueueEntry
 	Request control.Update
-	Check   bool
 	// Step is the change a QueueStep makes.
 	Step *control.QueueStep
 }

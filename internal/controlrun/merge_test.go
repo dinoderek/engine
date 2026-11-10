@@ -26,27 +26,14 @@ type merger struct {
 	requests []hostops.MergeRequest
 }
 
-// ControlMerge answers as the host does: a check of a PR it would merge
-// says it is ready, and never merges it.
+// ControlMerge answers as the host does.
 func (m *merger) ControlMerge(r hostops.MergeRequest) (hostops.Merged, error) {
 	m.requests = append(m.requests, r)
-	got, err := m.reply(r)
-	if r.Check && err == nil && got.Code == hostops.CodeMerged && !strings.HasPrefix(got.Reason, "already") {
-		return hostops.Merged{Outcome: hostops.MergePending, Code: hostops.CodeReady, Reason: "ready"}, nil
-	}
-	return got, err
+	return m.reply(r)
 }
 
-// merges are the merge calls among the requests, leaving out checks.
-func (m *merger) merges() []hostops.MergeRequest {
-	var out []hostops.MergeRequest
-	for _, r := range m.requests {
-		if !r.Check {
-			out = append(out, r)
-		}
-	}
-	return out
-}
+// merges are the host calls made.
+func (m *merger) merges() []hostops.MergeRequest { return m.requests }
 
 // requested dispatches the task, then has its executor move it to in-review
 // and request the merge.
@@ -83,7 +70,7 @@ func request(t *testing.T, c *Coordinator, worker control.Actor, id, head string
 
 func reply(code, reason string) func(hostops.MergeRequest) (hostops.Merged, error) {
 	outcome := map[string]string{hostops.CodeMerged: hostops.MergeDone, hostops.CodePendingChecks: hostops.MergePending,
-		hostops.CodePendingMergeable: hostops.MergePending, hostops.CodeReady: hostops.MergePending}[code]
+		hostops.CodePendingMergeable: hostops.MergePending}[code]
 	if outcome == "" {
 		outcome = hostops.MergeRefused
 	}
@@ -198,16 +185,17 @@ func TestABehindHeadGetsItsTurnAndMergesOnceRefreshed(t *testing.T) {
 	}
 }
 
-func TestPendingChecksWaitThenDemoteAndAQuestionHoldsTheMerge(t *testing.T) {
+func TestPendingChecksWaitAndAQuestionHoldsTheMerge(t *testing.T) {
 	c, m, task, worker := requested(t, reply(hostops.CodePendingChecks, "check test is still running"))
 	pass(t, c)
-	if _, ok := lastUpdate(t, c, task.ID, control.MergeMerged, control.MergeRefused, control.MergeDemoted); ok || len(m.merges()) != 1 {
+	if _, ok := lastUpdate(t, c, task.ID, control.MergeMerged, control.MergeRefused); ok || len(m.merges()) != 1 {
 		t.Fatal("pending checks were answered")
 	}
 	if _, err := c.Service.Execute(worker, control.Request{Op: "ask", ID: task.ID, Body: "Approve the merge?", Key: "ask"}); err != nil {
 		t.Fatal(err)
 	}
 	m.reply = reply(hostops.CodeMerged, "merged")
+	later(c, reconcile.CheckEvery)
 	pass(t, c)
 	if e, _ := entry(t, c, task.ID); len(m.merges()) != 1 || e.Phase != control.QueueWaiting {
 		t.Fatalf("merged while the operator's question was open; entry %+v", e)
@@ -227,8 +215,14 @@ func TestCoordinatorRecordsAMergeWhoseResultWasLost(t *testing.T) {
 	if e, _ := entry(t, c, task.ID); e.Failures != 1 || len(operatorNotices(t, c, task.ID)) != 0 {
 		t.Fatalf("one failure: %+v", e)
 	}
-	// A restarted server is a new coordinator on the same records.
+	// A restarted server is a new coordinator on the same records: it keeps
+	// the head's interval, then calls again.
 	restarted := &Coordinator{Service: c.Service, URL: c.URL, Config: c.Config, Host: c.Host, Client: c.Client, Logf: t.Logf}
+	pass(t, restarted)
+	if len(m.merges()) != 1 {
+		t.Fatalf("a restart called the head again within its interval: %d calls", len(m.merges()))
+	}
+	later(restarted, reconcile.CheckEvery)
 	pass(t, restarted)
 	st, _ := c.Service.Store.Snapshot()
 	if st.Items[task.ID].State != "done" || len(m.merges()) != 2 {
@@ -247,6 +241,7 @@ func TestAVanishedHeadMergesWithoutItsSession(t *testing.T) {
 		t.Fatalf("attempt %+v", at)
 	}
 	m.reply = reply(hostops.CodeMerged, "merged at "+reviewedHead)
+	later(c, reconcile.CheckEvery)
 	pass(t, c)
 	if st, _ = c.Service.Store.Snapshot(); st.Items[task.ID].State != "done" {
 		t.Fatalf("task %s", st.Items[task.ID].State)

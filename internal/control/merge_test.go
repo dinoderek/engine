@@ -92,11 +92,11 @@ func TestMergeRequestsQueueInOrderAndKeepTheirPlace(t *testing.T) {
 	two, b, _ := inReview(t, s, repo, plan)
 	first := call(t, s, a, ready(one.ID, good())).Updates[0]
 	call(t, s, b, ready(two.ID, good()))
-	// The head is told to refresh; its new request keeps its place and is checked again.
+	// The head is told to refresh; its new request keeps its place and is checked again at once.
 	st := mustSnapshot(t, s)
 	from := st.Queue[one.ID]
 	to := from
-	to.Phase, to.TurnAt, to.WaitSince = QueueRefresh, s.now(), s.now()
+	to.Phase, to.TurnAt, to.WaitSince, to.CheckedAt = QueueRefresh, s.now(), s.now(), s.now()
 	if ok, err := s.QueueStep(QueueStep{From: from, To: &to, Kind: MergeTurn, Text: "Your turn"}); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
@@ -107,7 +107,7 @@ func TestMergeRequestsQueueInOrderAndKeepTheirPlace(t *testing.T) {
 	if len(queue) != 2 || queue[0].Task != one.ID || queue[1].Task != two.ID {
 		t.Fatalf("queue %+v", queue)
 	}
-	if e := queue[0]; e.Seq != first.ID || e.Request != again.ID || e.Head != m.Head || e.Phase != QueueCheck || !e.TurnAt.IsZero() || !e.WaitSince.IsZero() {
+	if e := queue[0]; e.Seq != first.ID || e.Request != again.ID || e.Head != m.Head || e.Phase != QueueCheck || !e.TurnAt.IsZero() || !e.WaitSince.IsZero() || !e.CheckedAt.IsZero() {
 		t.Fatalf("re-requested entry %+v", e)
 	}
 	if got := call(t, s, b, Request{Op: "get", ID: two.ID}).Queue; len(got) != 1 || got[0].Task != two.ID {
@@ -131,30 +131,19 @@ func TestQueueStepAppliesOnlyToTheEntryItRead(t *testing.T) {
 	if ok, err := s.QueueStep(QueueStep{From: stale, Done: true, Kind: MergeMerged, Text: "Merged"}); err != nil || ok {
 		t.Fatalf("a stale step applied: %v %v", ok, err)
 	}
-	demoted := from
-	demoted.Demotions = 1
-	if ok, err := s.QueueStep(QueueStep{From: from, To: &demoted, Kind: MergeDemoted, Text: "back", Demote: true, Notice: "moved back"}); err != nil || !ok {
+	checked := from
+	checked.CheckedAt = time.Unix(1700000000, 0).UTC()
+	if ok, err := s.QueueStep(QueueStep{From: from, To: &checked, Kind: "say", Text: "told", Notice: "noted"}); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	st := mustSnapshot(t, s)
 	e := st.Queue[task.ID]
 	last := st.Updates[len(st.Updates)-1]
-	if e.Seq != last.ID-1 || e.Demotions != 1 || last.Recipient != "operator" || last.ReplyTo != req.ID || st.Updates[last.ID-2].Kind != MergeDemoted {
-		t.Fatalf("demoted entry %+v, updates %+v", e, st.Updates[len(st.Updates)-2:])
+	if e.Seq != from.Seq || !e.CheckedAt.Equal(checked.CheckedAt) || last.Recipient != "operator" || last.ReplyTo != req.ID || st.Updates[last.ID-2].Kind != "say" {
+		t.Fatalf("stepped entry %+v, updates %+v", e, st.Updates[len(st.Updates)-2:])
 	}
-	held := e
-	if ok, err := s.QueueStep(QueueStep{From: e, To: &held, Hold: true, Notice: "gh failed"}); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	st = mustSnapshot(t, s)
-	e = st.Queue[task.ID]
-	if !QueueHeld(&st, e) {
-		t.Fatalf("hold %+v", e)
-	}
-	call(t, s, op, Request{Op: "ack", ReplyTo: e.Held})
-	st = mustSnapshot(t, s)
-	if QueueHeld(&st, e) || !MergedAt(&st, task.ID).IsZero() {
-		t.Fatal("still held after the acknowledgement, or merged")
+	if !MergedAt(&st, task.ID).IsZero() {
+		t.Fatal("merged before the merge step")
 	}
 	if ok, err := s.QueueStep(QueueStep{From: e, Done: true, Kind: MergeMerged, Text: "Merged at " + head}); err != nil || !ok {
 		t.Fatal(ok, err)

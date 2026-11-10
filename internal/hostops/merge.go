@@ -13,13 +13,11 @@ import (
 
 // MergeRequest is what the coordinator asks a task's host to merge: the PR,
 // the head commit that was reviewed and gated, and the repo's merge method.
-// Check only judges the PR and never merges it.
 type MergeRequest struct {
 	Repo   string `json:"repo"`
 	PR     int    `json:"pr"`
 	Head   string `json:"head"`
 	Method string `json:"method"`
-	Check  bool   `json:"check,omitempty"`
 }
 
 // Merge's outcomes. A refusal hands the PR back to its executor; pending
@@ -42,7 +40,6 @@ const (
 	CodeBehind           = "behind"
 	CodePendingChecks    = "pending-checks"
 	CodePendingMergeable = "pending-mergeable"
-	CodeReady            = "ready"
 	CodeInvalid          = "invalid"
 )
 
@@ -77,7 +74,7 @@ type prState struct {
 // the PR is open at that head, every check is green, it is mergeable, no
 // branch rule blocks it and the base branch is in the head's history. A PR
 // already merged at that head is reported merged, so a merge whose result
-// was lost is never retried. A check stops before the base is compared.
+// was lost is never retried.
 func Merge(d Deps, r MergeRequest) (Merged, error) {
 	if _, err := session.ParseRepo(r.Repo); err != nil {
 		return Merged{}, refuse("%v", err)
@@ -96,9 +93,6 @@ func Merge(d Deps, r MergeRequest) (Merged, error) {
 	}
 	if verdict, done := judge(p, r.Head); done {
 		return verdict, nil
-	}
-	if r.Check {
-		return Merged{MergePending, CodeReady, "the PR is green and mergeable"}, nil
 	}
 	behind, err := d.Run(d.Home, nil, "gh", "api", fmt.Sprintf("repos/%s/compare/%s...%s", r.Repo, p.Base, r.Head), "--jq", ".behind_by")
 	if err != nil {
