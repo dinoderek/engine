@@ -94,25 +94,15 @@ place per fact and keeping docs true: those are yours and the reviewer's.
 
 ## Workflow: worktree to merge
 
-1. **Worktree.** From the main checkout, `./dev worktree create <type>/<topic>`
-   branches from the remote's default branch into a worktree outside the
-   checkout; work only there. If your harness opened one, merge `origin/main`
-   first. One task, one worktree, one branch, one PR.
-   Commit work in progress; never stash (the stash is shared).
-2. **Gates.** Build with tests and docs until `./dev test` is green. Before
-   every push, fetch; if `origin/main` moved, merge it in and rerun.
-3. **Fresh review.** A reviewer that did not write the diff reviews it
-   against `origin/main`, with this file as its checklist. Its first line is
-   `Verdict: APPROVED` or `Verdict: CHANGES_REQUESTED`. Fix real findings,
-   rerun the gates, review again. Declined findings go in the PR, with reasons.
-4. **PR** per `.github/pull_request_template.md`: gate evidence, rulings,
-   deviations.
-5. **CI.** Watch with `gh pr checks --watch` until green. On a failure, read
-   the run's `test-ai-results` artifact, fix, and return to step 2.
-6. **Merge.** Hands-off: merge on green with
-   `gh pr merge --squash --match-head-commit <sha>`, where `<sha>` is the
-   commit that was reviewed and gated. Gated: say the PR is ready and wait;
-   never merge or enable auto-merge without the operator's approval.
-7. **Cleanup.** `./dev worktree release <branch>`.
+Build a task with the `build` skill (`plugins/engine/skills/build/SKILL.md`).
+This repo sets the default mode: **hands-off**. A build that names no mode
+merges on green without asking. Its repo specifics:
 
-Attribute commits and reviews to the actual harness and model.
+- **Worktree:** `./dev worktree create <type>/<topic>` from the main checkout;
+  `./dev worktree release <branch>` at cleanup.
+- **Gate:** `./dev test`.
+- **Reviewer checklist:** this file.
+- **PR body:** `.github/pull_request_template.md`.
+- **Merge:** squash, pinned to the reviewed head.
+- **CI failure:** read the run's `test-ai-results` artifact.
+- **Attribution:** commits and reviews name the actual harness and model.
