@@ -209,6 +209,10 @@ func Parse(args []string, e Env) (control.Request, error) {
 	return r, nil
 }
 
+// taskOps are the operations only a task has: the CLI's name for each, and
+// the request's.
+var taskOps = map[string]string{"complete-external": "complete-external", "merge-ready": "merge-request", "cleaned": "cleaned"}
+
 func operation(args []string) (control.Request, []string, error) {
 	r := control.Request{}
 	head, rest := args[0], args[1:]
@@ -238,21 +242,11 @@ func operation(args []string) (control.Request, []string, error) {
 		case "list":
 			r.Op = "list"
 			r.State = head
-		case "complete-external":
+		case "complete-external", "merge-ready", "cleaned":
 			if head != "task" {
-				return r, nil, fmt.Errorf("complete-external requires a task")
+				return r, nil, fmt.Errorf("%s requires a task", op)
 			}
-			r.Op = op
-		case "merge-ready":
-			if head != "task" {
-				return r, nil, fmt.Errorf("merge-ready requires a task")
-			}
-			r.Op = "merge-request"
-		case "cleaned":
-			if head != "task" {
-				return r, nil, fmt.Errorf("cleaned requires a task")
-			}
-			r.Op = op
+			r.Op = taskOps[op]
 		case "approve", "stop":
 			if head != "plan" {
 				return r, nil, fmt.Errorf("%s requires a plan", op)

@@ -57,10 +57,14 @@ usage and does nothing else: engine reads it. Docs cite verbs, not commands.
   locally, it checks that branch out as it is: engine sets it to a resumed
   task's work first. It puts the worktree outside the checkout, so the
   checkout's tools and `git status` never walk it. `worktree release` tears it
-  all down. Engine runs `dev worktree create <branch>` when the repo has an
-  executable `dev` at its root whose usage, printed with no verb, lists
-  `worktree create`; otherwise, including when `dev` prints no usage within
-  three minutes, it uses a plain `git worktree add`, which provisions nothing.
+  all down, and is idempotent: a repeat run, or one after the session
+  already tore everything down, exits 0 and changes nothing. Engine runs `dev
+  worktree create <branch>` when the repo has an executable `dev` at its root
+  whose usage, printed with no verb, lists `worktree create`; otherwise,
+  including when `dev` prints no usage within three minutes, it uses a plain
+  `git worktree add`, which provisions nothing. When a task is done, engine
+  likewise runs `dev worktree release <branch>` if the usage lists it, then
+  `git worktree remove` on any worktree left, which keeps the branch.
 - Commit work in progress rather than stashing: the stash is shared across
   worktrees.
 

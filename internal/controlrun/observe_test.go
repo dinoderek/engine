@@ -28,11 +28,11 @@ type probeHost struct {
 	gate   chan struct{}
 }
 
-func (h *probeHost) SyncRepo(string) (hostops.Synced, error)             { panic("unused") }
-func (h *probeHost) Spawn(hostops.SpawnRequest) (hostops.Spawned, error) { panic("unused") }
-func (h *probeHost) Collect(string) (hostops.Collected, error)           { panic("unused") }
-func (h *probeHost) Release(string, hostops.Outcome) (hostops.Released, error)      { panic("unused") }
-func (h *probeHost) Check(string, io.Writer) (bool, error)               { panic("unused") }
+func (h *probeHost) SyncRepo(string) (hostops.Synced, error)                   { panic("unused") }
+func (h *probeHost) Spawn(hostops.SpawnRequest) (hostops.Spawned, error)       { panic("unused") }
+func (h *probeHost) Collect(string) (hostops.Collected, error)                 { panic("unused") }
+func (h *probeHost) Release(string, hostops.Outcome) (hostops.Released, error) { panic("unused") }
+func (h *probeHost) Check(string, io.Writer) (bool, error)                     { panic("unused") }
 func (h *probeHost) Status() (hostops.Status, error) {
 	h.mu.Lock()
 	h.calls++

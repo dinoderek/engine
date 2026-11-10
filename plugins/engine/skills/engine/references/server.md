@@ -44,7 +44,7 @@ already shows.
 ## Executor
 
 Follow the `build` skill, hands-off, with these changes. They replace the
-repo's own merge and cleanup steps; the merge guard enforces it.
+repo's own merge step; the merge guard enforces it.
 
 - **Step 1.** The server claimed the task and opened its worktree: work
   there, and create none.
@@ -60,7 +60,7 @@ repo's own merge and cleanup steps; the merge guard enforces it.
 - **Step 10: the merge request.** You never merge, and never wait for a
   lock: the coordinator's merge queue orders merges. Once the PR is
   `in-review`, reviewed and pushed:
-  1. Read updates once more. Send the rulings digest, if any (below),
+  1. Send the rulings digest, if any (below),
      once: a repeated request does not resend it. Approval the repo or card
      requires is an `engine ask` before the request.
   2. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
@@ -75,8 +75,11 @@ repo's own merge and cleanup steps; the merge guard enforces it.
      updates t7 --after 512` arrives as your next prompt: run it, and act on
      the update it shows.
   4. The updates on the task:
-     - `merged`: the task is `done`; record the outcome with `engine tell
-       <task>` and stop, keeping the worktree for the coordinator to release.
+     - `merged`: the task is `done`. Record the outcome with `engine tell
+       <task>`; from outside the worktree, tear down what you provisioned by
+       the repo's post-merge cleanup rules (no new work, commits or pushes);
+       run `engine task cleaned <task> [--left <what remains>]`; end your
+       turn. The coordinator closes the window.
      - `merge-turn`: your turn. Redo step 7 (fetch, merge the default
        branch in, rerun the gates and the review, push), then request again
        for the new head, within the time it names.
@@ -89,7 +92,7 @@ repo's own merge and cleanup steps; the merge guard enforces it.
   5. To rework the PR, set the task `running`: it leaves the queue. A resumed
      session finds its task still in-review; `engine task show <task>` shows
      its queue entry.
-- **Step 11.** Leave cleanup to the coordinator.
+- **Step 11.** On `merged`, above.
 
 A server outage blocks the merge request: keep your work and wait. Never
 bypass gates or the queue.

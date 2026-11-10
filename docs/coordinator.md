@@ -9,7 +9,7 @@
   each host's tmux sessions, harness observations and run directories.
   A restarted server adopts live sessions.
 - **One pass** runs every 30 seconds and once at start. `internal/reconcile`
-  decides from records and fresh host reads, merge queues first. A pass reads every
+  decides from records and fresh host reads. A pass reads every
   host's `status` in parallel; the session view's observer reuses those reads
   (`control-server.md`, "Session view"). Stopping coordination leaves
   sessions running. Plans move only to `planned` and `done`.
@@ -53,18 +53,24 @@ Passes run the queues first. The head, the first eligible entry in
 request order (in-review, coordinated, no unresolved question), stays head
 until it merges or leaves. Only the head is called, through its task host's
 `merge` op (the server has no GitHub credential): at once when it becomes
-head or requests again, then once per `CheckEvery`, timed from the entry's
-stored last call, so a restart adds none. Waiting entries cost no calls. A
-merge marks the task done with its PR; the session keeps its window 10
-minutes to report. A done task's session is released once idle 10 minutes;
-releasing one whose background job still runs is a notice. Otherwise the
-code routes it: behind, conflicting or moved gets `merge-turn`, waking the
-executor to refresh and request again; red, closed or a branch rule ends
-the entry `merge-refused`, telling the operator of the last two; merged
-elsewhere is done, and the operator told; pending waits.
+head or requests again, then once per `CheckEvery` from the entry's
+stored last call, so a restart adds none. A
+merge marks the task done with its PR. Otherwise the code routes it:
+behind, conflicting or moved gets `merge-turn`, waking the executor to
+refresh and request again; red, closed or a branch rule ends the entry
+`merge-refused`, telling the operator of the last two; merged elsewhere is
+done, and the operator told; pending waits.
+
+**After the merge**, the `merged` update gives the session a cleanup turn,
+ending in `engine task cleaned`. Idle after that, it is released; `--left`
+tells the operator. Without it, it is released once idle `CleanupWait`
+after the merge, or at once if its window is gone, telling the operator
+where it ran; one in a turn at `CleanupCap` is noticed
+(`internal/reconcile/session.go`). Other done tasks' sessions go once idle
+10 minutes. A release with a background job running is a notice.
 
 Every wait is bounded in `internal/reconcile/queue.go`. A head outstaying
-one (refresh, checks, mergeability, an unreachable host), failing `gh`
+one, failing `gh`
 repeatedly, or whose host is not in `hosts.toml` ends `merge-refused` with
 the reason, telling the operator; the executor fixes it and requests again.
 A waiting PR's changes are found at its turn. Leaving in-review except for
@@ -75,43 +81,39 @@ resumes in-review, keeping its entry. A lost merge result reads as merged.
 
 A host does its own work through `engine host <op> --json`: one job, one JSON
 object on stdout, exit 0, or 1 on failure. The caller passes the model, effort
-and kickoff; the host handles its own disk and tmux, reading `hosts.toml`
+and kickoff; the host reads `hosts.toml`
 only for its launch line, harness binary and slots. The coordinator calls its own host's ops in-process and another
-machine's as `ssh -o BatchMode=yes -o ConnectTimeout=10 <address> engine host
-<op> --json`. It refuses to run unless the name in `~/.config/engine/host` is
+machine's over `ssh` (`internal/remote/ssh.go`). It refuses to run unless the name in `~/.config/engine/host` is
 a machine in `hosts.toml` (`hosts-and-sessions.md`).
 
 | Op | Does |
 | --- | --- |
 | `control-spawn` | Syncs engine's isolated clone of the repo, then runs `spawn` with the run's credentials. |
 | `sync-repo` | Ensures engine's clone exists, fetches it, returns the default branch. |
-| `spawn` | Creates the worktree, trusts it for the harness, opens the tmux window, launches the harness with the caller's model, effort and kickoff (stdin), writes `run.json`. |
-| `status` | Lists each window of session `engine` (alive, exit code, harness, state, background, the last 20 screen lines unless working, a waiting window's newest `permissions.jsonl` denial (`telemetry.md`)), each session name's newest run, quota per harness, free and heavy slots, the harnesses signed out by their own CLI, and `harness_errors`. |
+| `spawn` | Starts a session with the caller's model, effort and kickoff (stdin): `hosts-and-sessions.md`, "Starting a session". |
+| `status` | Each window of session `engine` with its state and, unless working, its last 20 screen lines and a waiting window's newest denial (`telemetry.md`); each session's newest run; quota, free slots and signed-out harnesses (`internal/hostops/status.go`). |
 | `collect` | Returns a run directory, its `run.json` and file list; nothing is uploaded. |
 | `merge` | Merges a PR with the host's `gh`, pinned to the reviewed head, once open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base; replies with a code. Already merged is done. |
-| `release` | Closes the session's window, deletes each harness's files for it, removes its worktree unless the run failed or the worktree has changes; the branch stays. |
+| `release` | Closes the window, deletes each harness's files for it; for a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note); removes a remaining worktree unless the run failed or it has changes. Never deletes the branch. |
 
-**The envelope.** Every reply, a failure too, carries `protocol` (an integer),
+**The envelope.** Every reply, a failure too, carries `protocol`,
 `engine` (the build) and `host`. A failure is `{"error": …, "refused":
 true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is
 an unreachable host. A caller refuses a reply on another protocol, or not an
 engine's, telling the operator to run `engine setup --host <name>`.
 
-**A failed call is unknown, never dead.** Nothing a failed call or
-unreachable host would have said is known: none of its sessions is marked
-dead, failed, stalled, restarted or reaped. Only a successful `status`
-lacking a window shows it gone.
+**A failed call is unknown, never dead.** No session of a failed call or
+unreachable host is marked dead, failed, stalled, restarted or reaped; only
+a successful `status` lacking a window shows it gone.
 
-Each host keeps engine's clone at `~/.local/share/engine/repos/<owner>/<repo>`.
 An SSH host needs
 key-based SSH, `engine`, `tmux`, `gh` and the harness CLIs signed in. The
 coordinator and sessions use the host's own `gh` and Git configuration (`operator-setup.md`).
 
 ## Session signals
 
-Agent state is never scraped from the pane; the task's state and questions
-are server records. The session layer adds whether a session is alive
-and takes input:
+Agent state is never scraped from the pane: task state and questions are
+server records. Two sources say whether a session is alive and takes input:
 
 1. **The harness** gives each window of session `engine` a `state` (`working`,
    `waiting` or `limited`) from the observation of the harness its newest
