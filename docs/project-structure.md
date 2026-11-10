@@ -22,7 +22,7 @@
 - **A product feature:** a new package under `internal/<name>/`, wired into
   `internal/cli`, with its row in `scripts/import-rules.tsv`. A command's
   logic never lives in `internal/cli`.
-- **Tests:** a `_test.go` file beside the code; fixtures in `testdata/`.
+- **Tests:** a `_test.go` beside the code; fixtures in `testdata/`.
 - **A gate lane:** a row in `scripts/lanes.tsv`. If no single command does
   the job, add a `dev check` subcommand in `devtools/internal/checks`, then a
   row in the lane table of `quality-gates.md`.

@@ -5,8 +5,8 @@
 ## Run the gates
 
 `./dev test` runs every required lane in parallel, with no fail-fast;
-`./dev test <lane>...` runs named lanes, and `./dev test for <path>...` the
-lanes those paths trigger.
+`./dev test <lane>...` runs named lanes, `./dev test for <path>...` those
+paths' lanes.
 
 Every `required` lane in `scripts/lanes.tsv` must be green before a PR. CI
 runs `./dev test` on every pull request and every push to `main`, and uploads
@@ -37,7 +37,7 @@ Go has no branch coverage, so the target is statements, with
 `-coverpkg=./...`: code counts as covered when any package's tests run it.
 
 `imports` checks only layers (the compiler rejects cycles), on non-test
-imports. A rule whose importer or target matches no package fails the lane.
+imports of files built on the host OS. A rule whose importer or target matches no package fails the lane.
 Load `architecture.md` before changing a rule.
 
 ## Baselines only shrink
@@ -84,7 +84,7 @@ is still true; the reviewer does.
 ## Setup and debugging
 
 `./dev doctor` installs what Homebrew can and reports any other gap with its
-fix (with Homebrew, Go too; `./dev` fetches the pinned toolchain). For a failed gate, read
+fix, and installs Go with Homebrew when none is on `PATH`; `./dev` sets `GOTOOLCHAIN` from go.mod, so any Go can bootstrap. For a failed gate, read
 `.test-ai-results/summary.md` (one PASS or FAIL line per lane), then
 `.test-ai-results/<lane>.txt`, which starts with the command and exit code,
 and rerun it with `./dev test <lane>`.

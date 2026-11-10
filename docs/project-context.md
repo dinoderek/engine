@@ -13,8 +13,8 @@ repo picks the tools for its stack.
   live in the file; links are for depth, never for rules.** At most 1000
   words: Non-negotiables (with the repo's extra hard-stop classes), Always
   load, Load on demand, Docs, Workflow.
-- **Always load:** brief, architecture, project structure, testing strategy,
-  quality gates: about 4000 words with `AGENTS.md`, at most.
+- **Always load:** brief (what, state, scope, stack), architecture, project
+  structure, testing strategy, quality gates: about 4000 words with `AGENTS.md`, at most.
 - **Load on demand:** a trigger table in `AGENTS.md` ("if your task… load…")
   is the **only** routing; the README keeps no doc table. Every persistent
   doc appears in it or in always-load.
@@ -25,15 +25,14 @@ repo picks the tools for its stack.
 ### 2. One command per job
 
 A single script (e.g. `./dev`) has the verbs `doctor` (turns "can't run"
-into a fix), `run`, `test [lane | for <paths>]`, `worktree create | release`,
-`deploy` and `deps`. A verb with no use is left out, and the usage says so.
+into a fix), `run`, `test [lane | for <paths>]` (`for` runs the required lanes whose trigger
+patterns match the paths), `worktree create | release`, `deploy` and `deps`. A verb with no use is left out, and the usage says so.
 Run with no verb, the script prints that usage and does nothing else: engine
 reads it.
 
 ### 3. Worktrees
 
-- Work in a worktree; commit work in progress rather than stashing, because
-  the stash is shared.
+- Work in a worktree, never the main checkout; never stash (it is shared).
 - `worktree create` branches from the remote's current default branch,
   provisions what the task needs, and checks out a branch that already exists
   locally as it is. `worktree release` tears it down and is idempotent.
@@ -55,7 +54,7 @@ reads it.
 - Default targets: coverage 80% of lines and of branches (statements where
   the stack has no branch coverage, as in Go); per function, cognitive
   complexity ≤ 25, ≤ 200 lines, nesting ≤ 4, ≤ 5 parameters; per file, ≤ 500
-  lines; no import cycles, plus layer rules (where the compiler rejects
+  lines of code or config (docs have word budgets); no import cycles, plus layer rules (where the compiler rejects
   cycles, as in Go, the lane checks layers only); lint, format, types and the
   docs check.
 - Existing violations go in baselines that only shrink; an inline suppression
@@ -97,9 +96,8 @@ and minor updates merge on green.
   stable ID per decision (`<subject>.<slug>`) with kind, status, why and code,
   run as tests; an `open` fact is a hard stop.
 - **Design system**, when the repo has a UI: a catalog of **which component to
-  reach for**, never its props (the component and its tests are the spec),
-  checked for completeness. Tokens are the only source of colour, spacing and
-  type, and a lint ratchet bans literals.
+  reach for**, never its props, checked for completeness; tokens are the only
+  source of colour, spacing and type, and a lint ratchet bans literals.
 - **Isolated environments**, for stateful infrastructure: a slot lease per
   worktree, with derived ports; commands that need it refuse to run without
   it.

@@ -18,18 +18,18 @@
 budget	*	2000
 budget	AGENTS.md	1000
 budget	README.md	300
-budget	docs/project-brief.md	340
+budget	docs/project-brief.md	330
 budget	docs/architecture.md	380
 budget	docs/project-structure.md	370
 budget	docs/testing-strategy.md	345
-budget	docs/quality-gates.md	835
+budget	docs/quality-gates.md	850
 budget	docs/control-server.md	1500
 budget	docs/coordinator.md	1400
 budget	docs/execution-protocol.md	710
 budget	docs/hosts-and-sessions.md	1400
 budget	docs/harnesses.md	700
-budget	docs/project-context.md	1020
-budget	docs/versions.md	510
+budget	docs/project-context.md	1035
+budget	docs/versions.md	520
 budget	docs/operator-setup.md	1710
 # Read at the start of every session: AGENTS.md plus its "Always load" list.
 set	always-load	3230	AGENTS.md,docs/project-brief.md,docs/architecture.md,docs/project-structure.md,docs/testing-strategy.md,docs/quality-gates.md

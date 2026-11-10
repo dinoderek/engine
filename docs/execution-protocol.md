@@ -42,7 +42,7 @@ host config maps each tier to a model and effort per harness
   rulings mean Prepare under-specified the card.
 - **Hard stops are the only interruptions, asked once.** Repeated questions
   usually share a root cause, such as one red gate on the default branch; a
-  question that affects every task is asked once, on the plan.
+  question every task shares is asked once, on the plan.
 
 ## States
 

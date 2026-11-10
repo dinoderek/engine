@@ -15,9 +15,8 @@ Two programs share one Go module:
   `internal/hostops` runs on the host. A harness is the `internal/harness`
   `Adapter` interface, one package per harness; `internal/hostops` and
   `internal/setup` see only the interface.
-- **`dev`**, the repo's tooling behind `./dev`: `devtools/cmd/dev` →
-  `devtools/internal/dev` (the verbs) → `lanes` and `checks` → `baseline` and
-  `repo`.
+- **`dev`**, the tooling behind `./dev`: `devtools/cmd/dev` →
+  `devtools/internal/dev` (verbs) → `lanes`, `checks` → `baseline`, `repo`.
 
 ## Layers and import rules
 

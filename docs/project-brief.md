@@ -7,8 +7,7 @@
 engine is a hands-off feature build protocol for agent-driven repos, plus the
 tooling that runs it. An operator and an agent agree the *what* and the
 *how*, an agent plans the work, and a coordinator runs each task in its own
-session through to a merged PR. The operator is pulled in only when a task
-asks.
+session through to a merged PR.
 
 | Part | What it is |
 | --- | --- |

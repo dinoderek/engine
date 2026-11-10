@@ -16,8 +16,8 @@ Nothing else names a version: `./dev` exports `GOTOOLCHAIN` from the
 
 ## The versions lane
 
-`./dev test versions` fails when the `go` and `toolchain` lines are missing,
-name different minors, or put the toolchain below the language version; when
+`./dev test versions` fails when the `go` or `toolchain` line is missing,
+the two name different minors, or put the toolchain below the language version; when
 the gates run on another Go; when a workflow sets its own Go version, uses
 setup-go without `go-version-file: go.mod`, or pins an action by tag instead
 of a commit SHA with a version comment; when `.golangci.yml` sets a Go version; when a plugin's Claude
@@ -27,11 +27,11 @@ restates a Go version.
 ## Upgrade policy
 
 - **Cooldown.** Adopt a release only once it is at least 7 days old
-  (Dependabot's cooldown enforces this); move the `toolchain` line to each new
-  Go patch within a week after.
+  (Dependabot's cooldown enforces this for what it bumps); move the
+  `toolchain` line to each new Go patch within a week of the cooldown ending.
 - **Go minors.** Never more than one minor behind the newest; adopt one once
   its first patch is out and golangci-lint supports it, in one PR that sets
-  both lines and fixes new vet and lint findings.
+  both lines and fixes new lint findings.
 - **Modules, tools and actions.** Dependabot opens one grouped PR per
   ecosystem each week; patch and minor updates merge on green. For a major
   update, say in the PR what the release notes change for engine. Fix lint
