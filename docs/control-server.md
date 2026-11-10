@@ -138,7 +138,8 @@ persist when wake-up fails.
 `engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen`
 chooses another loopback address. It uses the CLI's server configuration and
 operator credential, which never reaches the browser. Any local user reaching
-the port reads with operator rights; run it only on a single-user machine. The page calls fixed same-origin routes:
+the port reads with operator rights; run it only on a single-user machine.
+The page calls fixed same-origin routes:
 
 - `/api/plans`: repositories and plans, filtered by `repo`, status `state`
   and search `q`.
