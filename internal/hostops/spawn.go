@@ -20,7 +20,10 @@ type SpawnRequest struct {
 	Repo    string // owner/name
 	Task    int
 	Feature string // owner/repo#n, or empty
-	Mode    string
+	// Title is how the harness apps show the session (session.Title); empty
+	// shows its name. It is omitted when empty, like Resume.
+	Title string `json:",omitempty"`
+	Mode  string
 	// Harness names an adapter; empty is the default.
 	Harness string
 	Tier    string
@@ -94,7 +97,7 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 		"git -C %s worktree remove --force %s && git -C %s branch -D %s",
 		hosts.ShellWord(clone.Path), hosts.ShellWord(wt.Path), hosts.ShellWord(clone.Path), wt.Branch)
 	line, err := s.cfg.LaunchLine(s.host, hosts.Launch{
-		Harness: s.h.Name(), Name: s.name, Clone: clone.Path, Home: d.Home,
+		Harness: s.h.Name(), Name: s.name, Title: s.Title, Clone: clone.Path, Home: d.Home,
 		Model: hosts.TierModel{Model: s.Model, Effort: s.Effort},
 	})
 	if err != nil {
@@ -209,6 +212,7 @@ func (s *spawn) checkRequest(home string) error {
 		}
 	}
 	s.name = session.TaskName(s.repo, s.Task)
+	s.Title = session.CleanTitle(s.Title)
 	if s.runDir, err = session.RunDir(home, s.RunID); err != nil {
 		problems = append(problems, err.Error())
 	} else if !strings.HasPrefix(s.RunID, s.name+"-") {
@@ -228,7 +232,7 @@ func (s spawn) record(wt session.Worktree, window, log string, d Deps) session.R
 		Schema:  session.RecordSchema, RunID: s.RunID, Repo: s.repo.String(),
 		Task: session.Ref{Repo: s.repo.String(), Number: s.Task}.String(), Feature: s.Feature,
 		Host: s.host.Name, Harness: s.h.Name(), Tier: s.Tier, Model: s.Model, Effort: s.Effort,
-		Mode: s.Mode, Heavy: s.Heavy, Name: s.name, Tmux: session.Name + ":" + window,
+		Mode: s.Mode, Heavy: s.Heavy, Name: s.name, Title: s.Title, Tmux: session.Name + ":" + window,
 		Branch: wt.Branch, Worktree: wt.Path, PaneLog: log, Spawned: d.Now().UTC(),
 	}
 }

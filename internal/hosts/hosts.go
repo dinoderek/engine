@@ -49,8 +49,8 @@ type TierModel struct {
 type Harness struct {
 	// MaxSessions caps the harness across all hosts.
 	MaxSessions int
-	// Launch is the launch line, with {bin}, {model}, {effort}, {name} and
-	// {clone} placeholders.
+	// Launch is the launch line, with {bin}, {model}, {effort}, {name},
+	// {title} and {clone} placeholders.
 	Launch string
 	Tiers  map[Tier]TierModel
 }

@@ -148,7 +148,7 @@ func decode(root *node) (*Config, *Error) {
 }
 
 // launchPlaceholders are the {words} a launch line may use.
-var launchPlaceholders = []string{"bin", "model", "effort", "name", "clone"}
+var launchPlaceholders = []string{"bin", "model", "effort", "name", "title", "clone"}
 
 var placeholder = regexp.MustCompile(`\{([A-Za-z_]+)\}`)
 

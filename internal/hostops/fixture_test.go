@@ -20,7 +20,7 @@ reserve_gb = 8
 
 [harness.claude]
 max_sessions = 8
-launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {name} --remote-control {name}"
+launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {title} --remote-control {title}"
 tiers.deep     = { model = "opus-x",   effort = "high" }
 tiers.standard = { model = "sonnet-x", effort = "high" }
 tiers.light    = { model = "haiku-x",  effort = "medium" }

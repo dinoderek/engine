@@ -85,8 +85,8 @@ An attempt is the session registry: the server's record of a task's or plan's
 session (host, harness, run ID, tmux window, state; `engine attempt list`).
 `engine ps`, `engine attach` and the dashboard resolve a session through it.
 
-A session is named `<repo>-<task>` on every surface: the tmux window, the
-remote-control name and part of the branch.
+A session is named `<repo>-<task>` in its tmux window, run ID and branch;
+the harness apps show its title, `t<n> · <title>` (`p<n>` for a planner).
 
 ## Starting a session
 

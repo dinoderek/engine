@@ -213,7 +213,7 @@ func TestPlannerDispatchAndInvalidPlanBlock(t *testing.T) {
 	}
 	pass(t, c)
 	for _, req := range h.launches {
-		if req.Spawn.Tier != "deep" || req.Spawn.Task != control.Number(plan.ID) {
+		if req.Spawn.Tier != "deep" || req.Spawn.Task != control.Number(plan.ID) || req.Spawn.Title != plan.ID+" · Feature" {
 			t.Fatal(req)
 		}
 	}

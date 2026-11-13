@@ -11,13 +11,19 @@ func TestLaunchLineExpandsEveryPlaceholder(t *testing.T) {
 		t.Fatal(err)
 	}
 	mac := c.Hosts["mac"]
-	got, err := c.LaunchLine(mac, Launch{Harness: "claude", Tier: Deep, Name: "boga3-412", Clone: "/c/o/boga3", Home: "/home/me"})
+	got, err := c.LaunchLine(mac, Launch{Harness: "claude", Tier: Deep, Name: "boga3-412", Title: "t412 · Fix Bob's tab", Clone: "/c/o/boga3", Home: "/home/me"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "/home/me/.local/bin/claude --permission-mode auto --model claude-opus-5-5 --effort high -n boga3-412 --remote-control boga3-412"
+	title := `'t412 · Fix Bob'\''s tab'`
+	want := "/home/me/.local/bin/claude --permission-mode auto --model claude-opus-5-5 --effort high -n " + title + " --remote-control " + title
 	if got != want {
 		t.Errorf("claude:\n got %s\nwant %s", got, want)
+	}
+	// A run without a title shows its name.
+	got, err = c.LaunchLine(mac, Launch{Harness: "claude", Tier: Deep, Name: "boga3-412", Home: "/home/me"})
+	if err != nil || !strings.HasSuffix(got, " -n boga3-412 --remote-control boga3-412") {
+		t.Errorf("claude without a title: %s, %v", got, err)
 	}
 	got, err = c.LaunchLine(mac, Launch{Harness: "codex", Tier: Light, Name: "r-1", Clone: "/c/o/r", Home: "/home/me"})
 	if err != nil {

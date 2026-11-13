@@ -10,6 +10,7 @@ import (
 	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
+	"github.com/dinoderek/engine/internal/session"
 )
 
 // dispatch reserves an attempt for a's item, at its version in st, and
@@ -53,7 +54,7 @@ func (c *Coordinator) launch(st control.State, at control.Attempt, credential st
 	}
 	repo := st.Items[item.Repo]
 	req := hostops.ControlRequest{URL: c.URL, Credential: credential, Attempt: at.ID, Remote: repo.Remote,
-		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Mode: hostops.HandsOff,
+		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Title: session.Title(item.ID, item.Title), Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
 			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model)}}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)

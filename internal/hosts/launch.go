@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"cmp"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -14,6 +15,8 @@ type Launch struct {
 	Tier    Tier
 	// Name is the session name, <repo>-<task>.
 	Name string
+	// Title is how the harness apps show the session; empty is Name.
+	Title string
 	// Clone is engine's clone of the task's repo.
 	Clone string
 	// Home expands a bin path that starts with ~/.
@@ -75,6 +78,7 @@ func (c *Config) LaunchLine(h Host, l Launch) (string, error) {
 		"{model}", ShellWord(model.Model),
 		"{effort}", ShellWord(model.Effort),
 		"{name}", ShellWord(l.Name),
+		"{title}", ShellWord(cmp.Or(l.Title, l.Name)),
 		"{clone}", ShellWord(l.Clone),
 	)
 	return r.Replace(harness.Launch), nil
