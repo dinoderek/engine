@@ -69,8 +69,12 @@ type Record struct {
 	// Heavy is true when the task's card requires a heavy capability: the
 	// run takes one of its host's heavy slots.
 	Heavy bool `json:"heavy"`
-	// Name is the session name: the tmux window and the Remote Control name.
-	Name     string    `json:"name"`
+	// Name is the session name: the tmux window, and the stem of the branch
+	// and the run ID.
+	Name string `json:"name"`
+	// Title is how the harness apps show the session (Title); a run spawned
+	// without one shows its Name.
+	Title    string    `json:"title,omitempty"`
 	Tmux     string    `json:"tmux"` // the window's target, such as engine:@3
 	Branch   string    `json:"branch"`
 	Worktree string    `json:"worktree"`

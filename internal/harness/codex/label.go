@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -77,20 +76,6 @@ func LabelPending(runDir string, now time.Time) bool {
 // filed the project for.
 const projectKey = "engine_repo"
 
-// ThreadTitle is the title of a task's thread: "<plan> > <task>", or the
-// task alone when it belongs to no plan. Runs name them by their server IDs
-// (p12, t34).
-func ThreadTitle(rec session.Record) string {
-	task := rec.Task
-	if t, err := session.ParseRef(rec.Task); err == nil {
-		task = "t" + strconv.Itoa(t.Number)
-	}
-	if rec.Feature == "" {
-		return task
-	}
-	return rec.Feature + " > " + task
-}
-
 // LabelThread titles a joined run's thread and files it under its repo's
 // project, through engine's daemon, and records the outcome in LabelFile. It
 // does nothing once the thread is labelled, after the last attempt, or while
@@ -143,7 +128,7 @@ func labelFor(home string, rec session.Record, threadID string) (LabelRequest, e
 	if err != nil {
 		return LabelRequest{}, err
 	}
-	return LabelRequest{ThreadID: threadID, Title: ThreadTitle(rec), Project: repo.Name, Repo: repo.String(), Root: root}, nil
+	return LabelRequest{ThreadID: threadID, Title: rec.DisplayTitle(), Project: repo.Name, Repo: repo.String(), Root: root}, nil
 }
 
 func (a Adapter) sendLabel(req LabelRequest) error {

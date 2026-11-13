@@ -135,24 +135,38 @@ func (a Adapter) Observe(_ context.Context, host hosts.Host, runs map[string]ses
 }
 
 // probe is the state of the window called name, whose newest run is r: the
-// state of the session of that name, unless a limit marker makes a live,
+// state of the run's session (findAgent), unless a limit marker makes a live,
 // non-busy session limited.
 func probe(name string, r session.Run, agents []Agent) (harness.State, bool) {
 	var st harness.State
-	for _, ag := range agents {
-		if ag.Name == name {
-			st.State = AgentState(ag)
-			if st.State == session.StateWaiting {
-				st.WaitingFor = ag.WaitingFor
-			}
-			st.Background = st.State == session.StateWorking && turnEnded(r.Dir, ag.SessionID)
-			break
+	if ag, ok := findAgent(name, r, agents); ok {
+		st.State = AgentState(ag)
+		if st.State == session.StateWaiting {
+			st.WaitingFor = ag.WaitingFor
 		}
+		st.Background = st.State == session.StateWorking && turnEnded(r.Dir, ag.SessionID)
 	}
 	if l, ok := ReadLimit(r.Dir); ok && st.State != session.StateWorking {
 		st = harness.State{State: session.StateLimited, ResetsAt: l.ResetsAt}
 	}
 	return st, st.State != ""
+}
+
+// findAgent is the run's session: the one the launch line named, by the
+// window's name or the run's title, else the one in the run's worktree, which
+// still finds a session renamed in the apps.
+func findAgent(name string, r session.Run, agents []Agent) (Agent, bool) {
+	for _, ag := range agents {
+		if ag.Name == name || ag.Name != "" && ag.Name == r.Record.Title {
+			return ag, true
+		}
+	}
+	for _, ag := range agents {
+		if r.Record.Worktree != "" && filepath.Clean(ag.CWD) == filepath.Clean(r.Record.Worktree) {
+			return ag, true
+		}
+	}
+	return Agent{}, false
 }
 
 // turnEnded reports whether a session that Claude Code lists as busy has

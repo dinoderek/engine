@@ -31,12 +31,13 @@ row, and its name in the `harness-names` lane. No other package names it.
 ## Launch lines and tiers
 
 They live only in the operator's `hosts.toml`. `{model}` and `{effort}`
-come from the task's tier; `{name}` is `<repo>-<task>`.
+come from the task's tier; `{name}` is `<repo>-<task>`; `{title}` is the
+title the apps show.
 
 ```toml
 [harness.claude]
 max_sessions = 8        # across all hosts: a budget lever
-launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {name} --remote-control {name}"
+launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {title} --remote-control {title}"
 tiers.deep     = { model = "claude-opus-5-5",   effort = "high" }
 tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
 tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
@@ -52,10 +53,9 @@ tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
 Rules for the lines:
 
 - **Claude:** keep `--permission-mode auto`, whose classifier decides most
-  actions without a prompt, and `-n {name} --remote-control {name}`, which
-  name the session in the apps.
+  actions without a prompt, and `-n {title} --remote-control {title}`.
 - **Codex:** keep the `workspace-write` sandbox with auto-review deciding
   what crosses it (never `approval_policy = "never"`, which leaves it nothing
   to review), and keep network access, for `gh` and `git push`. Set no
   writable root and no `--add-dir`: a joined session refuses both, so such a
-  line keeps every session embedded, and `spawn` warns.
+  line keeps sessions embedded, and `spawn` warns.

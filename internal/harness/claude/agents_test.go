@@ -71,3 +71,28 @@ func TestAgentState(t *testing.T) {
 		}
 	}
 }
+
+// A run's session is the one its launch named, by the window's name or the
+// run's title, else the one in its worktree: the apps can rename a session.
+func TestFindAgent(t *testing.T) {
+	run := session.Run{Record: session.Record{Name: "r-7", Title: "t7 · Fix it", Worktree: "/w/r-7"}}
+	tests := []struct {
+		name   string
+		run    session.Run
+		agents []Agent
+		want   int // the PID found; 0 is none
+	}{
+		{"by the window's name", run, []Agent{{PID: 1, Name: "other"}, {PID: 2, Name: "r-7"}}, 2},
+		{"by the run's title", run, []Agent{{PID: 1, Name: "t7 · Fix it", CWD: "/elsewhere"}}, 1},
+		{"renamed, by its worktree", run, []Agent{{PID: 1, Name: "Renamed", CWD: "/w/other"}, {PID: 2, Name: "Renamed", CWD: "/w/r-7/"}}, 2},
+		{"a name beats another session's worktree", run, []Agent{{PID: 1, CWD: "/w/r-7"}, {PID: 2, Name: "t7 · Fix it"}}, 2},
+		{"no title matches no unnamed session", session.Run{Record: session.Record{Name: "r-7"}}, []Agent{{PID: 1}}, 0},
+		{"none", run, []Agent{{PID: 1, Name: "r-70", CWD: "/w/r-70"}}, 0},
+	}
+	for _, tt := range tests {
+		ag, ok := findAgent(tt.run.Record.Name, tt.run, tt.agents)
+		if got := map[bool]int{true: ag.PID}[ok]; got != tt.want {
+			t.Errorf("%s: found %d, want %d", tt.name, got, tt.want)
+		}
+	}
+}

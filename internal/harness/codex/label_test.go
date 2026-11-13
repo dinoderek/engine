@@ -17,19 +17,19 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-func TestThreadTitle(t *testing.T) {
+func TestLabelTitleIsTheRunsTitle(t *testing.T) {
 	tests := []struct {
 		name string
 		rec  session.Record
 		want string
 	}{
-		{"a server task in a plan", session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34", Feature: "p12"}, "p12 > t34"},
-		{"a server task in no plan", session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34"}, "t34"},
-		{"an unparsable task stays as recorded", session.Record{Control: true, Repo: "o/engine", Task: "odd"}, "odd"},
+		{"a run with a title", session.Record{Name: "engine-34", Title: "t34 · Fix it"}, "t34 · Fix it"},
+		{"a run spawned without one shows its name", session.Record{Name: "engine-34"}, "engine-34"},
 	}
 	for _, tt := range tests {
-		if got := ThreadTitle(tt.rec); got != tt.want {
-			t.Errorf("%s: %q, want %q", tt.name, got, tt.want)
+		req, err := labelFor(t.TempDir(), session.Record{Repo: "o/engine", Name: tt.rec.Name, Title: tt.rec.Title}, "th1")
+		if err != nil || req.Title != tt.want {
+			t.Errorf("%s: title %q (err %v), want %q", tt.name, req.Title, err, tt.want)
 		}
 	}
 }
@@ -238,13 +238,13 @@ func readLabel(t *testing.T, dir string) labelRecord {
 func TestLabelCodexThreadStopsOnceLabelled(t *testing.T) {
 	d, reqs, where := labelDeps(t, nil)
 	dir := t.TempDir()
-	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "138", Feature: "p12"}
+	rec := session.Record{Repo: "o/engine", Task: "o/engine#" + "138", Feature: "p12", Title: "t138 · Label threads"}
 	for range 2 {
 		if err := d.LabelThread(dir, rec, "th1"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want := LabelRequest{ThreadID: "th1", Title: "p12 > t138", Project: "engine", Repo: "o/engine",
+	want := LabelRequest{ThreadID: "th1", Title: "t138 · Label threads", Project: "engine", Repo: "o/engine",
 		Root: filepath.Join(d.Home, filepath.FromSlash(session.ReposDir), "o", "engine")}
 	if !reflect.DeepEqual(*reqs, []LabelRequest{want}) {
 		t.Errorf("requests %+v, want one %+v", *reqs, want)
@@ -266,7 +266,7 @@ func TestLabelCodexThreadStopsOnceLabelled(t *testing.T) {
 func TestLabelCodexThreadRetriesAFailureAFewTimes(t *testing.T) {
 	d, reqs, _ := labelDeps(t, errors.New("daemon down"))
 	dir := t.TempDir()
-	rec := session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34", Feature: "p12"}
+	rec := session.Record{Control: true, Repo: "o/engine", Task: "o/engine#" + "34", Feature: "p12", Title: "t34 · Fix it"}
 	now := fixedNow()
 	d.Now = func() time.Time { return now }
 	for i := range labelAttempts {
@@ -287,7 +287,7 @@ func TestLabelCodexThreadRetriesAFailureAFewTimes(t *testing.T) {
 		t.Errorf("after the last attempt: err %v, %d requests, want %d", err, len(*reqs), labelAttempts)
 	}
 	got := readLabel(t, dir)
-	if got.Error != "daemon down" || got.Attempts != labelAttempts || got.Title != "p12 > t34" ||
+	if got.Error != "daemon down" || got.Attempts != labelAttempts || got.Title != "t34 · Fix it" ||
 		got.Root != filepath.Join(d.Home, filepath.FromSlash(session.ControlReposDir), "o", "engine") {
 		t.Errorf("record %+v", got)
 	}

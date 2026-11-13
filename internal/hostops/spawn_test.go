@@ -34,6 +34,7 @@ func TestSpawn(t *testing.T) {
 	tm := &tmuxFake{windows: []string{"@1 %1 0 other"}}
 	req := request()
 	req.Heavy = true
+	req.Title = "t7  · Fix\nthe tab" // the host cleans what it is sent
 	got, err := Spawn(spawnDeps(t, h, git.run, tm, nil), req)
 	if err != nil {
 		t.Fatal(err)
@@ -54,10 +55,15 @@ func TestSpawn(t *testing.T) {
 		t.Fatalf("run.json: %s, %v", data, err)
 	}
 	wantRec := session.Record{Schema: 1, RunID: "r-7-20260102T030405Z", Repo: "o/r", Task: ref(7), Feature: ref(3), Host: "mac",
-		Harness: "claude", Tier: "deep", Model: "opus-x", Effort: "high", Mode: HandsOff, Heavy: true, Name: "r-7", Tmux: "engine:@9",
+		Harness: "claude", Tier: "deep", Model: "opus-x", Effort: "high", Mode: HandsOff, Heavy: true, Name: "r-7", Title: "t7 · Fix the tab", Tmux: "engine:@9",
 		Branch: "task/r-7", Worktree: worktree, PaneLog: filepath.Join(runDir, session.PaneLog), Spawned: fixedNow()}
 	if rec != wantRec {
 		t.Errorf("run.json\n got %+v\nwant %+v", rec, wantRec)
+	}
+	// The window's command quotes the launch line once more.
+	title := hosts.ShellWord("t7 · Fix the tab")
+	if want := strings.ReplaceAll("-n "+title+" --remote-control "+title, "'", `'\''`); !strings.Contains(tm.command, want) {
+		t.Errorf("the launch does not title the session: %s", tm.command)
 	}
 	if trust, _ := os.ReadFile(filepath.Join(h.dir, ".claude.json")); !strings.Contains(string(trust), worktree) {
 		t.Errorf("the worktree is not trusted: %s", trust)
