@@ -32,6 +32,11 @@ it cold.
 8. **Hard stops.** Flag anything in the diff that should have stopped for the
    operator (the classes in `hard-stops.md`): product, data, security,
    contract, a loosened gate, or anything outward or costly.
+9. **Gate evidence.** The gate evidence in the PR body matches the CI run
+   on the head.
+10. **Tests kept.** No test is deleted or weakened and no skip is added
+    without a Deviations entry.
+11. **Operator attributions.** Every operator attribution cites an update.
 
 ## Report
 

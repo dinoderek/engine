@@ -30,6 +30,11 @@ you decide (`SKILL.md`, "Decisions").
 
 The repo's `AGENTS.md` may add classes; they apply too.
 
+## Safe defaults
+
+A question with a safe, reversible default is not a stop: take the default
+and record it with `engine tell`.
+
 ## Ask once
 
 Before asking, look for an answer the operator has already given (in the

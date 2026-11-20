@@ -36,7 +36,8 @@ follow only it.
    Where the repo is silent, use `git worktree add` from the default branch,
    its standard test command and a concise PR body, and say so in the PR.
 3. **Plans are never cited.** Code, tests and docs never mention an issue
-   number, plan path or task ID. Commit messages and PR bodies may.
+   number, plan path or task ID. Commit messages and PR bodies may, except
+   in an engine server task (the `engine` skill's rule 2).
 4. **Durable decisions graduate** into the repo's owning doc, in the PR that
    ships them.
 5. **GitHub is the host's `gh`,** with its configured sign-in and Git configuration.
@@ -71,6 +72,8 @@ follow only it.
      with a new reviewer.
    - Decline a finding only with a reason; it goes in the PR body.
    - Repeat until `Verdict: APPROVED`. Stop only for a **Review** hard stop.
+   - Record every round's verdict, and your answer to each finding, in the
+     PR body.
 7. **Refresh.** Fetch. If the default branch moved, merge it in and go back
    to step 5. Rerun the gates if anything changed since they last passed.
 8. **PR.** Push and open the PR with the repo's template. Add the gate

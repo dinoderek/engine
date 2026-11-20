@@ -33,8 +33,8 @@ skill's `review` mode.
 1. **Work from the target repo.** Read its `AGENTS.md` (or `CLAUDE.md`) and
    what it says to always load before anything else. The repo's rules win,
    except where an override the operator agreed says otherwise.
-2. **Plans are never cited.** Code, tests and docs never mention a plan or
-   task ID. Commit messages and PR bodies may.
+2. **Plans are never cited.** Plan and task IDs never appear in code, tests,
+   docs, commit messages, PR titles or bodies.
 3. **One task = one session = one worktree = one PR.**
 4. **Server writes are versioned.** Read an item's current `version` before
    an edit or state change. Every write takes `--request-key <key>`; reuse

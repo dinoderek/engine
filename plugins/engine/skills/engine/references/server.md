@@ -1,8 +1,8 @@
 # Server roles
 
 The server roles' mechanics. The session's environment supplies the endpoint,
-credential file and attempt ID (`ENGINE_SERVER_URL`, `ENGINE_SERVER_TOKEN_FILE`,
-`ENGINE_ATTEMPT_ID`).
+credential file and attempt ID (`ENGINE_SERVER_URL`,
+`ENGINE_SERVER_TOKEN_FILE`, `ENGINE_ATTEMPT_ID`).
 
 ## Read and write
 
@@ -19,8 +19,7 @@ credential file and attempt ID (`ENGINE_SERVER_URL`, `ENGINE_SERVER_TOKEN_FILE`,
 - `engine tell <id> <text>` posts a message on your task or its plan, and
   wakes the sessions waiting on it. `engine ask <id> <text>` asks the
   operator, on your task or its plan, and holds your task in `needs-human`.
-  `--operator` on `tell` sends a message to the operator's inbox that asks
-  for no answer.
+  `tell --operator` messages the operator's inbox, asking no answer.
 
 ## Planner
 
@@ -45,24 +44,27 @@ already shows.
 Follow the `build` skill, hands-off, with these changes. They replace its
 merge step, which the merge guard enforces.
 
-- **Step 1.** The server claimed the task and opened its worktree: work
-  there, and create none.
+- **Step 1.** The server opened the task's worktree: work there.
 
-- **Step 2.** Also read the parent plan, `engine updates` for the
-  task and the plan, and the card's and plan's `## Overrides`. Every dependency must be
-  `done`; if not, it is a **Drift** hard stop.
+- **Step 2.** Also read the parent plan, `engine updates` for the task and
+  the plan, and the card's and plan's `## Overrides`. A dependency not
+  `done` is a **Drift** hard stop.
 - **Updates are the inbox.** Read them before you change code, before the PR,
   before the merge request, and first thing when the session resumes.
 - **Step 8.** Omit issue-closing directives. Put `low` notes and the
   digest in the repo template's rulings section if it has one. Then set the
   task `in-review` with its PR URL.
+- **Reviewer verdicts.** Post every reviewer verdict, APPROVED or not, with
+  `engine tell <task>`, and list each round in the PR body.
 - **Step 10: the merge request.** You never merge, and never wait for a
   lock: the coordinator's merge queue orders merges. Once the PR is
   `in-review`, reviewed and pushed:
   1. Send the rulings digest, if any (below),
      once: a repeated request does not resend it. Approval the repo or card
      requires is an `engine ask` before the request.
-  2. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
+  2. Request the merge only when `gh pr checks` shows nothing pending, and
+     never edit the PR body after `merge-ready`: it becomes the merge commit
+     body. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
      <the repo's merge method> --verdict APPROVED`, then end your turn. The
      merge guard refuses `gh pr merge` in a server session. The coordinator
      waits for CI.
@@ -90,8 +92,7 @@ merge step, which the merge guard enforces.
      its queue entry.
 - **Step 11.** On `merged`, above.
 
-A server outage blocks the merge request: keep your work and wait. Never
-bypass gates or the queue.
+A server outage blocks the merge request: keep your work and wait. Never bypass gates or the queue.
 
 ## Rulings
 
@@ -127,10 +128,14 @@ The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
   and carry on. An open question on the plan holds only new dispatches and
   its asker, not you; if it is your root cause, `engine ask <task>`, citing
   its sequence in the question and the PR body.
-- **Ask:** `engine ask <task> <question>`, then end your turn.
-- **Plan-level questions:** a gate red on the default branch, or a host tool
-  or sign-in that every task on that host needs, affects every task. Ask it
-  once on the plan: `engine ask <plan> <question>`. It holds your task and the
-  plan's new dispatches; its resolution answers them all.
+- **Ask on your own task by default:** `engine ask <task> <question>`, then
+  end your turn.
+- **A plan question needs a proved-red default branch:** ask it once with
+  `engine ask <plan> <question>`. It holds your task and the plan's new
+  dispatches; its resolution answers them all.
+- **Host problems are the coordinator's readiness job, not a question.**
+- **Never say the operator agreed without citing the update that holds it.**
+  When the operator answers in the pane, the hook records it; do not re-post
+  it.
 - Only the operator ends the stop. Resolving your task's last open question
   restores its state and wakes you.
