@@ -14,10 +14,14 @@ import (
 // a task worktree: `<clone>/dev worktree create|release <branch>`.
 const worktreeCommand = "dev"
 
-// Worktree is a task's worktree.
+// Worktree is a task's worktree. Created says CreateWorktree made it, and
+// NewBranch that it made the branch too, so RemoveWorktree knows what is its
+// own to remove.
 type Worktree struct {
-	Path   string
-	Branch string
+	Path      string
+	Branch    string
+	Created   bool
+	NewBranch bool
 }
 
 // TaskName is the session name of a task, <repo>-<task>: the tmux window, the
@@ -48,6 +52,9 @@ func Branch(repo Repo, task int) string {
 // the earlier attempt left on the branch is adopted as it is, fast-forwarded
 // to origin's tip, when it is clean and holds no commits origin lacks;
 // otherwise it is refused, so that work is never discarded.
+//
+// When it made the worktree but a later check fails, it returns the worktree
+// with the error, so the caller can remove it.
 func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, error) {
 	if task < 1 {
 		return Worktree{}, fmt.Errorf("task number must be positive, got %d", task)
@@ -86,12 +93,37 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, err
 	if path == "" {
 		return Worktree{}, fmt.Errorf("the worktree command ran but no worktree has branch %s", branch)
 	}
+	wt := Worktree{Path: path, Branch: branch, Created: true, NewBranch: !adopt}
 	if adopt {
 		if err := r.checkAtOrigin(clone, path, branch); err != nil {
-			return Worktree{}, err
+			return wt, err
 		}
 	}
-	return Worktree{Path: path, Branch: branch}, nil
+	return wt, nil
+}
+
+// RemoveWorktree undoes CreateWorktree: it removes the worktree when that
+// call made it, and the branch when it made that too. A worktree it adopted
+// and a branch it found stay, since they hold an earlier attempt's work.
+func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
+	if !wt.Created {
+		return nil
+	}
+	unlock, err := lock(clone.Path + ".lock")
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if _, err := r.git(clone.Path, "worktree", "remove", "--force", wt.Path); err != nil {
+		return fmt.Errorf("remove the worktree %s: %w", wt.Path, err)
+	}
+	if !wt.NewBranch {
+		return nil
+	}
+	if _, err := r.git(clone.Path, "branch", "-D", wt.Branch); err != nil {
+		return fmt.Errorf("delete the branch %s: %w", wt.Branch, err)
+	}
+	return nil
 }
 
 // checkAtOrigin fails when a resumed worktree is not at origin's tip of its

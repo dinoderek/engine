@@ -1,6 +1,7 @@
 package control
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -59,6 +60,7 @@ func TestReconcileLeavesAResumableTaskForAResumeAndFailsTheRest(t *testing.T) {
 	task := newTask(t, s, repo.ID, plan.ID)
 	approve(t, s, plan)
 	a, out := dispatch(t, s, task)
+	launched(t, s, out.Attempt.ID)
 	question := call(t, s, a, Request{Op: "ask", ID: task.ID, Body: "Which API?"}).Updates[0]
 	seenLive(t, s, out.Attempt.ID)
 	at := call(t, s, op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "host rebooted"}).Attempt
@@ -76,6 +78,7 @@ func TestReconcileLeavesAResumableTaskForAResumeAndFailsTheRest(t *testing.T) {
 	if resumed.Item.State != "running" || resumed.Attempt.ID == out.Attempt.ID {
 		t.Fatalf("an answered, vanished task was not dispatched again: %+v", resumed.Item)
 	}
+	launched(t, s, resumed.Attempt.ID)
 	seenLive(t, s, resumed.Attempt.ID)
 	failed := call(t, s, op, Request{Op: "attempt-reconcile", ID: resumed.Attempt.ID, Body: "crashed"}).Attempt
 	current = call(t, s, op, Request{Op: "get", ID: task.ID}).Item
@@ -119,6 +122,15 @@ func TestEndDeadIsIdempotentAndRefusesAnUnknownAttempt(t *testing.T) {
 	}
 }
 
+// launched records that attempt id's window opened, as a coordinator does
+// once its host starts the session.
+func launched(t *testing.T, s Service, id string) {
+	t.Helper()
+	if err := s.SetAttempt(id, "running", "@1"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // seenLive records that a coordinator pass saw attempt id's window live.
 func seenLive(t *testing.T, s Service, id string) {
 	t.Helper()
@@ -129,5 +141,46 @@ func seenLive(t *testing.T, s Service, id string) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The operator's reconcile of a dispatch that never launched, which its host
+// confirmed (Service.Reconcile), ends the attempt vanished and returns the
+// task to todo for a new dispatch, rather than failing it.
+func TestReconcileOfAnUnlaunchedDispatchReturnsTheTaskToTodo(t *testing.T) {
+	s := service(t)
+	s.Reconcile = func(string) error { return nil }
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	_, out := dispatch(t, s, task)
+	at := call(t, s, op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "spawn died before its window"}).Attempt
+	current := call(t, s, op, Request{Op: "get", ID: task.ID}).Item
+	if at.State != "ended" || at.Reason != EndVanished || current.State != "todo" {
+		t.Fatalf("an unlaunched dispatch: %+v, task %s", at, current.State)
+	}
+	if _, again := dispatch(t, s, *current); again.Attempt.ID == out.Attempt.ID || again.Item.State != "running" {
+		t.Fatalf("the task was not dispatched again: %+v", again)
+	}
+}
+
+// A refusal of the host check reaches the operator as its own problem, not
+// as a storage failure, and ends nothing.
+func TestReconcileRefusalIsTheChecksProblem(t *testing.T) {
+	s := service(t)
+	s.Reconcile = func(string) error {
+		return &Problem{Status: 409, Reason: ReasonReconcileRefused, Message: "execution is still alive"}
+	}
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	_, out := dispatch(t, s, task)
+	_, err := s.Execute(op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "gone", Key: "k"})
+	var p *Problem
+	if !errors.As(err, &p) || p.Status != 409 || p.Reason != ReasonReconcileRefused || err.Error() != "reconcile-refused: execution is still alive" {
+		t.Fatalf("err = %v", err)
+	}
+	if at := mustSnapshot(t, s).Attempts[out.Attempt.ID]; at.State != "dispatching" {
+		t.Fatalf("a refused reconcile changed the attempt: %+v", at)
 	}
 }

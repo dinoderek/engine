@@ -74,6 +74,23 @@ func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	return at
 }
 
+// endUnlaunched ends a dispatching attempt that its host confirmed never
+// launched: no window and no run record. A launch that never happened is no
+// failure of the task, so the attempt ends vanished and a running task
+// returns to todo, for the next pass to dispatch a new attempt.
+func (s Service) endUnlaunched(st *State, a Actor, at Attempt, body string) Attempt {
+	item := st.Items[at.Item]
+	at.State, at.Ended, at.Reason = "ended", s.now(), EndVanished
+	st.Attempts[at.ID] = at
+	if item.Kind == "task" && item.Attempt == at.ID && item.State == "running" {
+		item.State = "todo"
+		item.Version++
+		st.Items[item.ID] = item
+	}
+	st.update(a, Request{ID: at.Item}, "execution-ended", at.Reason+": "+body, s.now())
+	return at
+}
+
 // EndDead ends attempt id after the coordinator saw its window gone on a
 // host it read. It is idempotent and returns the ended attempt.
 func (s Service) EndDead(id, body string) (Attempt, error) {

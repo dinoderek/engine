@@ -197,6 +197,9 @@ type gitFake struct {
 	branch bool
 	// origin is true when origin already has the task's branch.
 	origin bool
+	// ancestor is true when every merge-base --is-ancestor holds, as for a
+	// worktree a resume adopts.
+	ancestor bool
 }
 
 func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string, error) {
@@ -214,6 +217,11 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		return "https://github.com/o/r.git\n", nil
 	case strings.Contains(line, "symbolic-ref"):
 		return "origin/main\n", nil
+	case f.ancestor && strings.Contains(line, "merge-base --is-ancestor"):
+		return "", nil
+	case strings.Contains(line, "worktree remove"):
+		f.added = ""
+		return "", os.RemoveAll(args[len(args)-1])
 	case f.origin && (strings.Contains(line, "rev-parse HEAD") || strings.Contains(line, "rev-parse --verify") && strings.Contains(line, "refs/remotes/")):
 		return "abc\n", nil
 	case strings.Contains(line, "rev-parse --verify") && (!f.branch || strings.Contains(line, "refs/remotes/")),

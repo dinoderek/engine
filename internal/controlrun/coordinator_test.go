@@ -31,8 +31,10 @@ type host struct {
 	note string
 	// refuse, when set, is the reason the host refuses a new dispatch.
 	refuse string
-	// unresolved makes a dispatch fail with no reply and no effect.
-	unresolved bool
+	// unresolved makes a dispatch fail with no reply and no effect, with
+	// the error unresolvedErr, or "connection closed" when it is empty.
+	unresolved    bool
+	unresolvedErr string
 }
 
 func (h *host) SyncRepo(string) (hostops.Synced, error)             { panic("legacy GitHub path used") }
@@ -66,6 +68,9 @@ func (h *host) ControlSpawn(r hostops.ControlRequest) (hostops.Spawned, error) {
 	}
 	name := fmt.Sprintf("demo-%d", r.Spawn.Task)
 	if h.unresolved {
+		if h.unresolvedErr != "" {
+			return hostops.Spawned{}, errors.New(h.unresolvedErr)
+		}
 		return hostops.Spawned{}, errors.New("connection closed")
 	}
 	if h.refuse != "" {

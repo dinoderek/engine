@@ -1,6 +1,8 @@
 package controlrun
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -67,10 +69,19 @@ func (c *Coordinator) launch(st control.State, at control.Attempt, credential st
 		return err
 	}
 	if err != nil {
-		_ = c.notice(item.ID, "dispatch/"+at.ID, "Dispatch has an unresolved outcome; its execution stays reserved. "+err.Error())
+		_ = c.notice(item.ID, recoveryKey(at.ID, err), "Dispatch has an unresolved outcome; its execution stays reserved. "+err.Error())
 		return err
 	}
 	return c.Service.SetAttempt(at.ID, "running", spawned.Window)
+}
+
+// recoveryKey is the notice key of a dispatch's unresolved outcome: one per
+// attempt and distinct error, told apart by its first line, so each new
+// error posts once and its repeats on later passes post nothing.
+func recoveryKey(attempt string, err error) string {
+	first, _, _ := strings.Cut(err.Error(), "\n")
+	sum := sha256.Sum256([]byte(first))
+	return "dispatch/" + attempt + "/" + hex.EncodeToString(sum[:6])
 }
 
 // hadEarlierAttempt reports whether an attempt for item other than current
@@ -192,7 +203,12 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 	return nil
 }
 
-// ConfirmEnded refuses to infer death from an outage or an unfinished dispatch.
+// ConfirmEnded checks, for the operator's attempt reconcile, that a host it
+// reads successfully shows attempt id's session gone, refusing to infer death
+// from an outage or an unfinished dispatch. A running attempt needs no live
+// window and a recorded run; a dispatching one, no window of its name and no
+// run record at all, so no launch of it is in place to adopt. Its refusals
+// are 409 problems with reason control.ReasonReconcileRefused.
 func (c *Coordinator) ConfirmEnded(id string) error {
 	st, err := c.Service.Store.Snapshot()
 	if err != nil {
@@ -200,33 +216,33 @@ func (c *Coordinator) ConfirmEnded(id string) error {
 	}
 	at, ok := st.Attempts[id]
 	if !ok {
-		return fmt.Errorf("unknown execution")
+		return &control.Problem{Status: 404, Message: "unknown execution"}
 	}
 	if at.State == "ended" {
 		return nil
 	}
-	if at.State == "dispatching" {
-		return fmt.Errorf("dispatch has not completed; execution is still reserved")
-	}
 	cfg, _, err := c.configuration()
 	if err != nil {
-		return err
+		return refuseReconcile("read the host configuration: %v", err)
 	}
 	host, ok := cfg.Hosts[at.Host]
 	if !ok {
-		return fmt.Errorf("execution host is not configured")
+		return refuseReconcile("execution host %s is not configured", at.Host)
 	}
 	status, err := c.Client(host).Status()
 	if err != nil {
-		return err
+		return refuseReconcile("host %s could not be read, so the session may be alive: %v", at.Host, err)
 	}
 	if status.RunsError != "" {
-		return fmt.Errorf("host run records are unreadable")
+		return refuseReconcile("host %s's run records are unreadable", at.Host)
 	}
 	name := windowName(st, st.Items[at.Item])
+	if at.State == "dispatching" {
+		return dispatchGone(status, name, at)
+	}
 	for _, w := range status.Windows {
 		if w.Name == name && w.Alive {
-			return fmt.Errorf("execution is still alive")
+			return refuseReconcile("execution is still alive in window %s on %s", name, at.Host)
 		}
 	}
 	for _, r := range status.Runs {
@@ -234,5 +250,25 @@ func (c *Coordinator) ConfirmEnded(id string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("dispatch outcome is unknown; no matching host run record")
+	return refuseReconcile("dispatch outcome is unknown; no matching host run record")
+}
+
+// dispatchGone confirms that a dispatching attempt left nothing on its host:
+// no window of its name, live or dead, and no run record of its run.
+func dispatchGone(status hostops.Status, name string, at control.Attempt) error {
+	for _, w := range status.Windows {
+		if w.Name == name {
+			return refuseReconcile("dispatch has not completed: host %s has a window %s", at.Host, name)
+		}
+	}
+	for _, r := range status.Runs {
+		if r.Record.RunID == at.RunID {
+			return refuseReconcile("dispatch has not completed: host %s has a run record for %s", at.Host, at.RunID)
+		}
+	}
+	return nil
+}
+
+func refuseReconcile(format string, args ...any) error {
+	return &control.Problem{Status: 409, Reason: control.ReasonReconcileRefused, Message: fmt.Sprintf(format, args...)}
 }

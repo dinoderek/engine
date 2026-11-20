@@ -65,16 +65,27 @@ type spawn struct {
 	h      harness.Adapter
 	l      harness.Launcher // the session's launch
 	bin    string           // the harness binary
+	// stale is a leftover run directory with no run.json and no window of
+	// the run's name, which Spawn clears before it starts.
+	stale bool
 }
 
 // Spawn creates the task's worktree in engine's clone, which sync-repo has
 // synced, trusts it for the harness, opens the task's tmux window running
 // the harness with the kickoff, and writes run.json. It refuses, changing
-// nothing, a request it cannot launch, and a name whose window exists.
+// nothing, a request it cannot launch, and a name whose window exists. A
+// failure before the window opens removes what this call created (the run
+// directory, the harness's trust, and the worktree and branch if it made
+// them), so the next dispatch starts clean; its error names anything left.
 func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	s, err := checkSpawn(d, r)
 	if err != nil {
 		return Spawned{}, err
+	}
+	if s.stale {
+		if err := os.RemoveAll(s.runDir); err != nil {
+			return Spawned{}, fmt.Errorf("clear the leftover run directory %s: %w", s.runDir, err)
+		}
 	}
 	repos := session.Repos{Run: d.Run, Probe: d.Probe, Home: d.Home, BaseURL: d.BaseURL}
 	if s.control != nil {
@@ -85,34 +96,44 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	if err != nil {
 		return Spawned{}, refuse("%v", err)
 	}
+	u := &undo{repos: repos, clone: clone, runDir: s.runDir, l: s.l, removeAll: os.RemoveAll}
 	wt, err := repos.CreateWorktree(clone, s.Task, s.Resume)
+	u.wt = wt
 	var taken *session.BranchTakenError
 	if errors.As(err, &taken) {
 		return Spawned{}, refuse("%v", err)
 	}
 	if err != nil {
-		return Spawned{}, err
+		return Spawned{}, u.run(err)
 	}
-	left := fmt.Sprintf("the worktree is left in place; before starting again, remove it with "+
-		"git -C %s worktree remove --force %s && git -C %s branch -D %s",
-		hosts.ShellWord(clone.Path), hosts.ShellWord(wt.Path), hosts.ShellWord(clone.Path), wt.Branch)
+	out, err := s.open(d, clone, wt, u)
+	if err != nil {
+		return Spawned{}, u.run(err)
+	}
+	return out, nil
+}
+
+// open trusts the worktree, writes the run's files and opens its window.
+// Once the window is open u has nothing to undo.
+func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (Spawned, error) {
 	line, err := s.cfg.LaunchLine(s.host, hosts.Launch{
 		Harness: s.h.Name(), Name: s.name, Title: s.Title, Clone: clone.Path, Home: d.Home,
 		Model: hosts.TierModel{Model: s.Model, Effort: s.Effort},
 	})
 	if err != nil {
-		return Spawned{}, fmt.Errorf("%w; %s", err, left)
+		return Spawned{}, err
 	}
 	joined, joinWarning := s.join(d, line)
 	if err := s.l.Trust(wt.Path, clone.Path, joined); err != nil {
-		return Spawned{}, fmt.Errorf("%w; %s", err, left)
+		return Spawned{}, err
 	}
+	u.trusted = true
 	log := filepath.Join(s.runDir, session.PaneLog)
 	// A joined session's hooks find their run by its worktree in run.json, so
 	// it is there before the session starts; the window is added once open.
 	if joined {
 		if err := session.WriteRecord(s.runDir, s.record(wt, "", log, d)); err != nil {
-			return Spawned{}, errors.Join(fmt.Errorf("write run.json: %w; %s", err, left), s.l.Release(wt.Path))
+			return Spawned{}, fmt.Errorf("write run.json: %w", err)
 		}
 	}
 	if s.control != nil {
@@ -123,12 +144,9 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined, control: s.control})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
-		if uerr := s.l.Release(wt.Path); uerr != nil {
-			left += "; " + uerr.Error()
-		}
-		_ = os.Remove(filepath.Join(s.runDir, session.RecordFile))
-		return Spawned{}, fmt.Errorf("open the tmux window: %w; %s", err, left)
+		return Spawned{}, fmt.Errorf("open the tmux window: %w", err)
 	}
+	u.opened = true
 	if err := session.WriteRecord(s.runDir, s.record(wt, opened.ID, log, d)); err != nil {
 		return Spawned{}, fmt.Errorf("the session is running in %s:%s, but run.json was not written: %w", session.Name, opened.ID, err)
 	}
@@ -145,6 +163,50 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 	return out, nil
 }
 
+// undo is what one Spawn created before its window opened, so a failure
+// removes it and the next dispatch of the run starts clean.
+type undo struct {
+	repos   session.Repos
+	clone   session.Clone
+	wt      session.Worktree // removed only as far as wt says this call made it
+	runDir  string           // checkRequest saw it absent, so it is this call's
+	l       harness.Launcher
+	trusted bool
+	opened  bool // the window is open: the session runs, so nothing is undone
+	// removeAll removes the run directory: os.RemoveAll.
+	removeAll func(string) error
+}
+
+// run removes what u holds and returns cause, naming each leftover it could
+// not remove with the command that removes it.
+func (u *undo) run(cause error) error {
+	if u.opened {
+		return cause
+	}
+	var left []string
+	if u.trusted {
+		if err := u.l.Release(u.wt.Path); err != nil {
+			left = append(left, "the harness's trust for "+u.wt.Path+": "+err.Error())
+		}
+	}
+	if err := u.repos.RemoveWorktree(u.clone, u.wt); err != nil {
+		advice := "git -C " + hosts.ShellWord(u.clone.Path) + " worktree remove --force " + hosts.ShellWord(u.wt.Path)
+		what := "the worktree " + u.wt.Path
+		if u.wt.NewBranch {
+			advice += " && git -C " + hosts.ShellWord(u.clone.Path) + " branch -D " + u.wt.Branch
+			what += " and branch " + u.wt.Branch
+		}
+		left = append(left, fmt.Sprintf("%s (%v); remove it with %s", what, err, advice))
+	}
+	if err := u.removeAll(u.runDir); err != nil {
+		left = append(left, fmt.Sprintf("the run directory %s (%v); remove it with rm -rf %s", u.runDir, err, hosts.ShellWord(u.runDir)))
+	}
+	if len(left) == 0 {
+		return cause
+	}
+	return fmt.Errorf("%w; left in place, to remove before starting again: %s", cause, strings.Join(left, "; "))
+}
+
 // join asks the harness whether the session joins the host's remote
 // control, when the caller lets sessions join. It only reads.
 func (s spawn) join(d Deps, line string) (bool, string) {
@@ -155,7 +217,7 @@ func (s spawn) join(d Deps, line string) (bool, string) {
 }
 
 // checkSpawn runs spawn's refusals. It only reads files and tmux's window
-// list.
+// list; a leftover run directory it accepts is cleared by Spawn.
 func checkSpawn(d Deps, r SpawnRequest) (spawn, error) {
 	s := spawn{SpawnRequest: r}
 	if err := s.checkRequest(d.Home); err != nil {
@@ -217,8 +279,12 @@ func (s *spawn) checkRequest(home string) error {
 		problems = append(problems, err.Error())
 	} else if !strings.HasPrefix(s.RunID, s.name+"-") {
 		problems = append(problems, fmt.Sprintf("run id %s is not a run of %s", s.RunID, s.name))
+	} else if _, err := os.Stat(filepath.Join(s.runDir, session.RecordFile)); err == nil {
+		problems = append(problems, "run "+s.RunID+" already has a run record, "+filepath.Join(s.runDir, session.RecordFile))
 	} else if _, err := os.Stat(s.runDir); err == nil {
-		problems = append(problems, "run "+s.RunID+" already has a directory, "+s.runDir)
+		// A dispatch that died before its window opened left it; checkSpawn
+		// refuses it still when a window has the run's name.
+		s.stale = true
 	}
 	if len(problems) > 0 {
 		return refuse("%s", strings.Join(problems, "; "))

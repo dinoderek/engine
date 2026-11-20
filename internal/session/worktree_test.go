@@ -69,7 +69,7 @@ func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != (Worktree{Path: wt, Branch: "task/r-7"}) {
+	if got != (Worktree{Path: wt, Branch: "task/r-7", Created: true, NewBranch: true}) {
 		t.Errorf("worktree = %+v", got)
 	}
 	script := filepath.Join(clone.Path, "dev")

@@ -70,15 +70,18 @@ func requestProblem(err error) error {
 }
 
 func httpFailure(w http.ResponseWriter, err error, logf func(string, ...any)) {
-	status, message := 500, "control storage operation failed"
+	status, body := 500, map[string]string{"error": "control storage operation failed"}
 	var p *Problem
 	if errors.As(err, &p) {
-		status, message = p.Status, p.Message
+		status, body["error"] = p.Status, p.Message
+		if p.Reason != "" {
+			body["reason"] = p.Reason
+		}
 	} else if logf != nil {
 		logf("control operation: %v", err)
 	}
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // Client communicates only with its configured endpoint, with a bounded request.
@@ -131,11 +134,11 @@ func (c Client) once(ctx context.Context, body []byte) (Response, bool, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		var failure struct{ Error string }
+		var failure struct{ Error, Reason string }
 		if err = json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&failure); err != nil || failure.Error == "" {
 			failure.Error = http.StatusText(resp.StatusCode)
 		}
-		return Response{}, resp.StatusCode >= 500, problem(resp.StatusCode, "%s", failure.Error)
+		return Response{}, resp.StatusCode >= 500, &Problem{Status: resp.StatusCode, Message: failure.Error, Reason: failure.Reason}
 	}
 	var out Response
 	if err = json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&out); err != nil {
