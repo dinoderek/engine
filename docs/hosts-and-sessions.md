@@ -65,7 +65,9 @@ on `PATH`. For launch lines and tiers, load `launch-lines.md`.
 In start order, each ready task goes to a host that has a free slot (a free
 heavy slot, for a heavy task), the chosen harness signed in and under its cap,
 every capability the card requires, a tmux server whose working directory
-exists (`tmux.md`), and a passed readiness probe for its repo (`readiness.md`).
+exists (`tmux.md`), a passed readiness probe for its repo (`readiness.md`),
+and no usage limit holding that host × harness (`session-signals.md`, "Death
+at a limit").
 Among those, the host with the most free slots wins, then the fewest
 capabilities, then the lowest name.
 
@@ -97,8 +99,8 @@ The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
    re-dispatch adopts a branch a run of the same task marked, whether or not
    that run opened a window: as it is, with any worktree on it, its
    unpushed commits and uncommitted changes, fast-forwarded to `origin`'s tip
-   only when that loses nothing, and refused when `origin`'s has moved on
-   past it; the kickoff names its head. A resume of an
+   when clean and behind it, and refused when the two diverged or `origin` is
+   ahead of uncommitted changes; the kickoff names its head. A resume of an
    unmarked branch reopens `origin`'s at its tip;
 2. trusts the worktree for its harness and opens the window `<repo>-<task>`
    in the session `engine`;

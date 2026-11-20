@@ -183,3 +183,18 @@ func TestALiveSessionAtAnUnknownLimitIsToldToContinueEvery30Minutes(t *testing.T
 		})
 	}
 }
+
+func TestADeathAtALimitHoldsItsHostInTheSamePass(t *testing.T) {
+	dying := with(task(1, "running"), Session{Spawned: t0.Add(-time.Hour), DiedAtLimit: true})
+	dying.Current.Harness = "claude"
+	v := when(view(plan("planned"), dying, task(2, "todo")), time.Minute)
+	got := shows(Decide(v))
+	if !strings.Contains(got, "end t1 a1") || strings.Contains(got, "dispatch") {
+		t.Errorf("the freed slot took a task on the limited host:\n%s", got)
+	}
+	// Another host still takes it.
+	v.Fleet.Hosts = append(v.Fleet.Hosts, HostLoad{Name: "mac", Harnesses: []string{"claude"}, FreeSlots: 1, FreeHeavySlots: 1})
+	if got := shows(Decide(v)); !strings.Contains(got, "dispatch t2 mac claude false") {
+		t.Errorf("another host did not take it:\n%s", got)
+	}
+}

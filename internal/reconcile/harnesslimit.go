@@ -69,6 +69,25 @@ func KnownReset(resetsAt int64, ended time.Time) bool {
 	return resetsAt > ended.Unix()
 }
 
+// dyingAtLimit is the fleet with the host × harness of every session this
+// pass ends at a usage limit held as if the limit had just been recorded, so
+// the slot it frees takes no task there before the next pass sees the limit.
+func (f Fleet) dyingAtLimit(v View, dead []Action) Fleet {
+	for _, a := range dead {
+		if !a.AtLimit {
+			continue
+		}
+		i := slices.IndexFunc(v.Tasks, func(t Item) bool { return t.ID == a.Item })
+		if i < 0 {
+			continue
+		}
+		at := v.Tasks[i].Current
+		limits := slices.DeleteFunc(slices.Clone(f.Limits), func(l control.HarnessLimit) bool { return l.Host == at.Host && l.Harness == at.Harness })
+		f.Limits = append(limits, control.HarnessLimit{Host: at.Host, Harness: at.Harness, ResetsAt: a.ResetsAt, Ended: v.Now, Since: v.Now, Attempt: at.ID, Task: a.Item})
+	}
+	return f
+}
+
 // limitWait says why host × harness takes no task now for its usage limit,
 // or nothing.
 func (f Fleet) limitWait(host, harness string) string {

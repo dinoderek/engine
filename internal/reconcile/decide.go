@@ -21,7 +21,9 @@ func Decide(v View) []Action {
 	if plan, done := planStep(v); done {
 		return append(acts, plan...)
 	}
-	acts = append(acts, deadSessions(v)...)
+	dead := deadSessions(v)
+	acts = append(acts, dead...)
+	v.Fleet = v.Fleet.dyingAtLimit(v, dead)
 	acts = append(acts, releaseStopped(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, reaps(v)...)

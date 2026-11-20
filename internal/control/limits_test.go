@@ -62,6 +62,7 @@ func TestHarnessLimits(t *testing.T) {
 		name     string
 		attempts []Attempt
 		wrote    string // an attempt that wrote to the server
+		planner  string // an item that is a plan, whose attempts are its planner's
 		want     string
 	}{
 		{name: "no limit", attempts: []Attempt{at(1, "mac", 0, time.Hour, false)}, want: "[]"},
@@ -76,6 +77,8 @@ func TestHarnessLimits(t *testing.T) {
 			want: "[mac/claude reset 1 since 3h0m0s ended 3h0m0s a1 probe 0s live false probes 0]"},
 		{name: "a claim between limits starts the run anew", attempts: []Attempt{at(1, "mac", 0, time.Hour, true), at(2, "mac", 2*time.Hour, 3*time.Hour, false), at(3, "mac", 4*time.Hour, 5*time.Hour, true)}, wrote: "a2",
 			want: "[mac/claude reset 3 since 5h0m0s ended 5h0m0s a3 probe 0s live false probes 0]"},
+		{name: "a planner's claim does not lift it", attempts: []Attempt{at(1, "mac", 0, time.Hour, true), func() Attempt { a := at(2, "mac", 2*time.Hour, -1, false); a.Item = "p2"; return a }()},
+			wrote: "a2", planner: "p2", want: "[mac/claude reset 1 since 1h0m0s ended 1h0m0s a1 probe 0s live false probes 0]"},
 		{name: "another harness's limit", attempts: []Attempt{func() Attempt { a := at(1, "mac", 0, time.Hour, true); a.Harness = "codex"; return a }(), at(2, "mac", 2*time.Hour, -1, false)}, wrote: "a2",
 			want: "[mac/codex reset 1 since 1h0m0s ended 1h0m0s a1 probe 0s live false probes 0]"},
 	}
@@ -84,6 +87,10 @@ func TestHarnessLimits(t *testing.T) {
 			st := emptyState()
 			for _, a := range c.attempts {
 				st.Attempts[a.ID] = a
+				st.Items[a.Item] = Item{ID: a.Item, Kind: "task"}
+			}
+			if c.planner != "" {
+				st.Items[c.planner] = Item{ID: c.planner, Kind: "plan"}
 			}
 			if c.wrote != "" {
 				st.Updates = append(st.Updates, Update{ID: 1, Author: c.wrote})

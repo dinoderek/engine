@@ -8,7 +8,8 @@ import (
 
 // HarnessLimit is a host × harness whose account is at a usage limit, as the
 // attempts there record it: one ended at a limit (Attempt.Limited), and no
-// attempt started there since has claimed its task.
+// task's attempt started there since has claimed its task. A planner's does
+// not count: placement never gates it, so it may sit live while limited.
 type HarnessLimit struct {
 	Host    string
 	Harness string
@@ -38,7 +39,7 @@ func HarnessLimits(st *State) []HarnessLimit {
 	wrote := authors(st)
 	pairs := map[[2]string][]Attempt{}
 	for _, at := range st.Attempts {
-		if at.Host != "" && at.Harness != "" {
+		if at.Host != "" && at.Harness != "" && st.Items[at.Item].Kind == "task" {
 			key := [2]string{at.Host, at.Harness}
 			pairs[key] = append(pairs[key], at)
 		}
