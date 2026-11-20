@@ -177,8 +177,9 @@ func (s Service) QueueStep(q QueueStep) (bool, error) {
 // RecordMerged completes task id, whose PR merged while its queue entry
 // changed during the merge call: a request, rework or withdrawal raced the
 // merge. The task is done with the PR, its entry ends, and the operator is
-// told so the race is seen.
-func (s Service) RecordMerged(id, pr, body string) error {
+// told so the race is seen. request is the merge request the merge acted on,
+// which the merged update answers: the entry may hold a newer one by now.
+func (s Service) RecordMerged(id, pr, body string, request int) error {
 	return s.Store.Transaction(func(st *State) error {
 		item, ok := st.Items[id]
 		if !ok || item.State == "done" {
@@ -188,13 +189,9 @@ func (s Service) RecordMerged(id, pr, body string) error {
 		item.State, item.PR = "done", pr
 		item.Version++
 		st.Items[id] = item
-		req := 0
-		if e, queued := st.Queue[id]; queued {
-			req = e.Request
-			delete(st.Queue, id)
-		}
-		st.update(a, Request{ID: id, ReplyTo: req}, MergeMerged, body, now)
-		st.update(a, Request{ID: id, ReplyTo: req, Recipient: "operator"}, "say",
+		delete(st.Queue, id)
+		st.update(a, Request{ID: id, ReplyTo: request}, MergeMerged, body, now)
+		st.update(a, Request{ID: id, ReplyTo: request, Recipient: "operator"}, "say",
 			fmt.Sprintf("%s merged while its merge queue entry was changing (%s); the task is done. Check that the merged commit is the one you expect.", pr, body), now)
 		return nil
 	})
@@ -231,4 +228,21 @@ func MergedAt(st *State, id string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// MergedHead is the head commit the task's PR merged at: the head of the
+// merge request its newest merged update answers. It is empty when the task
+// has no merged update or the request is gone.
+func MergedHead(st *State, id string) string {
+	for i := len(st.Updates) - 1; i >= 0; i-- {
+		u := st.Updates[i]
+		if u.Item != id || u.Kind != MergeMerged {
+			continue
+		}
+		if u.ReplyTo < 1 || u.ReplyTo > len(st.Updates) || st.Updates[u.ReplyTo-1].Merge == nil {
+			return ""
+		}
+		return st.Updates[u.ReplyTo-1].Merge.Head
+	}
+	return ""
 }

@@ -192,6 +192,6 @@ func TestReleaseEndedLogsAFailedRelease(t *testing.T) {
 
 type failingRelease struct{ *host }
 
-func (failingRelease) Release(string, hostops.Outcome) (hostops.Released, error) {
+func (failingRelease) Release(string, hostops.Outcome, string) (hostops.Released, error) {
 	return hostops.Released{}, errors.New("tmux is gone")
 }

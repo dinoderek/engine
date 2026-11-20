@@ -54,6 +54,9 @@ func TestACleanedSessionIsReleasedAtOnce(t *testing.T) {
 	if !slices.Equal(m.outcomes, []hostops.Outcome{hostops.RunDone}) || st.Attempts[st.Items[task.ID].Attempt].State != "ended" {
 		t.Fatalf("outcomes %v, attempt %s", m.outcomes, st.Attempts[st.Items[task.ID].Attempt].State)
 	}
+	if !slices.Equal(m.heads, []string{reviewedHead}) {
+		t.Errorf("released with heads %v, want the merged head %s", m.heads, reviewedHead)
+	}
 	if n := releaseTexts(t, c, task.ID); len(n) != 0 {
 		t.Fatalf("notices %q, want none", n)
 	}

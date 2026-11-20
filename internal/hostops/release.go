@@ -38,10 +38,13 @@ type Released struct {
 	// Worktree is the newest run's worktree, when it still was on disk.
 	Worktree     string `json:"worktree,omitempty"`
 	WorktreeKept bool   `json:"worktree_kept"`
+	// BranchDeleted is true when a done task's local branch was deleted.
+	BranchDeleted bool `json:"branch_deleted,omitempty"`
 	// Note says what went wrong without failing the release: the repo's
 	// `worktree release` failing or timing out, why a worktree was kept when
-	// the run had not failed, a run.json it could not read, or a harness's
-	// files it could not remove.
+	// the run had not failed, why a done task's branch was kept or not
+	// deleted, a run.json it could not read, or a harness's files it could
+	// not remove.
 	Note string `json:"note,omitempty"`
 }
 
@@ -52,8 +55,11 @@ type Released struct {
 // repo's own `dev worktree release <branch>` runs first, from engine's clone,
 // when the repo provides it, best effort under TeardownLimit. Engine's
 // removal is git's plain `worktree remove` of a worktree still on disk, which
-// keeps one with uncommitted changes; engine never deletes the branch.
-func Release(d Deps, name string, outcome Outcome) (Released, error) {
+// keeps one with uncommitted changes. For a done task's run, once the
+// worktree is gone, engine deletes the local branch when its tip is
+// mergedHead or an ancestor of origin's default branch, and otherwise keeps
+// it and says so in the note. Any other release never deletes the branch.
+func Release(d Deps, name string, outcome Outcome, mergedHead string) (Released, error) {
 	if !nameRe.MatchString(name) {
 		return Released{}, refuse("session name %q: use letters, digits, _, . and -, not starting with -", name)
 	}
@@ -93,19 +99,30 @@ func Release(d Deps, name string, outcome Outcome) (Released, error) {
 		r.RepoReleased = ran
 		r.note(err)
 	}
-	if _, err := os.Stat(run.Record.Worktree); errors.Is(err, fs.ErrNotExist) {
-		return r, nil
-	}
-	r.Worktree, r.WorktreeKept = run.Record.Worktree, true
-	if outcome == RunFailed || outcome == RunStopped {
-		return r, nil
-	}
-	if err := removeWorktree(d, run.Record); err != nil {
+	r.releaseWorktree(d, run.Record, outcome)
+	if outcome == RunDone && !r.WorktreeKept {
+		deleted, err := dropBranch(d, run.Record, mergedHead)
+		r.BranchDeleted = deleted
 		r.note(err)
-		return r, nil
+	}
+	return r, nil
+}
+
+// releaseWorktree removes rec's worktree unless it is gone already or the
+// run failed or was stopped, and records what it found in r.
+func (r *Released) releaseWorktree(d Deps, rec session.Record, outcome Outcome) {
+	if _, err := os.Stat(rec.Worktree); errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+	r.Worktree, r.WorktreeKept = rec.Worktree, true
+	if outcome == RunFailed || outcome == RunStopped {
+		return
+	}
+	if err := removeWorktree(d, rec); err != nil {
+		r.note(err)
+		return
 	}
 	r.WorktreeKept = false
-	return r, nil
 }
 
 // note adds err, if any, to the reply's note.

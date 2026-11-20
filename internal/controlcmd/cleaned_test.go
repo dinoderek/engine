@@ -26,7 +26,7 @@ func TestCLICleanedReportsFromTheEnvironmentAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.RecordMerged(task.ID, fmt.Sprintf("https://github.com/x/y/pull/%d", 7), "merged"); err != nil {
+	if err := svc.RecordMerged(task.ID, fmt.Sprintf("https://github.com/x/y/pull/%d", 7), "merged", 0); err != nil {
 		t.Fatal(err)
 	}
 	tokenFile := filepath.Join(t.TempDir(), "token")

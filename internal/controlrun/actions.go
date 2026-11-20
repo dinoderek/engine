@@ -144,9 +144,9 @@ func (c *Coordinator) now() time.Time {
 
 // release closes a finished session's window and worktree on its host, and
 // ends its attempt. A stopped task's keeps the worktree and branch, and its
-// attempt has ended already. A release with a Key tells the operator, once, and so
-// does a done task's release whose host replied with a note, such as the
-// repo's own worktree release failing.
+// attempt has ended already. A release with a Key tells the operator, once,
+// and so does a done task's release whose host replied with a note, such as
+// the repo's own worktree release failing.
 func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 	outcome := hostops.RunEnded
 	switch {
@@ -155,7 +155,7 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 	case a.Stopped:
 		outcome = hostops.RunStopped
 	}
-	reply, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, outcome)
+	reply, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, outcome, a.Head)
 	if err != nil {
 		return err
 	}

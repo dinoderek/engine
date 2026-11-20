@@ -7,7 +7,7 @@ func TestCleanedNeedsTheTasksOwnExecutionAndADoneTask(t *testing.T) {
 	task, a, _ := reviewed(t, s)
 	cleaned := Request{Op: "cleaned", ID: task.ID}
 	reject(t, s, a, cleaned, 409)
-	if err := s.RecordMerged(task.ID, good().PR, "merged"); err != nil {
+	if err := s.RecordMerged(task.ID, good().PR, "merged", 0); err != nil {
 		t.Fatal(err)
 	}
 	reject(t, s, op, cleaned, 403)
