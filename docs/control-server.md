@@ -14,19 +14,19 @@ mkdir -p ~/.config/engine
 engine serve
 ```
 
-`engine serve` starts the server on that host (over ssh if remote) and returns. It runs in tmux server `engine-server` (`tmux -L engine-server attach`), logs to `~/.local/share/engine/server/serve.log`, and listens on port 7331 of the host's Tailscale name, the origin it advertises and the CLI uses. To restart, close its window and rerun.
+`engine serve` starts the server on that host (over ssh if remote) and returns. It runs in tmux server `engine-server` (`tmux -L engine-server attach`), logs to `~/.local/share/engine/server/serve.log`, and listens on port 7331 of the host's Tailscale name, the origin it advertises and the CLI uses. The tailnet keeps credentials confidential. To restart, close its window and rerun.
 
 A host whose `hosts.toml` entry records `services` starts through its systemd unit (`systemctl --user start`), never a second tmux server. A start that fails or leaves the unit inactive exits 1, naming its `journalctl --user -u`.
 
 `--foreground` runs it in place. For other networks, use an SSH tunnel or a TLS reverse proxy, set `[server] url` instead of `host`, and use `--foreground`. Without config.toml, the CLI uses `http://devbox:7331`; `ENGINE_SERVER_URL` overrides both. The CLI reads its credential from `~/.config/engine/server-token` or `ENGINE_SERVER_TOKEN_FILE`; workers get the advertised URL.
 
-For backup, stop the server, run `engine serve --backup <new-path>`, restart it, and copy the backup off-machine. Restore with the server stopped, keeping the operator credential. Backups hold credentials, are private and never overwrite a file.
+For backup, stop the server, run `engine serve --backup <new-path>`, restart it, and copy the backup off-machine. Restore with the server stopped, keeping the operator credential. Backups hold credentials, are private and never overwrite a file. Test restores in an isolated database first.
 
 ## Records and commands
 
 IDs belong to engine: repositories, plans, tasks and attempts have separate prefixes and globally unique numbers. Every task belongs to one plan; creating a task without `--plan` fails. `engine help` lists the command groups; the flags are in `internal/controlcmd/command.go`.
 
-Edits, approvals and workflow changes require the current `--version`. A plan's edit invalidates its approval; an active execution, a plan's children included, prevents an edit. Approve, run and stop take a plan and persist its coordination intent (`coordinator.md`). Retrying a failed task is an explicit operator state change. `get`, `list` and `plan-view` add a plan's derived, unstored `status` (`execution-protocol.md`, "States").
+Edits, approvals and workflow changes require the current `--version`. A plan's edit invalidates its approval; an active execution, a plan's children included, prevents an edit. Approve, run and stop take a plan and persist its coordination intent (`coordinator.md`). `get`, `list` and `plan-view` add a plan's derived, unstored `status` (`execution-protocol.md`, "States").
 
 `engine lint <plan-id>` checks a plan's tasks before approval, changing nothing, from one snapshot including outside dependencies.
 
@@ -34,7 +34,7 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 ## API and storage
 
-`POST /v1/command` accepts the Request in `internal/control/types.go`. The credential sets authorship. Errors include an HTTP status, and some a stable `reason`. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`, which the CLI prints and never retries.
+`POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors include an HTTP status, and some a stable `reason`; storage details stay in server logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`, which the CLI prints and never retries.
 
 Every write has a request key; a key reused for a different command fails. The CLI retries uncertain delivery once with the same key. Version conflicts require reading the current record. An edit invalidates a placement decision before any execution is reserved or launched.
 
@@ -52,7 +52,7 @@ Messages addressed to the operator appear in the cross-repository inbox. Informa
 
 `engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen` chooses another loopback address. It uses the CLI's server configuration and operator credential, which never reaches the browser. Any local user reaching the port reads with operator rights; run it only on a single-user machine.
 
-The process forwards only read operations (`list`, `plan-view`, `attempts`, `get`, `updates`, `session-view`) and answers GET and HEAD for a loopback host name on any port, so an SSH tunnel works. When the control server fails, the page keeps its last data, marked stale. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only the page's scripts.
+The process forwards only read operations (`list`, `plan-view`, `attempts`, `get`, `updates`, `session-view`) and answers GET and HEAD for a loopback host name on any port, so an SSH tunnel works. It sends `Cache-Control: no-store`. When the control server fails, the page keeps its last data, marked stale. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only the page's scripts.
 
 The per-plan view lists unfinished prerequisites, including other plans' tasks. A todo task waiting to start has the plan's question as feedback. On both tabs, "Needs feedback" opens the question's thread at its update over the tab, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
 
@@ -72,4 +72,4 @@ Observations live in an in-memory cache keyed by attempt, so a request never con
 
 ## Host status
 
-`host-status`, an operator-only read, returns the fleet as the coordinator's latest pass read it: when, and for each `hosts.toml` host its reachability, slots, windows with their attempts, quota and readiness. It is kept in memory, starts empty with the server and never contacts a host. `engine host status --all [--json]` prints it.
+`host-status`, an operator-only read, returns each host's reachability, slots, windows with attempts, quota and readiness from the latest pass, never contacting a host. `engine host status --all [--json]` prints it.

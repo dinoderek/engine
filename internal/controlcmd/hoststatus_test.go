@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -66,7 +67,7 @@ func TestRenderHostStatusReadyAndNoPass(t *testing.T) {
 		t.Fatalf("a ready host: %v\n%s", err, out.String())
 	}
 	out.Reset()
-	if err := renderHostStatus(&out, control.HostStatus{}, fleetAt); err != nil || !strings.Contains(out.String(), "No coordinator pass has read the hosts yet.") {
+	if err := renderHostStatus(&out, control.HostStatus{}, fleetAt); err != nil || !strings.Contains(out.String(), "No coordinator pass has read the hosts yet") {
 		t.Fatalf("no pass: %v\n%s", err, out.String())
 	}
 	if got := readinessText(control.HostRow{Unready: "tmux server's directory is gone\nrestart it"}); got != "unready: tmux server's directory is gone" {
@@ -108,8 +109,8 @@ func TestHostStatusAllAgainstAServer(t *testing.T) {
 	if err := json.Unmarshal(e.Out.(*bytes.Buffer).Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Hosts) != 2 || got.Hosts[1].Windows[0].Attempt != "a9" || got.Hosts[0].Unreachable == "" || !got.At.Equal(fleetAt) {
-		t.Fatalf("json fleet: %+v", got)
+	if want := twoHosts(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("json fleet:\n%+v\nwant\n%+v", got, want)
 	}
 }
 

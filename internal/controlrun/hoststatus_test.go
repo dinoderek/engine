@@ -79,14 +79,24 @@ func TestTheBoardShowsAnUnreachableHostAndKeepsOnlyTheLatestPass(t *testing.T) {
 	b.Record(control.State{}, reconcile.Fleet{}, nil) // a nil board records nothing
 	b = &HostBoard{Now: func() time.Time { return boardAt }}
 	down := reconcile.Load("mac", nil, nil, hostops.Status{}, errString("ssh: timed out"))
-	up := reconcile.Load("devbox", nil, nil, hostops.Status{Slots: 2, FreeSlots: 1, Windows: []hostops.Window{{Name: "demo-9", ID: "@2"}}}, nil)
+	up := reconcile.Load("devbox", nil, nil, hostops.Status{Slots: 2, FreeSlots: 1, Windows: []hostops.Window{{Name: "demo-9", ID: "@2"}, {Name: "demo-8", ID: "@3", Alive: true}},
+		Runs:        []hostops.Run{{Name: "demo-8", Record: session.Record{Harness: "codex"}}},
+		Quota:       map[string]session.Quota{"codex": {Windows: map[string]session.QuotaWindow{"weekly": {Used: 5, ResetsAt: 7}}}},
+		TmuxCwdGone: &hostops.TmuxCwdGone{Pid: 4, Dir: "/gone", Reason: "tmux server's directory is gone"}}, nil)
 	b.Record(control.State{}, reconcile.Fleet{Hosts: []reconcile.HostLoad{down, up}}, nil)
 	got := b.Status()
 	if len(got.Hosts) != 2 || got.Hosts[0].Unreachable != "ssh: timed out" || got.Hosts[0].Windows == nil || got.Hosts[0].Slots != 0 {
 		t.Fatalf("unreachable host: %+v", got.Hosts)
 	}
-	if w := got.Hosts[1].Windows; len(w) != 1 || w[0].Item != "" || w[0].Alive {
-		t.Fatalf("a window no attempt runs: %+v", w)
+	up2 := got.Hosts[1]
+	if w := up2.Windows; len(w) != 2 || w[0].Item != "" || w[0].Alive || w[1].Harness != "codex" {
+		t.Fatalf("windows no attempt runs, one with its run's harness: %+v", w)
+	}
+	if up2.Unready != "tmux server's directory is gone" {
+		t.Fatalf("a dead tmux cwd: %q", up2.Unready)
+	}
+	if want := []control.HostQuota{{Harness: "codex", Window: "weekly", Used: 5, ResetsAt: 7}}; !reflect.DeepEqual(up2.Quota, want) {
+		t.Fatalf("a quota whose reading names no harness: %+v", up2.Quota)
 	}
 	b.Record(control.State{}, reconcile.Fleet{Hosts: []reconcile.HostLoad{up}}, nil)
 	if got = b.Status(); len(got.Hosts) != 1 || got.Hosts[0].Name != "devbox" {

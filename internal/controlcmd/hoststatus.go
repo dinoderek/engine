@@ -60,7 +60,7 @@ func hostMain(args []string, e Env) int {
 // attempt. now dates the pass.
 func renderHostStatus(w io.Writer, s control.HostStatus, now time.Time) error {
 	if s.At.IsZero() {
-		_, err := fmt.Fprintln(w, "No coordinator pass has read the hosts yet.")
+		_, err := fmt.Fprintln(w, "No coordinator pass has read the hosts yet: passes read them only while a plan is coordinating.")
 		return err
 	}
 	fmt.Fprintf(w, "As of the coordinator's pass at %s (%s ago)\n\n", s.At.UTC().Format(time.RFC3339), now.Sub(s.At).Round(time.Second))

@@ -7,7 +7,8 @@
 For dispatch, Git credentials and run credential files, load `coordinator.md`.
 
 **One file, every host.** `~/.config/engine/hosts.toml` is the same on every
-host (`engine setup --host <name>` copies it); a host's own name is in `~/.config/engine/host`.
+host (`engine setup --host <name>` copies it); each host's own name is in
+`~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, never a
 hostname or IP. Its `address` goes to `ssh` as is and is never posted.
@@ -73,13 +74,16 @@ For an unpinned card, `harness_ratio` scores each positive-weight harness by
 `default_harness`, then name. If no host fits, the next harness is tried.
 Without a ratio, `default_harness` is used.
 
-An unplaced task stays ready; the operator is told once if no host could take it even with every slot free. The planner starts at `deep` on the plan's
+An unplaced task stays ready; the operator is notified once if no host could
+take it even with every slot free. The planner starts at `deep` on the plan's
 harness, else `default_harness`.
 
 ## Attempts and naming
 
 An attempt is the session registry: the server's record of a task's or plan's
 session (host, harness, run ID, tmux window, state; `engine attempt list`).
+`engine ps`, `engine attach` and the dashboard resolve a session through it.
+
 A session is named `<repo>-<task>` in its tmux window, run ID and branch; the
 harness apps title it `t<n> · <title>` (`p<n>` for a planner).
 
@@ -102,7 +106,7 @@ The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
 
 Spawn refuses a missing host file, `hosts.toml` or host entry, an unknown or
 unrunnable harness, or an existing window; slots, capabilities and caps are
-placement's alone. A host on another protocol names `engine setup --host`.
+placement's alone.
 
 **Preflight:** `engine start --check` runs `gh auth status`, then a hands-off
 light-tier session that exercises the skill, `gh`, `engine` and `/tmp`; it
