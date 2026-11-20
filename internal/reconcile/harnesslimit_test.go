@@ -50,6 +50,16 @@ func TestPlacementSkipsALimitedHostForAnother(t *testing.T) {
 	}
 }
 
+func TestAResetNoLaterThanTheLimitIsUnknown(t *testing.T) {
+	v := atLimit(view(plan("planned"), task(1, "todo")), t0.Add(-time.Hour))
+	if got := Decide(when(v, time.Minute)); len(got) != 0 {
+		t.Errorf("a stale reset opened the host:\n%s", shows(got))
+	}
+	if got := shows(Decide(when(v, ProbeEvery))); got != "dispatch t1 devbox claude false" {
+		t.Errorf("a stale reset is probed as unknown:\n%s", got)
+	}
+}
+
 func TestAnUnknownLimitIsProbedEvery30MinutesOneTaskAtATime(t *testing.T) {
 	v := atLimit(view(plan("planned"), task(1, "todo"), task(2, "todo")), time.Time{})
 	if got := Decide(when(v, ProbeEvery-time.Second)); len(got) != 0 {
@@ -124,11 +134,10 @@ func TestOneNoteAfter12HoursOfFailedProbes(t *testing.T) {
 	if len(acts) != 1 || acts[0].Key != "limit-probes/devbox/claude/"+strconv.FormatInt(t0.Unix(), 10) || acts[0].Item != "" || !strings.Contains(acts[0].Text, "every probe since has hit it (23)") {
 		t.Fatalf("got %+v", acts)
 	}
-	// A known reset, no probe yet, or another plan's limit: no note.
+	// A known reset, or no probe yet: no note.
 	for _, edit := range []func(*View){
 		func(v *View) { v.Fleet.Limits[0].ResetsAt = t0.Add(48 * time.Hour).Unix() },
 		func(v *View) { v.Fleet.Limits[0].Probes = 0 },
-		func(v *View) { v.Fleet.Limits[0].Task = "t8" },
 	} {
 		w := atLimit(view(plan("planned"), task(9, "todo")), time.Time{})
 		w.Fleet.Limits[0].Probes, w.Fleet.Limits[0].Live = 23, true

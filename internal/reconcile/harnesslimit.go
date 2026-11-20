@@ -34,13 +34,15 @@ func (f Fleet) limitFor(host, harness string) (control.HarnessLimit, bool) {
 // task, none, or one, a probe of an account whose reset is unknown. A known
 // reset opens it ResumeDelay after the reset, as the in-session continue
 // waits. An unknown one lets one task through ProbeEvery after the limit or
-// the last probe, while no probe still runs. Without a limit it is open.
+// the last probe, while no probe still runs. A reset no later than the limit
+// itself, stale or from a skewed clock, counts as unknown, so a wrong one
+// never sends a task each pass. Without a limit it is open.
 func (f Fleet) gate(host, harness string) (open, one bool, why string) {
 	l, ok := f.limitFor(host, harness)
 	if !ok {
 		return true, false, ""
 	}
-	if l.ResetsAt > 0 {
+	if l.ResetsAt > l.Ended.Unix() {
 		at := time.Unix(l.ResetsAt, 0).Add(ResumeDelay)
 		if !f.Now.Before(at) {
 			return true, false, ""
@@ -90,12 +92,11 @@ func probeHit(v View, t Item) (Action, bool) {
 
 // limitNotes tell the operator, once per limit, that a host × harness has
 // been at a usage limit with no known reset for ProbeNote, through failed
-// probes. The pass of the plan whose task hit it last sends it.
+// probes. Every plan's pass may send it: its key makes it one note.
 func limitNotes(v View) []Action {
 	var acts []Action
 	for _, l := range v.Fleet.Limits {
-		mine := slices.ContainsFunc(v.Tasks, func(t Item) bool { return t.ID == l.Task })
-		if !mine || l.ResetsAt > 0 || l.Probes == 0 || v.Now.Sub(l.Since) < ProbeNote {
+		if l.ResetsAt > l.Ended.Unix() || l.Probes == 0 || v.Now.Sub(l.Since) < ProbeNote {
 			continue
 		}
 		acts = append(acts, notice(Item{}, fmt.Sprintf("limit-probes/%s/%s/%d", l.Host, l.Harness, l.Since.Unix()), fmt.Sprintf(

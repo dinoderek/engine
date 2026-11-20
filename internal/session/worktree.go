@@ -162,13 +162,19 @@ func (r Repos) ownBranch(clone Clone, branch, run string) bool {
 // it, which tears down what `worktree create` provisioned, then removes any
 // worktree still on the branch, and deletes the branch when CreateWorktree
 // made that too. A worktree it adopted and a branch it found stay, since they
-// hold an earlier attempt's work.
+// hold an earlier attempt's work: a found branch the repo's release deleted
+// is put back at its tip.
 func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 	if !wt.Created {
 		return nil
 	}
+	tip := ""
+	if !wt.NewBranch {
+		out, _ := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+wt.Branch)
+		tip = strings.TrimSpace(out)
+	}
 	if _, err := r.ReleaseWorktree(clone.Path, wt.Branch); err != nil {
-		return err
+		return errors.Join(err, r.restoreBranch(clone, wt.Branch, tip))
 	}
 	unlock, err := lock(clone.Path + ".lock")
 	if err != nil {
@@ -185,13 +191,26 @@ func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 		}
 	}
 	if !wt.NewBranch {
-		return nil
+		return r.restoreBranch(clone, wt.Branch, tip)
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+wt.Branch); err != nil {
 		return nil // the repo's release deleted it
 	}
 	if _, err := r.git(clone.Path, "branch", "-D", wt.Branch); err != nil {
 		return fmt.Errorf("delete the branch %s: %w", wt.Branch, err)
+	}
+	return nil
+}
+
+// restoreBranch puts back, at tip, a branch the repo's own release deleted
+// although this call only adopted it: its commits may exist nowhere else.
+// An empty tip, or a branch still there, needs nothing.
+func (r Repos) restoreBranch(clone Clone, branch, tip string) error {
+	if tip == "" || r.exists(clone.Path, "refs/heads/"+branch) {
+		return nil
+	}
+	if _, err := r.git(clone.Path, "branch", branch, tip); err != nil {
+		return fmt.Errorf("restore branch %s at %s, which the repo's worktree release deleted: %w", branch, tip, err)
 	}
 	return nil
 }
@@ -316,9 +335,11 @@ func (r Repos) adoptWorktree(clone Clone, branch, path string) error {
 
 // adoptOwnWorktree readies the worktree an earlier attempt of the task left
 // on its own branch: as it is, uncommitted changes and commits origin lacks
-// included, fast-forwarded to origin's tip of the branch only when it is
-// clean and behind it. It refuses engine's clone itself, and a worktree whose
-// folder is gone.
+// included, fast-forwarded to origin's tip of the branch when it is clean
+// and behind it. It refuses a worktree that origin's branch has moved on
+// from, whether it diverged or has changes a fast-forward would need to
+// move, since its commits or origin's would be lost; and, like
+// adoptWorktree, engine's clone itself and a worktree whose folder is gone.
 func (r Repos) adoptOwnWorktree(clone Clone, branch, path string) error {
 	if filepath.Clean(path) == filepath.Clean(clone.Path) {
 		return taken("branch %s is checked out in engine's clone %s; check out its default branch there first", branch, path)
@@ -331,8 +352,13 @@ func (r Repos) adoptOwnWorktree(clone Clone, branch, path string) error {
 		return fmt.Errorf("read the status of the worktree at %s: %w", path, err)
 	}
 	tip := "refs/remotes/origin/" + branch
-	if strings.TrimSpace(status) != "" || !r.behind(path, "HEAD", tip) {
+	switch {
+	case !r.exists(path, tip) || r.ancestor(path, tip, "HEAD"):
 		return nil
+	case strings.TrimSpace(status) != "":
+		return taken("branch %s has a worktree at %s with uncommitted changes, and origin's branch has commits it lacks; commit, merge and push them first", branch, path)
+	case !r.ancestor(path, "HEAD", tip):
+		return taken("branch %s at %s and origin's have each moved on; merge them and push first", branch, path)
 	}
 	if _, err := r.git(path, "merge", "--ff-only", "--quiet", tip); err != nil {
 		return fmt.Errorf("fast-forward the worktree at %s to %s: %w", path, tip, err)
@@ -341,12 +367,16 @@ func (r Repos) adoptOwnWorktree(clone Clone, branch, path string) error {
 }
 
 // followOwn readies the task's own local branch, when origin has it too: set
-// to origin's tip when it is absent or behind it, and otherwise kept as it
-// is, since its commits are the task's own work.
+// to origin's tip when it is absent or behind it, and kept as it is when
+// ahead, since its commits are the task's own work. A branch that diverged
+// from origin's is refused: either side's commits would be lost.
 func (r Repos) followOwn(clone Clone, branch string) error {
 	local, remote := "refs/heads/"+branch, "refs/remotes/origin/"+branch
-	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", local); err == nil && !r.behind(clone.Path, local, remote) {
+	switch {
+	case r.exists(clone.Path, local) && r.ancestor(clone.Path, remote, local):
 		return nil
+	case r.exists(clone.Path, local) && !r.ancestor(clone.Path, local, remote):
+		return taken("branch %s in %s and origin's have each moved on; merge them and push first", branch, clone.Path)
 	}
 	if _, err := r.git(clone.Path, "branch", "--force", "--no-track", branch, remote); err != nil {
 		return fmt.Errorf("set branch %s to origin's tip: %w", branch, err)
@@ -354,12 +384,14 @@ func (r Repos) followOwn(clone Clone, branch string) error {
 	return nil
 }
 
-// behind reports whether ref is an ancestor of tip, which both exist: moving
-// it there loses nothing.
-func (r Repos) behind(dir, ref, tip string) bool {
-	if _, err := r.git(dir, "rev-parse", "--verify", "--quiet", tip); err != nil {
-		return false
-	}
+// exists reports whether ref names a commit in dir's repository.
+func (r Repos) exists(dir, ref string) bool {
+	_, err := r.git(dir, "rev-parse", "--verify", "--quiet", ref)
+	return err == nil
+}
+
+// ancestor reports whether ref is an ancestor of tip, or is tip.
+func (r Repos) ancestor(dir, ref, tip string) bool {
 	_, err := r.git(dir, "merge-base", "--is-ancestor", ref, tip)
 	return err == nil
 }

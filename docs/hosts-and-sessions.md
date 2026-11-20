@@ -97,7 +97,8 @@ The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
    re-dispatch adopts a branch a run of the same task marked, whether or not
    that run opened a window: as it is, with any worktree on it, its
    unpushed commits and uncommitted changes, fast-forwarded to `origin`'s tip
-   only when that loses nothing; the kickoff names its head. A resume of an
+   only when that loses nothing, and refused when `origin`'s has moved on
+   past it; the kickoff names its head. A resume of an
    unmarked branch reopens `origin`'s at its tip;
 2. trusts the worktree for its harness and opens the window `<repo>-<task>`
    in the session `engine`;

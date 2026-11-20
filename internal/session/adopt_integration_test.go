@@ -122,3 +122,79 @@ func TestCreateWorktreeFollowsOriginOnlyWhenTheOwnBranchIsBehind(t *testing.T) {
 		t.Fatalf("worktree = %+v, %v; want its own commit %s", wt, err, own)
 	}
 }
+
+// ownOnOrigin is resumeFixture with the task's branch adopted by run
+// r-5-a1, then given a commit of its own that origin lacks; origin then moves
+// on too. It returns the worktree the attempt left.
+func ownOnOrigin(t *testing.T) (Repos, Clone, Worktree) {
+	t.Helper()
+	remote, r, clone, _ := resumeFixture(t, "")
+	first, err := r.CreateWorktree(clone, 5, true, "r-5-a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(first.Path, "own.txt"), []byte("own"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, first.Path, "add", "own.txt")
+	mustGit(t, first.Path, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "--quiet", "-m", "own")
+	remote.commit(t, "task/r-5", "theirs.txt", "theirs", 0o644)
+	if _, err := r.Sync(mustRepo(t, "o/r")); err != nil {
+		t.Fatal(err)
+	}
+	return r, clone, first
+}
+
+func TestCreateWorktreeRefusesAnOwnBranchThatDivergedFromOrigin(t *testing.T) {
+	r, clone, first := ownOnOrigin(t)
+	var takenErr *BranchTakenError
+	// The worktree it left, and the branch without it, are both refused.
+	if _, err := r.CreateWorktree(clone, 5, true, "r-5-a2"); !errors.As(err, &takenErr) || !strings.Contains(err.Error(), "have each moved on") {
+		t.Fatalf("a diverged worktree: err = %v", err)
+	}
+	mustGit(t, clone.Path, "worktree", "remove", first.Path)
+	if _, err := r.CreateWorktree(clone, 5, true, "r-5-a2"); !errors.As(err, &takenErr) || !strings.Contains(err.Error(), "have each moved on") {
+		t.Fatalf("a diverged branch: err = %v", err)
+	}
+}
+
+func TestCreateWorktreeRefusesAChangedOwnWorktreeBehindOrigin(t *testing.T) {
+	remote, r, clone, _ := resumeFixture(t, "")
+	first, err := r.CreateWorktree(clone, 5, true, "r-5-a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(first.Path, "draft.txt"), []byte("half done"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	remote.commit(t, "task/r-5", "theirs.txt", "theirs", 0o644)
+	if _, err := r.Sync(mustRepo(t, "o/r")); err != nil {
+		t.Fatal(err)
+	}
+	var takenErr *BranchTakenError
+	if _, err := r.CreateWorktree(clone, 5, true, "r-5-a2"); !errors.As(err, &takenErr) || !strings.Contains(err.Error(), "with uncommitted changes, and origin's branch has commits it lacks") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRemoveWorktreeKeepsAnAdoptedBranchTheReposReleaseDeleted(t *testing.T) {
+	r, clone, first, commit := ownFixture(t)
+	mustGit(t, clone.Path, "worktree", "remove", first.Path)
+	wt, err := r.CreateWorktree(clone, 5, false, "r-5-a2")
+	if err != nil || !wt.Created || wt.NewBranch {
+		t.Fatalf("worktree = %+v, %v", wt, err)
+	}
+	// A repo whose own release removes the worktree and force-deletes the
+	// branch, as a spawn's undo would run it.
+	release := "#!/bin/sh\n[ $# -eq 0 ] && { echo 'usage: dev worktree release <branch>'; exit 2; }\n" +
+		"git worktree remove --force \"" + wt.Path + "\" && git branch -D \"$3\"\n"
+	if err := os.WriteFile(filepath.Join(clone.Path, "dev"), []byte(release), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RemoveWorktree(clone, wt); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustGit(t, clone.Path, "rev-parse", "refs/heads/task/r-5"); got != commit {
+		t.Errorf("branch at %q after the repo's release, want it restored at %s", got, commit)
+	}
+}

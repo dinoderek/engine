@@ -8,8 +8,8 @@ windows, never globally or in `~/.tmux.conf`. It targets windows by id
 exits (`remain-on-exit`). Engine types with `send-keys -l`, then `Enter` after
 a short delay: input boxes can swallow a newline sent with the text. A usage
 limit resume first reads the pane's input line (the line under a rule that
-starts with a prompt mark); text already there, such as the harness's own
-unsent continue, is sent with `Enter` alone.
+starts with a prompt mark, faint placeholder text dropped); text already
+there, such as the harness's own unsent continue, is sent with `Enter` alone.
 
 **Working directory.** Every tmux command runs from `$HOME`, so no server
 engine starts lives in a worktree later removed, failing every later

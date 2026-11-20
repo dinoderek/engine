@@ -73,6 +73,9 @@ func TestInputLine(t *testing.T) {
 		{"lowest wins", "────\n❯ old\n────\n❯ \n────\n", "", true},
 		{"quoted prompt", "> not an input line\nmore\n", "", false},
 		{"no box", "just output\n", "", false},
+		{"faint placeholder", "────\n\x1b[38;5;246m❯ \x1b[39m\x1b[2mTry \"fix lint\"\x1b[22m\n────\n", "", true},
+		{"coloured text", "\x1b[38;5;244m────\x1b[39m\n\x1b[38;2;2;2;2m❯ continue\x1b[0m\n", "continue", true},
+		{"faint reset", "────\n❯ \x1b[2mhint\x1b[0m sent\x1b(B\n", "sent", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			text, found := InputLine(tc.screen)
@@ -91,7 +94,7 @@ func TestSubmitSendsUnsentTextWithEnterAlone(t *testing.T) {
 	if err := tm.Submit("@4", "continue"); err != nil {
 		t.Fatal(err)
 	}
-	want := "tmux capture-pane -p -t =engine:@4\n" +
+	want := "tmux capture-pane -p -e -t =engine:@4\n" +
 		"tmux display-message -p -t =engine:@4 #{pane_in_mode}\ntmux send-keys -t =engine:@4 Enter"
 	if f.dump() != want {
 		t.Errorf("calls\n%s", f.dump())
@@ -107,7 +110,7 @@ func TestSubmitTypesIntoAnEmptyInputLine(t *testing.T) {
 		if err := tm.Submit("@4", "continue"); err != nil {
 			t.Fatal(err)
 		}
-		want := "tmux capture-pane -p -t =engine:@4\n" +
+		want := "tmux capture-pane -p -e -t =engine:@4\n" +
 			"tmux display-message -p -t =engine:@4 #{pane_in_mode}\n" +
 			"tmux send-keys -t =engine:@4 -l continue\ntmux send-keys -t =engine:@4 Enter"
 		if f.dump() != want {
