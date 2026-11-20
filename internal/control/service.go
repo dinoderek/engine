@@ -1,6 +1,7 @@
 package control
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
 	"sort"
@@ -185,7 +186,8 @@ func read(st *State, a Actor, r Request) (Response, error) {
 				out.Attempts = append(out.Attempts, at)
 			}
 		}
-		sort.Slice(out.Attempts, func(i, j int) bool { return out.Attempts[i].Started.Before(out.Attempts[j].Started) })
+		// Oldest first; attempts started in the same instant by their number.
+		slices.SortFunc(out.Attempts, func(a, b Attempt) int { return cmp.Or(a.Started.Compare(b.Started), Number(a.ID)-Number(b.ID)) })
 		return out, nil
 	}
 	for _, item := range st.Items {

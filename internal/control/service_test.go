@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -270,5 +271,29 @@ func TestATaskRequiresAPlan(t *testing.T) {
 	}
 	if p := call(t, s, op, Request{Op: "get", ID: plan.ID}).Item; !p.Coordinating || p.ApprovedVersion == 0 {
 		t.Fatalf("a task edit changed its plan's approval: %+v", p)
+	}
+}
+
+// Attempts started in the same instant list in the order they were made,
+// whatever order the store holds them in.
+func TestAttemptsStartedTogetherListInTheOrderMade(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	var tasks []Item
+	for range 12 {
+		tasks = append(tasks, newTask(t, s, repo.ID, plan.ID))
+	}
+	approve(t, s, plan)
+	var want []string
+	for _, task := range tasks {
+		_, out := dispatch(t, s, task)
+		want = append(want, out.Attempt.ID)
+	}
+	var got []string
+	for _, at := range call(t, s, op, Request{Op: "attempts"}).Attempts {
+		got = append(got, at.ID)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("attempts %v, want %v", got, want)
 	}
 }
