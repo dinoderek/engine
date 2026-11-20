@@ -129,7 +129,7 @@ func deadSessions(v View) []Action {
 	for _, t := range v.Tasks {
 		s := t.Session
 		if s != nil && t.open() && t.claimed() && !s.Live && !s.Unknown {
-			acts = append(acts, Action{Kind: EndAttempt, Item: t.ID, Attempt: t.Current.ID, Text: "its session " + s.Name + " has died"})
+			acts = append(acts, Action{Kind: EndAttempt, Item: t.ID, Attempt: t.Current.ID, Text: "its session " + s.Name + " has died", Tail: s.PaneTail})
 		}
 	}
 	return acts

@@ -1,7 +1,10 @@
 package controlrun
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
@@ -22,14 +25,7 @@ func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Con
 		}
 		return c.notice(a.Item, a.Key, a.Text)
 	case reconcile.EndAttempt:
-		at, err := c.Service.EndDead(a.Attempt, a.Text)
-		if err != nil {
-			return err
-		}
-		if at.Reason == control.EndVanished {
-			return c.notice(a.Item, "vanished/"+at.ID, a.Text+"; the task stays resumable and is dispatched again as a resume")
-		}
-		return c.notice(a.Item, "failed/"+at.ID, a.Text)
+		return c.endAttempt(a)
 	case reconcile.Notice:
 		return c.mark(a)
 	case reconcile.Resume:
@@ -40,6 +36,51 @@ func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Con
 		return c.stop(a.Item)
 	}
 	return nil
+}
+
+// endAttempt ends a dead session's attempt and tells the operator how: a
+// vanished task resumes, a session that died before claiming its task is
+// dispatched again once, and any other death fails the task.
+func (c *Coordinator) endAttempt(a reconcile.Action) error {
+	at, err := c.Service.EndDead(a.Attempt, a.Text, a.Tail)
+	if err != nil {
+		return err
+	}
+	switch {
+	case at.Reason == control.EndVanished:
+		return c.notice(a.Item, "vanished/"+at.ID, a.Text+"; the task stays resumable and is dispatched again as a resume")
+	case at.Reason == control.EndEarlyDeath:
+		return c.notice(a.Item, "early/"+at.ID, a.Text+" before it claimed the task; the task is dispatched again once"+tails([]control.Attempt{at}))
+	case at.Early:
+		st, err := c.Service.Store.Snapshot()
+		if err != nil {
+			return err
+		}
+		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(st, at)))
+	}
+	return c.notice(a.Item, "failed/"+at.ID, a.Text)
+}
+
+// earlyAttempts are the attempts of at's task that died before claiming it,
+// oldest first, at the newest.
+func earlyAttempts(st control.State, at control.Attempt) []control.Attempt {
+	var out []control.Attempt
+	for _, o := range st.Attempts {
+		if o.Item == at.Item && o.Early {
+			out = append(out, o)
+		}
+	}
+	slices.SortFunc(out, func(x, y control.Attempt) int { return control.Number(x.ID) - control.Number(y.ID) })
+	return out
+}
+
+// tails is each attempt's pane log tail, for a notice.
+func tails(attempts []control.Attempt) string {
+	var b strings.Builder
+	for _, at := range attempts {
+		fmt.Fprintf(&b, "\n\nPane log tail of %s:\n%s", at.ID, cmp.Or(at.Tail, "(the host showed no pane log)"))
+	}
+	return b.String()
 }
 
 // mark sends a notice, then records on its attempt what it flagged: the

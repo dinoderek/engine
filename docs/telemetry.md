@@ -6,7 +6,7 @@
 
 Each run has a directory on its host, `~/.local/share/engine/runs/<run-id>/`.
 The host reads it, and the coordinator reads it through the `collect` and
-`status` host ops; nothing is uploaded.
+`status` host ops; nothing is uploaded but the tail of a just-ended run's `pane.log`, which `status` returns.
 
 `run.json` is the run's index, written once at spawn by the host's `spawn` op
 with the caller's identity, the session name, tmux target, branch, worktree,
