@@ -106,7 +106,7 @@ The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
 
 Spawn refuses a missing host file, `hosts.toml` or host entry, an unknown or
 unrunnable harness, or an existing window; slots, capabilities and caps are
-placement's alone. A host on another protocol names `engine setup --host`.
+placement's alone.
 
 **Preflight:** `engine start --check` runs `gh auth status`, then a hands-off
 light-tier session that exercises the skill, `gh`, `engine` and `/tmp`; it
@@ -117,7 +117,7 @@ exits 1 when gh failed or the session was denied, stalled or skipped a step.
 | Where | How |
 | --- | --- |
 | Browser | The dashboard, `engine ui`, on loopback or through a tunnel. |
-| Terminal | `engine ps` lists tasks with their attempts; `engine attach <task-id>` runs `tmux attach` on the host, over `ssh -t` if remote. |
+| Terminal | `engine ps` lists tasks with their attempts; `engine attach <task-id>` runs `tmux attach` on the host, over `ssh -t` if remote; `engine host status --all` shows the fleet. |
 | Phone | An SSH app over Tailscale: `tmux attach -t engine`, `Ctrl-b w`. |
 | Apps | Claude apps and claude.ai/code through Remote Control; Codex apps when the session joined the daemon. |
 

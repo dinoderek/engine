@@ -48,6 +48,7 @@ const Usage = "engine serve\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
 	"engine merge-queue <repo-id>\n" +
+	"engine host status --all [--json]\n" +
 	"engine attempt list [<task-id>]\n" +
 	"engine attempt reconcile <attempt-id> <evidence> | --body <evidence>\n" +
 	"All writes accept --request-key <key>; edits require --version. Output is JSON.\n"
@@ -69,6 +70,9 @@ func Main(args []string, e Env) int {
 	}
 	if args[0] == "attach" {
 		return attachMain(args[1:], e)
+	}
+	if args[0] == "host" {
+		return hostMain(args[1:], e)
 	}
 	req, err := Parse(args, e)
 	if err != nil {

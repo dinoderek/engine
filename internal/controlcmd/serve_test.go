@@ -75,6 +75,9 @@ func TestObserverReachesHostsThroughTheHostConfig(t *testing.T) {
 	if c.Observer != obs || c.Service.Observe == nil || service.Observe == nil || service.Reconcile == nil {
 		t.Fatal("the session view is not wired to the observer")
 	}
+	if c.Board == nil || service.Hosts == nil || c.Service.Hosts == nil {
+		t.Fatal("the host-status op is not wired to the coordinator's board")
+	}
 	if c.Ready == nil || c.Ready.Client == nil {
 		t.Fatal("the coordinator does not probe readiness")
 	}

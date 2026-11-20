@@ -52,6 +52,9 @@ func serverCommand(args []string) bool {
 	if slices.Contains([]string{"serve", "repo", "plan", "task", "updates", "inbox", "ask", "reply", "ack", "resolve", "merge-queue", "attempt"}, args[0]) {
 		return true
 	}
+	if args[0] == "host" {
+		return slices.Contains(args[1:], "--all")
+	}
 	if args[0] == "ps" {
 		return !slices.Contains(args[1:], "--github")
 	}
