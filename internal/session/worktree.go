@@ -168,13 +168,12 @@ func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 	if !wt.Created {
 		return nil
 	}
-	tip := ""
+	var kept keptBranch
 	if !wt.NewBranch {
-		out, _ := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+wt.Branch)
-		tip = strings.TrimSpace(out)
+		kept = r.keep(clone, wt.Branch)
 	}
 	if _, err := r.ReleaseWorktree(clone.Path, wt.Branch); err != nil {
-		return errors.Join(err, r.restoreBranch(clone, wt.Branch, tip))
+		return errors.Join(err, r.restoreBranch(clone, wt.Branch, kept))
 	}
 	unlock, err := lock(clone.Path + ".lock")
 	if err != nil {
@@ -191,7 +190,7 @@ func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 		}
 	}
 	if !wt.NewBranch {
-		return r.restoreBranch(clone, wt.Branch, tip)
+		return r.restoreBranch(clone, wt.Branch, kept)
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+wt.Branch); err != nil {
 		return nil // the repo's release deleted it
@@ -202,17 +201,29 @@ func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 	return nil
 }
 
-// restoreBranch puts back, at tip, a branch the repo's own release deleted
-// although this call only adopted it: its commits may exist nowhere else.
-// An empty tip, or a branch still there, needs nothing.
-func (r Repos) restoreBranch(clone Clone, branch, tip string) error {
-	if tip == "" || r.exists(clone.Path, "refs/heads/"+branch) {
+// keptBranch is what restoreBranch puts back: a branch's tip and its run
+// mark, which deleting the branch deletes too.
+type keptBranch struct{ tip, run string }
+
+// keep reads branch's tip and mark.
+func (r Repos) keep(clone Clone, branch string) keptBranch {
+	tip, _ := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+	run, _ := r.git(clone.Path, "config", "--get", "branch."+branch+"."+runMark)
+	return keptBranch{tip: strings.TrimSpace(tip), run: strings.TrimSpace(run)}
+}
+
+// restoreBranch puts back, at its tip and with its mark, a branch the repo's
+// own release deleted although this call only adopted it: its commits may
+// exist nowhere else, and the mark keeps it the task's own. A branch with no
+// tip, or one still there, needs nothing.
+func (r Repos) restoreBranch(clone Clone, branch string, kept keptBranch) error {
+	if kept.tip == "" || r.exists(clone.Path, "refs/heads/"+branch) {
 		return nil
 	}
-	if _, err := r.git(clone.Path, "branch", branch, tip); err != nil {
-		return fmt.Errorf("restore branch %s at %s, which the repo's worktree release deleted: %w", branch, tip, err)
+	if _, err := r.git(clone.Path, "branch", branch, kept.tip); err != nil {
+		return fmt.Errorf("restore branch %s at %s, which the repo's worktree release deleted: %w", branch, kept.tip, err)
 	}
-	return nil
+	return r.mark(clone, branch, kept.run)
 }
 
 // checkAtOrigin fails when a resumed worktree is not at origin's tip of its

@@ -42,7 +42,7 @@ func (f Fleet) gate(host, harness string) (open, one bool, why string) {
 	if !ok {
 		return true, false, ""
 	}
-	if l.ResetsAt > l.Ended.Unix() {
+	if KnownReset(l.ResetsAt, l.Ended) {
 		at := time.Unix(l.ResetsAt, 0).Add(ResumeDelay)
 		if !f.Now.Before(at) {
 			return true, false, ""
@@ -60,6 +60,13 @@ func (f Fleet) gate(host, harness string) (open, one bool, why string) {
 		return false, false, fmt.Sprintf("%s on %s is at a usage limit with no known reset; the next probe is at %s", harness, host, next.UTC().Format(time.RFC3339))
 	}
 	return true, true, ""
+}
+
+// KnownReset reports whether resetsAt, a limit's reset in epoch seconds,
+// is known: later than ended, when the limit ended its attempt. Zero, a stale
+// reset or a skewed clock's is unknown.
+func KnownReset(resetsAt int64, ended time.Time) bool {
+	return resetsAt > ended.Unix()
 }
 
 // limitWait says why host × harness takes no task now for its usage limit,
@@ -96,13 +103,13 @@ func probeHit(v View, t Item) (Action, bool) {
 func limitNotes(v View) []Action {
 	var acts []Action
 	for _, l := range v.Fleet.Limits {
-		if l.ResetsAt > l.Ended.Unix() || l.Probes == 0 || v.Now.Sub(l.Since) < ProbeNote {
+		if KnownReset(l.ResetsAt, l.Ended) || l.Probes == 0 || v.Now.Sub(l.Since) < ProbeNote {
 			continue
 		}
 		acts = append(acts, notice(Item{}, fmt.Sprintf("limit-probes/%s/%s/%d", l.Host, l.Harness, l.Since.Unix()), fmt.Sprintf(
-			"%s on %s has been at a usage limit with no known reset since %s, and every probe since has hit it (%d); "+
+			"%s on %s has been at a usage limit with no known reset since %s, and every probe since has hit it; "+
 				"its tasks wait, or start on another host or harness with quota. Check that account's usage on %s.",
-			l.Harness, l.Host, l.Since.UTC().Format(time.RFC3339), l.Probes, l.Host)))
+			l.Harness, l.Host, l.Since.UTC().Format(time.RFC3339), l.Host)))
 	}
 	return acts
 }

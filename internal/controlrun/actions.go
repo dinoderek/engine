@@ -73,7 +73,7 @@ func (c *Coordinator) endAtLimit(a reconcile.Action) error {
 		return err
 	}
 	when := fmt.Sprintf("by a probe every %s, the reset being unknown", reconcile.ProbeEvery)
-	if at.ResetsAt > 0 {
+	if reconcile.KnownReset(at.ResetsAt, at.Ended) {
 		when = "at " + time.Unix(at.ResetsAt, 0).Add(reconcile.ResumeDelay).UTC().Format(time.RFC3339) + ", once the reset has passed"
 	}
 	return c.notice(a.Item, "limit-death/"+at.ID, fmt.Sprintf("%s; the task stays resumable and is dispatched again %s, from its own branch. "+

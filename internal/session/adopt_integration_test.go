@@ -197,4 +197,12 @@ func TestRemoveWorktreeKeepsAnAdoptedBranchTheReposReleaseDeleted(t *testing.T) 
 	if got := mustGit(t, clone.Path, "rev-parse", "refs/heads/task/r-5"); got != commit {
 		t.Errorf("branch at %q after the repo's release, want it restored at %s", got, commit)
 	}
+	// Restored with its mark, so the next attempt still adopts it.
+	if err := os.Remove(filepath.Join(clone.Path, "dev")); err != nil {
+		t.Fatal(err)
+	}
+	next, err := r.CreateWorktree(clone, 5, false, "r-5-a3")
+	if err != nil || !next.Adopted || next.Head != commit {
+		t.Errorf("the next attempt: %+v, %v; want the branch adopted at %s", next, err, commit)
+	}
 }

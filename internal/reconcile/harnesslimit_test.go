@@ -131,8 +131,13 @@ func TestOneNoteAfter12HoursOfFailedProbes(t *testing.T) {
 		t.Errorf("noted too soon:\n%s", got)
 	}
 	acts := Decide(when(v, ProbeNote))
-	if len(acts) != 1 || acts[0].Key != "limit-probes/devbox/claude/"+strconv.FormatInt(t0.Unix(), 10) || acts[0].Item != "" || !strings.Contains(acts[0].Text, "every probe since has hit it (23)") {
+	if len(acts) != 1 || acts[0].Key != "limit-probes/devbox/claude/"+strconv.FormatInt(t0.Unix(), 10) || acts[0].Item != "" || !strings.Contains(acts[0].Text, "every probe since has hit it;") {
 		t.Fatalf("got %+v", acts)
+	}
+	// Another failed probe sends the same note, so its key dedupes it.
+	v.Fleet.Limits[0].Probes++
+	if again := Decide(when(v, ProbeNote+time.Hour)); len(again) != 1 || again[0].Key != acts[0].Key || again[0].Text != acts[0].Text {
+		t.Errorf("the note changed with a probe: %+v", again)
 	}
 	// A known reset, or no probe yet: no note.
 	for _, edit := range []func(*View){
