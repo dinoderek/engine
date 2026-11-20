@@ -132,7 +132,7 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	if a.Role == "coordinator" && r.Version != item.Version {
 		return Response{}, problem(409, "card changed since placement; version is %d", item.Version)
 	}
-	if OwnQuestion(st, item.ID) > 0 || !hasEarlierAttempt(st, item.ID) && PlanQuestion(st, item.ID) > 0 {
+	if OwnQuestion(st, item.ID) > 0 || NewStartHold(st, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	if !approved(st, item) {
@@ -174,15 +174,16 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	return Response{Item: &item, Attempt: &at, Credential: secret}, nil
 }
 
-// hasEarlierAttempt reports whether an attempt of item exists: a dispatch of
-// it is a recovery, not a new start.
-func hasEarlierAttempt(st *State, item string) bool {
+// NewStartHold is the open plan question that holds task id from starting,
+// or 0. A task with an earlier attempt is a recovery, not a new start, and
+// is never held by it.
+func NewStartHold(st *State, id string) int {
 	for _, at := range st.Attempts {
-		if at.Item == item {
-			return true
+		if at.Item == id {
+			return 0
 		}
 	}
-	return false
+	return PlanQuestion(st, id)
 }
 
 func cutSlug(s string) (string, string, bool) {

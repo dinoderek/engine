@@ -39,6 +39,9 @@ type Item struct {
 	Vanished bool
 	// Question is the item's own unresolved operator question, or 0.
 	Question int
+	// PlanHold is the open plan question that keeps the task from a new
+	// start, or 0. A task with an earlier attempt is never held by it.
+	PlanHold int
 	// Blocked are the dependencies that are not done.
 	Blocked []string
 	// Resume is true when an earlier attempt opened a window, so the next

@@ -89,3 +89,16 @@ func TestAPlanQuestionDoesNotPreventAutomaticResume(t *testing.T) {
 		t.Fatal("a plan question held back a running task's quota recovery")
 	}
 }
+
+func TestAPlanQuestionKeepsANewTaskOutOfPlacement(t *testing.T) {
+	c, h, _, plan, task := setup(t)
+	execute(t, c.Service, control.Request{Op: "ask", ID: plan.ID, Body: "Pause to decide scope"})
+	pass(t, c)
+	st, err := c.Service.Store.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Attempts) != 0 || h.calls != 0 || st.Items[task.ID].State != "todo" {
+		t.Fatalf("a held task was placed: %d attempts, %d launches, %s", len(st.Attempts), h.calls, st.Items[task.ID].State)
+	}
+}
