@@ -44,7 +44,7 @@ The operator credential is an owner-only regular file. Every dispatch creates a 
 
 ## Updates and operator inbox
 
-Updates are immutable and ordered; read up to 200 after a cursor. Comments leave workflow state alone. A question atomically holds a task in `needs-human`: its own, or the asking task (the update's `task`) when a task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements and replies leave it unresolved. Resolution records the decision and atomically restores each held task's earlier state, unless another question holds it, its state changed or its execution ended. Unresolved questions block completion and merge checks; a plan's also block its tasks' state changes, planner handoff, child dispatch and automatic quota resume.
+Updates are immutable and ordered; read up to 200 after a cursor. Comments leave workflow state alone. A question atomically holds a task in `needs-human`: its own, or the asking task (the update's `task`) when a task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements and replies leave it unresolved. Resolution records the decision and atomically restores each held task's earlier state, unless another question holds it, its state changed or its execution ended. A task's own questions, including one it asked on its plan, block its state changes, completion, merge and quota resume. A plan's question blocks only planner handoff and the first dispatch of its tasks.
 
 Messages addressed to the operator appear in the cross-repository inbox. Informational messages leave the inbox on acknowledgement; questions leave on resolution. Idle, unrestricted sessions get wake-up pointers for others' messages on their item; tasks also for others' plan messages and resolutions, except coordinator notices and those to the operator. Messages persist when wake-up fails.
 
@@ -54,9 +54,9 @@ Messages addressed to the operator appear in the cross-repository inbox. Informa
 
 The process forwards only read operations (`list`, `plan-view`, `attempts`, `get`, `updates`, `session-view`) and answers GET and HEAD for a loopback host name on any port, so an SSH tunnel works. It sends `Cache-Control: no-store`. When the control server fails, the page keeps its last data, marked stale. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only the page's scripts.
 
-The per-plan view lists unfinished prerequisites, including other plans' tasks. A queued task's feedback is the plan's question. On both tabs, "Needs feedback" opens the question's thread at its update over the tab, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
+The per-plan view lists unfinished prerequisites, including other plans' tasks. A todo task waiting to start has the plan's question as feedback. On both tabs, "Needs feedback" opens the question's thread at its update over the tab, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
 
-Each task has one summary: done is done; failed and needs-human are blocked; an active attempt, or a running or in-review state, is in progress; an unfinished prerequisite or the plan's open question (as sessions report it) blocks it; todo under an approved plan is ready; anything else is blocked. Coordination does not change it.
+Each task has one summary: done is done; failed and needs-human are blocked; an active attempt, or a running or in-review state, is in progress; an unfinished prerequisite or a todo task under the plan's open question (its read's `question`) is blocked; todo under an approved plan is ready; anything else is blocked. Coordination does not change it.
 
 ## Session view
 
@@ -65,7 +65,7 @@ Each task has one summary: done is done; failed and needs-human are blocked; an 
 - `role` is `planner` for a plan and `executor` for a task.
 - `last_seen` is when a host last reported the window live; it survives `unknown` and `exited` observations.
 - `observed` is the harness's `working`, `waiting` or `limited`; `live` for an open window with no harness state; `exited` once a reachable host shows the window gone; otherwise `unknown`. An exited attempt stays listed until engine ends it.
-- `feedback` is the item's unresolved question, its own or its parent plan's. Waiting without one is not a feedback request.
+- `feedback` is the item's unresolved question, including one its session asked on its plan. Waiting without one is not a feedback request.
 - `latest` is the item's newest `say`, `ask`, `reply` or `resolved` update with a body, excluding coordinator notices. A task's preview never shows its plan's messages.
 
 Observations live in an in-memory cache keyed by attempt, so a request never contacts a host. Coordinator passes store their host reads, and a background loop refreshes stale ones, one read in flight per host. The cache drops ended and replaced attempts and starts empty with the server. An unreachable host, unreadable run records or an old observation give `unknown`; the timings are in `internal/controlrun/observe.go`.

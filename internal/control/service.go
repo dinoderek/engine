@@ -216,7 +216,7 @@ func (s Service) create(st *State, a Actor, r Request) (Response, error) {
 	if strings.TrimSpace(item.Title) == "" {
 		return Response{}, problem(400, "title is required")
 	}
-	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" {
+	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" || item.Question != nil {
 		return Response{}, problem(400, "server-owned fields cannot be set on creation")
 	}
 	if err := validateCreation(st, a, item); err != nil {

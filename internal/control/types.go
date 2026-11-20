@@ -34,6 +34,9 @@ type Item struct {
 	ApprovedVersion int  `json:"approved_version,omitempty"`
 	// Status is a plan's PlanStatus in read responses. It is never stored.
 	Status string `json:"status,omitempty"`
+	// Question is a plan's oldest open question in read responses, however
+	// it was asked. It is never stored.
+	Question *UpdateRef `json:"question,omitempty"`
 	// StoppedAt is when the operator last stopped this plan's coordination.
 	StoppedAt time.Time `json:"stopped_at,omitzero"`
 }
