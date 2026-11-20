@@ -30,6 +30,8 @@ type Coordinator struct {
 	Wake   func(reconcile.Session, string) error
 	// Observer, when set, keeps each pass's host reads for the session view.
 	Observer *Observer
+	// Board, when set, keeps each pass's fleet for the host-status op.
+	Board *HostBoard
 	// Ready, when set, probes each host's readiness for each coordinated
 	// repo; placement then skips a host until its probe passes.
 	Ready *Readiness
@@ -116,6 +118,7 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 		return err
 	}
 	c.Observer.Record(st, fleet)
+	c.Board.Record(st, fleet, c.Ready)
 	if !st.Items[id].Coordinating {
 		return nil
 	}

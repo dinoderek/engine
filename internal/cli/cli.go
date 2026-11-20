@@ -48,6 +48,9 @@ commands:
                             exits 1 while any item is open
   host <op> --json          run one of this host's ops for a caller on any host:
                             sync-repo, spawn, status, collect or release
+  host status --all [--json]
+                            every host's reachability, windows, quota and
+                            readiness, from the coordinator's latest pass
 `
 
 // Env is what a command reads and runs: the standard streams, the runners for

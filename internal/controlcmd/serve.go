@@ -111,15 +111,18 @@ func serveMain(args []string, e Env) int {
 	return 0
 }
 
-// wire connects the command service, the coordinator and the session view's observer.
+// wire connects the command service, the coordinator, the session view's
+// observer and the host-status board.
 func wire(store *control.Store, url string, e Env) (control.Service, *controlrun.Coordinator, *controlrun.Observer) {
 	service := control.Service{Store: store}
 	c := newCoordinator(service, url, e)
 	obs := newObserver(store, e)
 	service.Reconcile = c.ConfirmEnded
 	service.Observe = obs.Observation
+	board := &controlrun.HostBoard{}
+	service.Hosts = board.Status
 	c.Service = service
-	c.Observer = obs
+	c.Observer, c.Board = obs, board
 	return service, c, obs
 }
 

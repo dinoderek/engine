@@ -176,6 +176,8 @@ type Response struct {
 	Queue      []QueueEntry `json:"queue,omitempty"`
 	Sessions   []SessionRow `json:"sessions,omitempty"`
 	Credential string       `json:"credential,omitempty"`
+	// Fleet is the host-status op's reply.
+	Fleet *HostStatus `json:"fleet,omitempty"`
 }
 
 type receipt struct {
