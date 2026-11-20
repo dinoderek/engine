@@ -17,7 +17,6 @@ import (
 // The acceptance tests of usage limits, stopping a task, pane answers and
 // the fleet view, through Run against the operations fleet (opsfleet_test.go).
 
-// runVars are the variables a session's commands run with: its run's
 // hookWith runs one of the session's harness hooks on the event in, as
 // Claude Code runs it in the session's pane; a hook that starts a
 // background entry runs it to its end first.

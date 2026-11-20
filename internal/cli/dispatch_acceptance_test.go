@@ -184,21 +184,22 @@ func TestTmuxRunsFromHomeAndADeadServerDirectoryIsSkipped(t *testing.T) {
 
 	f := newOpsFleet(t, "mac", "box")
 	f.pass() // readiness
-	mac := f.hosts["mac"]
+	// box, first by name, is the host placement would otherwise pick.
+	box := f.hosts["box"]
 	gone := filepath.Join(t.TempDir(), "removed-worktree")
-	mac.tmux.mu.Lock()
-	mac.tmux.up, mac.tmux.cwd = true, gone
-	mac.tmux.mu.Unlock()
+	box.tmux.mu.Lock()
+	box.tmux.up, box.tmux.cwd = true, gone
+	box.tmux.mu.Unlock()
 	task := f.task("Add a flag")
 	f.passes(2)
-	if at := f.current(task); at.Host != "box" || at.State != "running" {
-		t.Fatalf("the task went to %s (%s); want box", at.Host, at.State)
+	if at := f.current(task); at.Host != "mac" || at.State != "running" {
+		t.Fatalf("the task went to %s (%s); want mac", at.Host, at.State)
 	}
-	if live := mac.tmux.live(); len(live) != 0 {
-		t.Errorf("mac opened %q", live)
+	if live := box.tmux.live(); len(live) != 0 {
+		t.Errorf("box opened %q", live)
 	}
 	_, inbox, _ := f.engine("inbox", "--operator")
-	if n := strings.Count(inbox, "Host mac is unready: tmux server 4100 runs in "+gone); n != 1 {
+	if n := strings.Count(inbox, "Host box is unready: tmux server 4101 runs in "+gone); n != 1 {
 		t.Errorf("the operator's inbox names the dead server %d time(s):\n%s", n, inbox)
 	}
 	wantIn(t, inbox, "tmux kill-server")
@@ -250,7 +251,7 @@ func TestAnEarlyDeathRetriesOnceThenFails(t *testing.T) {
 	}
 	notices := f.noticesOn(task.ID)
 	if len(containing(notices, "dispatched again once")) != 1 {
-		t.Errorf("the first death's notice: %q", notices)
+		t.Fatalf("the first death's notice: %q", notices)
 	}
 	last := notices[len(notices)-1]
 	wantIn(t, last, "second time", "tmux: server exited unexpectedly", "claude: command not found")
@@ -293,44 +294,45 @@ func probes(h *opsHost) int {
 func TestAFailingReadinessProbeSkipsTheHostUntilANewHead(t *testing.T) {
 	f := newOpsFleet(t, "mac", "box")
 	mac, box := f.hosts["mac"], f.hosts["box"]
-	doctor := filepath.Join(mac.home, "doctor.fail")
+	// box, first by name, is the host placement would otherwise pick.
+	doctor := filepath.Join(box.home, "doctor.fail")
 	writeFile(t, doctor, "go: go1.27.2 is not installed; run ./dev doctor --install\n")
 	f.pass() // readiness
 	task := f.task("Add a flag")
 	f.passes(3)
-	if at := f.current(task); at.Host != "box" || at.State != "running" {
-		t.Fatalf("the task went to %s (%s); want box", at.Host, at.State)
+	if at := f.current(task); at.Host != "mac" || at.State != "running" {
+		t.Fatalf("the task went to %s (%s); want mac", at.Host, at.State)
 	}
-	notes := containing(f.noticesOn(f.repo.ID), "Host mac is unready")
+	notes := containing(f.noticesOn(f.repo.ID), "Host box is unready")
 	if len(notes) != 1 {
 		t.Fatalf("readiness notes %q; want one", notes)
 	}
-	wantIn(t, notes[0], "Host mac is unready for fleet/app: `./dev doctor` failed", "go: go1.27.2 is not installed")
-	if len(containing(f.noticesOn(f.repo.ID), "Host box")) != 0 {
-		t.Errorf("box, which is ready, has a note")
+	wantIn(t, notes[0], "Host box is unready for fleet/app: `./dev doctor` failed", "go: go1.27.2 is not installed")
+	if len(containing(f.noticesOn(f.repo.ID), "Host mac")) != 0 {
+		t.Errorf("mac, which is ready, has a note")
 	}
-	export := hosts.PathExport([]string{filepath.Join(box.home, "fakebin")})
-	if w := box.tmux.window(opsWindow(task)); w == nil || !strings.Contains(w.command, export) {
+	export := hosts.PathExport([]string{filepath.Join(mac.home, "fakebin")})
+	if w := mac.tmux.window(opsWindow(task)); w == nil || !strings.Contains(w.command, export) {
 		t.Errorf("the session's command lacks the PATH prefix %q: %+v", export, w)
 	}
 
 	if err := os.Remove(doctor); err != nil {
 		t.Fatal(err)
 	}
-	before := probes(mac)
+	before := probes(box)
 	f.clock.add(controlrun.ReadyEvery + time.Minute)
 	f.passes(2)
-	if probes(mac) != before {
-		t.Errorf("mac probed again on the same head")
+	if probes(box) != before {
+		t.Errorf("box probed again on the same head")
 	}
 	_, status, _ := f.engine("host", "status", "--all")
-	wantRow(t, status, "mac", "yes", "2 of 2 (heavy 2 of 2)", "-", "unready: fleet/app: ./dev doctor failed (the readiness note has the output)")
+	wantRow(t, status, "box", "yes", "2 of 2 (heavy 2 of 2)", "-", "unready: fleet/app: ./dev doctor failed (the readiness note has the output)")
 	f.pushMain("Change elsewhere")
 	f.clock.add(controlrun.ReadyEvery + time.Minute)
 	f.passes(2)
-	if probes(mac) != before+1 {
-		t.Fatalf("mac was probed %d time(s) on the new head; want 1", probes(mac)-before)
+	if probes(box) != before+1 {
+		t.Fatalf("box was probed %d time(s) on the new head; want 1", probes(box)-before)
 	}
 	_, status, _ = f.engine("host", "status", "--all")
-	wantRow(t, status, "mac", "yes", "2 of 2 (heavy 2 of 2)", "-", "ready")
+	wantRow(t, status, "box", "yes", "2 of 2 (heavy 2 of 2)", "-", "ready")
 }

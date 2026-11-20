@@ -157,13 +157,18 @@ func (g *fakeGitHub) merge(args []string) (string, error) {
 	flag := func(name string) string { return args[slices.Index(args, name)+1] }
 	g.mu.Lock()
 	p := g.prs[n]
+	open := p != nil && p.State == "OPEN" && p.Head == flag("--match-head-commit")
+	head := ""
+	if open {
+		head = p.Head
+	}
 	g.mu.Unlock()
-	if p == nil || p.State != "OPEN" || p.Head != flag("--match-head-commit") || !slices.Contains(args, "--squash") {
+	if !open || !slices.Contains(args, "--squash") {
 		return "", fmt.Errorf("gh pr merge %d: refused %q", n, args)
 	}
 	msg := filepath.Join(g.f.t.TempDir(), "message")
 	writeFile(g.f.t, msg, flag("--subject")+"\n\n"+flag("--body")+"\n")
-	commit := g.originGit("commit-tree", p.Head+"^{tree}", "-p", "main", "-F", msg)
+	commit := g.originGit("commit-tree", head+"^{tree}", "-p", "main", "-F", msg)
 	g.originGit("update-ref", "refs/heads/main", commit)
 	_ = os.Remove(msg)
 	g.mu.Lock()
