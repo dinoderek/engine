@@ -60,7 +60,7 @@ Each task has one summary: done is done; failed and needs-human are blocked; an 
 
 ## Session view
 
-`session-view`, an operator-only read, returns one row per item's current, unended or vanished attempt, by item number. The fields in `internal/control/sessions.go` are the whole contract; credentials, screens, run files and bodies never join them.
+`session-view`, an operator-only read, returns one row per item's current, unended or resumable attempt, by item number. The fields in `internal/control/sessions.go` are the whole contract; credentials, screens, run files and bodies never join them.
 
 - `role` is `planner` for a plan and `executor` for a task.
 - `last_seen` is when a host last reported the window live; it survives `unknown` and `exited` observations.

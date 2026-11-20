@@ -34,8 +34,8 @@ type Item struct {
 	// Session is the current attempt's session as the hosts show it, nil
 	// when the item has no attempt or its attempt vanished.
 	Session *Session
-	// Vanished is true when the current attempt ended vanished: the task
-	// stays resumable.
+	// Vanished is true when the current attempt ended vanished or in an
+	// early death: the task is dispatched again.
 	Vanished bool
 	// Question is the item's own unresolved operator question, or 0.
 	Question int
@@ -95,6 +95,8 @@ type Action struct {
 	// Text says why: the notice's body, the ended attempt's reason, or the
 	// log line.
 	Text string
+	// Tail is the pane log's end an EndAttempt records.
+	Tail string
 	// Host, Harness and Resume are where and how a Dispatch launches.
 	Host    string
 	Harness string

@@ -116,6 +116,7 @@ func TestRetriedTaskDispatchesAsAResume(t *testing.T) {
 	if h.launches[first.RunID].Spawn.Resume {
 		t.Fatal("a first attempt dispatched as a resume")
 	}
+	claim(t, c, task)
 	h.status.Windows[0].Alive = false
 	if err := c.ConfirmEnded(first.ID); err != nil {
 		t.Fatal(err)
@@ -185,6 +186,7 @@ func TestDeathAfterCoordinationRestartedStillFails(t *testing.T) {
 	now = now.Add(time.Minute)
 	execute(t, c.Service, control.Request{Op: "run", ID: plan.ID})
 	pass(t, c)
+	claim(t, c, task)
 	h.status.Windows[0].Alive = false
 	now = now.Add(time.Minute)
 	pass(t, c)
