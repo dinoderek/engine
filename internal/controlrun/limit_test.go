@@ -79,7 +79,7 @@ func TestAProbeThatHitsTheLimitAgainEndsAtOnceAndQuietly(t *testing.T) {
 	if !first.Limited || first.Reason != control.EndVanished {
 		t.Fatalf("the first death: %+v", first)
 	}
-	if notices := taskNotices(c, task); len(notices) != 1 || !strings.Contains(notices[0], "by a probe every 30m0s") {
+	if notices := taskNotices(c, task); len(notices) != 1 || !strings.Contains(notices[0], "by a probe every 30 minutes") {
 		t.Fatalf("notices %q", notices)
 	}
 	at(c, 29*time.Minute)

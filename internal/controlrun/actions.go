@@ -72,7 +72,7 @@ func (c *Coordinator) endAtLimit(a reconcile.Action) error {
 	if err != nil || a.Probe {
 		return err
 	}
-	when := fmt.Sprintf("by a probe every %s, the reset being unknown", reconcile.ProbeEvery)
+	when := fmt.Sprintf("by a probe every %d minutes, the reset being unknown", int(reconcile.ProbeEvery.Minutes()))
 	if reconcile.KnownReset(at.ResetsAt, at.Ended) {
 		when = "at " + time.Unix(at.ResetsAt, 0).Add(reconcile.ResumeDelay).UTC().Format(time.RFC3339) + ", once the reset has passed"
 	}
