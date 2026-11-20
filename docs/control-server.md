@@ -56,7 +56,7 @@ The process forwards only read operations (`list`, `plan-view`, `attempts`, `get
 
 The per-plan view lists unfinished prerequisites, including other plans' tasks. A queued task's feedback is the plan's question. On both tabs, "Needs feedback" opens the question's thread at its update over the tab, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
 
-Each task has one summary: done is done; failed and needs-human are blocked; an active attempt, or a running or in-review state, is in progress; an unfinished prerequisite or the plan's open question (as sessions report it) blocks it; todo under an approved plan is ready; anything else is blocked. Coordination does not change it.
+Each task has one summary: done is done; failed and needs-human are blocked; an active attempt, or a running or in-review state, is in progress; an unfinished prerequisite or a todo task waiting under the plan's open question (the plan read's `question`) is blocked; todo under an approved plan is ready; anything else is blocked. Coordination does not change it.
 
 ## Session view
 

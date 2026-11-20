@@ -21,7 +21,7 @@ func PlanStatus(plan Item, tasks []Item, asked bool) string {
 }
 
 // withStatus returns a read response's copy of item, with a plan's status
-// filled in. The status is never stored.
+// and open question filled in. Neither is ever stored.
 func withStatus(st *State, item Item) Item {
 	if item.Kind != "plan" {
 		return item
@@ -32,6 +32,10 @@ func withStatus(st *State, item Item) Item {
 			tasks = append(tasks, t)
 		}
 	}
-	item.Status = PlanStatus(item, tasks, OwnQuestion(st, item.ID) > 0)
+	id := OwnQuestion(st, item.ID)
+	item.Status = PlanStatus(item, tasks, id > 0)
+	if id > 0 {
+		item.Question = updateRef(st.Updates[id-1])
+	}
 	return item
 }

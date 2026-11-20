@@ -133,7 +133,7 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 	out := PlanDetail{Plan: PlanRow{ID: plan.ID, Repo: plan.Repo, Slug: items[plan.Repo].Slug, Title: plan.Title, State: cmp.Or(plan.Status, plan.State)}, Tasks: []TaskRow{}}
 	hosts := activeHosts(live)
 	feedback := feedbackByTask(sessions)
-	asked := planQuestion(id, sessions)
+	asked := plan.Question
 	dispatchable := plan.ApprovedVersion > 0 && plan.State != "prepare"
 	for _, t := range view {
 		if t.Kind != "task" || t.Plan != id {
@@ -171,17 +171,6 @@ func activeHosts(attempts []control.Attempt) map[string]string {
 		}
 	}
 	return out
-}
-
-// planQuestion is the plan's own unresolved question, as any of its
-// sessions reports it.
-func planQuestion(plan string, rows []control.SessionRow) *control.UpdateRef {
-	for _, r := range rows {
-		if r.Feedback != nil && r.Feedback.Item == plan {
-			return r.Feedback
-		}
-	}
-	return nil
 }
 
 // group maps a task's workflow state, live attempt, prerequisites, its plan's

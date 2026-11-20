@@ -161,3 +161,30 @@ func rawRecords(t *testing.T, path string) map[string]string {
 	}
 	return raw
 }
+
+func TestAPlanReadCarriesItsOpenQuestionWithNoSessionAsking(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	if q := call(t, s, op, Request{Op: "get", ID: plan.ID}).Item.Question; q != nil {
+		t.Fatalf("question before any ask: %+v", q)
+	}
+	asked := call(t, s, op, Request{Op: "ask", ID: plan.ID, Body: "Pause to decide scope"}).Updates[0]
+	for name, got := range map[string]*UpdateRef{
+		"get":       call(t, s, op, Request{Op: "get", ID: plan.ID}).Item.Question,
+		"plan-view": call(t, s, op, Request{Op: "plan-view", ID: plan.ID}).Items[0].Question,
+	} {
+		if got == nil || got.Update != asked.ID || got.Item != plan.ID {
+			t.Fatalf("%s question = %+v, want update %d", name, got, asked.ID)
+		}
+	}
+	if q := call(t, s, op, Request{Op: "get", ID: task.ID}).Item.Question; q != nil {
+		t.Fatalf("a task carries its plan's question: %+v", q)
+	}
+	reject(t, s, op, Request{Op: "create", Item: Item{Kind: "plan", Repo: repo.ID, Title: "Forged", Question: &UpdateRef{Update: 1}}}, 400)
+	call(t, s, op, Request{Op: "resolve", ReplyTo: asked.ID, Body: "Go on"})
+	if q := call(t, s, op, Request{Op: "get", ID: plan.ID}).Item.Question; q != nil {
+		t.Fatalf("question after resolution: %+v", q)
+	}
+}
