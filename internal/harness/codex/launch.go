@@ -68,7 +68,8 @@ func (l launcher) Args(s harness.Launch) string {
 // sessionVars is the shell for the -c value that gives a joined session's
 // commands what the window exports: the agent runs in the daemon, whose
 // environment has none of it. TMUX and TMUX_PANE, which the session closes
-// its own window with, come from the window's shell as it starts.
+// its own window with, come from the window's shell as it starts, and so
+// does PATH when the host puts directories first on it.
 func sessionVars(s harness.Launch) string {
 	vars := []string{session.RunDirVar + "=" + TOMLString(s.RunDir), session.HarnessVar + "=" + TOMLString(Name)}
 	if s.ServerURL != "" {
@@ -79,6 +80,10 @@ func sessionVars(s harness.Launch) string {
 	if s.Unattended {
 		vars = append(vars, session.UnattendedVar+`="1"`)
 	}
+	path := ""
+	if len(s.Path) > 0 {
+		path = hosts.ShellWord(`",PATH="`) + `"$PATH"`
+	}
 	return hosts.ShellWord("shell_environment_policy.set={"+strings.Join(vars, ",")+`,TMUX="`) + `"$TMUX"` +
-		hosts.ShellWord(`",TMUX_PANE="`) + `"$TMUX_PANE"` + hosts.ShellWord(`"}`)
+		hosts.ShellWord(`",TMUX_PANE="`) + `"$TMUX_PANE"` + path + hosts.ShellWord(`"}`)
 }

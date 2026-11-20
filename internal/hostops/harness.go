@@ -51,7 +51,7 @@ type launch struct {
 
 // harnessLaunch is l as the adapter takes it.
 func (l launch) harnessLaunch() harness.Launch {
-	out := harness.Launch{Line: l.line, Dir: l.dir, RunDir: l.runDir, Kickoff: l.kickoff, Unattended: l.mode == HandsOff, Joined: l.joined}
+	out := harness.Launch{Line: l.line, Dir: l.dir, RunDir: l.runDir, Kickoff: l.kickoff, Unattended: l.mode == HandsOff, Joined: l.joined, Path: l.path}
 	if l.control != nil {
 		out.ServerURL, out.TokenFile, out.Attempt = l.control.URL, filepath.Join(l.runDir, "server-token"), l.control.Attempt
 	}
