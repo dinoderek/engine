@@ -54,7 +54,7 @@ const SummaryRunes = 240
 var humanKinds = []string{"say", "ask", "reply", "resolved"}
 
 // sessionView projects every current, unended attempt, and every vanished
-// one awaiting its resume, from one snapshot. Host observations come only
+// or early-death one awaiting its dispatch, from one snapshot. Host observations come only
 // from the cache, so a request never probes a host.
 func (s Service) sessionView(st *State, a Actor) (Response, error) {
 	if err := operator(a); err != nil {
