@@ -80,12 +80,13 @@ func TestReconcileLeavesAResumableTaskForAResumeAndFailsTheRest(t *testing.T) {
 	}
 	reject(t, s, op, Request{Op: "claim", ID: task.ID, Body: "devbox", State: "claude"}, 409)
 	call(t, s, op, Request{Op: "resolve", ReplyTo: question.ID, Body: "The second one."})
-	_, resumed := dispatch(t, s, *current)
+	worker, resumed := dispatch(t, s, *current)
 	if resumed.Item.State != "running" || resumed.Attempt.ID == out.Attempt.ID {
 		t.Fatalf("an answered, vanished task was not dispatched again: %+v", resumed.Item)
 	}
 	launched(t, s, resumed.Attempt.ID)
 	seenLive(t, s, resumed.Attempt.ID)
+	call(t, s, worker, Request{Op: "say", ID: task.ID, Body: "started"})
 	failed := call(t, s, op, Request{Op: "attempt-reconcile", ID: resumed.Attempt.ID, Body: "crashed"}).Attempt
 	current = call(t, s, op, Request{Op: "get", ID: task.ID}).Item
 	if failed.Reason != EndFailed || current.State != "failed" {
@@ -115,15 +116,15 @@ func TestEndDeadIsIdempotentAndRefusesAnUnknownAttempt(t *testing.T) {
 	task := newTask(t, s, repo.ID, plan.ID)
 	approve(t, s, plan)
 	_, out := dispatch(t, s, task)
-	if _, err := s.EndDead("absent", "gone"); err == nil {
+	if _, err := s.EndDead("absent", "gone", ""); err == nil {
 		t.Fatal("ended an unknown attempt")
 	}
-	first, err := s.EndDead(out.Attempt.ID, "gone")
-	if err != nil || first.Reason != EndFailed {
+	first, err := s.EndDead(out.Attempt.ID, "gone", "")
+	if err != nil || first.Reason != EndEarlyDeath {
 		t.Fatalf("%v %+v", err, first)
 	}
-	second, err := s.EndDead(out.Attempt.ID, "gone")
-	if err != nil || !second.Ended.Equal(first.Ended) || second.Reason != EndFailed {
+	second, err := s.EndDead(out.Attempt.ID, "gone", "")
+	if err != nil || !second.Ended.Equal(first.Ended) || second.Reason != EndEarlyDeath {
 		t.Fatalf("ending twice changed the attempt: %v %+v", err, second)
 	}
 }

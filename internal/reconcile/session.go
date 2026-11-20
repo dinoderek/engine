@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 )
 
 // The waits a pass acts on.
 const (
 	// ClaimWait is how long a started session has to claim its task.
-	ClaimWait = 5 * time.Minute
+	ClaimWait = control.ClaimWait
 	// StallWait is how long a session may wait for input outside a hard stop.
 	StallWait = 10 * time.Minute
 	// DenialLead is how long before a wait was first seen a permission
@@ -69,6 +70,9 @@ type Session struct {
 	// Screen is the window's last lines, when its host sent them: it does
 	// for a window whose session is not working.
 	Screen string
+	// PaneTail is the end of the session's pane log, which its host shows
+	// for a run whose window is gone or dead.
+	PaneTail string
 	// Denial is the newest entry of a waiting session's permission log,
 	// when that entry is a denial.
 	Denial *hostops.Denial

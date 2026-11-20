@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
@@ -13,6 +14,15 @@ import (
 
 // ScreenLines is how much of a window's screen status returns.
 const ScreenLines = 20
+
+// PaneTailLines and PaneTailAge bound the pane log tail status returns: how
+// many lines, and how recently the log was last written. The newest run of
+// every session name is listed, so the tail is limited to a run that just
+// ended.
+const (
+	PaneTailLines = 20
+	PaneTailAge   = time.Hour
+)
 
 // Status is status's reply: what this host's sessions are doing now.
 type Status struct {
@@ -77,6 +87,9 @@ type Run struct {
 	Name   string         `json:"name"`
 	Dir    string         `json:"dir"`
 	Record session.Record `json:"run"`
+	// PaneTail is the last PaneTailLines lines of the run's pane log, for a
+	// run with no live window whose log was written within PaneTailAge.
+	PaneTail string `json:"pane_tail,omitempty"`
 }
 
 // ReadStatus reads this host's windows and the state of each, each harness's
@@ -133,11 +146,27 @@ func ReadStatus(d Deps) (Status, error) {
 	live, heavy := session.SlotsHeld(windows, runs)
 	s.FreeSlots = max(s.Slots-live, 0)
 	s.FreeHeavySlots = min(max(s.HeavySlots-heavy, 0), s.FreeSlots)
-	for name, r := range runs {
-		s.Runs = append(s.Runs, Run{Name: name, Dir: r.Dir, Record: r.Record})
-	}
-	slices.SortFunc(s.Runs, func(a, b Run) int { return strings.Compare(a.Name, b.Name) })
+	s.Runs = d.listRuns(runs, s.Windows)
 	return s, nil
+}
+
+// listRuns is the newest run of each session name, sorted by name. A run
+// with no live window carries the tail of its pane log.
+func (d Deps) listRuns(runs map[string]session.Run, windows []Window) []Run {
+	alive := map[string]bool{}
+	for _, w := range windows {
+		alive[w.Name] = alive[w.Name] || w.Alive
+	}
+	out := []Run{}
+	for name, r := range runs {
+		run := Run{Name: name, Dir: r.Dir, Record: r.Record}
+		if !alive[name] {
+			run.PaneTail = d.paneTail(r.Dir)
+		}
+		out = append(out, run)
+	}
+	slices.SortFunc(out, func(a, b Run) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }
 
 // observe has each adapter read its harness on this host, given the newest

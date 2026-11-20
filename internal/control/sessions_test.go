@@ -217,11 +217,12 @@ func TestSessionViewKeepsAVanishedAttemptUntilItsResume(t *testing.T) {
 	failed := newTask(t, s, repo.ID, plan.ID)
 	approve(t, s, plan)
 	a, out := dispatch(t, s, task)
-	_, other := dispatch(t, s, failed)
+	otherWorker, other := dispatch(t, s, failed)
 	launched(t, s, out.Attempt.ID)
 	launched(t, s, other.Attempt.ID)
 	question := call(t, s, a, Request{Op: "ask", ID: task.ID, Body: "Which API?"}).Updates[0]
 	seenLive(t, s, out.Attempt.ID)
+	call(t, s, otherWorker, Request{Op: "say", ID: failed.ID, Body: "started"})
 	call(t, s, op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "host rebooted"})
 	call(t, s, op, Request{Op: "attempt-reconcile", ID: other.Attempt.ID, Body: "crashed"})
 	rows := sessionRows(t, s)

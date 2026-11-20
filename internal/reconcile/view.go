@@ -93,6 +93,8 @@ type Action struct {
 	// Text says why: the notice's body, the ended attempt's reason, or the
 	// log line.
 	Text string
+	// Tail is the pane log's end an EndAttempt records.
+	Tail string
 	// Host, Harness and Resume are where and how a Dispatch launches.
 	Host    string
 	Harness string

@@ -99,7 +99,7 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 		}
 		for _, r := range h.Status.Runs {
 			if r.Name == s.Name && r.Record.RunID == at.RunID {
-				s.Worktree, s.Branch = r.Record.Worktree, r.Record.Branch
+				s.Worktree, s.Branch, s.PaneTail = r.Record.Worktree, r.Record.Branch, r.PaneTail
 			}
 		}
 		if w, ok := matchWindow(at, h.Status, s.Name); ok {
