@@ -145,7 +145,7 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 		return "@9 %9\n", nil
 	case "display-message":
 		if f.serverPid == "" {
-			return "", &session.ExitError{Command: "tmux display-message", Code: 1}
+			return "", &session.ExitError{Command: "tmux display-message", Code: 1, Stderr: "no server running on /tmp/tmux-1/default"}
 		}
 		return f.serverPid + "\n", nil
 	case "split-window":

@@ -121,6 +121,8 @@ func TestServerPid(t *testing.T) {
 	}{
 		{"a server", "4242\n", nil, 4242, true, false},
 		{"no server", "", fail(1, "no server running"), 0, false, false},
+		{"no socket", "", fail(1, "error connecting to /tmp/tmux-1/default (No such file or directory)"), 0, false, false},
+		{"a socket tmux may not use", "", fail(1, "error connecting to /tmp/tmux-1/default (Permission denied)"), 0, false, true},
 		{"tmux cannot run", "", errors.New("tmux: not found"), 0, false, true},
 		{"garbage", "none\n", nil, 0, false, true},
 	} {

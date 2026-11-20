@@ -131,7 +131,7 @@ a short delay: input boxes can swallow a newline sent with the text.
 **Working directory.** Every tmux command runs from `$HOME`, so a server
 engine starts never lives in a worktree that is later removed, failing every
 later window. Host status
-reports an older server in that state as `tmux_cwd_gone`, with its restart
+reports a server in that state as `tmux_cwd_gone`, with its restart
 command, and placement skips the host. Engine never kills a server with sessions.
 
 **Creation.** A per-server lock, `tmux-<socket>.lock` in

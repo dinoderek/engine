@@ -97,11 +97,18 @@ func (t *Tmux) serverState() string {
 	return strings.TrimSpace(out)
 }
 
+// noServer reads tmux's complaint when no server answers: none is running or
+// its socket does not exist. Any other failure, such as a permission error on
+// the socket, is not "no server".
+func noServer(stderr string) bool {
+	return strings.Contains(stderr, "no server running") || strings.Contains(stderr, "No such file or directory")
+}
+
 // ServerPid is the pid of the tmux server, and false when no server runs.
 func (t *Tmux) ServerPid() (int, bool, error) {
 	out, err := t.tmux("display-message", "-p", "#{pid}")
 	var exit *ExitError
-	if errors.As(err, &exit) {
+	if errors.As(err, &exit) && noServer(exit.Stderr) {
 		return 0, false, nil
 	}
 	if err != nil {
