@@ -118,3 +118,18 @@ func TestTypedLogsTheTextsHashOnTheHost(t *testing.T) {
 		t.Fatal("a client without the typed op logged")
 	}
 }
+
+func TestTypedOnAHostThatPredatesTheOpGoesAhead(t *testing.T) {
+	reply := func(failure string) SSH {
+		return SSH{Name: "devbox", Address: "devbox", Exec: func(_ io.Reader, out, _ io.Writer, _ string, _ ...string) (int, error) {
+			_, err := io.WriteString(out, `{`+envelope+`,`+failure+`}`)
+			return 1, err
+		}}
+	}
+	if err := Typed(reply(`"error":"unknown op \"typed\"; nothing was changed","refused":true`), "r-7-1", "continue"); err != nil {
+		t.Errorf("an engine with no typed op, and so no prompt hook: %v", err)
+	}
+	if err := Typed(reply(`"error":"no run directory /x; nothing was changed","refused":true`), "r-7-1", "continue"); err == nil {
+		t.Error("a host that refused to log the text let it be typed")
+	}
+}

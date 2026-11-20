@@ -2,6 +2,7 @@ package remote
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -93,7 +94,8 @@ func RunReady(client Client, repo string, out io.Writer) (bool, error) {
 // Typed logs, on the session's host, the hash of text about to be typed
 // into the session of the run, in the run's typed-text log (the typed op).
 // Text whose hash is not logged must not be typed: the run's prompt hook
-// would take it for the operator's.
+// would take it for the operator's. A host whose engine predates the op
+// has no prompt hook either, so its refusal of the op is no error.
 func Typed(client Client, runID, text string) error {
 	hash := session.TextHash(text)
 	switch c := client.(type) {
@@ -102,7 +104,12 @@ func Typed(client Client, runID, text string) error {
 		return err
 	case SSH:
 		var reply hostops.Typed
-		return c.call("typed", []string{"--run-id", runID, "--sha256", hash}, "", &reply)
+		err := c.call("typed", []string{"--run-id", runID, "--sha256", hash}, "", &reply)
+		var refused *hostops.RefusedError
+		if errors.As(err, &refused) && refused.Reason == `unknown op "typed"` {
+			return nil
+		}
+		return err
 	default:
 		if c, ok := client.(interface {
 			Typed(runID, hash string) error

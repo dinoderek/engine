@@ -17,7 +17,8 @@ logs the text's SHA-256, trimmed of surrounding white space, in the run's
 `typed.jsonl`: the spawn logs the kickoff before the window opens, and the
 coordinator logs each wake and `continue` through the host's `typed` op
 before typing it. A text it cannot log it does not type, and a spawn that
-cannot log its kickoff fails.
+cannot log its kickoff fails. A host whose engine predates the `typed` op
+has no prompt hook either, so its refusal of the op lets the text through.
 
 In a server run, the hook logs every submitted prompt in `prompts.jsonl`,
 by hash; elsewhere it does nothing. Each logged hash accounts for one
