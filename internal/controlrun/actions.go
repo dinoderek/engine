@@ -156,10 +156,7 @@ func (c *Coordinator) resume(a reconcile.Action, cfg *hosts.Config) error {
 	if err != nil || !eligible {
 		return err
 	}
-	if err := c.typed(cfg, at, ResumeText); err != nil {
-		return err
-	}
-	return c.Resume(a.Session)
+	return c.Resume(a.Session, func(text string) error { return c.typed(cfg, at, text) })
 }
 
 // resumed reports whether at was already told to continue: once per known

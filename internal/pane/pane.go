@@ -239,7 +239,7 @@ func (p Poster) inTranscript(q pending) bool {
 		if q.Transcript != "" {
 			prompts, _ := p.Hooks.Prompts(q.Transcript) // unreadable is not found
 			for _, got := range prompts {
-				if strings.Contains(got, want) {
+				if strings.TrimSpace(got) == want {
 					return true
 				}
 			}

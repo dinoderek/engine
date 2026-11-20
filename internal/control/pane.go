@@ -76,8 +76,8 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 		if question > 0 {
 			outcome = fmt.Sprintf("resolved question %d", question)
 		}
-		note := fmt.Sprintf("Pane input %d on %s may not be the operator's: %s. It is recorded and %s; check that you typed it, and reopen the question if you did not.",
-			u.ID, item, strings.Join(doubts, ", and "), outcome)
+		note := fmt.Sprintf("Pane input %d on %s may not be the operator's: %s. It is recorded and %s. If you did not type it, stop the task (engine task stop %s) or tell its session your answer (engine tell %s).",
+			u.ID, item, strings.Join(doubts, ", and "), outcome, item, item)
 		out.Updates = append(out.Updates, st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{ID: item, Recipient: "operator"}, "say", note, s.now()))
 	}
 	return out, nil
@@ -90,13 +90,14 @@ const clockSkew = 30 * time.Second
 
 // paneQuestion is the open question a pane input submitted at at answers,
 // or 0: of the open questions that hold item and were asked before at, the
-// oldest the session asked itself, else the oldest. A question asked after
+// oldest the session asked itself, else the oldest. A plan's planner never
+// answers a question one of its tasks asked on the plan. A question asked after
 // the text was typed is not its answer. A zero at bounds nothing.
 func paneQuestion(st *State, a Actor, item string, at time.Time) int {
 	other := 0
 	for _, u := range st.Updates {
-		if !u.RequiresReply || u.Item != item && u.Task != item || resolved(st, u.ID) {
-			continue
+		if !u.RequiresReply || u.Item != item && u.Task != item || u.Task != "" && u.Task != item || resolved(st, u.ID) {
+			continue // a task's question on its plan holds that task, not the plan's planner
 		}
 		if !at.IsZero() && u.At.After(at.Add(clockSkew)) {
 			continue

@@ -105,6 +105,9 @@ func TestAPaneAnswerTheHookDidNotVouchForResolvesWithOneNote(t *testing.T) {
 			if len(n) != 1 || !strings.Contains(n[0].Body, tc.reason) || !strings.Contains(n[0].Body, fmt.Sprintf("resolved question %d", question.ID)) {
 				t.Fatalf("notes = %+v, want one naming %q", n, tc.reason)
 			}
+			if !strings.Contains(n[0].Body, "engine task stop "+task.ID) || !strings.Contains(n[0].Body, "engine tell "+task.ID) {
+				t.Errorf("note %q names no action the operator can take", n[0].Body)
+			}
 			if n[0].ID != out.Updates[len(out.Updates)-1].ID {
 				t.Error("the note is not in the answer's transaction")
 			}
@@ -221,5 +224,31 @@ func TestAPaneAnswerPrefersTheSessionsOwnQuestion(t *testing.T) {
 	out := call(t, s, planner, Request{Op: "pane-input", Body: "Yes, split it"})
 	if out.Updates[0].ReplyTo != own.ID {
 		t.Errorf("the planner's pane answer resolved %d, want its own question %d, not the task's %d", out.Updates[0].ReplyTo, own.ID, theirs.ID)
+	}
+}
+
+func TestAPlannersPaneInputNeverAnswersATasksPlanQuestion(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	asker, _ := dispatch(t, s, task)
+	theirs := call(t, s, asker, Request{Op: "ask", ID: plan.ID, Body: "Is main red?"}).Updates[0]
+	planner := Actor{Name: "a99", Role: "worker", Attempt: "a99"}
+	if err := s.Store.Transaction(func(st *State) error {
+		st.Attempts[planner.Attempt] = Attempt{ID: planner.Attempt, Item: plan.ID, State: "running"}
+		p := st.Items[plan.ID]
+		p.Attempt = planner.Attempt
+		st.Items[plan.ID] = p
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	out := call(t, s, planner, Request{Op: "pane-input", Body: "Unrelated note"})
+	if out.Updates[0].Kind != KindPaneMessage {
+		t.Errorf("the planner's pane input %+v answered the task's question %d", out.Updates[0], theirs.ID)
+	}
+	if st := mustSnapshot(t, s); st.Items[task.ID].State != "needs-human" {
+		t.Errorf("task %s, want it still held by its own question", st.Items[task.ID].State)
 	}
 }

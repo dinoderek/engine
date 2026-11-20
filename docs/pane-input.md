@@ -5,44 +5,44 @@
 ## Why
 
 A question holds its task in `needs-human`. An answer typed into the
-session's pane reaches the session but not the server, so the task would
-stay held and its merge blocked. The prompt hook, `engine hook prompt
---harness <name>` on every submitted prompt, closes that gap with no
-command for the operator. Claude Code and Codex both run it.
+session's pane reaches only the session, so the task would stay held and
+its merge blocked. The prompt hook, `engine hook prompt --harness <name>`
+on every submitted prompt, closes that gap with no command for the
+operator. Claude Code and Codex both run it.
 
 ## Telling the operator's prompts from engine's
 
-Before engine types into a run's pane, or launches it with a kickoff, it
-logs the text's SHA-256, trimmed of surrounding white space, in the run's
-`typed.jsonl`: the spawn logs the kickoff before the window opens, the
-coordinator each wake and `continue` through the host's `typed` op. Text it
-cannot log it does not type; a spawn that cannot log its kickoff fails. A
-host whose engine predates the op has no prompt hook either, so its
-refusal of the op lets the text through.
+Before engine sends text to a run's session, it logs its SHA-256,
+trimmed of surrounding white space, in the run's `typed.jsonl`: the spawn
+logs the kickoff before the window opens, the coordinator each wake, and
+what a resume submits (`continue`, or text left unsent), through the host's
+`typed` op. Text it cannot log it does not type; a spawn that cannot log
+its kickoff fails. A host whose engine predates the op has no prompt hook
+either, so its refusal of the op lets the text through.
 
 In a server run, the hook logs every submitted prompt in `prompts.jsonl`,
 by hash; elsewhere it does nothing. Each logged hash accounts for one
-prompt, so the operator typing the same text later is still the operator.
+prompt, so text the operator retypes later is still theirs.
 A prompt from another session than the run's first, such as a reviewer the
-session started, is ignored.
+session started, is ignored, and so is every prompt after Claude Code's
+`/clear`, which starts a new session.
 
 ## Posting
 
 The operator's prompt is queued in `pane-<n>.json` for a background
 `engine hook prompt --harness <name> <run-dir> <n>`, since a harness may
 write a prompt to its transcript only after its hooks run. It waits up to a
-minute for the adapter's `Prompts` to show the text, then posts it verbatim
-with the `pane-input` op, on the run's credential, saying whether it was
-found and when it was submitted. The queue file keeps what it vouches, so
-every retry is the same request under the same key.
+minute for the adapter's `Prompts` to hold the text exactly, then posts it
+verbatim with the `pane-input` op, on the run's credential, saying whether
+it was found and when it was submitted. The queue file keeps what it
+vouches, so every retry is the same request under the same key.
 
-A server that does not answer or fails is retried for 15 minutes, waits
-growing from 5 seconds to 2 minutes. A prompt still unposted stays queued,
-and the session's next prompt starts its post again; a post locks its queue
-file, so two never race. Posted or refused, it leaves the queue. Each
-outcome, its update IDs or its error, is a line in `pane.jsonl`. If the
-background start fails, the hook posts at once, neither waiting nor
-retrying.
+An unanswering or failing server is retried for 15 minutes, waits growing
+from 5 seconds to 2 minutes. An unposted prompt stays queued for the
+session's next prompt to post again; a post locks its queue file, so two
+never race. Posted or refused, it leaves the queue. `pane.jsonl` logs each
+outcome: its update IDs or its error. If the background start fails, the
+hook posts at once, neither waiting nor retrying.
 
 ## Detection, not prevention
 

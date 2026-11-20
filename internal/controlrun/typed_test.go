@@ -90,7 +90,12 @@ func TestAContinueLogsItsHashBeforeItIsTyped(t *testing.T) {
 	h.status.Windows[0].State = session.StateLimited
 	h.status.Windows[0].ResetsAt = now.Add(-3 * time.Minute).Unix()
 	order := &typingOrder{h: h}
-	c.Resume = func(reconcile.Session) error { return order.record(ResumeText) }
+	c.Resume = func(_ reconcile.Session, logged func(string) error) error {
+		if err := logged(ResumeText); err != nil {
+			return err
+		}
+		return order.record(ResumeText)
+	}
 	h.typed = nil
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
