@@ -6,13 +6,13 @@
 
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
 - **Stateless.** Each pass derives everything from the server's records and each host's tmux sessions, harness observations and run directories.
-- **One pass** runs every 30 seconds and once at start, reading every host's `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer reuses those reads (`control-server.md`, "Session view"). Stopping coordination leaves sessions running; plans move only to `planned` and `done`.
+- **One pass** runs every 30 seconds and once at start, reading every host's `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer reuses those reads (`dashboard.md`). Stopping coordination leaves sessions running; plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`, "Placement". For how a pass reads a session's liveness, stalls or limits, load `session-signals.md`. For lint changes, load `plugins/engine/skills/engine/references/plan.md`.
 
 ## Dispatch and recovery
 
-Plans are serialized against fresh fleet capacity. A dispatch records its attempt, host and credential before calling the host. A restart adopts matching sessions or retries the same dispatch identity on that host. A dispatch for a task whose earlier attempt ran is a resume, on the task's branch from `origin` (`hosts-and-sessions.md`). A new attempt first releases the ended one's session, once a read shows its window gone. A refused dispatch retries each pass, noticing once per attempt; an unresolved one, once per distinct first line of its error, tmux ids aside.
+Plans are serialized against fresh fleet capacity. A dispatch records its attempt, host and credential before calling the host. A restart adopts matching sessions or retries the same dispatch identity on that host. A dispatch for a task whose earlier attempt ran is a resume, on the task's branch from `origin` (`hosts-and-sessions.md`). A new attempt first releases the ended one's session, once a read shows its window gone. Placement skips a held task; a stopped one's window is released (`control-server.md`). A refused dispatch retries each pass, noticing once per attempt; an unresolved one, once per distinct first line of its error, tmux ids aside.
 
 The host serializes dispatches by run ID and returns an existing run on replay. A spawn failing before its window opens removes what it made (the run directory; the worktree and branch unless reused), naming any leftover; a run directory with no `run.json` and no window is reused. It uses the host's Git credentials and identity, with isolated clones under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin into an owner-only run file whose path the window command exports; hooks recover their connection from the worktree's server-session record. Credential files are never collected.
 
@@ -44,7 +44,7 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `status` | Windows with their state and, unless working, last 20 screen lines and a waiting window's newest denial (`telemetry.md`); newest runs, each with the last 20 lines of its pane log, stripped of control sequences, when it has no live window and the log was written in the last hour; quota, free slots and signed-out harnesses (`internal/hostops/status.go`). |
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
 | `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start (else creation) counts; undated sorts first, ties select the later rollup entry. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. Already merged is done. |
-| `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or it has changes. Engine never deletes the branch. |
+| `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or was stopped, or it has changes. Engine never deletes the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine` (the build) and `host`. A failure is `{"error": …, "refused": true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is an unreachable host. A caller refuses a reply on another protocol, or not an engine's, and tells the operator to run `engine setup --host <name>`.
 

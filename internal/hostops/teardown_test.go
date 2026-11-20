@@ -127,7 +127,7 @@ func TestReleaseOpTakesOneOutcome(t *testing.T) {
 	h := newHome(t, "mac")
 	d := Deps{Tmux: (&tmuxFake{}).tmux(), Home: h.dir, Run: (&gitFake{}).run}
 	code, reply, _ := call(t, d, "", "release", "--json", "--name", "r-7", "--failed", "--done")
-	if code != 1 || reply["refused"] != true || !strings.Contains(reply["error"].(string), "cannot both be set") {
+	if code != 1 || reply["refused"] != true || !strings.Contains(reply["error"].(string), "are exclusive") {
 		t.Errorf("both outcomes: exit %d, %v", code, reply)
 	}
 	if code, reply, _ := call(t, d, "", "release", "--json", "--name", "r-7", "--done"); code != 0 || reply["name"] != "r-7" {

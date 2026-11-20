@@ -26,11 +26,12 @@ ops, each printing one JSON object:
   status                             windows and their sessions' states, newest
                                      runs, quota, free slots and free heavy slots
   collect --run-id <id>              a run directory and its run.json
-  release --name <repo>-<task> [--failed | --done]
+  release --name <repo>-<task> [--failed | --stopped | --done]
                                      close a session's window, remove its
-                                     worktree, kept when --failed, and delete
-                                     the harness's files for it; --done runs
-                                     the repo's dev worktree release first
+                                     worktree, kept when --failed or --stopped,
+                                     and delete the harness's files for it;
+                                     --done runs the repo's dev worktree
+                                     release first
   merge --repo <owner/repo> --pr <n> --head <sha> --method squash|merge|rebase
                                      merge a green PR pinned to its reviewed
                                      head, with this host's gh
@@ -87,7 +88,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	fs.Bool("json", true, "print one JSON object")
 	var req SpawnRequest
 	var name string
-	var failed, done bool
+	var failed, stopped, done bool
 	var merge MergeRequest
 	run := map[string]func() (any, error){
 		"control-spawn": func() (any, error) {
@@ -108,7 +109,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		},
 		"status":  func() (any, error) { return ReadStatus(d) },
 		"collect": func() (any, error) { return Collect(d, req.RunID) },
-		"release": func() (any, error) { return release(d, name, failed, done) },
+		"release": func() (any, error) { return release(d, name, failed, stopped, done) },
 		"merge":   func() (any, error) { return Merge(d, merge) },
 	}[op]
 	if run == nil {
@@ -133,6 +134,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	case "release":
 		fs.StringVar(&name, "name", "", "")
 		fs.BoolVar(&failed, "failed", false, "")
+		fs.BoolVar(&stopped, "stopped", false, "")
 		fs.BoolVar(&done, "done", false, "")
 	case "merge":
 		fs.StringVar(&merge.Repo, "repo", "", "")
@@ -149,14 +151,16 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	return run()
 }
 
-// release runs the release op for its flags: at most one of --failed and
-// --done.
-func release(d Deps, name string, failed, done bool) (Released, error) {
+// release runs the release op for its flags: at most one of --failed,
+// --stopped and --done.
+func release(d Deps, name string, failed, stopped, done bool) (Released, error) {
 	switch {
-	case failed && done:
-		return Released{}, refuse("engine host release: --failed and --done cannot both be set")
+	case failed && done || failed && stopped || stopped && done:
+		return Released{}, refuse("engine host release: --failed, --stopped and --done are exclusive")
 	case failed:
 		return Release(d, name, RunFailed)
+	case stopped:
+		return Release(d, name, RunStopped)
 	case done:
 		return Release(d, name, RunDone)
 	}

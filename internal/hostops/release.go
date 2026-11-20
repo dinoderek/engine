@@ -21,6 +21,9 @@ const (
 	RunEnded Outcome = ""
 	// RunFailed keeps the worktree for the operator.
 	RunFailed Outcome = "failed"
+	// RunStopped is a run the operator stopped: its task is held, and the
+	// worktree stays for the resume.
+	RunStopped Outcome = "stopped"
 	// RunDone is a done task's run: the repo's own `worktree release` runs
 	// first.
 	RunDone Outcome = "done"
@@ -44,12 +47,12 @@ type Released struct {
 
 // Release closes the session's window if it is still open, deletes what each
 // harness adapter wrote for this session alone, and removes the worktree of
-// its newest run, unless the run failed: a failed run's worktree is kept for
-// the operator. For a done task's run, the repo's own `dev worktree release
-// <branch>` runs first, from engine's clone, when the repo provides it, best
-// effort under TeardownLimit. Engine's removal is git's plain `worktree
-// remove` of a worktree still on disk, which keeps one with uncommitted
-// changes; engine never deletes the branch.
+// its newest run, unless the run failed, when it is kept for the operator, or
+// was stopped, when it is kept for the resume. For a done task's run, the
+// repo's own `dev worktree release <branch>` runs first, from engine's clone,
+// when the repo provides it, best effort under TeardownLimit. Engine's
+// removal is git's plain `worktree remove` of a worktree still on disk, which
+// keeps one with uncommitted changes; engine never deletes the branch.
 func Release(d Deps, name string, outcome Outcome) (Released, error) {
 	if !nameRe.MatchString(name) {
 		return Released{}, refuse("session name %q: use letters, digits, _, . and -, not starting with -", name)
@@ -94,7 +97,7 @@ func Release(d Deps, name string, outcome Outcome) (Released, error) {
 		return r, nil
 	}
 	r.Worktree, r.WorktreeKept = run.Record.Worktree, true
-	if outcome == RunFailed {
+	if outcome == RunFailed || outcome == RunStopped {
 		return r, nil
 	}
 	if err := removeWorktree(d, run.Record); err != nil {

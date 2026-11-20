@@ -15,6 +15,16 @@ import (
 // open when open is set, and releases it.
 func released(t *testing.T, open, failed bool, git *gitFake) (Released, string, *tmuxFake, error) {
 	t.Helper()
+	outcome := RunEnded
+	if failed {
+		outcome = RunFailed
+	}
+	return releasedAs(t, open, outcome, git)
+}
+
+// releasedAs is released for any outcome.
+func releasedAs(t *testing.T, open bool, outcome Outcome, git *gitFake) (Released, string, *tmuxFake, error) {
+	t.Helper()
 	h := newHome(t, "mac")
 	worktree := filepath.Join(h.clone(t)+"-worktrees", "task-r-7")
 	if err := os.MkdirAll(worktree, 0o755); err != nil {
@@ -24,10 +34,6 @@ func released(t *testing.T, open, failed bool, git *gitFake) (Released, string, 
 	tm := &tmuxFake{windows: []string{"@1 %1 0 other"}}
 	if open {
 		tm.windows = append(tm.windows, "@5 %5 1 r-7")
-	}
-	outcome := RunEnded
-	if failed {
-		outcome = RunFailed
 	}
 	r, err := Release(Deps{Run: git.run, Tmux: tm.tmux(), Home: h.dir}, "r-7", outcome)
 	return r, worktree, tm, err
@@ -53,6 +59,25 @@ func TestReleaseFailedKeepsTheWorktree(t *testing.T) {
 	r, worktree, _, err := released(t, true, true, git)
 	if err != nil || r != (Released{Name: "r-7", WindowClosed: true, Worktree: worktree, WorktreeKept: true}) || len(git.calls) != 0 {
 		t.Errorf("released %+v, %v, git %v", r, err, git.calls)
+	}
+}
+
+// A stopped task's release closes the window but touches neither the
+// worktree nor the branch, which its resume adopts.
+func TestReleaseStoppedKeepsTheWorktreeAndTheBranch(t *testing.T) {
+	git := &gitFake{}
+	r, worktree, tm, err := releasedAs(t, true, RunStopped, git)
+	if err != nil || r != (Released{Name: "r-7", WindowClosed: true, Worktree: worktree, WorktreeKept: true}) {
+		t.Errorf("released %+v, %v", r, err)
+	}
+	if len(git.calls) != 0 {
+		t.Errorf("git calls %v: a stopped release removes the worktree or deletes the branch", git.calls)
+	}
+	if !slices.Contains(tm.calls, "kill-window -t =engine:@5") {
+		t.Errorf("tmux calls %v", tm.calls)
+	}
+	if _, err := os.Stat(worktree); err != nil {
+		t.Errorf("the worktree is gone: %v", err)
 	}
 }
 

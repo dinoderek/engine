@@ -22,6 +22,7 @@ func Decide(v View) []Action {
 		return append(acts, plan...)
 	}
 	acts = append(acts, deadSessions(v)...)
+	acts = append(acts, releaseStopped(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, reaps(v)...)
 	placed := place(v)
@@ -135,6 +136,19 @@ func deadSessions(v View) []Action {
 	return acts
 }
 
+// releaseStopped releases the window an operator's stop left on a host, keeping the
+// worktree and branch for the resume. It repeats each pass until a read shows
+// the window gone, so a release that failed is retried.
+func releaseStopped(v View) []Action {
+	var acts []Action
+	for _, t := range v.Tasks {
+		if s := t.Session; s != nil && t.Stopped && (s.Live || s.DeadWindow) {
+			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: *s, Stopped: true, Text: "the operator stopped its task"})
+		}
+	}
+	return acts
+}
+
 // stalls flags a session that has not claimed in time, that died before
 // claiming, or that waits outside a hard stop: once per wait, and once per
 // session that died. A limited session gets its limit step instead.
@@ -145,7 +159,7 @@ func stalls(v View) []Action {
 			acts = append(acts, limit(v, t)...)
 		}
 		s := t.Session
-		if s == nil || !t.open() || s.Unknown || s.Limited || s.Waiting && s.ResetsAt > 0 {
+		if s == nil || !t.open() || t.Stopped || s.Unknown || s.Limited || s.Waiting && s.ResetsAt > 0 {
 			continue
 		}
 		if !s.Live {

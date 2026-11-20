@@ -133,6 +133,10 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return s.reserve(st, a, r)
 	case "attempt-reconcile":
 		return s.endAttempt(st, a, r)
+	case "task-stop":
+		return s.stopTask(st, a, r)
+	case "task-resume":
+		return s.resumeTask(st, a, r)
 	case "merge-request":
 		return s.mergeRequest(st, a, r)
 	case "merge-queue":
@@ -216,7 +220,7 @@ func (s Service) create(st *State, a Actor, r Request) (Response, error) {
 	if strings.TrimSpace(item.Title) == "" {
 		return Response{}, problem(400, "title is required")
 	}
-	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" || item.Question != nil {
+	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" || item.Question != nil || item.Held {
 		return Response{}, problem(400, "server-owned fields cannot be set on creation")
 	}
 	if err := validateCreation(st, a, item); err != nil {

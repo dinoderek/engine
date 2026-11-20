@@ -39,6 +39,9 @@ type Item struct {
 	Question *UpdateRef `json:"question,omitempty"`
 	// StoppedAt is when the operator last stopped this plan's coordination.
 	StoppedAt time.Time `json:"stopped_at,omitzero"`
+	// Held is a todo task the operator stopped: no pass places it until
+	// the operator resumes it.
+	Held bool `json:"held,omitempty"`
 }
 
 // Attempt persists a dispatch before the host is contacted.
@@ -65,8 +68,8 @@ type Attempt struct {
 	StuckFor   int64     `json:"stuck_for,omitempty"`
 	// LiveAt is the last coordinator pass that saw the attempt's window live.
 	LiveAt time.Time `json:"live_at,omitzero"`
-	// Reason is why a dead window ended the attempt: EndVanished,
-	// EndEarlyDeath or EndFailed.
+	// Reason is why the attempt ended: EndVanished, EndEarlyDeath or
+	// EndFailed for a dead window, EndStopped for the operator's stop.
 	Reason string `json:"reason,omitempty"`
 	// Early is set when the session died before claiming its task, whether
 	// that ended the attempt early-death or failed; Tail is the end of its

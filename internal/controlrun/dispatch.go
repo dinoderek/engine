@@ -59,7 +59,7 @@ func (c *Coordinator) launch(st control.State, at control.Attempt, credential st
 	req := hostops.ControlRequest{URL: c.URL, Credential: credential, Attempt: at.ID, Remote: repo.Remote,
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Title: session.Title(item.ID, item.Title), Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
-			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model)}}
+			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model, resume)}}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
 	var refused *hostops.RefusedError
 	if errors.As(err, &refused) {
@@ -150,15 +150,20 @@ func windowName(st control.State, item control.Item) string {
 	return fmt.Sprintf("%s-%d", strings.Split(st.Items[item.Repo].Slug, "/")[1], control.Number(item.ID))
 }
 
-func kickoff(item control.Item, at control.Attempt, reviewer string) string {
+func kickoff(item control.Item, at control.Attempt, reviewer string, resume bool) string {
 	role := "executor"
 	if item.Kind == "plan" {
 		role = "planner"
 	}
-	return fmt.Sprintf("Use the engine skill's server %s mode for %s. Read engine %s show %s and its updates. "+
+	text := fmt.Sprintf("Use the engine skill's server %s mode for %s. Read engine %s show %s and its updates. "+
 		"All plan/task state, messages, approvals and merge requests use the engine server CLI, never GitHub issues. "+
 		"Execution: %s. Reviewer model: %s. The repository's tests, review and pinned-head merge rules apply. "+
 		"Read the server plan-source reference before working.", role, item.ID, item.Kind, item.ID, at.ID, reviewer)
+	if resume {
+		text += " This is a resume: an earlier attempt already worked on this " + item.Kind + ". Its branch and worktree hold its work so far; " +
+			"read the updates since it started, check what the branch already has, and continue from there."
+	}
+	return text
 }
 
 func (c *Coordinator) reconcileDispatches(root string, fleet reconcile.Fleet, cfg *hosts.Config) error {

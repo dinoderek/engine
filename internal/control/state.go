@@ -135,6 +135,9 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	if OwnQuestion(st, item.ID) > 0 || NewStartHold(st, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
+	if item.Held {
+		return Response{}, problem(409, "task is held; resume it first")
+	}
 	if !approved(st, item) {
 		return Response{}, problem(409, "item is not approved")
 	}

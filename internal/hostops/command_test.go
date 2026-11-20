@@ -3,6 +3,7 @@ package hostops
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -142,5 +143,28 @@ func TestSpawnReadsTheKickoffFromStdin(t *testing.T) {
 	code, reply, _ = call(t, d, "", args...)
 	if msg, _ := reply["error"].(string); code != 1 || !strings.Contains(msg, "the kickoff is empty") {
 		t.Errorf("no kickoff: exit %d, reply %v", code, reply)
+	}
+}
+
+// --stopped releases a stopped task's session, keeping its worktree; it
+// excludes --failed and --done.
+func TestReleaseStoppedIsAFlagOfItsOwn(t *testing.T) {
+	h := newHome(t, "mac")
+	worktree := filepath.Join(h.dir, "wt")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeRun(t, h, session.Record{RunID: "r-7-a", Repo: "o/r", Name: "r-7", Worktree: worktree, Spawned: fixedNow()})
+	git := &gitFake{}
+	d := Deps{Tmux: (&tmuxFake{}).tmux(), Home: h.dir, Exec: agentsFake("[]", nil), Run: git.run}
+	code, reply, _ := call(t, d, "", "release", "--json", "--name", "r-7", "--stopped")
+	if code != 0 || reply["worktree_kept"] != true || len(git.calls) != 0 {
+		t.Errorf("release --stopped: exit %d, reply %v, git %v", code, reply, git.calls)
+	}
+	for _, other := range []string{"--failed", "--done"} {
+		code, reply, _ = call(t, d, "", "release", "--json", "--name", "r-7", "--stopped", other)
+		if msg, _ := reply["error"].(string); code != 1 || reply["refused"] != true || !strings.Contains(msg, "exclusive") {
+			t.Errorf("--stopped %s: exit %d, reply %v", other, code, reply)
+		}
 	}
 }

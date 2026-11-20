@@ -62,7 +62,8 @@ Read these at each session start:
 | changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
 | changes dispatch, recovery, merges, the merge queue or host ops | `docs/coordinator.md` |
 | changes how the coordinator reads a session's liveness, stalls or limit recovery | `docs/session-signals.md` |
-| changes server records, API, credentials, inbox or `engine ui` | `docs/control-server.md` |
+| changes server records, API, credentials or inbox | `docs/control-server.md` |
+| changes `engine ui` or the session view | `docs/dashboard.md` |
 | changes host config, placement, attempts or session access | `docs/hosts-and-sessions.md` |
 | changes a harness adapter or what the core asks of one | `docs/harnesses.md` |
 | changes what is recorded about runs or where it is stored | `docs/telemetry.md` |
