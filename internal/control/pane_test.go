@@ -205,25 +205,41 @@ func TestAPaneAnswerAnswersOnlyAQuestionAskedBeforeItWasTyped(t *testing.T) {
 
 func TestAPaneAnswerPrefersTheSessionsOwnQuestion(t *testing.T) {
 	s := service(t)
-	repo, plan := repoPlan(t, s)
-	task := newTask(t, s, repo.ID, plan.ID)
+	_, plan := repoPlan(t, s)
 	approve(t, s, plan)
-	asker, _ := dispatch(t, s, task)
-	theirs := call(t, s, asker, Request{Op: "ask", ID: plan.ID, Body: "Is main red?"}).Updates[0]
-	planner := Actor{Name: "a99", Role: "worker", Attempt: "a99"}
-	if err := s.Store.Transaction(func(st *State) error {
-		st.Attempts[planner.Attempt] = Attempt{ID: planner.Attempt, Item: plan.ID, State: "running"}
-		p := st.Items[plan.ID]
-		p.Attempt = planner.Attempt
-		st.Items[plan.ID] = p
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	planner, _ := dispatch(t, s, plan)
+	theirs := call(t, s, op, Request{Op: "ask", ID: plan.ID, Body: "Should the plan change scope?"}).Updates[0]
 	own := call(t, s, planner, Request{Op: "ask", ID: plan.ID, Body: "Split the task?"}).Updates[0]
 	out := call(t, s, planner, Request{Op: "pane-input", Body: "Yes, split it"})
 	if out.Updates[0].ReplyTo != own.ID {
-		t.Errorf("the planner's pane answer resolved %d, want its own question %d, not the task's %d", out.Updates[0].ReplyTo, own.ID, theirs.ID)
+		t.Errorf("the planner's pane answer resolved %d, want its own question %d over the older %d", out.Updates[0].ReplyTo, own.ID, theirs.ID)
+	}
+	if out = call(t, s, planner, Request{Op: "pane-input", Body: "No, keep the scope"}); out.Updates[0].ReplyTo != theirs.ID {
+		t.Errorf("with its own answered, the pane answer resolved %d, want %d", out.Updates[0].ReplyTo, theirs.ID)
+	}
+}
+
+func TestAHarnessCommandAnswersNothing(t *testing.T) {
+	s := service(t)
+	task, worker, _, _ := paneSession(t, s)
+	out := call(t, s, worker, Request{Op: "pane-input", Body: " /compact"})
+	if out.Updates[0].Kind != KindPaneMessage {
+		t.Errorf("a slash command answered the question: %+v", out.Updates[0])
+	}
+	if st := mustSnapshot(t, s); st.Items[task.ID].State != "needs-human" {
+		t.Errorf("task %s, want it still held", st.Items[task.ID].State)
+	}
+}
+
+func TestTheNoteOnAPlannersPaneInputNamesThePlanStop(t *testing.T) {
+	s := service(t)
+	_, plan := repoPlan(t, s)
+	approve(t, s, plan)
+	planner, _ := dispatch(t, s, plan)
+	call(t, s, planner, Request{Op: "pane-input", Body: "Approved"})
+	n := notes(mustSnapshot(t, s), plan.ID)
+	if len(n) != 1 || !strings.Contains(n[0].Body, "engine plan stop "+plan.ID) || strings.Contains(n[0].Body, "task stop") {
+		t.Errorf("notes %+v, want one naming the plan's stop", n)
 	}
 }
 

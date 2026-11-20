@@ -62,7 +62,10 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 		vouch = *r.Pane
 	}
 	r.ID, r.Recipient, r.ReplyTo, r.RequiresReply, r.Pane = item, "", 0, false, nil
-	kind, question := KindPaneMessage, paneQuestion(st, a, item, vouch.At)
+	kind, question := KindPaneMessage, 0
+	if !strings.HasPrefix(strings.TrimSpace(r.Body), "/") { // a harness command, such as /compact, answers nothing
+		question = paneQuestion(st, a, item, vouch.At)
+	}
 	if question > 0 {
 		kind, r.ID, r.ReplyTo = KindPaneAnswer, st.Updates[question-1].Item, question
 	}
@@ -76,8 +79,12 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 		if question > 0 {
 			outcome = fmt.Sprintf("resolved question %d", question)
 		}
-		note := fmt.Sprintf("Pane input %d on %s may not be the operator's: %s. It is recorded and %s. If you did not type it, stop the task (engine task stop %s) or tell its session your answer (engine tell %s).",
-			u.ID, item, strings.Join(doubts, ", and "), outcome, item, item)
+		stop := "engine task stop " + item
+		if st.Items[item].Kind == "plan" {
+			stop = "engine plan stop " + item + " --version <n>"
+		}
+		note := fmt.Sprintf("Pane input %d on %s may not be the operator's: %s. It is recorded and %s. If you did not type it, stop it (%s) or tell its session your answer (engine tell %s).",
+			u.ID, item, strings.Join(doubts, ", and "), outcome, stop, item)
 		out.Updates = append(out.Updates, st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{ID: item, Recipient: "operator"}, "say", note, s.now()))
 	}
 	return out, nil

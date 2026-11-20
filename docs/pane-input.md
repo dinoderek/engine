@@ -40,9 +40,9 @@ vouches, so every retry is the same request under the same key.
 An unanswering or failing server is retried for 15 minutes, waits growing
 from 5 seconds to 2 minutes. An unposted prompt stays queued for the
 session's next prompt to post again; a post locks its queue file, so two
-never race. Posted or refused, it leaves the queue. `pane.jsonl` logs each
+never race. Posted, refused or unpostable, it is dequeued. `pane.jsonl` logs each
 outcome: its update IDs or its error. If the background start fails, the
-hook posts at once, neither waiting nor retrying.
+hook posts at once, without waiting or retrying.
 
 ## Detection, not prevention
 

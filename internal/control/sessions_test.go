@@ -234,3 +234,17 @@ func TestSessionViewKeepsAVanishedAttemptUntilItsResume(t *testing.T) {
 		t.Fatal("a failed attempt stayed in the session view")
 	}
 }
+
+func TestSessionViewShowsPaneInputAsTheLatestMessage(t *testing.T) {
+	s := service(t)
+	task, worker, _, _ := paneSession(t, s)
+	answer := call(t, s, worker, Request{Op: "pane-input", Body: "Yes, drop the column"}).Updates[0]
+	row := sessionRows(t, s)[task.ID]
+	if row.Feedback != nil || row.Latest == nil || row.Latest.Update != answer.ID || row.Latest.Kind != KindPaneAnswer {
+		t.Fatalf("after a pane answer: %+v", row)
+	}
+	message := call(t, s, worker, Request{Op: "pane-input", Body: "Also bump the version"}).Updates[0]
+	if l := sessionRows(t, s)[task.ID].Latest; l == nil || l.Update != message.ID || l.Kind != KindPaneMessage {
+		t.Fatalf("after a pane message: %+v", l)
+	}
+}

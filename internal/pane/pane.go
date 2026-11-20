@@ -146,8 +146,8 @@ const (
 // and when it was submitted, and records the outcome in the run's
 // OutcomeLog. It retries an unreachable or failing server for RetryFor,
 // under one request key, so a repeat is the same request. A posted prompt
-// leaves the queue, and so does one the server refused; one still unposted
-// stays for the next prompt to post. A post of a prompt another post holds
+// leaves the queue, and so does one the server refused or the run cannot
+// reach a server for; one still unposted stays for the next prompt to post. A post of a prompt another post holds
 // does nothing.
 func (p Poster) Post(ctx context.Context, dir string, seq int) error {
 	file := pendingFile(dir, seq)
@@ -165,6 +165,7 @@ func (p Poster) Post(ctx context.Context, dir string, seq int) error {
 	}
 	conn, err := connection(dir)
 	if err != nil {
+		_ = os.Remove(file) // the run has no server to post to, now or later
 		return p.record(dir, outcome{Seq: seq, Error: err.Error()}, err)
 	}
 	if q.Vouch == nil {

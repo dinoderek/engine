@@ -315,7 +315,7 @@ func TestAPostWithNoCredentialFails(t *testing.T) {
 	if err := h.Post.Post(context.Background(), r.dir, 1); err == nil {
 		t.Error("posted with no credential")
 	}
-	if _, err := os.Stat(pendingFile(r.dir, 1)); err != nil {
-		t.Errorf("the unposted prompt left the queue: %v", err)
+	if _, err := os.Stat(pendingFile(r.dir, 1)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a prompt the run can never post stayed queued: %v", err)
 	}
 }
