@@ -39,15 +39,14 @@ follow only it.
    number, plan path or task ID. Commit messages and PR bodies may.
 4. **Durable decisions graduate** into the repo's owning doc, in the PR that
    ships them.
-5. **GitHub is the host's `gh`,** with its configured sign-in and the host's
-   normal Git configuration.
+5. **GitHub is the host's `gh`,** with its configured sign-in and Git configuration.
 6. **Never fake evidence.** A lane you did not run is not passed.
 
 ## Steps
 
 1. **Open.** `engine version` must run: the plugin's merge guard calls it
-   (**Environment** hard stop). Create a worktree from the remote's default
-   branch with the repo's command and work only there. If your harness opened
+   (**Environment** hard stop). Work only in a worktree from the remote's
+   default branch, made with the repo's command. If your harness opened
    one, merge the default branch into it first. Commit work in progress;
    never use a bare `git stash`, which other sessions share.
 2. **Load and check.** Read the card and any thread on it. Load what
@@ -84,13 +83,12 @@ follow only it.
     - Gated: say the PR is ready, with its URL and head SHA, and wait for the
       operator's explicit approval. If the head changes after that, ask again.
     - Hands-off: merge on green.
-    - Merge with a command of its own, `gh pr merge <n> -R <owner/repo>
-      --<method> --match-head-commit <sha>`, using the repo's merge method.
-      Run any base or head check as a separate command first: an allow rule
-      matches only a command that starts with its prefix.
-    - Never enable auto-merge or merge with `--admin`. The merge guard blocks
-      both, any merge without `--match-head-commit`, and merges through the
-      API.
+    - Merge with `gh pr merge <n> -R <owner/repo> --<method>
+      --match-head-commit <sha>` (the repo's merge method). Run any base or
+      head check as its own command first: an allow rule matches a command by
+      its prefix.
+    - Never enable auto-merge or use `--admin`. The merge guard blocks both,
+      any merge without `--match-head-commit`, and API merges.
 11. **Clean up.** Report what shipped and every deviation. Run the repo's
     worktree-release command from outside the worktree and say what it
     removed. If the PR closed unmerged, a gated run asks before releasing.
@@ -115,14 +113,13 @@ You decide, without asking:
 - UI details within the agreed mocks;
 - adding dev-only dependencies.
 
-None of these is a ruling, and none needs a note. For example, renaming a
-helper, testing a parser in a unit test rather than end to end, splitting a
-function to meet a lint target, or picking one of the options the card's
-Open list offers: the diff shows each, and a reviewer judges it there.
+None of these is a ruling or needs a note. Renaming a helper, testing a
+parser in a unit test, splitting a function to meet a lint target, or
+picking one of the card's Open options: a reviewer judges each in the diff.
 
 **`low` notes are optional.** At most five one-line notes in the PR body,
 in the template's rulings section if it has one (in its format), else under
 a collapsed `<details><summary>Low-risk decisions</summary>`, and only for
-something a reviewer would otherwise ask about, or the repo asks to log. No
-notes is the normal case. Anything bigger than a note is either a hard stop or, in an engine
+something a reviewer would otherwise ask about, or the repo asks to log. No notes is the normal case.
+Anything bigger than a note is either a hard stop or, in an engine
 server task, a `review` ruling (the `engine` skill).

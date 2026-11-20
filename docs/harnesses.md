@@ -30,9 +30,8 @@ row, and its name in the `harness-names` lane. No other package names it.
 
 ## Launch lines and tiers
 
-They live only in the operator's `hosts.toml`. `{model}` and `{effort}`
-come from the task's tier; `{name}` is `<repo>-<task>`; `{title}` is the
-title the apps show.
+They live only in the operator's `hosts.toml`. `{model}` and `{effort}` come
+from the task's tier; `{name}` is `<repo>-<task>`; `{title}` is the app title.
 
 ```toml
 [harness.claude]
