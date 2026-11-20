@@ -72,6 +72,9 @@ type Host struct {
 	Capabilities     []string
 	// Bin is the path of each harness binary, as written: it may start with ~.
 	Bin map[string]string
+	// Path are directories put first on PATH for the host's sessions and
+	// readiness probes, in order, as written: each may start with ~/.
+	Path []string
 	// Services records how the host runs the control server; the zero value
 	// records nothing.
 	Services Services

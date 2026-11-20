@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/remote"
 )
 
@@ -61,5 +62,30 @@ func TestCheckRefusesWhatItCannotReach(t *testing.T) {
 	d.Home = t.TempDir()
 	if _, err := Check(d, "dev", "", &bytes.Buffer{}); !errors.As(err, &refused) || !strings.Contains(err.Error(), "read host config") {
 		t.Errorf("no host config: %v", err)
+	}
+}
+
+// readyFake is another machine whose ready op answers with probe.
+type readyFake struct {
+	hostFake
+	asked []hostops.ReadyRequest
+	probe hostops.Readiness
+}
+
+func (f *readyFake) Ready(r hostops.ReadyRequest) (hostops.Readiness, error) {
+	f.asked = append(f.asked, r)
+	return f.probe, nil
+}
+
+func TestReadyOnAHostProbesAfreshAndReports(t *testing.T) {
+	h := newHome(t, "mac")
+	f := &readyFake{probe: hostops.Readiness{Repo: "o/r", Head: "abc", Checks: []hostops.ReadyCheck{{Name: hostops.GHCheck, OK: true}}}}
+	var out bytes.Buffer
+	if ok, err := Ready(remoteDeps(h, f), "dev", "o/r", &out); !ok || err != nil || len(f.asked) != 1 || !f.asked[0].Fresh ||
+		!strings.Contains(out.String(), "ok   o/r: gh auth status at abc") {
+		t.Errorf("ok=%v err=%v asked=%+v out=%q", ok, err, f.asked, out.String())
+	}
+	if _, err := Ready(remoteDeps(h, f), "nowhere", "o/r", &out); err == nil {
+		t.Error("an unknown host was probed")
 	}
 }

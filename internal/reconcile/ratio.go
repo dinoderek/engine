@@ -45,9 +45,10 @@ func (f Fleet) choose(w Want, free map[string]slots, running map[string]int) (st
 	var reasons []string
 	possible := false
 	for _, name := range names {
-		fits, why := f.fits(w, name)
+		fits, why, probing := f.fits(w, name)
 		if why != "" {
 			reasons = append(reasons, "no host can take it: "+why)
+			possible = possible || probing
 			continue
 		}
 		possible = true

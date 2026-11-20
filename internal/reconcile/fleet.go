@@ -40,6 +40,27 @@ type HostLoad struct {
 	Unreachable string
 	// Status is the host's reply, which the session check reads.
 	Status hostops.Status
+	// Ready is the host's readiness for each repo, by repo ID; nil when the
+	// coordinator does not probe, and every repo may then be placed.
+	Ready map[string]Readiness
+}
+
+// Readiness is what a host's readiness probe for one repo says.
+type Readiness struct {
+	// Known is false until a probe answers: the host then takes no task of
+	// the repo, and that is no reason to tell the operator.
+	Known bool
+	// Unready says why the host takes no task of the repo: a failed check,
+	// or a probe that could not run.
+	Unready string
+}
+
+// readiness is the host's readiness for repo.
+func (h HostLoad) readiness(repo string) Readiness {
+	if h.Ready == nil {
+		return Readiness{Known: true}
+	}
+	return h.Ready[repo]
 }
 
 // Load is a host's load from its status: its free slots, heavy and all, and
@@ -159,7 +180,9 @@ func (f Fleet) Running() map[string]int {
 
 // Want is an item placement is asked to start.
 type Want struct {
-	ID       string
+	ID string
+	// Repo is the item's repo ID, which readiness is probed for.
+	Repo     string
 	Requires []string
 	// Harness is the item's pinned harness, or "" to follow the ratio.
 	Harness string
@@ -204,14 +227,16 @@ func (f Fleet) Place(wants []Want) []Placement {
 }
 
 // fits returns the hosts that could take the item with this harness if they
-// had a free slot. When none could, why says what each host lacks.
-func (f Fleet) fits(w Want, harness string) (fits []HostLoad, why string) {
+// had a free slot. When none could, why says what each host lacks, and
+// probing is true when a host only waits for its readiness probe.
+func (f Fleet) fits(w Want, harness string) (fits []HostLoad, why string, probing bool) {
 	if _, ok := f.Caps[harness]; !ok {
-		return nil, fmt.Sprintf("hosts.toml defines no harness %q (a misspelt tier? tiers are deep, standard and light)", harness)
+		return nil, fmt.Sprintf("hosts.toml defines no harness %q (a misspelt tier? tiers are deep, standard and light)", harness), false
 	}
-	var lacks []string
+	var lacks, waits []string
 	for _, h := range f.Hosts {
 		missing := slices.DeleteFunc(slices.Clone(w.Requires), h.has)
+		ready := h.readiness(w.Repo)
 		switch {
 		case !slices.Contains(h.Harnesses, harness):
 			lacks = append(lacks, fmt.Sprintf("%s does not run %s", h.Name, harness))
@@ -221,17 +246,21 @@ func (f Fleet) fits(w Want, harness string) (fits []HostLoad, why string) {
 			lacks = append(lacks, signedOutText(h.Name, harness))
 		case len(missing) > 0:
 			lacks = append(lacks, fmt.Sprintf("%s lacks %s", h.Name, strings.Join(missing, ", ")))
+		case ready.Unready != "":
+			lacks = append(lacks, h.Name+" is unready for this repo: "+ready.Unready)
+		case !ready.Known:
+			waits = append(waits, h.Name+" waits for its readiness probe")
 		default:
 			fits = append(fits, h)
 		}
 	}
-	if len(fits) == 0 {
-		if len(lacks) == 0 {
-			lacks = []string{"hosts.toml has no host"}
-		}
-		return nil, strings.Join(lacks, "; ")
+	if len(fits) > 0 {
+		return fits, "", false
 	}
-	return fits, ""
+	if len(lacks) == 0 && len(waits) == 0 {
+		lacks = []string{"hosts.toml has no host"}
+	}
+	return nil, strings.Join(append(waits, lacks...), "; "), len(waits) > 0
 }
 
 // heavy reports whether the item requires a heavy capability.

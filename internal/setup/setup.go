@@ -1,8 +1,9 @@
 // Package setup is `engine setup [--host <name>]`: it brings a host to the
 // caller's engine commit, plugin and config. Its own steps check the host's
 // tools, engine, config and suspend; each harness the host lists adds its
-// steps after them, through its adapter; gh's sign-in and the preflight
-// check come last. The report numbers the steps in order. It is safe to
+// steps after them, through its adapter; gh's sign-in, the preflight
+// check, a path suggestion and the readiness probe come last. The report
+// numbers the steps in order. It is safe to
 // rerun. It changes only engine's own files (~/.config/engine, ~/.local/bin,
 // ~/.local/share/engine) and what the adapters change (Codex's plugin in the
 // operator's Codex home, through Codex's own CLI), and for anything else it
@@ -40,6 +41,9 @@ type Deps struct {
 	// being set up, prints its report, and reports whether an unattended
 	// session there would run.
 	Check func(harness string, out io.Writer) (bool, error)
+	// Ready runs the readiness probe of the repo (owner/name) afresh on the
+	// host being set up, prints its report, and reports whether it passed.
+	Ready func(repo string, out io.Writer) (bool, error)
 }
 
 // runner is one setup run against one target.
@@ -159,8 +163,8 @@ func report(out io.Writer, t target, opens []string) bool {
 // steps lists the steps for the target, and records their names and which
 // harnesses act on this host. A host that is this one has no engine to
 // install or config to copy: it only checks. Each harness the host lists
-// adds its steps, in the registry's order. gh's sign-in comes next, and the
-// check runs last.
+// adds its steps, in the registry's order. gh's sign-in comes next, then
+// the check, the path suggestion and, last, the readiness probe.
 func (r *runner) steps(out io.Writer) []harness.Step {
 	steps := []harness.Step{{Name: "tools", Run: r.tools}, {Name: "engine", Run: r.enginePath}, {Name: "no suspend", Run: r.noSuspend}}
 	if r.t.remote() {
@@ -175,7 +179,9 @@ func (r *runner) steps(out io.Writer) []harness.Step {
 		steps = append(steps, own...)
 	}
 	steps = append(steps, harness.Step{Name: "gh auth", Run: r.ghAuth},
-		harness.Step{Name: "preflight", Run: func() (harness.Outcome, error) { return r.preflight(out) }})
+		harness.Step{Name: "preflight", Run: func() (harness.Outcome, error) { return r.preflight(out) }},
+		harness.Step{Name: "path", Run: r.path},
+		harness.Step{Name: "readiness", Run: func() (harness.Outcome, error) { return r.readiness(out) }})
 	r.names = make([]string, len(steps))
 	for i, s := range steps {
 		r.names[i] = s.Name

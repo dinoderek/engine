@@ -46,6 +46,9 @@ func runSetup(args []string, env Env) int {
 		Check: func(harness string, out io.Writer) (bool, error) {
 			return start.Check(startDeps(env), host, harness, out)
 		},
+		Ready: func(repo string, out io.Writer) (bool, error) {
+			return start.Ready(startDeps(env), host, repo, out)
+		},
 	}
 	closed, err := setup.Run(host, d, env.Out)
 	if err != nil {

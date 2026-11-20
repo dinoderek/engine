@@ -113,6 +113,27 @@ func TestLaunchCommand(t *testing.T) {
 	}
 }
 
+// A host's path goes first on the session's PATH, expanded, before anything
+// else the window command sets.
+func TestLaunchCommandPutsTheHostPathFirst(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	cfg := filepath.Join(h.dir, ".config", "engine", "hosts.toml")
+	data, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, cfg, strings.Replace(string(data), `capabilities = ["macos"]`, `capabilities = ["macos"]`+"\npath = [\"~/.local/share/mise/shims\", \"/opt/my bin\"]", 1), 0o600)
+	tm := &tmuxFake{}
+	if _, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, tm, nil), request()); err != nil {
+		t.Fatal(err)
+	}
+	want := "exec /bin/sh -c " + hosts.ShellWord(`export PATH=`+filepath.Join(h.dir, ".local/share/mise/shims")+`:'/opt/my bin':"$PATH" && export ENGINE_RUN_DIR=`)
+	if !strings.HasPrefix(tm.command, strings.TrimSuffix(want, "'")) {
+		t.Errorf("command\n got %s\nwant it to start %s", tm.command, want)
+	}
+}
+
 func TestSpawnRefusalsChangeNothing(t *testing.T) {
 	with := func(edit func(*SpawnRequest)) SpawnRequest { r := request(); edit(&r); return r }
 	cases := []spawnRefusal{
