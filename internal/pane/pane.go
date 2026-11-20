@@ -146,8 +146,8 @@ const (
 // and when it was submitted, and records the outcome in the run's
 // OutcomeLog. It retries an unreachable or failing server for RetryFor,
 // under one request key, so a repeat is the same request. A posted prompt
-// leaves the queue, and so does one the server refused or the run cannot
-// reach a server for; one still unposted stays for the next prompt to post. A post of a prompt another post holds
+// leaves the queue, and so does one the server refused or a run with no
+// server session holds; one still unposted stays for the next prompt to post. A post of a prompt another post holds
 // does nothing.
 func (p Poster) Post(ctx context.Context, dir string, seq int) error {
 	file := pendingFile(dir, seq)
@@ -165,12 +165,15 @@ func (p Poster) Post(ctx context.Context, dir string, seq int) error {
 	}
 	conn, err := connection(dir)
 	if err != nil {
-		_ = os.Remove(file) // the run has no server to post to, now or later
+		if _, missing := os.Stat(filepath.Join(dir, sessionFile)); errors.Is(missing, os.ErrNotExist) {
+			_ = os.Remove(file) // the run has no server to post to, now or later
+		}
 		return p.record(dir, outcome{Seq: seq, Error: err.Error()}, err)
 	}
+	key := fmt.Sprintf("pane/%s/%d", conn.Attempt, seq)
 	if q.Vouch == nil {
 		q.Vouch = &control.PaneInput{Transcript: p.inTranscript(q), At: q.At}
-		q.Vouch.Signature, _ = session.SignPane(dir, control.PaneMessage(conn.Attempt, q.Prompt)) // unsigned is flagged, not refused
+		q.Vouch.Signature, _ = session.SignPane(dir, control.PaneMessage(conn.Attempt, key, *q.Vouch, q.Prompt)) // unsigned is flagged, not refused
 		data, err := json.Marshal(q)
 		if err != nil {
 			return err
@@ -180,7 +183,7 @@ func (p Poster) Post(ctx context.Context, dir string, seq int) error {
 		}
 	}
 	client := control.Client{URL: conn.URL, Token: conn.token, HTTP: p.HTTP}
-	out, err := p.call(ctx, client, control.Request{Op: "pane-input", Key: fmt.Sprintf("pane/%s/%d", conn.Attempt, seq), Body: q.Prompt, Pane: q.Vouch})
+	out, err := p.call(ctx, client, control.Request{Op: "pane-input", Key: key, Body: q.Prompt, Pane: q.Vouch})
 	o := outcome{Seq: seq, Signed: q.Vouch.Signature != "", Transcript: q.Vouch.Transcript}
 	if err != nil {
 		o.Error = err.Error()

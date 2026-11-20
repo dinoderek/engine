@@ -29,8 +29,12 @@ func paneSession(t *testing.T, s Service) (Item, Actor, Update, ed25519.PrivateK
 	return task, worker, question, priv
 }
 
-func signed(priv ed25519.PrivateKey, attempt, text string) *PaneInput {
-	return &PaneInput{Signature: hex.EncodeToString(ed25519.Sign(priv, PaneMessage(attempt, text))), Transcript: true}
+// vouched is a pane-input of text signed as the prompt hook signs it, under
+// a fresh request key, found in the transcript and typed at at.
+func vouched(priv ed25519.PrivateKey, attempt, text string, at time.Time) Request {
+	r := Request{Op: "pane-input", Key: Secret(), Body: text, Pane: &PaneInput{Transcript: true, At: at}}
+	r.Pane.Signature = hex.EncodeToString(ed25519.Sign(priv, PaneMessage(attempt, r.Key, *r.Pane, text)))
+	return r
 }
 
 // notes are the coordinator's notes to the operator on item.
@@ -48,7 +52,7 @@ func TestASignedPaneAnswerResolvesTheTasksQuestion(t *testing.T) {
 	s := service(t)
 	task, worker, question, priv := paneSession(t, s)
 	const answer = "Yes, approved.\nDrop the old column too. "
-	out := call(t, s, worker, Request{Op: "pane-input", Body: answer, Pane: signed(priv, worker.Attempt, answer)})
+	out := call(t, s, worker, vouched(priv, worker.Attempt, answer, time.Time{}))
 	if len(out.Updates) != 2 {
 		t.Fatalf("updates = %+v, want the answer and the restored state", out.Updates)
 	}
@@ -74,26 +78,47 @@ func TestASignedPaneAnswerResolvesTheTasksQuestion(t *testing.T) {
 func TestAPaneAnswerTheHookDidNotVouchForResolvesWithOneNote(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
-		pane   func(ed25519.PrivateKey, string) *PaneInput
+		post   func(ed25519.PrivateKey, string) Request
 		reason string
 	}{
-		{"unsigned", func(ed25519.PrivateKey, string) *PaneInput { return &PaneInput{Transcript: true} }, "it is unsigned"},
-		{"no vouch at all", func(ed25519.PrivateKey, string) *PaneInput { return nil }, "it is unsigned"},
-		{"signed with another key", func(_ ed25519.PrivateKey, a string) *PaneInput {
+		{"unsigned", func(ed25519.PrivateKey, string) Request {
+			return Request{Op: "pane-input", Body: "Approved", Pane: &PaneInput{Transcript: true}}
+		}, "it is unsigned"},
+		{"no vouch at all", func(ed25519.PrivateKey, string) Request { return Request{Op: "pane-input", Body: "Approved"} }, "it is unsigned"},
+		{"signed with another key", func(_ ed25519.PrivateKey, a string) Request {
 			_, other, _ := ed25519.GenerateKey(rand.Reader)
-			return signed(other, a, "Approved")
+			return vouched(other, a, "Approved", time.Time{})
 		}, "its signature does not match"},
-		{"signed for other text", func(k ed25519.PrivateKey, a string) *PaneInput { return signed(k, a, "Rejected") }, "its signature does not match"},
-		{"missing from the transcript", func(k ed25519.PrivateKey, a string) *PaneInput {
-			p := signed(k, a, "Approved")
-			p.Transcript = false
-			return p
+		{"signed for other text", func(k ed25519.PrivateKey, a string) Request {
+			r := vouched(k, a, "Rejected", time.Time{})
+			r.Body = "Approved"
+			return r
+		}, "its signature does not match"},
+		{"resent under another request key", func(k ed25519.PrivateKey, a string) Request {
+			r := vouched(k, a, "Approved", time.Time{})
+			r.Key = Secret()
+			return r
+		}, "its signature does not match"},
+		{"resent with another time", func(k ed25519.PrivateKey, a string) Request {
+			r := vouched(k, a, "Approved", time.Time{})
+			r.Pane.At = time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+			return r
+		}, "its signature does not match"},
+		{"missing from the transcript", func(k ed25519.PrivateKey, a string) Request {
+			r := vouched(k, a, "Approved", time.Time{})
+			r.Pane.Transcript = false
+			return r
+		}, "its signature does not match the run's pane key, and it is missing from the prompts"},
+		{"signed as missing from the transcript", func(k ed25519.PrivateKey, a string) Request {
+			r := Request{Op: "pane-input", Key: Secret(), Body: "Approved", Pane: &PaneInput{}}
+			r.Pane.Signature = hex.EncodeToString(ed25519.Sign(k, PaneMessage(a, r.Key, *r.Pane, r.Body)))
+			return r
 		}, "missing from the prompts in the session's transcript"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := service(t)
 			task, worker, question, priv := paneSession(t, s)
-			out := call(t, s, worker, Request{Op: "pane-input", Body: "Approved", Pane: tc.pane(priv, worker.Attempt)})
+			out := call(t, s, worker, tc.post(priv, worker.Attempt))
 			if out.Updates[0].Kind != KindPaneAnswer || out.Updates[0].Body != "Approved" {
 				t.Fatalf("answer = %+v, want it recorded", out.Updates[0])
 			}
@@ -119,7 +144,7 @@ func TestPaneInputWithNoOpenQuestionIsAMessage(t *testing.T) {
 	s := service(t)
 	task, worker, question, priv := paneSession(t, s)
 	call(t, s, op, Request{Op: "resolve", ReplyTo: question.ID, Body: "Approved"})
-	out := call(t, s, worker, Request{Op: "pane-input", Body: "Also bump the version", Pane: signed(priv, worker.Attempt, "Also bump the version")})
+	out := call(t, s, worker, vouched(priv, worker.Attempt, "Also bump the version", time.Time{}))
 	if len(out.Updates) != 1 || out.Updates[0].Kind != KindPaneMessage || out.Updates[0].ReplyTo != 0 || out.Updates[0].Item != task.ID {
 		t.Fatalf("updates = %+v, want one pane message resolving nothing", out.Updates)
 	}
@@ -187,15 +212,13 @@ func TestStartedRecordsTheRunsPaneKey(t *testing.T) {
 func TestAPaneAnswerAnswersOnlyAQuestionAskedBeforeItWasTyped(t *testing.T) {
 	s := service(t)
 	task, worker, question, priv := paneSession(t, s) // asked at the service's clock, 09:00
-	typed := signed(priv, worker.Attempt, "Approved")
-	typed.At = s.now().Add(-time.Minute) // typed before the question, so not its answer
-	out := call(t, s, worker, Request{Op: "pane-input", Body: "Approved", Pane: typed})
+	// Typed before the question, so not its answer.
+	out := call(t, s, worker, vouched(priv, worker.Attempt, "Approved", s.now().Add(-time.Minute)))
 	if out.Updates[0].Kind != KindPaneMessage {
 		t.Fatalf("a text typed before the question resolved it: %+v", out.Updates[0])
 	}
-	typed = signed(priv, worker.Attempt, "Yes")
-	typed.At = s.now().Add(-clockSkew) // within the host's clock skew
-	if out = call(t, s, worker, Request{Op: "pane-input", Body: "Yes", Pane: typed}); out.Updates[0].ReplyTo != question.ID {
+	// Within the host's clock skew.
+	if out = call(t, s, worker, vouched(priv, worker.Attempt, "Yes", s.now().Add(-clockSkew))); out.Updates[0].ReplyTo != question.ID {
 		t.Errorf("answer %+v, want it to resolve %d despite the skew", out.Updates[0], question.ID)
 	}
 	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" {
@@ -228,6 +251,9 @@ func TestAHarnessCommandAnswersNothing(t *testing.T) {
 	}
 	if st := mustSnapshot(t, s); st.Items[task.ID].State != "needs-human" {
 		t.Errorf("task %s, want it still held", st.Items[task.ID].State)
+	}
+	if out = call(t, s, worker, Request{Op: "pane-input", Body: "/tmp/x is fine"}); out.Updates[0].Kind != KindPaneAnswer {
+		t.Errorf("an answer starting with a path answered nothing: %+v", out.Updates[0])
 	}
 }
 

@@ -146,7 +146,7 @@ func TestTheOperatorsPromptIsPostedVerbatimWithAValidSignature(t *testing.T) {
 	}
 	key, _ := hex.DecodeString(r.pub)
 	sig, _ := hex.DecodeString(got.Pane.Signature)
-	if !ed25519.Verify(key, control.PaneMessage(attempt, answer), sig) {
+	if !ed25519.Verify(key, control.PaneMessage(attempt, got.Key, *got.Pane, answer), sig) {
 		t.Error("the signature does not verify with the run's pane key")
 	}
 	if srv.auth[0] != "Bearer "+token {
@@ -314,6 +314,13 @@ func TestAPostWithNoCredentialFails(t *testing.T) {
 	must(t, os.Remove(filepath.Join(r.dir, tokenFile)))
 	if err := h.Post.Post(context.Background(), r.dir, 1); err == nil {
 		t.Error("posted with no credential")
+	}
+	if _, err := os.Stat(pendingFile(r.dir, 1)); err != nil {
+		t.Errorf("a prompt whose credential could not be read left the queue: %v", err)
+	}
+	must(t, os.Remove(filepath.Join(r.dir, sessionFile)))
+	if err := h.Post.Post(context.Background(), r.dir, 1); err == nil {
+		t.Error("posted with no server session")
 	}
 	if _, err := os.Stat(pendingFile(r.dir, 1)); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("a prompt the run can never post stayed queued: %v", err)

@@ -90,7 +90,7 @@ func TestThePromptHookPostsTheOperatorsPaneAnswer(t *testing.T) {
 	got := (*requests)[0]
 	key, _ := hex.DecodeString(pub)
 	sig, _ := hex.DecodeString(got.Pane.Signature)
-	if got.Op != "pane-input" || got.Body != answer || !got.Pane.Transcript || !ed25519.Verify(key, control.PaneMessage("a9", answer), sig) {
+	if got.Op != "pane-input" || got.Body != answer || !got.Pane.Transcript || !ed25519.Verify(key, control.PaneMessage("a9", got.Key, *got.Pane, answer), sig) {
 		t.Errorf("request %+v, want the answer verbatim, signed, found in the transcript", got)
 	}
 }

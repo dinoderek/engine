@@ -38,7 +38,7 @@ it was found and when it was submitted. The queue file keeps what it
 vouches, so every retry is the same request under the same key.
 
 An unanswering or failing server is retried for 15 minutes, waits growing
-from 5 seconds to 2 minutes. An unposted prompt stays queued for the
+5 seconds to 2 minutes. An unposted prompt stays queued for the
 session's next prompt to post again; a post locks its queue file, so two
 never race. Posted, refused or unpostable, it is dequeued. `pane.jsonl` logs each
 outcome: its update IDs or its error. If the background start fails, the
@@ -48,9 +48,10 @@ hook posts at once, without waiting or retrying.
 
 A server run's spawn writes an Ed25519 key's seed to the owner-only
 `pane-key` and returns its public half, which the coordinator stores on the
-attempt. The hook signs the attempt ID and text with it. A post unsigned,
+attempt. The hook signs the attempt ID, request key, time, transcript claim and
+text with it. A post unsigned,
 failing the attempt's key, or missing from the transcript is still
-recorded and still resolves, but the server raises one coordinator note. A
-session set on faking a post can read its own run directory: the note
-makes the attempt show, it does not stop it. `collect` never lists
+recorded and still resolves, but the server raises one coordinator note. The
+note shows a post made without the hook; a session that reads its own run
+directory can avoid it. `collect` never lists
 `pane-key`.

@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -28,9 +29,10 @@ type PaneInput struct {
 }
 
 // PaneMessage is what the prompt hook signs for the operator's text in the
-// session of attempt.
-func PaneMessage(attempt, text string) []byte {
-	return []byte("engine pane input\n" + attempt + "\n" + text)
+// session of attempt, posted under request key with what vouch says, its
+// signature aside: a resend under another key, time or claim fails.
+func PaneMessage(attempt, key string, vouch PaneInput, text string) []byte {
+	return fmt.Appendf(nil, "engine pane input\n%s\n%s\n%s\n%t\n%s", attempt, key, vouch.At.UTC().Format(time.RFC3339Nano), vouch.Transcript, text)
 }
 
 // Started records that the attempt's window opened as window, and the
@@ -63,7 +65,7 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 	}
 	r.ID, r.Recipient, r.ReplyTo, r.RequiresReply, r.Pane = item, "", 0, false, nil
 	kind, question := KindPaneMessage, 0
-	if !strings.HasPrefix(strings.TrimSpace(r.Body), "/") { // a harness command, such as /compact, answers nothing
+	if !harnessCommand.MatchString(strings.TrimSpace(r.Body)) {
 		question = paneQuestion(st, a, item, vouch.At)
 	}
 	if question > 0 {
@@ -74,7 +76,7 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 	if question > 0 {
 		out.Updates = append(out.Updates, s.release(st, a, st.Updates[question-1])...)
 	}
-	if doubts := paneDoubts(at, r.Body, vouch); len(doubts) > 0 {
+	if doubts := paneDoubts(at, r.Key, r.Body, vouch); len(doubts) > 0 {
 		outcome := "resolved nothing"
 		if question > 0 {
 			outcome = fmt.Sprintf("resolved question %d", question)
@@ -89,6 +91,10 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 	}
 	return out, nil
 }
+
+// harnessCommand is a harness's own command, such as /compact or /model x,
+// which answers no question; a path such as /tmp/x is not one.
+var harnessCommand = regexp.MustCompile(`^/[A-Za-z][A-Za-z0-9_:-]*(\s|$)`)
 
 // clockSkew is how far a host's clock may run behind the server's: a
 // question asked up to this long after a text's submission time may still
@@ -121,12 +127,12 @@ func paneQuestion(st *State, a Actor, item string, at time.Time) int {
 
 // paneDoubts are the reasons a pane-input post may not have come through
 // its session's prompt hook.
-func paneDoubts(at Attempt, text string, vouch PaneInput) []string {
+func paneDoubts(at Attempt, key, text string, vouch PaneInput) []string {
 	var doubts []string
 	switch {
 	case vouch.Signature == "":
 		doubts = append(doubts, "it is unsigned")
-	case !validPaneSignature(at, text, vouch.Signature):
+	case !validPaneSignature(at, key, text, vouch):
 		doubts = append(doubts, "its signature does not match the run's pane key")
 	}
 	if !vouch.Transcript {
@@ -135,11 +141,11 @@ func paneDoubts(at Attempt, text string, vouch PaneInput) []string {
 	return doubts
 }
 
-func validPaneSignature(at Attempt, text, signature string) bool {
-	key, err := hex.DecodeString(at.PaneKey)
-	if err != nil || len(key) != ed25519.PublicKeySize {
+func validPaneSignature(at Attempt, key, text string, vouch PaneInput) bool {
+	pub, err := hex.DecodeString(at.PaneKey)
+	if err != nil || len(pub) != ed25519.PublicKeySize {
 		return false
 	}
-	sig, err := hex.DecodeString(signature)
-	return err == nil && ed25519.Verify(key, PaneMessage(at.ID, text), sig)
+	sig, err := hex.DecodeString(vouch.Signature)
+	return err == nil && ed25519.Verify(pub, PaneMessage(at.ID, key, vouch, text), sig)
 }
