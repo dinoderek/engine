@@ -43,7 +43,7 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
 | `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start (else creation) counts; undated sorts first, ties select the later rollup entry. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. Already merged is done. |
 | `ready` | Probes a repo's readiness (`readiness.md`). |
-| `typed` | Logs a text's hash before the coordinator types it (`harnesses.md`). |
+| `typed` | Logs a text's hash before the coordinator types it (`pane-input.md`). |
 | `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or was stopped (as is a session hitting a usage limit again in its kickoff), or it has changes, then deletes the local branch if its tip is the merged head (`--head`) or an ancestor of `origin`'s default branch after a fetch; otherwise keeps it and notes the unmerged commits. Failures are notes; other releases keep the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine` (the build) and `host`. A failure is `{"error": …, "refused": true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is an unreachable host. A caller refuses a reply on another protocol, or not an engine's, and tells the operator to run `engine setup --host <name>`.

@@ -201,7 +201,7 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 			if window == "" {
 				continue
 			}
-			return c.Service.SetAttempt(at.ID, "running", window)
+			return c.Service.Started(at.ID, window, r.PaneKey)
 		}
 	}
 	credentials := st.ReceiptsForDispatch(at.ID)

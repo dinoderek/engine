@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -94,4 +95,26 @@ func TestAContinueLogsItsHashBeforeItIsTyped(t *testing.T) {
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
 	order.check(t, st.Attempts[st.Items[task.ID].Attempt].RunID)
+}
+
+// A dispatch whose outcome was unresolved, then found in the host's status,
+// records the run's pane key from that status as it starts running.
+func TestADispatchRecoveredFromStatusRecordsItsPaneKey(t *testing.T) {
+	c, h, _, _, task := setup(t)
+	h.unresolved = true
+	pass(t, c)
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	at := st.Attempts[st.Items[task.ID].Attempt]
+	if at.State != "dispatching" {
+		t.Fatalf("the unresolved dispatch is %s", at.State)
+	}
+	h.status.Windows = append(h.status.Windows, hostops.Window{Name: "demo-" + task.ID[1:], ID: "@7", Alive: true})
+	h.status.Runs = append(h.status.Runs, hostops.Run{Name: "demo-" + task.ID[1:], PaneKey: "beef",
+		Record: session.Record{RunID: at.RunID, Name: "demo-" + task.ID[1:], Tmux: "engine:@7", Control: true}})
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	if got := st.Attempts[at.ID]; got.State != "running" || got.Window != "@7" || got.PaneKey != "beef" {
+		t.Errorf("recovered attempt %+v, want it running in @7 with the run's pane key", got)
+	}
 }

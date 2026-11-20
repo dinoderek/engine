@@ -47,6 +47,10 @@ ops, each printing one JSON object:
                                      hook knows engine typed it
 `
 
+// UnknownOp is the refusal of an op this engine does not define, which a
+// caller reads to tell a host whose engine predates the op.
+func UnknownOp(op string) string { return fmt.Sprintf("unknown op %q", op) }
+
 // Envelope is what every reply carries.
 type Envelope struct {
 	Protocol int    `json:"protocol"`
@@ -127,7 +131,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		"typed":   func() (any, error) { return LogTyped(d, req.RunID, hash) },
 	}[op]
 	if run == nil {
-		return nil, refuse("unknown op %q", op)
+		return nil, refuse("%s", UnknownOp(op))
 	}
 	switch op {
 	case "sync-repo":

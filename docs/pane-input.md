@@ -4,21 +4,21 @@
 
 ## Why
 
-A question holds its task in `needs-human`. An operator who answers by
-typing into the session's pane reaches the session but not the server,
-which would keep the task held and its merge blocked. The prompt hook,
-`engine hook prompt --harness <name>` on every submitted prompt, closes that
-gap with no command for the operator. Claude Code and Codex both run it.
+A question holds its task in `needs-human`. An answer typed into the
+session's pane reaches the session but not the server, so the task would
+stay held and its merge blocked. The prompt hook, `engine hook prompt
+--harness <name>` on every submitted prompt, closes that gap with no
+command for the operator. Claude Code and Codex both run it.
 
 ## Telling the operator's prompts from engine's
 
 Before engine types into a run's pane, or launches it with a kickoff, it
 logs the text's SHA-256, trimmed of surrounding white space, in the run's
-`typed.jsonl`: the spawn logs the kickoff before the window opens, and the
-coordinator logs each wake and `continue` through the host's `typed` op
-before typing it. A text it cannot log it does not type, and a spawn that
-cannot log its kickoff fails. A host whose engine predates the `typed` op
-has no prompt hook either, so its refusal of the op lets the text through.
+`typed.jsonl`: the spawn logs the kickoff before the window opens, the
+coordinator each wake and `continue` through the host's `typed` op. Text it
+cannot log it does not type; a spawn that cannot log its kickoff fails. A
+host whose engine predates the op has no prompt hook either, so its
+refusal of the op lets the text through.
 
 In a server run, the hook logs every submitted prompt in `prompts.jsonl`,
 by hash; elsewhere it does nothing. Each logged hash accounts for one
@@ -28,22 +28,29 @@ session started, is ignored.
 
 ## Posting
 
-The operator's prompt is queued in `pane-<n>.json` and posted by a
-background `engine hook prompt --harness <name> <run-dir> <n>`, since a
-harness may write the prompt to its transcript only after its hooks run. The
-post waits up to a minute for the adapter's `Prompts` to show the text in the
-transcript, then sends it verbatim with the `pane-input` op, on the run's
-credential, saying whether it was found. Each outcome, its update IDs or
-its error, is a line in `pane.jsonl`; a failed post keeps its queue file.
-If the background start fails, the hook posts at once without waiting.
+The operator's prompt is queued in `pane-<n>.json` for a background
+`engine hook prompt --harness <name> <run-dir> <n>`, since a harness may
+write a prompt to its transcript only after its hooks run. It waits up to a
+minute for the adapter's `Prompts` to show the text, then posts it verbatim
+with the `pane-input` op, on the run's credential, saying whether it was
+found and when it was submitted. The queue file keeps what it vouches, so
+every retry is the same request under the same key.
+
+A server that does not answer or fails is retried for 15 minutes, waits
+growing from 5 seconds to 2 minutes. A prompt still unposted stays queued,
+and the session's next prompt starts its post again; a post locks its queue
+file, so two never race. Posted or refused, it leaves the queue. Each
+outcome, its update IDs or its error, is a line in `pane.jsonl`. If the
+background start fails, the hook posts at once, neither waiting nor
+retrying.
 
 ## Detection, not prevention
 
 A server run's spawn writes an Ed25519 key's seed to the owner-only
 `pane-key` and returns its public half, which the coordinator stores on the
-attempt. The hook signs the attempt ID and text with it. A post that is
-unsigned, fails the attempt's key, or was missing from the transcript is
-still recorded and still resolves, but the server raises one coordinator
-note. A session set on faking a post can read its own run directory; the
-note makes the attempt show, it does not stop it. `collect` never lists
+attempt. The hook signs the attempt ID and text with it. A post unsigned,
+failing the attempt's key, or missing from the transcript is still
+recorded and still resolves, but the server raises one coordinator note. A
+session set on faking a post can read its own run directory: the note
+makes the attempt show, it does not stop it. `collect` never lists
 `pane-key`.

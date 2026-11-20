@@ -42,6 +42,10 @@ func TestASpawnLogsItsKickoffBeforeTheWindowOpens(t *testing.T) {
 	if err != nil || replay.PaneKey != first.PaneKey {
 		t.Errorf("a replay's pane key %q, %v; want %q", replay.PaneKey, err, first.PaneKey)
 	}
+	status, err := ReadStatus(d)
+	if err != nil || len(status.Runs) != 1 || status.Runs[0].PaneKey != first.PaneKey {
+		t.Errorf("status runs %+v, %v; want the run's pane key %s", status.Runs, err, first.PaneKey)
+	}
 	collected, err := Collect(d, r.Spawn.RunID)
 	if err != nil || slices.Contains(collected.Files, session.PaneKeyFile) || !slices.Contains(collected.Files, session.TypedLog) {
 		t.Errorf("collected %v, %v; want the typed-text log and never the pane key", collected.Files, err)

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // The update kinds of the operator's pane input, which a session's prompt
@@ -22,6 +23,8 @@ const (
 type PaneInput struct {
 	Signature  string `json:"signature,omitempty"`
 	Transcript bool   `json:"transcript,omitempty"`
+	// At is when the session submitted the text, by its host's clock.
+	At time.Time `json:"at,omitzero"`
 }
 
 // PaneMessage is what the prompt hook signs for the operator's text in the
@@ -38,8 +41,8 @@ func (s Service) Started(id, window, paneKey string) error {
 
 // paneInput records the text the operator typed into the pane of the
 // calling session, verbatim, for the session's own item. It resolves the
-// item's open question, if one holds it, restoring the held tasks as a
-// resolution does. A post the hook did not vouch for (an absent or invalid
+// open question it answers (paneQuestion), if any, restoring the held tasks
+// as a resolution does. A post the hook did not vouch for (an absent or invalid
 // signature, or text missing from the transcript) is still recorded, and
 // resolves alike, but raises one coordinator note to the operator.
 func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
@@ -59,7 +62,7 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 		vouch = *r.Pane
 	}
 	r.ID, r.Recipient, r.ReplyTo, r.RequiresReply, r.Pane = item, "", 0, false, nil
-	kind, question := KindPaneMessage, OwnQuestion(st, item)
+	kind, question := KindPaneMessage, paneQuestion(st, a, item, vouch.At)
 	if question > 0 {
 		kind, r.ID, r.ReplyTo = KindPaneAnswer, st.Updates[question-1].Item, question
 	}
@@ -78,6 +81,34 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 		out.Updates = append(out.Updates, st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{ID: item, Recipient: "operator"}, "say", note, s.now()))
 	}
 	return out, nil
+}
+
+// clockSkew is how far a host's clock may run behind the server's: a
+// question asked up to this long after a text's submission time may still
+// be the one it answers.
+const clockSkew = 30 * time.Second
+
+// paneQuestion is the open question a pane input submitted at at answers,
+// or 0: of the open questions that hold item and were asked before at, the
+// oldest the session asked itself, else the oldest. A question asked after
+// the text was typed is not its answer. A zero at bounds nothing.
+func paneQuestion(st *State, a Actor, item string, at time.Time) int {
+	other := 0
+	for _, u := range st.Updates {
+		if !u.RequiresReply || u.Item != item && u.Task != item || resolved(st, u.ID) {
+			continue
+		}
+		if !at.IsZero() && u.At.After(at.Add(clockSkew)) {
+			continue
+		}
+		if u.Author == a.Name {
+			return u.ID
+		}
+		if other == 0 {
+			other = u.ID
+		}
+	}
+	return other
 }
 
 // paneDoubts are the reasons a pane-input post may not have come through

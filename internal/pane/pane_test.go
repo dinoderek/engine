@@ -10,8 +10,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -33,7 +35,8 @@ type server struct {
 	mu       sync.Mutex
 	requests []control.Request
 	auth     []string
-	status   int
+	// statuses are the failures the next requests get, in turn.
+	statuses []int
 }
 
 func (s *server) start(t *testing.T) string {
@@ -46,8 +49,9 @@ func (s *server) start(t *testing.T) string {
 		defer s.mu.Unlock()
 		s.requests = append(s.requests, req)
 		s.auth = append(s.auth, r.Header.Get("Authorization"))
-		if s.status != 0 {
-			w.WriteHeader(s.status)
+		if len(s.statuses) > 0 {
+			w.WriteHeader(s.statuses[0])
+			s.statuses = s.statuses[1:]
 			_, _ = w.Write([]byte(`{"error":"refused"}`))
 			return
 		}
@@ -214,27 +218,104 @@ func TestAPromptThatCannotGoToTheBackgroundIsPostedAtOnce(t *testing.T) {
 	}
 }
 
-func TestAFailedPostStaysQueuedWithItsError(t *testing.T) {
-	srv := server{status: http.StatusConflict}
+func TestARefusedPostLeavesTheQueueWithItsError(t *testing.T) {
+	srv := server{statuses: []int{http.StatusConflict}}
 	r := newRun(t, srv.start(t))
 	c := &clock{now: start}
 	h := Hook{Dir: r.dir, Post: poster(c, 0), Detach: func(string, int) error { return nil }}
+	h.Post.RetryFor = time.Hour
 	must(t, h.Submitted(r.event("Approved")))
 	if err := h.Post.Post(context.Background(), r.dir, 1); err == nil {
 		t.Fatal("a refused post succeeded")
 	}
-	if _, err := os.Stat(pendingFile(r.dir, 1)); err != nil {
-		t.Errorf("the refused prompt left the queue: %v", err)
+	if len(srv.requests) != 1 || !c.now.Equal(start) {
+		t.Errorf("%d requests by %s; want a refusal tried once", len(srv.requests), c.now)
+	}
+	if _, err := os.Stat(pendingFile(r.dir, 1)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the refused prompt stayed queued: %v", err)
 	}
 	log, _ := os.ReadFile(filepath.Join(r.dir, OutcomeLog))
 	if !strings.Contains(string(log), `"error":"refused"`) {
 		t.Errorf("outcome log %q, want the refusal", log)
 	}
+	if err := h.Post.Post(context.Background(), r.dir, 9); err == nil {
+		t.Error("posted a prompt that was never queued")
+	}
+}
+
+func TestAPostRetriesAFailingServerWithTheSameRequest(t *testing.T) {
+	srv := server{statuses: []int{http.StatusBadGateway, http.StatusBadGateway, http.StatusBadGateway}}
+	r := newRun(t, srv.start(t))
+	c := &clock{now: start}
+	h := Hook{Dir: r.dir, Post: poster(c, 0), Detach: func(string, int) error { return nil }}
+	h.Post.RetryFor = time.Minute
+	must(t, h.Submitted(r.event("Approved")))
+	must(t, h.Post.Post(context.Background(), r.dir, 1))
+	// The client tries twice per call: 502, 502; then, 5s later, 502 and 200.
+	if len(srv.requests) != 4 || !c.now.Equal(start.Add(firstRetry)) {
+		t.Fatalf("%d requests by %s; want four over one wait", len(srv.requests), c.now)
+	}
+	for _, got := range srv.requests[1:] {
+		if !reflect.DeepEqual(got, srv.requests[0]) {
+			t.Errorf("a retry sent %+v, want %+v", got, srv.requests[0])
+		}
+	}
+	if !srv.requests[0].Pane.At.Equal(start) {
+		t.Errorf("submitted at %s, want %s", srv.requests[0].Pane.At, start)
+	}
+	if _, err := os.Stat(pendingFile(r.dir, 1)); !errors.Is(err, os.ErrNotExist) {
+		t.Error("the posted prompt stayed queued")
+	}
+}
+
+func TestAPromptAnOutageLeftIsPostedWithTheNextPrompt(t *testing.T) {
+	srv := server{statuses: []int{http.StatusServiceUnavailable, http.StatusServiceUnavailable}}
+	r := newRun(t, srv.start(t))
+	c := &clock{now: start}
+	var detached []int
+	h := Hook{Dir: r.dir, Post: poster(c, 0), Detach: func(_ string, seq int) error { detached = append(detached, seq); return nil }}
+	must(t, h.Submitted(r.event("Approved")))
+	if err := h.Post.Post(context.Background(), r.dir, 1); err == nil {
+		t.Fatal("a post the server failed succeeded")
+	}
+	first := srv.requests[0]
+	must(t, h.Submitted(r.event(kickoff)))
+	if !reflect.DeepEqual(detached, []int{1, 1}) {
+		t.Fatalf("detached %v; want the queued prompt started again by the next one", detached)
+	}
+	must(t, h.Post.Post(context.Background(), r.dir, 1))
+	if got := srv.requests[len(srv.requests)-1]; !reflect.DeepEqual(got, first) {
+		t.Errorf("the later post sent %+v, want the first request again, %+v", got, first)
+	}
+}
+
+func TestAPostOfAPromptAnotherPostHoldsDoesNothing(t *testing.T) {
+	var srv server
+	r := newRun(t, srv.start(t))
+	c := &clock{now: start}
+	h := Hook{Dir: r.dir, Post: poster(c, 0), Detach: func(string, int) error { return nil }}
+	must(t, h.Submitted(r.event("Approved")))
+	f, err := os.Open(pendingFile(r.dir, 1))
+	must(t, err)
+	defer func() { _ = f.Close() }()
+	must(t, syscall.Flock(int(f.Fd()), syscall.LOCK_EX))
+	must(t, h.Post.Post(context.Background(), r.dir, 1))
+	if len(srv.requests) != 0 {
+		t.Errorf("posted %d requests while another post held the prompt", len(srv.requests))
+	}
+}
+
+func TestAPostWithNoCredentialFails(t *testing.T) {
+	var srv server
+	r := newRun(t, srv.start(t))
+	c := &clock{now: start}
+	h := Hook{Dir: r.dir, Post: poster(c, 0), Detach: func(string, int) error { return nil }}
+	must(t, h.Submitted(r.event("Approved")))
 	must(t, os.Remove(filepath.Join(r.dir, tokenFile)))
 	if err := h.Post.Post(context.Background(), r.dir, 1); err == nil {
 		t.Error("posted with no credential")
 	}
-	if err := h.Post.Post(context.Background(), r.dir, 9); err == nil {
-		t.Error("posted a prompt that was never queued")
+	if _, err := os.Stat(pendingFile(r.dir, 1)); err != nil {
+		t.Errorf("the unposted prompt left the queue: %v", err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // paneSession is a dispatched task whose session asked a question, and the
@@ -177,5 +178,48 @@ func TestStartedRecordsTheRunsPaneKey(t *testing.T) {
 	}
 	if got := mustSnapshot(t, s).Attempts[at.ID].PaneKey; got != "abcd" {
 		t.Errorf("a later observation dropped the pane key: %q", got)
+	}
+}
+
+func TestAPaneAnswerAnswersOnlyAQuestionAskedBeforeItWasTyped(t *testing.T) {
+	s := service(t)
+	task, worker, question, priv := paneSession(t, s) // asked at the service's clock, 09:00
+	typed := signed(priv, worker.Attempt, "Approved")
+	typed.At = s.now().Add(-time.Minute) // typed before the question, so not its answer
+	out := call(t, s, worker, Request{Op: "pane-input", Body: "Approved", Pane: typed})
+	if out.Updates[0].Kind != KindPaneMessage {
+		t.Fatalf("a text typed before the question resolved it: %+v", out.Updates[0])
+	}
+	typed = signed(priv, worker.Attempt, "Yes")
+	typed.At = s.now().Add(-clockSkew) // within the host's clock skew
+	if out = call(t, s, worker, Request{Op: "pane-input", Body: "Yes", Pane: typed}); out.Updates[0].ReplyTo != question.ID {
+		t.Errorf("answer %+v, want it to resolve %d despite the skew", out.Updates[0], question.ID)
+	}
+	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" {
+		t.Errorf("task %s", st.Items[task.ID].State)
+	}
+}
+
+func TestAPaneAnswerPrefersTheSessionsOwnQuestion(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	asker, _ := dispatch(t, s, task)
+	theirs := call(t, s, asker, Request{Op: "ask", ID: plan.ID, Body: "Is main red?"}).Updates[0]
+	planner := Actor{Name: "a99", Role: "worker", Attempt: "a99"}
+	if err := s.Store.Transaction(func(st *State) error {
+		st.Attempts[planner.Attempt] = Attempt{ID: planner.Attempt, Item: plan.ID, State: "running"}
+		p := st.Items[plan.ID]
+		p.Attempt = planner.Attempt
+		st.Items[plan.ID] = p
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	own := call(t, s, planner, Request{Op: "ask", ID: plan.ID, Body: "Split the task?"}).Updates[0]
+	out := call(t, s, planner, Request{Op: "pane-input", Body: "Yes, split it"})
+	if out.Updates[0].ReplyTo != own.ID {
+		t.Errorf("the planner's pane answer resolved %d, want its own question %d, not the task's %d", out.Updates[0].ReplyTo, own.ID, theirs.ID)
 	}
 }

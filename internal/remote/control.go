@@ -106,7 +106,7 @@ func Typed(client Client, runID, text string) error {
 		var reply hostops.Typed
 		err := c.call("typed", []string{"--run-id", runID, "--sha256", hash}, "", &reply)
 		var refused *hostops.RefusedError
-		if errors.As(err, &refused) && refused.Reason == `unknown op "typed"` {
+		if errors.As(err, &refused) && refused.Reason == hostops.UnknownOp("typed") {
 			return nil
 		}
 		return err
