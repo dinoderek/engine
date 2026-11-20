@@ -32,6 +32,6 @@ func withStatus(st *State, item Item) Item {
 			tasks = append(tasks, t)
 		}
 	}
-	item.Status = PlanStatus(item, tasks, PendingQuestion(st, item.ID) > 0)
+	item.Status = PlanStatus(item, tasks, OwnQuestion(st, item.ID) > 0)
 	return item
 }

@@ -63,7 +63,7 @@ func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if item.PR != r.Merge.PR {
 		return Response{}, problem(409, "the merge request's PR is not the task's; record it with the in-review state")
 	}
-	if PendingQuestion(st, item.ID) > 0 {
+	if OwnQuestion(st, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	m := *r.Merge

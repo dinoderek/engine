@@ -90,7 +90,7 @@ func (s Service) sessionRow(st *State, item Item, at Attempt) SessionRow {
 			row.Observed = obs.State
 		}
 	}
-	if id := PendingQuestion(st, item.ID); id > 0 {
+	if id := OwnQuestion(st, item.ID); id > 0 {
 		row.Feedback = updateRef(st.Updates[id-1])
 	}
 	for i := len(st.Updates) - 1; i >= 0; i-- {

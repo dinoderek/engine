@@ -37,8 +37,7 @@ type Item struct {
 	// Vanished is true when the current attempt ended vanished: the task
 	// stays resumable.
 	Vanished bool
-	// Question is the item's, or its plan's, unresolved operator question,
-	// or 0.
+	// Question is the item's own unresolved operator question, or 0.
 	Question int
 	// Blocked are the dependencies that are not done.
 	Blocked []string
