@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
 )
 
 // unix is a stall or limit key's time.
@@ -53,6 +54,19 @@ func flagged(s Session) Session { s.StallNoted = s.WaitingSince; return s }
 // signedOut is f with its first host reporting harnesses signed out.
 func signedOut(f Fleet, harnesses ...string) Fleet { f.Hosts[0].Status.SignedOut = harnesses; return f }
 
+// tmuxCwdGone is f with its first host's tmux server running in a directory
+// that no longer exists.
+func tmuxCwdGone(f Fleet) Fleet {
+	f.Hosts[0].Status.TmuxCwdGone = &hostops.TmuxCwdGone{Pid: 7, Dir: "/gone", Reason: "tmux server 7 runs in /gone"}
+	return f
+}
+
+// otherHost is f with a second host that runs claude and has two free slots.
+func otherHost(f Fleet) Fleet {
+	f.Hosts = append(f.Hosts, HostLoad{Name: "laptop", Harnesses: []string{"claude"}, FreeSlots: 2, FreeHeavySlots: 2})
+	return f
+}
+
 // unreachable is f with its first host's status unreadable.
 func unreachable(f Fleet) Fleet { f.Hosts[0].Unreachable = "ssh: connect timed out"; return f }
 
@@ -85,6 +99,10 @@ func TestDecide(t *testing.T) {
 			[]string{"dispatch t2 devbox codex false"}},
 		{"a task whose only harness is signed out is a notice", withFleet(view(plan("planned"), task(2, "todo")), signedOut(fleet(2), "claude")),
 			[]string{"notice t2 placement/3"}},
+		{"a host whose tmux server's directory is gone takes no task", withFleet(view(plan("planned"), task(2, "todo")), tmuxCwdGone(fleet(2))),
+			[]string{"notice t2 placement/3"}},
+		{"another host takes the task while one has a dead tmux directory", withFleet(view(plan("planned"), task(2, "todo")), otherHost(tmuxCwdGone(fleet(2)))),
+			[]string{"dispatch t2 laptop claude false"}},
 		{"an unreachable host is never read as signed out", withFleet(view(plan("planned"), task(2, "todo")), unreachable(signedOut(fleet(2), "claude"))), nil},
 		{"another harness signed out changes nothing", withFleet(view(plan("planned"), task(2, "todo")), signedOut(fleet(2), "codex")),
 			[]string{"dispatch t2 devbox claude false"}},
@@ -167,5 +185,16 @@ func TestDecide(t *testing.T) {
 				t.Errorf("actions:\n%s\nwant:\n%s", got, want)
 			}
 		})
+	}
+}
+
+// The wait names the host and the reason, which carries the restart command.
+func TestPlacementWaitNamesAHostWithADeadTmuxDirectory(t *testing.T) {
+	got := tmuxCwdGone(fleet(2)).Place([]Want{{ID: "t2"}})
+	if len(got) != 1 || got[0].Host != "" || !strings.Contains(got[0].Wait, "devbox is unready: tmux server 7 runs in /gone") {
+		t.Errorf("placement %+v", got)
+	}
+	if h := tmuxCwdGone(unreachable(fleet(2))).Hosts[0]; h.Unready() != "" {
+		t.Errorf("an unreachable host's old status is not read: %q", h.Unready())
 	}
 }
