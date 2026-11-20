@@ -218,6 +218,8 @@ func TestSessionViewKeepsAVanishedAttemptUntilItsResume(t *testing.T) {
 	approve(t, s, plan)
 	a, out := dispatch(t, s, task)
 	_, other := dispatch(t, s, failed)
+	launched(t, s, out.Attempt.ID)
+	launched(t, s, other.Attempt.ID)
 	question := call(t, s, a, Request{Op: "ask", ID: task.ID, Body: "Which API?"}).Updates[0]
 	seenLive(t, s, out.Attempt.ID)
 	call(t, s, op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "host rebooted"})

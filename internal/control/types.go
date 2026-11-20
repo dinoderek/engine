@@ -211,12 +211,24 @@ func digest(b []byte) string   { sum := sha256.Sum256(b); return hex.EncodeToStr
 func fingerprint(v any) string { b, _ := json.Marshal(v); return digest(b) }
 
 // Problem carries a stable HTTP status without exposing storage errors.
+// Reason, when set, is a stable code a caller can tell the refusal by; the
+// response carries it beside the message.
 type Problem struct {
 	Status  int
 	Message string
+	Reason  string
 }
 
-func (e *Problem) Error() string { return e.Message }
+// ReasonReconcileRefused is attempt reconcile's refusal: the host read did
+// not confirm the execution's session gone.
+const ReasonReconcileRefused = "reconcile-refused"
+
+func (e *Problem) Error() string {
+	if e.Reason != "" {
+		return e.Reason + ": " + e.Message
+	}
+	return e.Message
+}
 func problem(status int, format string, args ...any) error {
-	return &Problem{status, fmt.Sprintf(format, args...)}
+	return &Problem{Status: status, Message: fmt.Sprintf(format, args...)}
 }

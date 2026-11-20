@@ -1,4 +1,4 @@
-> **Owns:** server deployment, records, API, credentials, the inbox, the dashboard and the session view. **Not here:** dispatch, recovery, the merge queue, host calls and session signals (`coordinator.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
+> **Owns:** server deployment, records, API, credentials, the inbox, the dashboard and the session view. **Not here:** dispatch, recovery, the merge queue, host calls (`coordinator.md`), session signals (`session-signals.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
 
 # Control server
 
@@ -34,7 +34,7 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 ## API and storage
 
-`POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors include an HTTP status; storage details stay in server logs.
+`POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors include an HTTP status, and some a stable `reason`; storage details stay in server logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`, which the CLI prints and never retries.
 
 Every write has a request key; a key reused for a different command fails. The CLI retries uncertain delivery once with the same key. Version conflicts require reading the current record. An edit invalidates a placement decision before any execution is reserved or launched.
 

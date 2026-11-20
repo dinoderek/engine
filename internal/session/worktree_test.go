@@ -69,7 +69,7 @@ func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != (Worktree{Path: wt, Branch: "task/r-7"}) {
+	if got != (Worktree{Path: wt, Branch: "task/r-7", Created: true, NewBranch: true}) {
 		t.Errorf("worktree = %+v", got)
 	}
 	script := filepath.Join(clone.Path, "dev")
@@ -352,4 +352,41 @@ func checkAdoption(t *testing.T, f *gitFake, tt adoption, got Worktree, err erro
 		}
 	}
 	t.Errorf("commands %v lack %q in %s", f.lines(), want, tt.old)
+}
+
+// Undoing a worktree the repo's own command made runs the repo's release,
+// which tears down what create provisioned, then removes what git still
+// lists; a release that fails is the error.
+func TestRemoveWorktreeRunsTheReposRelease(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		r, clone, f, wt := worktreeFixture(t, true, 0o755)
+		script := filepath.Join(clone.Path, "dev")
+		for i := range f.replies {
+			if f.replies[i].key == script {
+				f.replies[i].out = devUsage + "  worktree release <branch>   remove it\n"
+			}
+		}
+		release := reply{key: "worktree release"}
+		if fail {
+			release.err = errBoom
+		}
+		f.replies = append([]reply{release}, f.replies...)
+		got, err := r.CreateWorktree(clone, 7, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = r.RemoveWorktree(clone, got)
+		if !f.has(script + " worktree release task/r-7") {
+			t.Errorf("the repo's release did not run: %v", f.lines())
+		}
+		if fail {
+			if err == nil || !strings.Contains(err.Error(), "the repo's worktree release for task/r-7") || f.has("worktree remove") {
+				t.Errorf("a failed release: %v, %v", err, f.lines())
+			}
+			continue
+		}
+		if err != nil || !f.has("worktree remove --force "+wt) {
+			t.Errorf("the worktree git still lists was not removed: %v, %v", err, f.lines())
+		}
+	}
 }
