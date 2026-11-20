@@ -138,7 +138,7 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 		}
 		h := cfg.Hosts[s.Host]
 		tm := session.New()
-		tm.Run = hostExec
+		tm.Run, tm.Home = session.ExecContextIn(ctx, 30*time.Second, e.Home), e.Home
 		if h.Name != local.Name {
 			tm = &session.Tmux{Bin: "tmux", Run: remote.TmuxRunner(hostExec, h.Address), Sleep: time.Sleep}
 		}
@@ -164,7 +164,7 @@ func hostClients(ctx context.Context, e Env, limit time.Duration) func(hosts.Hos
 		name, _ := hosts.ReadHostName(hosts.ConfigDir(e.Home) + "/host")
 		if h.Name == name {
 			tm := session.New()
-			tm.Run = hostExec
+			tm.Run, tm.Home = session.ExecContextIn(ctx, 30*time.Second, e.Home), e.Home
 			return remote.Local{Deps: hostops.Deps{Home: e.Home, Run: session.RunCommandContext(ctx, limit), Probe: session.RunCommandContext(ctx, min(limit, session.ProbeLimit)),
 				Teardown: session.RunCommandContext(ctx, min(limit, session.TeardownLimit)), Exec: hostExec, Tmux: tm, Getenv: e.Getenv, Now: time.Now, JoinRemote: true,
 				Harnesses: registry.New(harness.Env{Exec: hostExec, Home: e.Home, Getenv: e.Getenv, Now: time.Now})}}

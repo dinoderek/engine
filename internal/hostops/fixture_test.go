@@ -110,8 +110,10 @@ type tmuxFake struct {
 	windows []string
 	codes   map[string]string
 	screens map[string]string
-	fail    error // every list-windows fails
-	openErr error // new-session and new-window fail
+	// serverPid is the tmux server's pid; empty means no server answers.
+	serverPid string
+	fail      error // every list-windows fails
+	openErr   error // new-session and new-window fail
 	// awakeErr fails the keep-awake job, which the fake's Tmux then starts.
 	awakeErr error
 	// opening runs as the window opens.
@@ -121,6 +123,9 @@ type tmuxFake struct {
 }
 
 func (f *tmuxFake) run(_ string, args ...string) (string, error) {
+	if args[0] == "-L" { // a private server's socket
+		args = args[2:]
+	}
 	line := strings.Join(args, " ")
 	f.calls = append(f.calls, line)
 	switch args[0] {
@@ -138,6 +143,11 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 			return "", f.openErr
 		}
 		return "@9 %9\n", nil
+	case "display-message":
+		if f.serverPid == "" {
+			return "", &session.ExitError{Command: "tmux display-message", Code: 1, Stderr: "no server running on /tmp/tmux-1/default"}
+		}
+		return f.serverPid + "\n", nil
 	case "split-window":
 		return "%10\n", nil
 	case "run-shell":
@@ -178,7 +188,7 @@ func (f *tmuxFake) tmux() *session.Tmux {
 func (f *tmuxFake) readOnly(t *testing.T) {
 	t.Helper()
 	for _, call := range f.calls {
-		if !strings.HasPrefix(call, "has-session") && !strings.HasPrefix(call, "list-windows") && !strings.HasPrefix(call, "capture-pane") {
+		if !strings.HasPrefix(call, "has-session") && !strings.HasPrefix(call, "list-windows") && !strings.HasPrefix(call, "capture-pane") && !strings.HasPrefix(call, "display-message") {
 			t.Errorf("a read ran tmux %s", call)
 		}
 	}
