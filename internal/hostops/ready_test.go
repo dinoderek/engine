@@ -33,7 +33,8 @@ echo "usage: ./dev <verb>"
 echo "  doctor   check this machine"
 `
 
-const devWithoutDoctor = "#!/bin/sh\necho 'usage: ./dev run'\n"
+// devWithoutDoctor says, as a usage should, that it has no doctor verb.
+const devWithoutDoctor = "#!/bin/sh\necho 'usage: ./dev run'\necho 'There is no doctor verb: nothing to check.'\n"
 
 func newReadyHost(t *testing.T, dev string) *readyHost {
 	t.Helper()
@@ -249,5 +250,22 @@ func TestReadyOpOnTheCommandLine(t *testing.T) {
 	}
 	if !strings.Contains(Usage, "ready --repo <owner/repo> [--remote <url>] [--fresh]") {
 		t.Error("the usage lacks ready")
+	}
+}
+
+// The usage offers doctor only where a line lists it as a verb.
+func TestOffersDoctorMatchesOnlyAListedVerb(t *testing.T) {
+	for line, want := range map[string]bool{
+		"  doctor   check this machine": true,
+		"./dev doctor":                  true,
+		"doctor":                        true,
+		"There is no doctor verb: none": false,
+		"  doctors  plural":             false,
+		"  run      see doctor first":   false,
+	} {
+		err := exec.Command("/bin/sh", "-c", "printf '%s\\n' \"$1\" | grep -qE "+offersDoctor, "sh", line).Run()
+		if got := err == nil; got != want {
+			t.Errorf("%q: offered %v, want %v", line, got, want)
+		}
 	}
 }

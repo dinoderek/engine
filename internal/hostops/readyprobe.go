@@ -78,8 +78,9 @@ func probeReady(d Deps, host hosts.Host, p readyProbe) ([]ReadyCheck, error) {
 	return readReady(p.dir), nil
 }
 
-// readyWindow is the tmux window of a repo's probe.
-func readyWindow(repo session.Repo) string { return "engine-ready-" + repo.Owner + "-" + repo.Name }
+// readyWindow is the tmux window of a repo's probe. A GitHub owner never
+// holds two hyphens in a row, so "--" keeps every repo's name apart.
+func readyWindow(repo session.Repo) string { return "engine-ready-" + repo.Owner + "--" + repo.Name }
 
 // closeWindows kills every window called name: under the readiness lock,
 // one is a probe that died.
@@ -98,6 +99,11 @@ func closeWindows(d Deps, name string) error {
 	return nil
 }
 
+// offersDoctor matches a usage line that lists doctor as a verb, alone or
+// after ./dev, never a line that only mentions it, such as "There is no
+// doctor verb".
+const offersDoctor = `'^[[:space:]]*(\./dev[[:space:]]+)?doctor([[:space:]]|$)'`
+
 // readyScript is the probe window's shell script. Each step writes its
 // output and exit code to dir; a `dev` whose usage does not list doctor
 // leaves doctorAbsent instead.
@@ -105,7 +111,7 @@ func readyScript(dir, wt string, path []string) string {
 	file := func(name string) string { return hosts.ShellWord(filepath.Join(dir, name)) }
 	return hosts.PathExport(path) + "cd " + hosts.ShellWord(wt) + " && { " +
 		ghStep(file(readyGHOut), file(readyGHExit)) + "; " +
-		"if [ -x ./dev ] && ./dev < /dev/null 2>&1 | grep -qw doctor; then " +
+		"if [ -x ./dev ] && ./dev < /dev/null 2>&1 | grep -qE " + offersDoctor + "; then " +
 		"./dev doctor < /dev/null > " + file(doctorOut) + " 2>&1; echo $? > " + file(doctorExit) + "; " +
 		"else : > " + file(doctorAbsent) + "; fi; }"
 }

@@ -51,7 +51,7 @@ func TestSetupProbesEveryClonedRepo(t *testing.T) {
 	}
 	out := r.out.String()
 	for _, want := range []string{"the readiness report for o/r", "the readiness report for o/x",
-		"10. readiness: OPEN (unready for o/x; fix what the report above shows)", "10. readiness: engine setup --host box"} {
+		"10. readiness: OPEN (unready for o/x; fix what the report above shows, or remove the clone in ~/.local/share/engine/control-repos of a repo engine no longer runs)", "10. readiness: engine setup --host box"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}

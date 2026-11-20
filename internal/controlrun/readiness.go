@@ -144,6 +144,8 @@ type readyNote struct{ item, key, body string }
 
 // notes are the notes for every failure seen and not yet noted: one per host,
 // repo, check and output, or per probe error, so a repeat posts nothing. A
+// check whose failing output changes from run to run posts on each new
+// output. A
 // host whose tmux server's directory is gone gets one per server.
 func (r *Readiness) notes(fleet reconcile.Fleet) []readyNote {
 	r.mu.Lock()

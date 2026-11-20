@@ -127,7 +127,8 @@ func (r *runner) readiness(out io.Writer) (harness.Outcome, error) {
 		}
 	}
 	if len(unready) > 0 {
-		return harness.Open("unready for "+strings.Join(unready, ", ")+"; fix what the report above shows", r.rerun()), nil
+		return harness.Open("unready for "+strings.Join(unready, ", ")+"; fix what the report above shows, or remove the clone in ~/"+
+			session.ControlReposDir+" of a repo engine no longer runs", r.rerun()), nil
 	}
 	return harness.Passed("ready for " + strings.Join(repos, ", ")), nil
 }
