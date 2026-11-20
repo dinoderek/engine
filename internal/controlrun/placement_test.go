@@ -38,7 +38,9 @@ func TestEditedCardInvalidatesStalePlacement(t *testing.T) {
 	}
 }
 
-func TestPlanQuestionPreventsAutomaticResumeUntilResolved(t *testing.T) {
+// limitedAskedOn starts a task whose session hit a limit that has reset, then
+// asks a question on the item, and runs a pass.
+func limitedAskedOn(t *testing.T, onPlan bool) (c *Coordinator, task control.Item, question control.Response, resumes *int) {
 	c, h, _, plan, task := setup(t)
 	pass(t, c)
 	pass(t, c)
@@ -46,28 +48,57 @@ func TestPlanQuestionPreventsAutomaticResumeUntilResolved(t *testing.T) {
 	c.Service.Now = func() time.Time { return now }
 	h.status.Windows[0].State = session.StateLimited
 	h.status.Windows[0].ResetsAt = now.Add(-3 * time.Minute).Unix()
-	resumes := 0
-	c.Resume = func(reconcile.Session) error { resumes++; return nil }
+	resumes = new(int)
+	c.Resume = func(reconcile.Session) error { *resumes++; return nil }
+	target := task.ID
+	if onPlan {
+		target = plan.ID
+	}
 	question, err := c.Service.Execute(control.Actor{Name: "operator", Role: "operator"},
-		control.Request{Op: "ask", ID: plan.ID, Body: "Pause to decide scope", Key: "plan-stop"})
+		control.Request{Op: "ask", ID: target, Body: "Pause to decide scope", Key: "stop"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	pass(t, c)
+	return c, task, question, resumes
+}
+
+func TestATaskQuestionPreventsAutomaticResumeUntilResolved(t *testing.T) {
+	c, task, question, resumes := limitedAskedOn(t, false)
+	st, err := c.Service.Store.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *resumes != 0 || st.Attempts[st.Items[task.ID].Attempt].ResumedFor != 0 {
+		t.Fatal("unresolved task question allowed quota recovery")
+	}
+	_, err = c.Service.Execute(control.Actor{Name: "operator", Role: "operator"},
+		control.Request{Op: "resolve", ReplyTo: question.Updates[0].ID, Body: "Continue with the agreed scope", Key: "resolve"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pass(t, c)
+	if *resumes != 1 {
+		t.Fatal("resolved task question prevented recovery")
+	}
+}
+
+func TestAPlanQuestionDoesNotPreventAutomaticResume(t *testing.T) {
+	_, _, _, resumes := limitedAskedOn(t, true)
+	if *resumes != 1 {
+		t.Fatal("a plan question held back a running task's quota recovery")
+	}
+}
+
+func TestAPlanQuestionKeepsANewTaskOutOfPlacement(t *testing.T) {
+	c, h, _, plan, task := setup(t)
+	execute(t, c.Service, control.Request{Op: "ask", ID: plan.ID, Body: "Pause to decide scope"})
 	pass(t, c)
 	st, err := c.Service.Store.Snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resumes != 0 || st.Attempts[st.Items[task.ID].Attempt].ResumedFor != 0 {
-		t.Fatal("unresolved plan question allowed quota recovery")
-	}
-	_, err = c.Service.Execute(control.Actor{Name: "operator", Role: "operator"},
-		control.Request{Op: "resolve", ReplyTo: question.Updates[0].ID, Body: "Continue with the agreed scope", Key: "plan-resolve"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	pass(t, c)
-	if resumes != 1 {
-		t.Fatal("resolved plan question prevented recovery")
+	if len(st.Attempts) != 0 || h.calls != 0 || st.Items[task.ID].State != "todo" {
+		t.Fatalf("a held task was placed: %d attempts, %d launches, %s", len(st.Attempts), h.calls, st.Items[task.ID].State)
 	}
 }

@@ -124,13 +124,13 @@ The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
 - **Look in the server first:** `engine updates <task>` and, if the task
   has a plan, `engine updates <plan>`. A `resolved` update on either that
   decides the same root cause covers you: cite its sequence in the PR body
-  and carry on. An open question on the plan already blocks your task's
-  state changes and merge; if it is your root cause, end your turn and wait,
-  citing it in the PR body.
+  and carry on. An open question on the plan holds only new dispatches and
+  its asker, not you; if it is your root cause, `engine ask <task>`, citing
+  its sequence in the question and the PR body.
 - **Ask:** `engine ask <task> <question>`, then end your turn.
 - **Plan-level questions:** a gate red on the default branch, or a host tool
   or sign-in that every task on that host needs, affects every task. Ask it
-  once on the plan: `engine ask <plan> <question>`. It holds your task and
-  blocks every task in the plan; its resolution answers them all.
+  once on the plan: `engine ask <plan> <question>`. It holds your task and the
+  plan's new dispatches; its resolution answers them all.
 - Only the operator ends the stop. Resolving your task's last open question
   restores its state and wakes you.

@@ -16,7 +16,7 @@ const (
 // vanished one. So a session that crashes on launch, or every resume of
 // one, is not dispatched again and again.
 func resumable(st *State, item Item, at Attempt) bool {
-	work := item.PR != "" || PendingQuestion(st, item.ID) > 0
+	work := item.PR != "" || OwnQuestion(st, item.ID) > 0
 	if work && !at.LiveAt.IsZero() && !resumedVanished(st, at) {
 		return true
 	}

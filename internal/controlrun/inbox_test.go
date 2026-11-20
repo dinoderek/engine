@@ -79,7 +79,7 @@ func TestPendingMessageCountsResolutionsOnlyForTheTasksPlan(t *testing.T) {
 	}
 }
 
-func TestPlanQuestionHoldsEveryTaskSessionUntilItsResolutionWakesThem(t *testing.T) {
+func TestPlanQuestionHoldsOnlyTheAskersSessionUntilItsResolutionWakesIt(t *testing.T) {
 	c, h, repo, plan, task := setup(t)
 	card := "## Outcome\nWorks\n## Tests\nProve it"
 	sibling := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Sibling", Repo: repo.ID, Plan: plan.ID, Body: card}})
@@ -103,8 +103,11 @@ func TestPlanQuestionHoldsEveryTaskSessionUntilItsResolutionWakesThem(t *testing
 	}
 	execute(t, c.Service, control.Request{Op: "say", ID: plan.ID, Body: "Looking into it"})
 	pass(t, c)
-	if len(woken) != 0 {
-		t.Fatalf("woke %v while the plan question was open", woken)
+	if asker := fmt.Sprintf("demo-%d", control.Number(task.ID)); woken[asker] != 0 {
+		t.Fatalf("woke %v while the plan question the asker put was open", woken)
+	}
+	if name := fmt.Sprintf("demo-%d", control.Number(sibling.ID)); woken[name] != 1 {
+		t.Fatalf("woke %v, want the sibling woken once for the plan note", woken)
 	}
 	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: out.Updates[0].ID, Body: "Fixed on main; merge it in"})
 	pass(t, c)
@@ -112,9 +115,9 @@ func TestPlanQuestionHoldsEveryTaskSessionUntilItsResolutionWakesThem(t *testing
 	if st.Items[task.ID].State != "running" {
 		t.Fatalf("asker is %s, want running", st.Items[task.ID].State)
 	}
-	for _, id := range []string{task.ID, sibling.ID} {
-		if name := fmt.Sprintf("demo-%d", control.Number(id)); woken[name] != 1 {
-			t.Fatalf("woken = %v, want %s woken once", woken, name)
+	for id, want := range map[string]int{task.ID: 1, sibling.ID: 2} {
+		if name := fmt.Sprintf("demo-%d", control.Number(id)); woken[name] != want {
+			t.Fatalf("woken = %v, want %s woken %d times", woken, name, want)
 		}
 	}
 }

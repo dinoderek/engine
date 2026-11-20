@@ -150,7 +150,7 @@ func (c *Coordinator) queueView(repo string) (reconcile.QueueView, error) {
 	v := reconcile.QueueView{Now: c.now()}
 	for _, e := range control.Queue(&st, repo) {
 		item := st.Items[e.Task]
-		q := reconcile.QueueItem{QueueEntry: e, State: item.State, Question: control.PendingQuestion(&st, item.ID),
+		q := reconcile.QueueItem{QueueEntry: e, State: item.State, Question: control.OwnQuestion(&st, item.ID),
 			Stopped: !coordinating(&st, item), Host: st.Attempts[item.Attempt].Host}
 		if u, ok := control.PendingMerge(&st, item.ID); ok {
 			q.Request = u

@@ -24,6 +24,8 @@ func requesting(t Item) Item {
 
 func question(t Item, id int) Item { t.Question = id; return t }
 
+func planHeld(t Item) Item { t.PlanHold = 12; return t }
+
 func ended(t Item) Item { t.Current.State = "ended"; return t }
 
 func vanished(t Item, question int) Item {
@@ -149,6 +151,10 @@ func TestDecide(t *testing.T) {
 			[]string{fmt.Sprintf("notice t2 stall/a2/%d", spawned)}},
 		{"an unheld task whose session ended is flagged and started again", view(plan("planned"), with(task(2, "todo"), gone())),
 			[]string{fmt.Sprintf("notice t2 stall/a2/%d", spawned), "dispatch t2 devbox claude false"}},
+
+		// A plan question holds new starts, not a recovery that needs the one slot.
+		{"a plan question holds a new task and leaves a vanished one its slot", withFleet(view(plan("planned"), planHeld(task(2, "todo")), vanished(task(3, "todo"), 0)), fleet(1)),
+			[]string{"dispatch t3 devbox claude true"}},
 
 		// Usage limits.
 		{"a limited session is told to continue after its reset", view(plan("planned"), with(task(2, "running"), limited(-3*time.Minute, 0))), []string{"resume t2 a2"}},

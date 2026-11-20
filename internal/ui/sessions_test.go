@@ -14,7 +14,7 @@ func ref(item string, update int) *control.UpdateRef {
 	return &control.UpdateRef{Item: item, Update: update, Kind: "ask", Author: "t28", At: time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC), Summary: "Approve?"}
 }
 
-// fixtureSessions: t28 asks its own question, t29 inherits the plan's older
+// fixtureSessions: t28 asks its own question, t29 asked the plan's older
 // one, t5 is another plan's task waiting without a question, p24's planner has
 // a resolved (so absent) question, and t9's host is gone.
 func fixtureSessions() []control.SessionRow {
@@ -62,17 +62,18 @@ func TestSessionListEmpty(t *testing.T) {
 
 func TestPlanDetailCarriesApplicableFeedback(t *testing.T) {
 	rows := []control.SessionRow{
-		{Item: "t28", Feedback: ref("p24", 12)},
 		{Item: "t29", Observed: "waiting"},
 		{Item: "t33", Feedback: ref("t33", 50)},
 	}
-	got := planDetail("p24", fixtureView(), fixtureAttempts(), rows)
+	asked := fixtureView()
+	asked[0].Question = ref("p24", 12)
+	got := planDetail("p24", asked, fixtureAttempts(), rows)
 	byID := map[string]TaskRow{}
 	for _, tk := range got.Tasks {
 		byID[tk.ID] = tk
 	}
-	if f := byID["t28"].Feedback; f == nil || f.Item != "p24" || f.Update != 12 {
-		t.Fatalf("t28 feedback = %+v, want the plan's question", f)
+	if f := byID["t28"].Feedback; f != nil {
+		t.Fatalf("a running task links the plan's question: %+v", f)
 	}
 	if byID["t29"].Feedback != nil {
 		t.Fatalf("a waiting session shows feedback: %+v", byID["t29"])
@@ -87,7 +88,7 @@ func TestPlanDetailCarriesApplicableFeedback(t *testing.T) {
 			t.Fatalf("%s under an open plan question = %+v, want blocked with the plan's question", id, byID[id])
 		}
 	}
-	failedAlone := planDetail("p24", fixtureView(), fixtureAttempts(), rows[:1])
+	failedAlone := planDetail("p24", asked, fixtureAttempts(), rows[:1])
 	for _, tk := range failedAlone.Tasks {
 		if tk.ID == "t33" && (tk.Feedback != nil || tk.Group != groupBlocked) {
 			t.Fatalf("a failed task is not waiting to start, so does not link the plan's question: %+v", tk)
@@ -96,7 +97,7 @@ func TestPlanDetailCarriesApplicableFeedback(t *testing.T) {
 	if byID["t26"].Feedback != nil || got.Counts != (Counts{Done: 1, InProgress: 2, Blocked: 4}) {
 		t.Fatalf("counts under an open plan question = %+v, done task %+v", got.Counts, byID["t26"])
 	}
-	without := planDetail("p24", fixtureView(), fixtureAttempts(), rows[1:])
+	without := planDetail("p24", fixtureView(), fixtureAttempts(), rows)
 	if without.Counts != (Counts{Done: 1, InProgress: 2, Ready: 1, Blocked: 3}) {
 		t.Fatalf("a task's own question must not hold up its siblings: %+v", without.Counts)
 	}
