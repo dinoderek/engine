@@ -46,6 +46,9 @@ type Readiness struct {
 	Config   string       `json:"config"`
 	At       time.Time    `json:"at"`
 	Checks   []ReadyCheck `json:"checks"`
+	// NoDoctor is true when the repo's dev offers no doctor, so only gh
+	// was checked.
+	NoDoctor bool `json:"no_doctor,omitempty"`
 	// Cached is true when an earlier probe's result answered.
 	Cached bool `json:"cached,omitempty"`
 }
@@ -125,11 +128,11 @@ func Ready(d Deps, r ReadyRequest) (Readiness, error) {
 		cached.Cached = true
 		return cached, nil
 	}
-	checks, err := probeReady(d, host, readyProbe{repos: repos, clone: clone, head: head, dir: dir})
+	checks, noDoctor, err := probeReady(d, host, readyProbe{repos: repos, clone: clone, head: head, dir: dir})
 	if err != nil {
 		return Readiness{}, err
 	}
-	out := Readiness{ProbedOn: host.Name, Repo: repo.String(), Head: head, Config: config, At: d.Now().UTC(), Checks: checks}
+	out := Readiness{ProbedOn: host.Name, Repo: repo.String(), Head: head, Config: config, At: d.Now().UTC(), Checks: checks, NoDoctor: noDoctor}
 	return out, writeReadiness(dir, out)
 }
 
@@ -193,7 +196,7 @@ func ReportReady(out io.Writer, r Readiness) {
 			fmt.Fprintln(out, indent(c.Output))
 		}
 	}
-	if len(r.Checks) == 1 {
+	if r.NoDoctor {
 		fmt.Fprintf(out, "note %s's dev offers no doctor, so only gh was checked\n", r.Repo)
 	}
 }

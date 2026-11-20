@@ -18,8 +18,10 @@ runs, in a window of the session `engine` with the host's `path`, as a
 session would:
 
 1. `gh auth status -h github.com`;
-2. the repo's `./dev doctor`, if its `dev` usage lists `doctor`
-   (`project-context.md`).
+2. the repo's `./dev doctor`, unless the repo has no `dev` or its usage
+   lists no `doctor` verb (`project-context.md`). A `dev` that cannot print
+   its usage, such as one whose toolchain is missing, still has its doctor
+   run, which fails with the reason.
 
 The window is bounded (`internal/hostops/readyprobe.go`). The worktree is
 removed afterwards; one a dead probe left is replaced by the next. No repo

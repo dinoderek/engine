@@ -27,6 +27,8 @@ const (
 	doctorOut    = "doctor.txt"
 	doctorExit   = "doctor.exit"
 	doctorAbsent = "doctor.absent"
+	usageOut     = "usage.txt"
+	readyStarted = "started"
 	scratchDir   = "worktree"
 )
 
@@ -44,38 +46,39 @@ type readyProbe struct {
 // session's would be: gh's sign-in check, then the repo's `./dev doctor` if
 // its `dev` usage lists doctor. The worktree is removed afterwards; one left
 // by a probe that died is replaced by the next.
-func probeReady(d Deps, host hosts.Host, p readyProbe) ([]ReadyCheck, error) {
+func probeReady(d Deps, host hosts.Host, p readyProbe) (checks []ReadyCheck, noDoctor bool, err error) {
 	path, err := host.PathPrefix(d.Home)
 	if err != nil {
-		return nil, refuse("%v", err)
+		return nil, false, refuse("%v", err)
 	}
 	wt := filepath.Join(p.dir, scratchDir)
 	if err := p.repos.AddScratch(p.clone, wt, p.head); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// A failed removal is retried by the next probe's AddScratch.
 	defer func() { _ = p.repos.RemoveScratch(p.clone, wt) }()
-	for _, f := range []string{readyGHOut, readyGHExit, doctorOut, doctorExit, doctorAbsent} {
+	for _, f := range []string{readyStarted, readyGHOut, readyGHExit, usageOut, doctorOut, doctorExit, doctorAbsent} {
 		if err := os.Remove(filepath.Join(p.dir, f)); err != nil && !os.IsNotExist(err) {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	name := readyWindow(p.clone.Repo)
 	if err := closeWindows(d, name); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	opened, err := d.Tmux.Open(session.Window{Name: name, Dir: wt, Command: "exec /bin/sh -c " + hosts.ShellWord(readyScript(p.dir, wt, path))})
 	if err != nil {
-		return nil, fmt.Errorf("open the readiness probe's window: %w", err)
+		return nil, false, fmt.Errorf("open the readiness probe's window: %w", err)
 	}
 	gone, err := waitExited(d, opened.ID, ReadyTimeout)
 	if !gone {
 		_ = d.Tmux.Kill(opened.ID)
 	}
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return readReady(p.dir), nil
+	checks, noDoctor = readReady(p.dir)
+	return checks, noDoctor, nil
 }
 
 // readyWindow is the tmux window of a repo's probe. A GitHub owner never
@@ -104,30 +107,43 @@ func closeWindows(d Deps, name string) error {
 // doctor verb".
 const offersDoctor = `'^[[:space:]]*(\./dev[[:space:]]+)?doctor([[:space:]]|$)'`
 
-// readyScript is the probe window's shell script. Each step writes its
-// output and exit code to dir; a `dev` whose usage does not list doctor
-// leaves doctorAbsent instead.
+// readyScript is the probe window's shell script. It marks its start once
+// in the worktree, and each step writes its output and exit code to dir. A
+// repo without an executable dev, or whose dev prints a usage that does not
+// list doctor, leaves doctorAbsent instead; a dev that cannot print its
+// usage, such as one whose toolchain is missing, still has its doctor run,
+// which fails with the reason.
 func readyScript(dir, wt string, path []string) string {
 	file := func(name string) string { return hosts.ShellWord(filepath.Join(dir, name)) }
-	return hosts.PathExport(path) + "cd " + hosts.ShellWord(wt) + " && { " +
+	usage := file(usageOut)
+	return hosts.PathExport(path) + "cd " + hosts.ShellWord(wt) + " && { : > " + file(readyStarted) + "; " +
 		ghStep(file(readyGHOut), file(readyGHExit)) + "; " +
-		"if [ -x ./dev ] && ./dev < /dev/null 2>&1 | grep -qE " + offersDoctor + "; then " +
-		"./dev doctor < /dev/null > " + file(doctorOut) + " 2>&1; echo $? > " + file(doctorExit) + "; " +
+		"if [ -x ./dev ]; then ./dev < /dev/null > " + usage + " 2>&1; " +
+		"if grep -qiE '^[[:space:]]*usage' " + usage + " && ! grep -qE " + offersDoctor + " " + usage + "; then : > " + file(doctorAbsent) + "; " +
+		"else ./dev doctor < /dev/null > " + file(doctorOut) + " 2>&1; echo $? > " + file(doctorExit) + "; fi; " +
 		"else : > " + file(doctorAbsent) + "; fi; }"
 }
 
 // readReady reads the probe's step files: gh's check always, the doctor's
-// unless the repo's dev offers none.
-func readReady(dir string) []ReadyCheck {
+// once gh finished, unless the repo's dev offers none. It reports whether
+// the repo offers no doctor. A probe that never started, or a gh that never
+// finished, is that one failure.
+func readReady(dir string) ([]ReadyCheck, bool) {
+	if _, err := os.Stat(filepath.Join(dir, readyStarted)); err != nil {
+		return []ReadyCheck{{Name: GHCheck, Output: "the probe's window ended before it entered its scratch worktree"}}, false
+	}
 	step := func(name, out, exit string) ReadyCheck {
 		ok, output := readStep(filepath.Join(dir, out), filepath.Join(dir, exit), name, ReadyTimeout)
 		return ReadyCheck{Name: name, OK: ok, Output: lastLines(output, readyLines)}
 	}
 	checks := []ReadyCheck{step(GHCheck, readyGHOut, readyGHExit)}
-	if _, err := os.Stat(filepath.Join(dir, doctorAbsent)); err == nil {
-		return checks
+	if _, err := os.Stat(filepath.Join(dir, readyGHExit)); err != nil {
+		return checks, false
 	}
-	return append(checks, step(DoctorCheck, doctorOut, doctorExit))
+	if _, err := os.Stat(filepath.Join(dir, doctorAbsent)); err == nil {
+		return checks, true
+	}
+	return append(checks, step(DoctorCheck, doctorOut, doctorExit)), false
 }
 
 // lastLines is the last n lines of s.

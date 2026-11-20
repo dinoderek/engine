@@ -152,7 +152,7 @@ func TestReadyReusesItsResultUntilTheHeadChanges(t *testing.T) {
 func TestReadyWithoutDoctorRunsOnlyGh(t *testing.T) {
 	h := newReadyHost(t, devWithoutDoctor)
 	r, err := Ready(h.deps(t, fixedNow()), ReadyRequest{Repo: "o/r", Remote: h.remote})
-	if err != nil || !r.OK() || len(r.Checks) != 1 || r.Checks[0].Name != GHCheck {
+	if err != nil || !r.OK() || !r.NoDoctor || len(r.Checks) != 1 || r.Checks[0].Name != GHCheck {
 		t.Fatalf("readiness %+v, %v", r, err)
 	}
 	if lines := h.logged(t); len(lines) != 1 || !strings.HasPrefix(lines[0], "gh auth status") {
@@ -162,6 +162,21 @@ func TestReadyWithoutDoctorRunsOnlyGh(t *testing.T) {
 	ReportReady(&out, r)
 	if !strings.Contains(out.String(), "ok   o/r: gh auth status at ") || !strings.Contains(out.String(), "offers no doctor") {
 		t.Errorf("report:\n%s", out.String())
+	}
+}
+
+// A dev that cannot print its usage, as when the toolchain it needs is not on
+// PATH, does not pass as one without a doctor: its doctor runs and fails.
+func TestReadyRunsDoctorWhenDevCannotPrintItsUsage(t *testing.T) {
+	h := newReadyHost(t, "#!/bin/sh\necho 'dev: Go is not installed. Run ./dev doctor' >&2\nexit 127\n")
+	r, err := Ready(h.deps(t, fixedNow()), ReadyRequest{Repo: "o/r", Remote: h.remote})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := r.Failed()
+	if r.OK() || r.NoDoctor || len(r.Checks) != 2 || len(failed) != 1 || failed[0].Name != DoctorCheck ||
+		failed[0].Output != "dev: Go is not installed. Run ./dev doctor" {
+		t.Fatalf("readiness %+v", r)
 	}
 }
 
@@ -222,12 +237,21 @@ func TestReusable(t *testing.T) {
 	}
 }
 
+// One cause is one failed check: a window that never entered its worktree,
+// or a gh that never finished, leaves the doctor out; a doctor that never
+// finished is its own.
 func TestReadyStepsThatNeverFinish(t *testing.T) {
 	dir := t.TempDir()
-	got := readReady(dir)
-	if len(got) != 2 || got[0].OK || !strings.Contains(got[0].Output, "gh auth status did not finish within 5m0s") ||
-		!strings.Contains(got[1].Output, "./dev doctor did not finish") {
-		t.Errorf("got %+v", got)
+	if got, _ := readReady(dir); len(got) != 1 || got[0].OK || !strings.Contains(got[0].Output, "ended before it entered its scratch worktree") {
+		t.Errorf("never started: %+v", got)
+	}
+	write(t, filepath.Join(dir, readyStarted), "", 0o600)
+	if got, _ := readReady(dir); len(got) != 1 || !strings.Contains(got[0].Output, "gh auth status did not finish within 5m0s") {
+		t.Errorf("gh never finished: %+v", got)
+	}
+	write(t, filepath.Join(dir, readyGHExit), "0\n", 0o600)
+	if got, absent := readReady(dir); len(got) != 2 || !got[0].OK || absent || !strings.Contains(got[1].Output, "./dev doctor did not finish") {
+		t.Errorf("doctor never finished: %+v", got)
 	}
 	if lastLines("a\nb\nc", 2) != "b\nc" || lastLines("a", 2) != "a" {
 		t.Error("lastLines")
