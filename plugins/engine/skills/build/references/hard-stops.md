@@ -32,8 +32,8 @@ The repo's `AGENTS.md` may add classes; they apply too.
 
 ## Safe defaults
 
-A question with a safe, reversible default is not a stop: take the default
-and record it with `engine tell`.
+A question with a safe, reversible default is not a stop: take it and record
+it in the PR body; an engine server task also uses `engine tell`.
 
 ## Ask once
 

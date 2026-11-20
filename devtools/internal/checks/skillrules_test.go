@@ -24,7 +24,7 @@ var skillRules = []skillRule{
 	{engineSkill, "Plan and task IDs never appear in code, tests, docs, commit messages, PR titles or bodies."},
 	{buildSkill, "Commit messages and PR bodies may, except in an engine server task"},
 	{buildSkill, "Record every round's verdict, and your answer to each finding, in the PR body."},
-	{hardStops, "A question with a safe, reversible default is not a stop: take the default and record it with `engine tell`."},
+	{hardStops, "A question with a safe, reversible default is not a stop: take it and record it in the PR body; an engine server task also uses `engine tell`."},
 	{serverRef, "**Ask on your own task by default:**"},
 	{serverRef, "**A plan question needs a proved-red default branch:**"},
 	{serverRef, "**Host problems are the coordinator's readiness job, not a question.**"},

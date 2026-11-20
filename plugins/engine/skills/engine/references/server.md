@@ -19,7 +19,7 @@ credential file and attempt ID (`ENGINE_SERVER_URL`,
 - `engine tell <id> <text>` posts a message on your task or its plan, and
   wakes the sessions waiting on it. `engine ask <id> <text>` asks the
   operator, on your task or its plan, and holds your task in `needs-human`.
-  `tell --operator` messages the operator's inbox, asking no answer.
+  `tell --operator` sends the operator's inbox a message that needs no answer.
 
 ## Planner
 
@@ -92,7 +92,8 @@ merge step, which the merge guard enforces.
      its queue entry.
 - **Step 11.** On `merged`, above.
 
-A server outage blocks the merge request: keep your work and wait. Never bypass gates or the queue.
+A server outage blocks the merge request: keep your work and wait. Never
+bypass gates or the queue.
 
 ## Rulings
 
