@@ -150,3 +150,13 @@ func TestAFailedRunNeverRunsTheReposRelease(t *testing.T) {
 		t.Errorf("released %+v, probed %d, teardown %v, git %v", r, f.probed, f.released, git.calls)
 	}
 }
+
+// The release op hands --head to the release, which deletes the branch whose
+// tip it names.
+func TestReleaseOpDeletesTheBranchOfTheHeadItIsGiven(t *testing.T) {
+	m := newMergedRun(t)
+	code, reply, _ := call(t, m.d, "", "release", "--json", "--name", "r-7", "--done", "--head", m.tip(t))
+	if code != 0 || reply["branch_deleted"] != true || m.branchExists() {
+		t.Errorf("exit %d, %v; branch exists %v", code, reply, m.branchExists())
+	}
+}

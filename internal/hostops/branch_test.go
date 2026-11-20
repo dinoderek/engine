@@ -150,3 +150,11 @@ func TestAMissingBranchIsNothingToDelete(t *testing.T) {
 		t.Errorf("released %+v, %v", r, err)
 	}
 }
+
+func TestABranchWithNoKnownMergedHeadIsKeptWithoutBlamingItsCommits(t *testing.T) {
+	m := newMergedRun(t)
+	r, err := Release(m.d, "r-7", RunDone, "")
+	if err != nil || r.BranchDeleted || !m.branchExists() || !strings.Contains(r.Note, "merged head is unknown") || strings.Contains(r.Note, "never reached") {
+		t.Errorf("released %+v, %v; branch exists %v", r, err, m.branchExists())
+	}
+}

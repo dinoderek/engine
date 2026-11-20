@@ -231,3 +231,24 @@ func TestPRNumber(t *testing.T) {
 		}
 	}
 }
+
+// A merge that landed while the entry took a newer request is recorded
+// against the request the merge acted on, so its head is the merged one.
+func TestRecordMergedAnswersTheRequestTheMergeActedOn(t *testing.T) {
+	s := service(t)
+	task, a, _ := reviewed(t, s)
+	first := call(t, s, a, ready(task.ID, good())).Updates[0]
+	later := good()
+	later.Head = "fedcba9876543210fedcba9876543210fedcba98"
+	second := call(t, s, a, ready(task.ID, later)).Updates[0]
+	if second.ID == first.ID || mustSnapshot(t, s).Queue[task.ID].Request != second.ID {
+		t.Fatalf("the entry holds request %d, want the newer %d", mustSnapshot(t, s).Queue[task.ID].Request, second.ID)
+	}
+	if err := s.RecordMerged(task.ID, good().PR, "merged", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	st := mustSnapshot(t, s)
+	if got := MergedHead(&st, task.ID); got != head || len(st.Queue) != 0 {
+		t.Fatalf("merged head %q, want %q; queue %+v", got, head, st.Queue)
+	}
+}

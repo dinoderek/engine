@@ -29,7 +29,7 @@ func dropBranch(d Deps, rec session.Record, mergedHead string) (bool, error) {
 	}
 	tip := strings.TrimSpace(out)
 	if mergedHead == "" || !strings.EqualFold(tip, mergedHead) {
-		if err := reachedDefault(d, rec, clone, ref); err != nil {
+		if err := reachedDefault(d, rec, clone, ref, mergedHead != ""); err != nil {
 			return false, fmt.Errorf("kept the branch %s at %s: %w", rec.Branch, tip, err)
 		}
 	}
@@ -42,8 +42,9 @@ func dropBranch(d Deps, rec session.Record, mergedHead string) (bool, error) {
 }
 
 // reachedDefault fetches origin and fails unless ref is an ancestor of
-// origin's default branch.
-func reachedDefault(d Deps, rec session.Record, clone, ref string) error {
+// origin's default branch. headKnown is whether the merged head was given,
+// which decides what the failure says.
+func reachedDefault(d Deps, rec session.Record, clone, ref string, headKnown bool) error {
 	repo, err := session.ParseRepo(rec.Repo)
 	if err != nil {
 		return err
@@ -56,6 +57,9 @@ func reachedDefault(d Deps, rec session.Record, clone, ref string) error {
 		return fmt.Errorf("it could not be judged, as the fetch failed: %w", err)
 	}
 	if _, err := d.Run(clone, nil, "git", "merge-base", "--is-ancestor", ref, "refs/remotes/origin/"+c.Default); err != nil {
+		if !headKnown {
+			return fmt.Errorf("the merged head is unknown and it is not in the history of %s, so it cannot be confirmed as merged", c.Default)
+		}
 		return fmt.Errorf("it has commits that never reached %s and are not the merged head", c.Default)
 	}
 	return nil

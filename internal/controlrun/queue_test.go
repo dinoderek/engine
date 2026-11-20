@@ -219,6 +219,11 @@ func TestAMergeRacingAWithdrawalIsRecorded(t *testing.T) {
 	if st.Items[task.ID].State != "done" || st.Items[task.ID].PR != reviewedPR || len(operatorNotices(t, c, task.ID)) != 1 {
 		t.Fatalf("task %+v, notices %d", st.Items[task.ID], len(operatorNotices(t, c, task.ID)))
 	}
+	// The withdrawal ended the entry, but the merged update still names the
+	// head the host merged at.
+	if got := control.MergedHead(&st, task.ID); got != reviewedHead {
+		t.Fatalf("merged head %q, want %q", got, reviewedHead)
+	}
 }
 
 // A head whose session vanishes during its turn is resumed in-review, and

@@ -107,7 +107,7 @@ func (c *Coordinator) call(repo string, a reconcile.Action, cfg *hosts.Config) e
 	if i < 0 || v.Entries[i].QueueEntry != a.Entry {
 		// A merge that landed while the entry changed is still recorded.
 		if p.Reply.Code == hostops.CodeMerged {
-			return c.Service.RecordMerged(a.Item, a.Entry.PR, "Merged "+a.Entry.PR+": "+p.Reply.Reason)
+			return c.Service.RecordMerged(a.Item, a.Entry.PR, "Merged "+a.Entry.PR+": "+p.Reply.Reason, a.Entry.Request)
 		}
 		return nil
 	}
