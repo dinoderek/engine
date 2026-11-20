@@ -140,7 +140,7 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 	}
 	// A resume sends continue, or Enter alone for text already left unsent.
 	c.Resume = func(s reconcile.Session) error {
-		return inWindow(ctx, e.Home, hostExec, s, func(tm *session.Tmux, id string) error { return tm.Submit(id, "continue") })
+		return inWindow(ctx, e.Home, hostExec, s, func(tm *session.Tmux, id string) error { return tm.Submit(id, controlrun.ResumeText) })
 	}
 	return c
 }

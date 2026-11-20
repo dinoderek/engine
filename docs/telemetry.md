@@ -8,7 +8,7 @@ Each run has a directory on its host, `~/.local/share/engine/runs/<run-id>/`.
 The host reads it, and the coordinator reads it through the `collect` and
 `status` host ops; nothing is uploaded but the tail of a just-ended run's `pane.log`, which `status` returns.
 
-`run.json` is the run's index, written once at spawn by the host's `spawn` op
+`run.json` is the run's index, written once by the host's `spawn` op
 with the caller's identity, the session name, tmux target, branch, worktree,
 pane log path and spawn time; `Record` in `internal/session/record.go` holds
 the field names. Run IDs are `<repo>-<task>-<UTC yyyymmddThhmmssZ>`, using
@@ -24,7 +24,8 @@ Codex, left to auto-review, and per action auto mode refused (`Entry` in
 
 `harness-state.json` is the state hook's latest state, and `quota.json` the
 newest quota reading a harness's hooks record. Each adapter may keep its own
-files there too, named in its package under `internal/harness/`.
+files there, named in its package under `internal/harness/`; the prompt
+hook's in `pane-input.md`.
 
 The coordinator logs each resume attempt with the task, timestamp and
 `resumed-for=<resets_at>`, and its notes retain the attempt and limit-alert

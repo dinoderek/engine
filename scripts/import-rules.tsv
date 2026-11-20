@@ -12,6 +12,7 @@
 internal/...	forbid	devtools/...,cmd/...
 internal/version	only	-
 internal/hook	only	internal/harness
+internal/pane	only	internal/control,internal/harness,internal/session
 internal/hosts	only	-
 internal/session	only	-
 internal/harness	only	internal/hosts,internal/session
@@ -30,7 +31,7 @@ internal/reconcile	only	internal/control,internal/hostops
 internal/controlrun	only	internal/control,internal/hostops,internal/hosts,internal/lint,internal/reconcile,internal/remote,internal/session
 internal/ui	only	internal/control
 internal/controlcmd	only	internal/harness,internal/harness/registry,internal/control,internal/controlrun,internal/lint,internal/hostops,internal/hosts,internal/reconcile,internal/remote,internal/session
-internal/cli	only	internal/harness,internal/harness/registry,internal/version,internal/hook,internal/hostops,internal/remote,internal/hosts,internal/session,internal/start,internal/setup,internal/upgrade,internal/control,internal/controlcmd,internal/ui
+internal/cli	only	internal/harness,internal/harness/registry,internal/version,internal/hook,internal/pane,internal/hostops,internal/remote,internal/hosts,internal/session,internal/start,internal/setup,internal/upgrade,internal/control,internal/controlcmd,internal/ui
 cmd/engine	only	internal/cli
 devtools/...	forbid	internal/...,cmd/...
 devtools/internal/repo	only	-

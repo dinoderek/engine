@@ -73,7 +73,7 @@ func (c *Coordinator) launch(st control.State, at control.Attempt, credential st
 		_ = c.notice(item.ID, recoveryKey(at.ID, err), "Dispatch has an unresolved outcome; its execution stays reserved. "+err.Error())
 		return err
 	}
-	return c.Service.SetAttempt(at.ID, "running", spawned.Window)
+	return c.Service.Started(at.ID, spawned.Window, spawned.PaneKey)
 }
 
 // recoveryKey is the notice key of a dispatch's unresolved outcome: one per

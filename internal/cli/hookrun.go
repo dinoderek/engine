@@ -44,6 +44,9 @@ func runHook(args []string, env Env) int {
 		return 1
 	}
 	hooks := a.Hooks()
+	if entry == promptEntry && len(rest) > 0 {
+		return postPrompt(env, hooks, rest)
+	}
 	if slices.Contains(harness.CoreEntries, entry) && len(rest) == 0 {
 		return coreHook(entry, name, hooks, env)
 	}
@@ -86,6 +89,8 @@ func coreHook(entry, name string, hooks harness.Hooks, env Env) int {
 		return preToolUse(env, name, hooks, ev)
 	case "permission":
 		return permissionHook(env, name, hooks, ev)
+	case promptEntry:
+		return promptHook(env, name, hooks, ev)
 	default:
 		return stateHook(env, name, hooks, ev)
 	}
@@ -155,10 +160,7 @@ func permissionHook(env Env, name string, hooks harness.Hooks, ev harness.Event)
 // no harness, or has none yet, is taken as its own.
 func stateHook(env Env, name string, hooks harness.Hooks, ev harness.Event) int {
 	run := findHookRun(env, name, hooks, ev)
-	if run.Dir == "" {
-		return 0
-	}
-	if rec, err := session.ReadRecord(run.Dir); err == nil && rec.Harness != "" && rec.Harness != name {
+	if run.Dir == "" || otherHarness(run.Dir, name) {
 		return 0
 	}
 	h := hook.State{Err: env.Err, Unattended: run.Unattended}
@@ -170,6 +172,15 @@ func stateHook(env Env, name string, hooks harness.Hooks, ev harness.Event) int 
 		return nil
 	}
 	return h.Handle(ev)
+}
+
+// otherHarness reports whether the run in dir is another harness's, by its
+// record: a session of harness name that inherited the run's directory is
+// not the run's session. A run whose record names no harness, or has none
+// yet, is taken as its own.
+func otherHarness(dir, name string) bool {
+	rec, err := session.ReadRecord(dir)
+	return err == nil && rec.Harness != "" && rec.Harness != name
 }
 
 // detachHook starts `engine hook <entry> --harness <name> <args>` in the

@@ -31,7 +31,9 @@ commands:
                             run a harness hook on the event on stdin: pre-tool-use
                             (the merge guard), permission (log, and deny or leave
                             to the harness's review in unattended sessions), state
-                            (record a session's state), or the harness's own
+                            (record a session's state), prompt (record the
+                            operator's pane input on the server), or the
+                            harness's own
   ps [--json]               list server tasks
   attach <task>             attach to a task's tmux window, here or over SSH
   tell <task> <text>        message a task; a lone - reads the text from stdin

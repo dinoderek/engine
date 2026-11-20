@@ -5,13 +5,15 @@ import (
 	"slices"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/reconcile"
+	"github.com/dinoderek/engine/internal/remote"
 )
 
 // wakeMessages points each idle session at the updates it has not been
 // woken for: one waiting for input, or one only a background job keeps
 // busy. A session busy in a turn, limited, or at a hard stop is left alone.
-func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
+func (c *Coordinator) wakeMessages(st control.State, v reconcile.View, cfg *hosts.Config) error {
 	if c.Wake == nil {
 		return nil
 	}
@@ -29,6 +31,9 @@ func (c *Coordinator) wakeMessages(st control.State, v reconcile.View) error {
 		if t.Kind == "task" {
 			text = fmt.Sprintf("Read the new task and plan updates: engine updates %s --after %d; engine updates %s --after %d",
 				t.ID, at.Seen, t.Plan, at.Seen)
+		}
+		if err := c.typed(cfg, at, text); err != nil {
+			return err
 		}
 		if err := c.Wake(sess, text); err != nil {
 			return err
@@ -71,4 +76,14 @@ var planWakeKinds = []string{"say", "resolved"}
 func planWake(item control.Item, u control.Update) bool {
 	return item.Kind == "task" && u.Item == item.Plan &&
 		u.Author != "coordinator" && u.Recipient != "operator" && slices.Contains(planWakeKinds, u.Kind)
+}
+
+// typed logs text in the typed-text log of at's run, on its host, before it
+// is typed into the session: unlogged, the run's prompt hook would take it
+// for the operator's pane input. A text that cannot be logged is not typed.
+func (c *Coordinator) typed(cfg *hosts.Config, at control.Attempt, text string) error {
+	if err := remote.Typed(c.Client(cfg.Hosts[at.Host]), at.RunID, text); err != nil {
+		return fmt.Errorf("log the text typed into %s's session on %s: %w", at.Item, at.Host, err)
+	}
+	return nil
 }

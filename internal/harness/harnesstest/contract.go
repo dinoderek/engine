@@ -175,6 +175,12 @@ func checkEvents(t *testing.T, build New, fx Fixtures) {
 		if err != nil || ev.Kind != f.Kind || ev.Name != f.Name {
 			t.Errorf("%s: read as %+v, %v; want kind %s", f.Name, ev, err, f.Kind)
 		}
+		if ev.Kind == harness.PromptSubmitted && ev.Prompt == "" {
+			t.Errorf("%s: a submitted prompt read with no text", f.Name)
+		}
+	}
+	if _, err := h.Prompts(filepath.Join(t.TempDir(), "no-transcript.jsonl")); err == nil {
+		t.Error("read prompts from a transcript that does not exist")
 	}
 	if _, err := h.Event([]byte("not json")); err == nil {
 		t.Error("JSON that is not an event read as one")

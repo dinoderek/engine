@@ -29,7 +29,7 @@ func TestRun(t *testing.T) {
 		{"removed gh wrapper", []string{"gh", "pr", "view"}, "", none, 2, "", `unknown command "gh"`},
 		{"hook blocks", []string{"hook", "pre-tool-use", "--harness", "claude"}, `{"tool_name":"Bash","tool_input":{"command":"gh pr merge --auto"}}`, none, 2, "", "merge guard"},
 		{"hook allows", []string{"hook", "pre-tool-use", "--harness", "codex"}, `{"tool_name":"Read","tool_input":{}}`, none, 0, "", ""},
-		{"unknown hook fails open", []string{"hook", "stop", "--harness", "claude"}, "", none, 1, "", `claude has no hook "stop --harness claude" (want pre-tool-use, permission, state, limit, statusline)`},
+		{"unknown hook fails open", []string{"hook", "stop", "--harness", "claude"}, "", none, 1, "", `claude has no hook "stop --harness claude" (want pre-tool-use, permission, state, prompt, limit, statusline)`},
 		{"another harness's hook fails open", []string{"hook", "label", "--harness", "claude", "/r", "th"}, "", none, 1, "", `claude has no hook "label`},
 		{"a core hook with arguments fails open", []string{"hook", "state", "--harness", "codex", "x"}, "", none, 1, "", `codex has no hook "state --harness codex x"`},
 		{"hook without a name fails open", []string{"hook"}, "", none, 1, "", "want engine hook <entry> --harness <name> [args]"},

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -117,7 +118,8 @@ func (l fakeLauncher) Args(s harness.Launch) string {
 func (f *Fake) Hooks() harness.Hooks { return fakeHooks{f} }
 
 // fakeHooks reads an event as {"kind": …, "name": …, "session_id": …,
-// "cwd": …, "command": …}, and denies with {"denied": <message>}.
+// "cwd": …, "command": …, "prompt": …, "transcript": …}, and denies with
+// {"denied": <message>}.
 type fakeHooks struct{ f *Fake }
 
 func (h fakeHooks) Event(raw []byte) (harness.Event, error) {
@@ -127,11 +129,31 @@ func (h fakeHooks) Event(raw []byte) (harness.Event, error) {
 		SessionID string            `json:"session_id"`
 		Cwd       string            `json:"cwd"`
 		Command   string            `json:"command"`
+		Prompt    string            `json:"prompt"`
+		// Transcript is a file of the session's prompts, one JSON string
+		// per line.
+		Transcript string `json:"transcript"`
 	}
 	if err := json.Unmarshal(raw, &e); err != nil {
 		return harness.Event{}, err
 	}
-	return harness.Event{Kind: e.Kind, Name: e.Name, SessionID: e.SessionID, Cwd: e.Cwd, Command: e.Command}, nil
+	return harness.Event{Kind: e.Kind, Name: e.Name, SessionID: e.SessionID, Cwd: e.Cwd, Command: e.Command, Prompt: e.Prompt, Transcript: e.Transcript}, nil
+}
+
+// Prompts reads a fake transcript: one JSON string per line.
+func (fakeHooks) Prompts(transcript string) ([]string, error) {
+	data, err := os.ReadFile(transcript)
+	if err != nil {
+		return nil, err
+	}
+	var prompts []string
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var p string
+		if line != "" && json.Unmarshal([]byte(line), &p) == nil {
+			prompts = append(prompts, p)
+		}
+	}
+	return prompts, nil
 }
 
 func (fakeHooks) Deny(w io.Writer, message string) error {

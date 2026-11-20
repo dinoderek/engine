@@ -1,0 +1,181 @@
+package control
+
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"strings"
+	"testing"
+)
+
+// paneSession is a dispatched task whose session asked a question, and the
+// private half of its run's pane key, recorded as the run started.
+func paneSession(t *testing.T, s Service) (Item, Actor, Update, ed25519.PrivateKey) {
+	t.Helper()
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	worker, claimed := dispatch(t, s, task)
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Started(claimed.Attempt.ID, "@4", hex.EncodeToString(pub)); err != nil {
+		t.Fatal(err)
+	}
+	question := call(t, s, worker, Request{Op: "ask", ID: task.ID, Body: "Approve the schema change?"}).Updates[0]
+	return task, worker, question, priv
+}
+
+func signed(priv ed25519.PrivateKey, attempt, text string) *PaneInput {
+	return &PaneInput{Signature: hex.EncodeToString(ed25519.Sign(priv, PaneMessage(attempt, text))), Transcript: true}
+}
+
+// notes are the coordinator's notes to the operator on item.
+func notes(st State, item string) []Update {
+	var out []Update
+	for _, u := range st.Updates {
+		if u.Item == item && u.Author == "coordinator" && u.Kind == "say" && u.Recipient == "operator" {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+func TestASignedPaneAnswerResolvesTheTasksQuestion(t *testing.T) {
+	s := service(t)
+	task, worker, question, priv := paneSession(t, s)
+	const answer = "Yes, approved.\nDrop the old column too. "
+	out := call(t, s, worker, Request{Op: "pane-input", Body: answer, Pane: signed(priv, worker.Attempt, answer)})
+	if len(out.Updates) != 2 {
+		t.Fatalf("updates = %+v, want the answer and the restored state", out.Updates)
+	}
+	got := out.Updates[0]
+	if got.Kind != KindPaneAnswer || got.Body != answer || got.ReplyTo != question.ID || got.Item != task.ID || got.Author != worker.Attempt {
+		t.Errorf("answer = %+v, want the text verbatim replying to %d", got, question.ID)
+	}
+	st := mustSnapshot(t, s)
+	if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
+		t.Errorf("task %s, open question %d; want it running with none", st.Items[task.ID].State, OwnQuestion(&st, task.ID))
+	}
+	if n := notes(st, task.ID); len(n) != 0 {
+		t.Errorf("notes = %+v, want none for a vouched answer", n)
+	}
+	inbox := call(t, s, op, Request{Op: "inbox"}).Updates
+	for _, u := range inbox {
+		if u.ID == question.ID {
+			t.Error("the answered question is still in the inbox")
+		}
+	}
+}
+
+func TestAPaneAnswerTheHookDidNotVouchForResolvesWithOneNote(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		pane   func(ed25519.PrivateKey, string) *PaneInput
+		reason string
+	}{
+		{"unsigned", func(ed25519.PrivateKey, string) *PaneInput { return &PaneInput{Transcript: true} }, "it is unsigned"},
+		{"no vouch at all", func(ed25519.PrivateKey, string) *PaneInput { return nil }, "it is unsigned"},
+		{"signed with another key", func(_ ed25519.PrivateKey, a string) *PaneInput {
+			_, other, _ := ed25519.GenerateKey(rand.Reader)
+			return signed(other, a, "Approved")
+		}, "its signature does not match"},
+		{"signed for other text", func(k ed25519.PrivateKey, a string) *PaneInput { return signed(k, a, "Rejected") }, "its signature does not match"},
+		{"missing from the transcript", func(k ed25519.PrivateKey, a string) *PaneInput {
+			p := signed(k, a, "Approved")
+			p.Transcript = false
+			return p
+		}, "missing from the prompts in the session's transcript"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := service(t)
+			task, worker, question, priv := paneSession(t, s)
+			out := call(t, s, worker, Request{Op: "pane-input", Body: "Approved", Pane: tc.pane(priv, worker.Attempt)})
+			if out.Updates[0].Kind != KindPaneAnswer || out.Updates[0].Body != "Approved" {
+				t.Fatalf("answer = %+v, want it recorded", out.Updates[0])
+			}
+			st := mustSnapshot(t, s)
+			if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
+				t.Errorf("task %s, open question %d; want it resolved all the same", st.Items[task.ID].State, OwnQuestion(&st, task.ID))
+			}
+			n := notes(st, task.ID)
+			if len(n) != 1 || !strings.Contains(n[0].Body, tc.reason) || !strings.Contains(n[0].Body, fmt.Sprintf("resolved question %d", question.ID)) {
+				t.Fatalf("notes = %+v, want one naming %q", n, tc.reason)
+			}
+			if n[0].ID != out.Updates[len(out.Updates)-1].ID {
+				t.Error("the note is not in the answer's transaction")
+			}
+		})
+	}
+}
+
+func TestPaneInputWithNoOpenQuestionIsAMessage(t *testing.T) {
+	s := service(t)
+	task, worker, question, priv := paneSession(t, s)
+	call(t, s, op, Request{Op: "resolve", ReplyTo: question.ID, Body: "Approved"})
+	out := call(t, s, worker, Request{Op: "pane-input", Body: "Also bump the version", Pane: signed(priv, worker.Attempt, "Also bump the version")})
+	if len(out.Updates) != 1 || out.Updates[0].Kind != KindPaneMessage || out.Updates[0].ReplyTo != 0 || out.Updates[0].Item != task.ID {
+		t.Fatalf("updates = %+v, want one pane message resolving nothing", out.Updates)
+	}
+	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" || len(notes(st, task.ID)) != 0 {
+		t.Errorf("task %s, notes %+v", st.Items[task.ID].State, notes(st, task.ID))
+	}
+}
+
+func TestAPaneAnswerResolvesAQuestionTheTaskAskedOnItsPlan(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	worker, _ := dispatch(t, s, task)
+	question := call(t, s, worker, Request{Op: "ask", ID: plan.ID, Body: "The unit lane is red on main"}).Updates[0]
+	out := call(t, s, worker, Request{Op: "pane-input", Body: "Fixed; merge main in"})
+	if out.Updates[0].ReplyTo != question.ID || out.Updates[0].Item != plan.ID {
+		t.Fatalf("answer = %+v, want it on the plan, resolving %d", out.Updates[0], question.ID)
+	}
+	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" || PlanQuestion(&st, task.ID) != 0 {
+		t.Errorf("task %s, plan question %d", st.Items[task.ID].State, PlanQuestion(&st, task.ID))
+	}
+}
+
+func TestOnlyASessionPostsItsOwnPaneInput(t *testing.T) {
+	s := service(t)
+	task, worker, _, _ := paneSession(t, s)
+	repo, plan := repoPlan2(t, s)
+	other := newTask(t, s, repo, plan)
+	reject(t, s, op, Request{Op: "pane-input", ID: task.ID, Body: "Approved"}, 403)
+	reject(t, s, Actor{Name: "coordinator", Role: "coordinator"}, Request{Op: "pane-input", ID: task.ID, Body: "Approved"}, 403)
+	reject(t, s, worker, Request{Op: "pane-input", ID: other.ID, Body: "Approved"}, 403)
+	reject(t, s, worker, Request{Op: "pane-input", Body: "  \n"}, 400)
+}
+
+// repoPlan2 is a second repository and plan beside repoPlan's.
+func repoPlan2(t *testing.T, s Service) (string, string) {
+	t.Helper()
+	repo := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "repo", Title: "Other", Slug: "owner/other", Remote: "git@example.test:owner/other.git"}}).Item
+	plan := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "plan", Repo: repo.ID, Title: "Other", Body: "Other"}}).Item
+	return repo.ID, plan.ID
+}
+
+func TestStartedRecordsTheRunsPaneKey(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	_, claimed := dispatch(t, s, task)
+	if err := s.Started(claimed.Attempt.ID, "@9", "abcd"); err != nil {
+		t.Fatal(err)
+	}
+	at := mustSnapshot(t, s).Attempts[claimed.Attempt.ID]
+	if at.State != "running" || at.Window != "@9" || at.PaneKey != "abcd" {
+		t.Errorf("attempt = %+v", at)
+	}
+	if err := s.SetAttempt(at.ID, "running", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustSnapshot(t, s).Attempts[at.ID].PaneKey; got != "abcd" {
+		t.Errorf("a later observation dropped the pane key: %q", got)
+	}
+}

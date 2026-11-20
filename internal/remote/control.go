@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/dinoderek/engine/internal/hostops"
+	"github.com/dinoderek/engine/internal/session"
 )
 
 // ControlSpawn uses the host's JSON stdin channel to transfer execution credentials.
@@ -87,4 +88,27 @@ func RunReady(client Client, repo string, out io.Writer) (bool, error) {
 	}
 	hostops.ReportReady(out, r)
 	return r.OK(), nil
+}
+
+// Typed logs, on the session's host, the hash of text about to be typed
+// into the session of the run, in the run's typed-text log (the typed op).
+// Text whose hash is not logged must not be typed: the run's prompt hook
+// would take it for the operator's.
+func Typed(client Client, runID, text string) error {
+	hash := session.TextHash(text)
+	switch c := client.(type) {
+	case Local:
+		_, err := hostops.LogTyped(c.Deps, runID, hash)
+		return err
+	case SSH:
+		var reply hostops.Typed
+		return c.call("typed", []string{"--run-id", runID, "--sha256", hash}, "", &reply)
+	default:
+		if c, ok := client.(interface {
+			Typed(runID, hash string) error
+		}); ok {
+			return c.Typed(runID, hash)
+		}
+		return fmt.Errorf("host client does not log typed text")
+	}
 }

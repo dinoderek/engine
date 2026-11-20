@@ -125,7 +125,7 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	if err = c.keepObservations(v); err != nil {
 		return err
 	}
-	if err = c.wakeMessages(st, v); err != nil {
+	if err = c.wakeMessages(st, v, cfg); err != nil {
 		c.log("wake messages: %v", err)
 	}
 	released := true

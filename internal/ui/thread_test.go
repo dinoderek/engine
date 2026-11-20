@@ -229,3 +229,15 @@ func TestThreadTooLongToReadIsAnError(t *testing.T) {
 		t.Fatalf("overlong thread = %d %+v, want an error rather than a partial thread", status, env)
 	}
 }
+
+func TestAPaneAnswerShowsAndSettlesItsQuestion(t *testing.T) {
+	answer := upd(2, "t7", control.KindPaneAnswer, "Yes, drop it")
+	answer.ReplyTo = 1
+	th := threadWindow("t7", []control.Update{ask(1, "t7"), answer, upd(3, "t7", control.KindPaneMessage, "Also bump it")}, 0, 0)
+	if !reflect.DeepEqual(messageIDs(th), []int{1, 2, 3}) {
+		t.Fatalf("messages = %v, want the pane input shown", messageIDs(th))
+	}
+	if want := []Question{{ID: 1, State: "resolved", Resolution: 2}}; !reflect.DeepEqual(th.Questions, want) {
+		t.Fatalf("questions = %+v, want %+v", th.Questions, want)
+	}
+}

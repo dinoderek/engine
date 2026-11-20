@@ -58,7 +58,7 @@ type Thread struct {
 }
 
 // messageKinds includes ruling, a plan update kind stored records may hold.
-var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved", "ruling"}
+var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved", "ruling", control.KindPaneAnswer, control.KindPaneMessage}
 
 // itemDetail shows a plan's status, as the plan list does, and a task's state.
 func itemDetail(it control.Item) ItemDetail {
@@ -113,7 +113,7 @@ func settle(q *Question, m Message) {
 		q.Replies++
 	case "acknowledged":
 		q.Acknowledged = true
-	case "resolved":
+	case "resolved", control.KindPaneAnswer:
 		q.State, q.Resolution = "resolved", m.ID
 	}
 }

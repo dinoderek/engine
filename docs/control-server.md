@@ -48,6 +48,8 @@ The operator credential is an owner-only regular file. Every dispatch creates a 
 
 Updates are immutable and ordered; read up to 200 after a cursor. Comments leave workflow state alone. A question atomically holds a task in `needs-human`: its own, or the asking task (the update's `task`) when a task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements and replies leave it unresolved. Resolution records the decision and atomically restores each held task's earlier state, unless another question holds it, its state changed or its execution ended. A task's own questions, including one it asked on its plan, block its state changes, completion, merge and quota resume. A plan's question blocks only planner handoff and the first dispatch of its tasks.
 
+**Pane input.** `pane-input`, which only a session's prompt hook posts (`harnesses.md`), records the operator's pane text verbatim for the session's own item: a `pane-answer` resolving the oldest open question holding it, released as a resolution is, else a `pane-message` resolving nothing. A post unsigned, failing the attempt's `pane_key`, or missing from the transcript still counts, and adds one coordinator note to the operator in its transaction.
+
 Messages addressed to the operator appear in the cross-repository inbox. Informational messages leave the inbox on acknowledgement; questions leave on resolution. Idle, unrestricted sessions get wake-up pointers for others' messages on their item; tasks also for others' plan messages and resolutions, except coordinator notices and those to the operator. Messages persist when wake-up fails.
 
 ## Host status

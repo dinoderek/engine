@@ -50,7 +50,8 @@ func ControlSpawn(d Deps, r ControlRequest) (Spawned, error) {
 		if windowID(record.Tmux) == "" {
 			return Spawned{}, refuse("dispatch record is incomplete; retain the reserved execution for reconciliation")
 		}
-		return Spawned{Name: record.Name, Window: windowID(record.Tmux), RunDir: runDir, Worktree: record.Worktree, Branch: record.Branch}, nil
+		key, _ := session.PanePublicKey(runDir) // a run spawned before pane keys has none
+		return Spawned{Name: record.Name, Window: windowID(record.Tmux), RunDir: runDir, Worktree: record.Worktree, Branch: record.Branch, PaneKey: key}, nil
 	}
 	repo, err := session.ParseRepo(r.Spawn.Repo)
 	if err != nil {

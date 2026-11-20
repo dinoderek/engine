@@ -5,9 +5,11 @@ import (
 	"slices"
 )
 
+// resolved reports whether question id was resolved: by the operator, or
+// by their answer typed into the asking session's pane.
 func resolved(st *State, id int) bool {
 	for _, u := range st.Updates {
-		if u.ReplyTo == id && u.Kind == "resolved" {
+		if u.ReplyTo == id && (u.Kind == "resolved" || u.Kind == KindPaneAnswer) {
 			return true
 		}
 	}

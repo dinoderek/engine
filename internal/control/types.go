@@ -83,6 +83,9 @@ type Attempt struct {
 	// died with the run's limit marker set. ResetsAt is then that limit's
 	// reset, or zero when unknown, and the attempt ended vanished.
 	Limited bool `json:"limited,omitempty"`
+	// PaneKey is the public key, in hex, of the run's pane key, which its
+	// prompt hook signs the operator's pane input with.
+	PaneKey string `json:"pane_key,omitempty"`
 }
 
 // Update is immutable history; acknowledgement and resolution are separate records.
@@ -164,6 +167,8 @@ type Request struct {
 	State         string `json:"state,omitempty"`
 	// Merge is a merge-request's PR, head, method and verdict.
 	Merge *MergeRequest `json:"merge,omitempty"`
+	// Pane is how a pane-input post's prompt hook vouches for it.
+	Pane *PaneInput `json:"pane,omitempty"`
 }
 
 // Response contains one operation's result. Credentials are only returned at dispatch.
