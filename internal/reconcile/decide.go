@@ -155,7 +155,7 @@ func releaseStopped(v View) []Action {
 func stalls(v View) []Action {
 	var acts []Action
 	for _, t := range v.Tasks {
-		if t.open() {
+		if t.open() && !t.Stopped {
 			acts = append(acts, limit(v, t)...)
 		}
 		s := t.Session

@@ -65,3 +65,15 @@ func TestAStoppedSessionIsNotWoken(t *testing.T) {
 		t.Error("a stopped task's session was woken")
 	}
 }
+
+// A stopped task's window that is still open and limited raises no limit
+// notice: the session is being released.
+func TestAStoppedTaskRaisesNoLimitStep(t *testing.T) {
+	s := working()
+	s.Limited, s.ResetsAt = true, t0.Add(48*time.Hour).Unix()
+	for _, a := range Decide(view(plan("planned"), held(2, &s))) {
+		if a.Kind != Release {
+			t.Errorf("a stopped task's limited window raised %s", show(a))
+		}
+	}
+}

@@ -5,7 +5,8 @@ package control
 // returns to todo, leaving the merge queue. The hold is set before the
 // attempt ends, so no pass can place the task in between. The coordinator
 // then closes the window, keeping the worktree and branch. A task with no
-// execution to end, such as a todo or finished one, is refused.
+// execution to end, such as a todo or finished one, or whose dispatch is
+// still in flight, is refused.
 func (s Service) stopTask(st *State, a Actor, r Request) (Response, error) {
 	item, err := heldTarget(st, a, r)
 	if err != nil {
@@ -14,6 +15,11 @@ func (s Service) stopTask(st *State, a Actor, r Request) (Response, error) {
 	at, ok := st.Attempts[item.Attempt]
 	if !ok || at.State == "ended" || item.State == "done" || item.State == "failed" {
 		return Response{}, problem(409, "task %s has no running execution to stop", item.ID)
+	}
+	if at.State == "dispatching" {
+		// The host may still open its window, which an ended attempt's
+		// record would never name: no pass could release it.
+		return Response{}, problem(409, "task %s's dispatch is still in flight; stop it once its session has started", item.ID)
 	}
 	withdraw(st, a, item, "the operator stopped the task", s.now())
 	at.State, at.Ended, at.Reason = "ended", s.now(), EndStopped

@@ -41,6 +41,9 @@ func TestTaskStopAndResumeAreOperatorOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err = svc.SetAttempt(out.Attempt.ID, "running", "@1"); err != nil {
+		t.Fatal(err)
+	}
 	worker := e
 	worker.Client = &control.Client{URL: e.Client.URL, Token: out.Credential}
 	worker.Out, worker.Err = &bytes.Buffer{}, &bytes.Buffer{}

@@ -94,6 +94,15 @@ func TestStopAndResumeRefuseWhatTheyCannotDo(t *testing.T) {
 	reject(t, s, op, Request{Op: "create", Item: Item{Kind: "task", Repo: repo.ID, Plan: plan.ID, Title: "Held", Body: "x", Held: true}}, 400)
 }
 
+func TestStopOfADispatchInFlightIsRefused(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	dispatch(t, s, task)
+	reject(t, s, op, Request{Op: "task-stop", ID: task.ID}, 409)
+}
+
 func TestStopOfAFinishedTaskIsRefused(t *testing.T) {
 	s := service(t)
 	task, worker, _ := running(t, s)
