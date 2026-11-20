@@ -154,7 +154,7 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 				row.Waiting = append(row.Waiting, Prerequisite{ID: d.ID, Title: d.Title, State: d.State, Plan: d.Plan})
 			}
 		}
-		row.Group = group(t.State, row.Host != "", len(row.Waiting) > 0, held, dispatchable)
+		row.Group = group(t.State, row.Host != "", len(row.Waiting) > 0, held || t.Held, dispatchable)
 		out.Counts.add(row.Group)
 		out.Tasks = append(out.Tasks, row)
 	}

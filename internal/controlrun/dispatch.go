@@ -160,7 +160,7 @@ func kickoff(item control.Item, at control.Attempt, reviewer string, resume bool
 		"Execution: %s. Reviewer model: %s. The repository's tests, review and pinned-head merge rules apply. "+
 		"Read the server plan-source reference before working.", role, item.ID, item.Kind, item.ID, at.ID, reviewer)
 	if resume {
-		text += " This is a resume: an earlier attempt already worked on this " + item.Kind + ". Its branch and worktree hold its work so far; " +
+		text += " This is a resume: an earlier attempt already worked on this " + item.Kind + ". Its branch holds the work it pushed; " +
 			"read the updates since it started, check what the branch already has, and continue from there."
 	}
 	return text
