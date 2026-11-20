@@ -50,6 +50,9 @@ type Item struct {
 	// Stopped is true when the operator stopped the current attempt: its
 	// window, if any is left, is released keeping the worktree and branch.
 	Stopped bool
+	// Claimed is true when the current attempt's session claimed its task
+	// (control.Claimed).
+	Claimed bool
 	// Merge is the request of the task's merge queue entry, nil when it has
 	// none.
 	Merge *control.Update
@@ -102,6 +105,11 @@ type Action struct {
 	Text string
 	// Tail is the pane log's end an EndAttempt records.
 	Tail string
+	// AtLimit is an EndAttempt of a window that died at a usage limit,
+	// resetting at ResetsAt; Probe is set when the attempt tried a host ×
+	// harness already at a limit, so its end tells no one.
+	AtLimit bool
+	Probe   bool
 	// Host, Harness and Resume are where and how a Dispatch launches.
 	Host    string
 	Harness string
@@ -117,7 +125,8 @@ type Action struct {
 	// Limit is the reset a limit Notice marks as alerted, far or stuck.
 	Limit int64
 	Far   bool
-	// ResetsAt is the reset a Resume continues after.
+	// ResetsAt is the reset a Resume continues after, or an AtLimit
+	// EndAttempt's.
 	ResetsAt int64
 	// Session is the window a Resume types into or a Release closes.
 	Session Session

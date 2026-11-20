@@ -1,6 +1,6 @@
 # Hosts and sessions
 
-> **Owns:** host config, task placement, the attempt as the session registry, how sessions are started and reached. **Not here:** dispatch and host ops (`coordinator.md`), session signals (`session-signals.md`), what a session does (the skills, `plugins/engine/skills/`), what it records (`telemetry.md`), each harness's launch line, tiers and adapter (`harnesses.md`).
+> **Owns:** host config, task placement, the attempt as the session registry, how sessions are started and reached. **Not here:** dispatch and host ops (`coordinator.md`), session signals (`session-signals.md`), what a session does (the skills, `plugins/engine/skills/`), what it records (`telemetry.md`), each harness's adapter (`harnesses.md`) and launch line and tiers (`launch-lines.md`), how engine drives tmux (`tmux.md`).
 
 ## Hosts
 
@@ -58,14 +58,16 @@ host runs it. Another manager, one key without the other, and a unit that is
 not a `.service` name are refused at load.
 
 Each harness runs through its pinned `bin`, never whichever binary is first
-on `PATH`. Launch lines and tiers are in `harnesses.md`.
+on `PATH`. For launch lines and tiers, load `launch-lines.md`.
 
 ## Placement
 
 In start order, each ready task goes to a host that has a free slot (a free
 heavy slot, for a heavy task), the chosen harness signed in and under its cap,
 every capability the card requires, a tmux server whose working directory
-exists (below), and a passed readiness probe for its repo (`readiness.md`).
+exists (`tmux.md`), a passed readiness probe for its repo (`readiness.md`),
+and no usage limit holding that host × harness (`session-signals.md`, "Death
+at a limit").
 Among those, the host with the most free slots wins, then the fewest
 capabilities, then the lowest name.
 
@@ -92,8 +94,14 @@ harness apps title it `t<n> · <title>` (`p<n>` for a planner).
 The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
 
 1. creates the worktree on `task/<repo>-<task>`, with the repo's
-   `worktree create` when it has one, else `git worktree add`. A resume
-   reopens `origin`'s branch at its tip;
+   `worktree create` when it has one, else `git worktree add`, and marks the
+   branch with its run in git config (`branch.<branch>.engineRun`). A
+   re-dispatch adopts a branch a run of the same task marked, whether or not
+   that run opened a window: as it is, with any worktree on it, its
+   unpushed commits and uncommitted changes, fast-forwarded to `origin`'s tip
+   when clean and behind it, and refused when the two diverged or `origin` is
+   ahead of uncommitted changes; the kickoff names its head. A resume of an
+   unmarked branch reopens `origin`'s at its tip;
 2. trusts the worktree for its harness and opens the window `<repo>-<task>`
    in the session `engine`;
 3. runs the launch line at the task's tier with the adapter's flags and the
@@ -120,26 +128,6 @@ exits 1 when gh failed or the session was denied, stalled or skipped a step.
 | Terminal | `engine ps` lists tasks with their attempts; `engine attach <task-id>` runs `tmux attach` on the host, over `ssh -t` if remote; `engine host status --all` shows the fleet. |
 | Phone | An SSH app over Tailscale: `tmux attach -t engine`, `Ctrl-b w`. |
 | Apps | Claude apps and claude.ai/code through Remote Control; Codex apps when the session joined the daemon. |
-
-## tmux setup
-
-Engine owns the tmux session `engine` and sets options only on it and its
-windows, never globally or in `~/.tmux.conf`. It targets windows by id
-(`@3`): tmux reads `.` as a separator. Windows stay after their command
-exits (`remain-on-exit`). Engine types with `send-keys -l`, then `Enter` after
-a short delay: input boxes can swallow a newline sent with the text.
-
-**Working directory.** Every tmux command runs from `$HOME`, so no server
-engine starts lives in a worktree later removed, failing every later
-window. Host status reports one as `tmux_cwd_gone`, with its restart
-command; placement skips the host. Engine never kills a server with sessions.
-
-**Creation.** A per-server lock, `tmux-<socket>.lock` in
-`~/.local/share/engine`, serialises window creation. A failed `respawn-pane`
-is retried once; its error carries `list-panes -a`.
-
-tmux survives a closed terminal, not a sleeping machine: macOS holds off
-sleep per window on power; a Linux host should not suspend.
 
 ## Lifecycle
 

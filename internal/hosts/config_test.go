@@ -10,11 +10,12 @@ import (
 )
 
 // docExample is the hosts.toml, joined from its toml blocks in
-// docs/hosts-and-sessions.md and the harness docs that hold the harness tables.
+// docs/hosts-and-sessions.md and docs/launch-lines.md, which holds the
+// harness tables.
 func docExample(t *testing.T) string {
 	t.Helper()
 	var b strings.Builder
-	for _, doc := range []string{"hosts-and-sessions.md", "harnesses.md"} {
+	for _, doc := range []string{"hosts-and-sessions.md", "launch-lines.md"} {
 		data, err := os.ReadFile("../../docs/" + doc)
 		if err != nil {
 			t.Fatal(err)

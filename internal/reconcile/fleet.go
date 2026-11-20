@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 )
 
@@ -21,6 +23,11 @@ type Fleet struct {
 	Heavy []string
 	// Hosts are sorted by name.
 	Hosts []HostLoad
+	// Now is the pass's time, and Limits the host × harness pairs at a
+	// usage limit then: placement starts no task on one until its reset, or
+	// its next probe (gate).
+	Now    time.Time
+	Limits []control.HarnessLimit
 }
 
 // HostLoad is one host: what it runs, and how full it is now.
@@ -212,14 +219,18 @@ func (f Fleet) Place(wants []Want) []Placement {
 		free[h.Name] = h.free()
 	}
 	running := f.Running()
+	probed := map[pair]bool{}
 	var out []Placement
 	for _, w := range wants {
-		harness, best, why, notify := f.choose(w, free, running)
+		harness, best, why, notify := f.choose(w, free, running, probed)
 		if why != "" {
 			out = append(out, Placement{ID: w.ID, Wait: why, Notify: notify})
 			continue
 		}
 		free[best.Name] = free[best.Name].take(f.heavy(w))
+		if _, one, _ := f.gate(best.Name, harness); one {
+			probed[pair{best.Name, harness}] = true
+		}
 		running[harness]++
 		out = append(out, Placement{ID: w.ID, Host: best.Name, Harness: harness})
 	}
@@ -228,8 +239,10 @@ func (f Fleet) Place(wants []Want) []Placement {
 
 // fits returns the hosts that could take the item with this harness if they
 // had a free slot. When none could, why says what each host lacks, and
-// probing is true when a host only waits for its readiness probe.
-func (f Fleet) fits(w Want, harness string) (fits []HostLoad, why string, probing bool) {
+// probing is true when a host only waits: for its readiness probe, or for
+// its usage limit to pass. A host this pass already probes a limit on takes
+// no second task with it.
+func (f Fleet) fits(w Want, harness string, probed map[pair]bool) (fits []HostLoad, why string, probing bool) {
 	if _, ok := f.Caps[harness]; !ok {
 		return nil, fmt.Sprintf("hosts.toml defines no harness %q (a misspelt tier? tiers are deep, standard and light)", harness), false
 	}
@@ -250,6 +263,10 @@ func (f Fleet) fits(w Want, harness string) (fits []HostLoad, why string, probin
 			lacks = append(lacks, h.Name+" is unready for this repo: "+ready.Unready)
 		case !ready.Known:
 			waits = append(waits, h.Name+" waits for its readiness probe")
+		case probed[pair{h.Name, harness}]:
+			waits = append(waits, fmt.Sprintf("%s on %s is being probed after a usage limit", harness, h.Name))
+		case f.limitWait(h.Name, harness) != "":
+			waits = append(waits, f.limitWait(h.Name, harness))
 		default:
 			fits = append(fits, h)
 		}

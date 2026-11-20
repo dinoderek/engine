@@ -41,7 +41,7 @@ off that repo only. An unreachable host is left to its status.
 
 Each distinct failure (host, repo, check and output) posts one note on the
 repo, naming the host, the check, the head and the output; a repeat posts
-nothing. A tmux server whose working directory is gone (`hosts-and-sessions.md`)
+nothing. A tmux server whose working directory is gone (`tmux.md`)
 gets one note per server, naming its restart command.
 
 **After a fix,** `engine setup --host <name>` probes every repo engine has

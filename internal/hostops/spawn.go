@@ -98,7 +98,7 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 		return Spawned{}, refuse("%v", err)
 	}
 	u := &undo{repos: repos, clone: clone, runDir: s.runDir, l: s.l, removeAll: os.RemoveAll}
-	wt, err := repos.CreateWorktree(clone, s.Task, s.Resume)
+	wt, err := repos.CreateWorktree(clone, s.Task, s.Resume, s.RunID)
 	u.wt = wt
 	var taken *session.BranchTakenError
 	if errors.As(err, &taken) {
@@ -146,7 +146,7 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 			return Spawned{}, err
 		}
 	}
-	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined, control: s.control, path: path})
+	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: adoptedKickoff(s.Kickoff, wt), joined: joined, control: s.control, path: path})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
 		return Spawned{}, fmt.Errorf("open the tmux window: %w", err)
@@ -166,6 +166,16 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 	}
 	out.Warning = strings.Join(warnings, "; ")
 	return out, nil
+}
+
+// adoptedKickoff is the kickoff, naming the commit to resume from when the
+// worktree opened on a branch an earlier attempt left.
+func adoptedKickoff(kickoff string, wt session.Worktree) string {
+	if !wt.Adopted || wt.Head == "" {
+		return kickoff
+	}
+	return kickoff + " The task's branch " + wt.Branch + " is at " + wt.Head + ", where an earlier attempt left it: resume from that commit, " +
+		"and keep any change it left uncommitted in the worktree."
 }
 
 // undo is what one Spawn created before its window opened, so a failure

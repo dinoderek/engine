@@ -208,7 +208,7 @@ func checkSpawnRefusal(t *testing.T, c spawnRefusal) {
 		t.Errorf("files changed:\nbefore %v\nafter  %v", before, after)
 	}
 	if slices.ContainsFunc(git.calls, func(c string) bool {
-		return !strings.Contains(c, "symbolic-ref") && !strings.Contains(c, "worktree list") && !strings.Contains(c, "rev-parse --verify") &&
+		return !strings.Contains(c, "symbolic-ref") && !strings.Contains(c, "worktree list") && !strings.Contains(c, "rev-parse --verify") && !strings.Contains(c, "config --get") &&
 			!strings.Contains(c, "merge-base --is-ancestor")
 	}) {
 		t.Errorf("a refusal ran %v", git.calls)
@@ -247,5 +247,35 @@ func TestSpawnFailuresSayWhatFailed(t *testing.T) {
 	_, err := Spawn(spawnDeps(t, h, git.run, &tmuxFake{}, nil), request())
 	if err == nil || !strings.Contains(err.Error(), "trust ") || !slices.ContainsFunc(git.calls, func(c string) bool { return strings.Contains(c, "worktree remove --force") }) {
 		t.Errorf("trust failed: %v, git %v", err, git.calls)
+	}
+}
+
+func TestSpawnNamesTheHeadOfABranchAnEarlierAttemptLeft(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	// The first attempt made the branch, with a commit, and never opened a
+	// window: the coordinator sends no resume.
+	git := &gitFake{branch: true, mark: "r-7-a1"}
+	tm := &tmuxFake{windows: []string{"@1 %1 0 other"}}
+	got, err := Spawn(spawnDeps(t, h, git.run, tm, nil), request())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(tm.command, "task/r-7 is at def, where an earlier attempt left it") || got.Branch != "task/r-7" {
+		t.Errorf("the kickoff does not name the branch head: %s", tm.command)
+	}
+	if !slices.Contains(git.calls, "git config branch.task/r-7.engineRun r-7-20260102T030405Z") {
+		t.Errorf("the branch is not marked as this run's: %v", git.calls)
+	}
+}
+
+func TestAdoptedKickoff(t *testing.T) {
+	fresh := session.Worktree{Branch: "task/r-7", Created: true, NewBranch: true}
+	if got := adoptedKickoff("go", fresh); got != "go" {
+		t.Errorf("a new branch changed the kickoff: %q", got)
+	}
+	adopted := session.Worktree{Branch: "task/r-7", Adopted: true, Head: "abc123"}
+	if got := adoptedKickoff("go", adopted); !strings.HasPrefix(got, "go The task's branch task/r-7 is at abc123") {
+		t.Errorf("kickoff %q", got)
 	}
 }

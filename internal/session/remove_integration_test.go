@@ -17,7 +17,7 @@ func TestRemoveWorktreeRemovesOnlyWhatCreateMade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fresh, err := r.CreateWorktree(clone, 4, false)
+	fresh, err := r.CreateWorktree(clone, 4, false, "")
 	if err != nil || !fresh.Created || !fresh.NewBranch {
 		t.Fatalf("a first attempt: %+v, %v", fresh, err)
 	}
@@ -31,7 +31,7 @@ func TestRemoveWorktreeRemovesOnlyWhatCreateMade(t *testing.T) {
 		t.Error("the new branch was kept")
 	}
 
-	resumed, err := r.CreateWorktree(clone, 5, true)
+	resumed, err := r.CreateWorktree(clone, 5, true, "")
 	if err != nil || !resumed.Created || resumed.NewBranch {
 		t.Fatalf("a resume from origin's branch: %+v, %v", resumed, err)
 	}
@@ -43,11 +43,11 @@ func TestRemoveWorktreeRemovesOnlyWhatCreateMade(t *testing.T) {
 	}
 	mustGit(t, clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/task/r-5")
 
-	left, err := r.CreateWorktree(clone, 5, true)
+	left, err := r.CreateWorktree(clone, 5, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	adopted, err := r.CreateWorktree(clone, 5, true)
+	adopted, err := r.CreateWorktree(clone, 5, true, "")
 	if err != nil || adopted.Created {
 		t.Fatalf("an adopted worktree: %+v, %v", adopted, err)
 	}

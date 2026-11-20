@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 // LimitFile is Claude's current limit marker in a run directory, which
@@ -28,3 +30,12 @@ func ReadLimit(dir string) (Limit, bool) {
 	}
 	return l, true
 }
+
+// RunLimit is the run's limit marker, for status to read when its window is
+// gone.
+func (Adapter) RunLimit(dir string) (int64, bool) {
+	l, ok := ReadLimit(dir)
+	return l.ResetsAt, ok
+}
+
+var _ harness.LimitMarker = Adapter{}

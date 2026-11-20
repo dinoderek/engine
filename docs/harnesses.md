@@ -1,6 +1,6 @@
 # Harnesses
 
-> **Owns:** the harness adapter contract, what the core does with an adapter's answers, and the `[harness.<name>]` launch lines and tiers an operator writes. **Not here:** each harness's quirks (the adapter packages' doc comments under `internal/harness/`), host config and placement (`hosts-and-sessions.md`), installing and signing in (`operator-setup.md`).
+> **Owns:** the harness adapter contract, and what the core does with an adapter's answers. **Not here:** the `[harness.<name>]` launch lines and tiers an operator writes (`launch-lines.md`), each harness's quirks (the adapter packages' doc comments under `internal/harness/`), host config and placement (`hosts-and-sessions.md`), installing and signing in (`operator-setup.md`).
 
 ## The contract
 
@@ -12,6 +12,7 @@ doc comments are the contract. What each answer drives:
 | a session's launch: config, trust, flags, kickoff | runs the host's line with them; `release` asks every adapter to delete its per-session files |
 | whether a session joins the remote-control daemon | joins only when allowed; a down daemon never refuses a spawn |
 | one observation per `status`: quota, signed out, window state | unknown is never dead; a window's own exit decides that |
+| optionally, a run's usage limit marker | a window that died with it set ends resumable (`session-signals.md`) |
 | hook events in engine's terms, its denial, its unattended policy | runs the core hooks: `pre-tool-use` is the merge guard, `permission` applies the policy, `state` writes the run's state file |
 | its own hook entries | resolves `engine hook <entry> --harness <name>`; an unknown name or entry exits 1 and blocks nothing |
 | `engine setup` steps, preflight failure advice, the user's plugin update | runs the steps after the host's, on hosts that list the harness; `engine upgrade` runs the update on the caller first |
@@ -23,38 +24,12 @@ What each harness answers today:
 | --- | --- | --- |
 | unattended permission request | denied, naming the Permission hard stop | left to Codex's auto-review, which never prompts |
 | session state | its own session list | the hooks' state file; a missing file is unknown |
+| a limit's reset | the hook's, the quota reading's, else the stop message's `resets <time>`, the next such time in the host's zone | the state file's, else the quota reading's |
+| a limit marker | the run's `limit.json` | none |
 
 **Adding a harness:** a package under `internal/harness/` that passes
 `harnesstest`'s contract suite, a registry line, its `scripts/import-rules.tsv`
 row, and its name in the `harness-names` lane. No other package names it.
 
-## Launch lines and tiers
-
-They live only in the operator's `hosts.toml`. `{model}` and `{effort}` come
-from the task's tier; `{name}` is `<repo>-<task>`; `{title}` is the app title.
-
-```toml
-[harness.claude]
-max_sessions = 8        # across all hosts: a budget lever
-launch = "{bin} --permission-mode auto --model {model} --effort {effort} -n {title} --remote-control {title}"
-tiers.deep     = { model = "claude-opus-5-5",   effort = "high" }
-tiers.standard = { model = "claude-sonnet-5-5", effort = "high" }
-tiers.light    = { model = "claude-haiku-5-5",  effort = "medium" }
-
-[harness.codex]
-max_sessions = 2
-launch = "{bin} --sandbox workspace-write -a on-request -c approvals_reviewer=auto_review -c sandbox_workspace_write.network_access=true -m {model} -c model_reasoning_effort={effort}"
-tiers.deep     = { model = "gpt-6.1-sol", effort = "high" }   # not Astra: Sol at high is close on coding, far cheaper
-tiers.standard = { model = "gpt-6.1-sol", effort = "medium" }
-tiers.light    = { model = "gpt-6-luna",  effort = "medium" }
-```
-
-Rules for the lines:
-
-- **Claude:** keep `--permission-mode auto`, whose classifier decides most
-  actions without a prompt, and `-n {title} --remote-control {title}`.
-- **Codex:** keep the `workspace-write` sandbox with auto-review deciding
-  what crosses it (never `approval_policy = "never"`, which leaves it nothing
-  to review), and keep network access, for `gh` and `git push`. Set no
-  writable root and no `--add-dir`: a joined session refuses both, so such a
-  line keeps sessions embedded, and `spawn` warns.
+For the launch lines and tiers an operator writes in `hosts.toml`, load
+`launch-lines.md`.

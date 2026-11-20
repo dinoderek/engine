@@ -69,6 +69,16 @@ type Adapter interface {
 	HookedState() bool
 }
 
+// LimitMarker is an adapter that keeps a usage limit marker in each run's
+// directory. Status reads it for a run with no live window, so a session
+// that died at a limit ends resumable.
+type LimitMarker interface {
+	// RunLimit reads the marker in the run directory dir: whether the run
+	// stopped at a usage limit that no resume cleared, and its reset in epoch
+	// seconds, or zero when unknown.
+	RunLimit(dir string) (resetsAt int64, limited bool)
+}
+
 // Launcher is one session's launch.
 type Launcher interface {
 	// Join decides, through the harness binary bin, whether a session

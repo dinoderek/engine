@@ -90,3 +90,31 @@ func TestPaneTailStripsTerminalControlSequences(t *testing.T) {
 		t.Errorf("tail %q", got)
 	}
 }
+
+func TestStatusShowsTheLimitARunWithNoLiveWindowStoppedAt(t *testing.T) {
+	h := newHome(t, "mac")
+	tm := &tmuxFake{windows: []string{"@1 %1 0 r-1", "@3 %3 1 r-3"}, screens: map[string]string{}}
+	now := fixedNow()
+	for _, name := range []string{"r-1", "r-2", "r-3", "r-4"} {
+		dir := writeRun(t, h, session.Record{RunID: name + "-a", Name: name, Harness: Claude, Spawned: now})
+		if name != "r-4" {
+			marker := `{"since":1000,"resets_at":5000,"error":"rate_limit"}`
+			if err := os.WriteFile(filepath.Join(dir, "limit.json"), []byte(marker), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	d := Deps{Tmux: tm.tmux(), Home: h.dir, Now: func() time.Time { return now }, Exec: agentsFake(`[{"pid":1,"name":"r-1","status":"busy"}]`, nil)}
+	got, err := ReadStatus(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := map[string]string{}
+	for _, r := range got.Runs {
+		limits[r.Name] = fmt.Sprint(r.Limit)
+	}
+	want := map[string]string{"r-1": "<nil>", "r-2": "&{5000}", "r-3": "&{5000}", "r-4": "<nil>"}
+	if fmt.Sprint(limits) != fmt.Sprint(want) {
+		t.Errorf("limits %v, want %v: only a run with no live window reports its marker", limits, want)
+	}
+}

@@ -37,7 +37,7 @@ func (f Fleet) harnesses(w Want, running map[string]int) ([]string, error) {
 
 // choose tries every eligible harness before holding an item back. Notify
 // is true only when no choice could fit even with every slot free.
-func (f Fleet) choose(w Want, free map[string]slots, running map[string]int) (string, HostLoad, string, bool) {
+func (f Fleet) choose(w Want, free map[string]slots, running map[string]int, probed map[pair]bool) (string, HostLoad, string, bool) {
 	names, err := f.harnesses(w, running)
 	if err != nil {
 		return "", HostLoad{}, "no host can take it: " + err.Error(), true
@@ -45,7 +45,7 @@ func (f Fleet) choose(w Want, free map[string]slots, running map[string]int) (st
 	var reasons []string
 	possible := false
 	for _, name := range names {
-		fits, why, probing := f.fits(w, name)
+		fits, why, probing := f.fits(w, name, probed)
 		if why != "" {
 			reasons = append(reasons, "no host can take it: "+why)
 			possible = possible || probing
