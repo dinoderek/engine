@@ -157,11 +157,11 @@ func (r *Readiness) notes(fleet reconcile.Fleet) []readyNote {
 	for key, e := range r.entries {
 		switch {
 		case e.err != "":
-			add(readyNote{key.repo, "readiness/" + key.host + "/error/" + digest(e.err), fmt.Sprintf(
+			add(readyNote{key.repo, "readiness/" + key.host + "/" + key.repo + "/error/" + digest(e.err), fmt.Sprintf(
 				"The readiness probe of %s could not run on %s: %s\nNo task of %s is placed on %s until it does.", e.slug, key.host, e.err, e.slug, key.host)})
 		case e.result != nil:
 			for _, c := range e.result.Failed() {
-				add(readyNote{key.repo, "readiness/" + key.host + "/" + digest(c.Name+"\n"+c.Output), failedText(key.host, *e.result, c)})
+				add(readyNote{key.repo, "readiness/" + key.host + "/" + key.repo + "/" + digest(c.Name+"\n"+c.Output), failedText(key.host, *e.result, c)})
 			}
 		}
 	}
@@ -182,10 +182,12 @@ func failedText(host string, res hostops.Readiness, c hostops.ReadyCheck) string
 		host, res.Repo, c.Name, shortSHA(res.Head), c.Output, res.Repo, host, host, hostops.ReadyTTL)
 }
 
-// postNotes sends every new note. One that fails is retried next pass.
+// postNotes sends every new note. One that fails is retried next pass. A
+// key the server already holds, as after a restart, was posted: its body may
+// differ only in the head, which the key leaves out.
 func (c *Coordinator) postNotes(fleet reconcile.Fleet) {
 	for _, n := range c.Ready.notes(fleet) {
-		if err := c.notice(n.item, n.key, n.body); err != nil {
+		if err := c.notice(n.item, n.key, n.body); err != nil && !keyUsed(err) {
 			c.log("readiness note %s: %v", n.key, err)
 			continue
 		}
@@ -210,6 +212,12 @@ func (c *Coordinator) askReady(st control.State, ids []string, cfg *hosts.Config
 		}
 	}
 	c.Ready.Ask(cfg, repos)
+}
+
+// keyUsed reports a request key the server holds for another body.
+func keyUsed(err error) bool {
+	var p *control.Problem
+	return errors.As(err, &p) && p.Status == 409 && strings.Contains(p.Message, "request key was already used")
 }
 
 func digest(s string) string {

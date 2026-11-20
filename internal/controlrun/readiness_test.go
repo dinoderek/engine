@@ -2,7 +2,9 @@ package controlrun
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 // once gate, when set, is closed, and records each request.
 type readyHost struct {
 	*host
+	mu    sync.Mutex
 	probe hostops.Readiness
 	err   error
 	gate  chan struct{}
@@ -26,8 +29,12 @@ func (h *readyHost) Ready(r hostops.ReadyRequest) (hostops.Readiness, error) {
 	if h.gate != nil {
 		<-h.gate
 	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.asked = append(h.asked, r)
-	return h.probe, h.err
+	p := h.probe
+	p.Repo = r.Repo
+	return p, h.err
 }
 
 // readySetup is setup's coordinator with readiness probes, on a clock the
@@ -157,5 +164,46 @@ func TestCoordinatorNotesADeadTmuxDirectoryOnce(t *testing.T) {
 	settled(t, c)
 	if got := notes(t, c, "Host devbox is unready: tmux server 7"); len(got) != 1 || !strings.Contains(got[0].Body, "tmux kill-server") {
 		t.Errorf("notes %+v", got)
+	}
+}
+
+// Two repos failing the same way on one host each get their own note.
+func TestCoordinatorNotesTheSameFailureOncePerRepo(t *testing.T) {
+	c, h, repo, _, _ := readySetup(t)
+	other := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "repo", Title: "Other", Slug: "owner/other", Remote: "ssh://example.test/other"}})
+	plan := execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "plan", Title: "Other feature", Repo: other.ID, Body: "Requirements"}})
+	execute(t, c.Service, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Task", Repo: other.ID, Plan: plan.ID, Body: "## Outcome\nWorks\n## Tests\nProve it"}})
+	plan = execute(t, c.Service, control.Request{Op: "approve", ID: plan.ID, Version: plan.Version})
+	execute(t, c.Service, control.Request{Op: "run", ID: plan.ID, Version: plan.Version})
+	h.probe.Checks = []hostops.ReadyCheck{{Name: hostops.GHCheck, Output: "X Failed to log in to github.com account octo (keyring)"}}
+	settled(t, c)
+	settled(t, c)
+	got := notes(t, c, "Host devbox is unready for")
+	if len(got) != 2 || got[0].Item == got[1].Item || (got[0].Item != repo.ID && got[1].Item != repo.ID) {
+		t.Errorf("notes %+v", got)
+	}
+}
+
+// A restarted coordinator that sees the same failure on a new head finds the
+// note's key already posted: nothing is posted again, and nothing is logged.
+func TestCoordinatorAfterARestartDoesNotRepostANote(t *testing.T) {
+	c, h, _, _, now := readySetup(t)
+	h.probe.Checks = []hostops.ReadyCheck{{Name: hostops.GHCheck, Output: "X Failed to log in"}}
+	settled(t, c)
+	pass(t, c)
+	var logged []string
+	c.Logf = func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
+	c.Ready = &Readiness{Client: c.Client, Now: func() time.Time { return *now }, Logf: c.Logf}
+	h.probe.Head = strings.Repeat("b", 40)
+	settled(t, c)
+	pass(t, c)
+	pass(t, c)
+	if got := notes(t, c, "Host devbox is unready for"); len(got) != 1 {
+		t.Errorf("notes %+v", got)
+	}
+	for _, l := range logged {
+		if strings.Contains(l, "readiness note") {
+			t.Errorf("logged %q", l)
+		}
 	}
 }
