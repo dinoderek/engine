@@ -61,7 +61,10 @@ func (e *ExitError) Error() string {
 
 // Exec is the Runner that starts real processes.
 func Exec(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	return runCmd(exec.Command(name, args...), name, args)
+}
+
+func runCmd(cmd *exec.Cmd, name string, args []string) (string, error) {
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -86,14 +89,20 @@ type Tmux struct {
 	// Awake is the caffeinate binary that keeps a macOS host awake while a
 	// window's command runs. Empty turns it off.
 	Awake string
-	// Sleep pauses between typing text and pressing Enter; nil is time.Sleep.
+	// Sleep pauses between typing text and pressing Enter, and before the
+	// respawn retry; nil is time.Sleep.
 	Sleep func(time.Duration)
+	// Home is the user's home directory. Open takes the per-host lock under
+	// it, in engine's data directory; empty takes none.
+	Home string
 }
 
-// New returns the Tmux for this host: the default server, and caffeinate on
-// macOS.
+// New returns the Tmux for this host: the default server, run from the home
+// directory so that a server it starts never lives in a worktree, and
+// caffeinate on macOS.
 func New() *Tmux {
-	t := &Tmux{Run: Exec, Bin: "tmux"}
+	home, _ := os.UserHomeDir()
+	t := &Tmux{Run: ExecIn(home), Bin: "tmux", Home: home}
 	if runtime.GOOS == "darwin" {
 		t.Awake = "/usr/bin/caffeinate"
 	}
@@ -262,6 +271,15 @@ func (t *Tmux) Open(w Window) (Opened, error) {
 	if err := w.validate(); err != nil {
 		return Opened{}, err
 	}
+	var opened Opened
+	err := t.withLock(func() (err error) {
+		opened, err = t.open(w)
+		return err
+	})
+	return opened, err
+}
+
+func (t *Tmux) open(w Window) (Opened, error) {
 	windows, err := t.Windows()
 	if err != nil {
 		return Opened{}, err
@@ -376,6 +394,5 @@ func (t *Tmux) configure(info WindowInfo, w Window) error {
 			return err
 		}
 	}
-	_, err := t.tmux("respawn-pane", "-k", "-t", info.PaneID, "-c", formatEscape(w.Dir), w.Command)
-	return err
+	return t.respawn(info, w)
 }

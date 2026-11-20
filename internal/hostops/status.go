@@ -37,6 +37,11 @@ type Status struct {
 	// SignedOut names the harnesses this host runs whose own CLI says they
 	// are signed out. A harness whose check cannot run is not listed.
 	SignedOut []string `json:"signed_out,omitempty"`
+	// TmuxCwdGone is set when the tmux server's working directory no longer
+	// exists: the host is unready, and placement skips it. TmuxCwdError says
+	// why the directory could not be read, when it could not.
+	TmuxCwdGone  *TmuxCwdGone `json:"tmux_cwd_gone,omitempty"`
+	TmuxCwdError string       `json:"tmux_cwd_error,omitempty"`
 }
 
 // Window is a window of the tmux session engine.
@@ -101,6 +106,10 @@ func ReadStatus(d Deps) (Status, error) {
 		s.RunsError = err.Error()
 	}
 	states := s.observe(adapters, host, windows, runs)
+	var cwdErr error
+	if s.TmuxCwdGone, cwdErr = d.tmuxCwdGone(); cwdErr != nil {
+		s.TmuxCwdError = cwdErr.Error()
+	}
 	for _, w := range windows {
 		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
 		if code, ok := codes[w.ID]; ok && w.Dead {
