@@ -63,9 +63,12 @@ type Attempt struct {
 	ResetsAt   int64     `json:"resets_at,omitempty"`
 	ResumedFor int64     `json:"resumed_for,omitempty"`
 	ResumeAt   time.Time `json:"resume_at,omitempty"`
-	Seen       int       `json:"seen,omitempty"`
-	FarFor     int64     `json:"far_for,omitempty"`
-	StuckFor   int64     `json:"stuck_for,omitempty"`
+	// LimitedSince is when the session was first seen limited in its current
+	// spell at a usage limit.
+	LimitedSince time.Time `json:"limited_since,omitzero"`
+	Seen         int       `json:"seen,omitempty"`
+	FarFor       int64     `json:"far_for,omitempty"`
+	StuckFor     int64     `json:"stuck_for,omitempty"`
 	// LiveAt is the last coordinator pass that saw the attempt's window live.
 	LiveAt time.Time `json:"live_at,omitzero"`
 	// Reason is why the attempt ended: EndVanished, EndEarlyDeath or

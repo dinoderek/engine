@@ -38,11 +38,23 @@ func ResetNote(prefix string, s Session) string {
 	return prefix + "=" + strconv.FormatInt(s.ResetsAt, 10)
 }
 
-// Limit is the step, and its text, that a live session with a known usage
-// limit reset calls for at now. The caller has checked the session is not
-// at a hard stop.
+// Limit is the step, and its text, that a live session at a usage limit
+// calls for at now. The caller has checked the session is not at a hard
+// stop. With the reset unknown, a session still limited is told to continue
+// every ProbeEvery, from when it was first seen limited or its last
+// continue.
 func Limit(s Session, now time.Time) (LimitStep, string) {
-	if !s.Live || s.Unknown || s.WindowID == "" || s.ResetsAt <= 0 || !s.Limited && !s.Waiting {
+	if !s.Live || s.Unknown || s.WindowID == "" || !s.Limited && !s.Waiting {
+		return NoLimitStep, ""
+	}
+	if s.ResetsAt <= 0 {
+		from := s.LimitedSince
+		if s.ResumeAt.After(from) {
+			from = s.ResumeAt
+		}
+		if s.Limited && !from.IsZero() && now.Sub(from) >= ProbeEvery {
+			return LimitResume, "continue; the reset is unknown"
+		}
 		return NoLimitStep, ""
 	}
 	reset := time.Unix(s.ResetsAt, 0)

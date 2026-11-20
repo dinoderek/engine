@@ -51,9 +51,11 @@ type Session struct {
 	Limited  bool
 	ResetsAt int64
 	// ResumeAt and the alert marks belong to this reset and session start.
-	ResumeAt   time.Time
-	FarNoted   bool
-	StuckNoted bool
+	// LimitedSince is when it was first seen limited in its current spell.
+	ResumeAt     time.Time
+	LimitedSince time.Time
+	FarNoted     bool
+	StuckNoted   bool
 	// Waiting is true when its window's state, from status, is waiting.
 	Waiting bool
 	// Background is true when its window's state is working but its last

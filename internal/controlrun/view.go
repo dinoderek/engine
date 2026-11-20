@@ -71,7 +71,7 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 		return t
 	}
 	sess := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))
-	sess.WaitingSince, sess.IdleSince = at.WaitingSince, at.IdleSince
+	sess.WaitingSince, sess.IdleSince, sess.LimitedSince = at.WaitingSince, at.IdleSince, at.LimitedSince
 	sess.StallNoted = at.Notice
 	if sess.ResetsAt == 0 && sess.Waiting {
 		sess.ResetsAt = at.ResetsAt
@@ -167,6 +167,7 @@ func since(start time.Time, holds bool, now time.Time) time.Time {
 func kept(at control.Attempt, sess reconcile.Session, now time.Time, coordinating bool) control.Attempt {
 	at.WaitingSince = since(at.WaitingSince, sess.Waiting && sess.Idle() && sess.ResetsAt == 0, now)
 	at.IdleSince = since(at.IdleSince, sess.Idle() && sess.ResetsAt == 0, now)
+	at.LimitedSince = since(at.LimitedSince, sess.Live && sess.Limited, now)
 	if sess.ResetsAt > 0 {
 		at.ResetsAt = sess.ResetsAt
 	}

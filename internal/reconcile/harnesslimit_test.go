@@ -152,3 +152,34 @@ func TestOneNoteAfter12HoursOfFailedProbes(t *testing.T) {
 		}
 	}
 }
+
+func TestALiveSessionAtAnUnknownLimitIsToldToContinueEvery30Minutes(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		since, resumed  time.Duration // before t0; zero is never
+		limited, resume bool
+	}{
+		{name: "limited for less than 30 minutes", since: ProbeEvery - time.Second, limited: true},
+		{name: "limited for 30 minutes", since: ProbeEvery, limited: true, resume: true},
+		{name: "told to continue 10 minutes ago", since: 2 * ProbeEvery, resumed: 10 * time.Minute, limited: true},
+		{name: "told to continue 30 minutes ago", since: 2 * ProbeEvery, resumed: ProbeEvery, limited: true, resume: true},
+		{name: "waiting, not limited", since: 2 * ProbeEvery},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := working()
+			if tc.limited {
+				s.Limited = true
+				s.LimitedSince = t0.Add(-tc.since)
+			} else {
+				s.Waiting, s.WaitingSince, s.IdleSince = true, t0.Add(-time.Minute), t0.Add(-time.Minute)
+			}
+			if tc.resumed != 0 {
+				s.ResumeAt = t0.Add(-tc.resumed)
+			}
+			got := shows(Decide(view(plan("planned"), with(task(1, "running"), s))))
+			if want := "resume t1 a1"; (got == want) != tc.resume {
+				t.Errorf("got %q, want a resume: %v", got, tc.resume)
+			}
+		})
+	}
+}

@@ -139,7 +139,7 @@ func (c *Coordinator) resume(a reconcile.Action) error {
 			return nil
 		}
 		at := st.Attempts[current.Attempt]
-		if current.State == "needs-human" || at.ID != a.Attempt || at.State == "ended" || at.ResumedFor == a.ResetsAt {
+		if current.State == "needs-human" || at.ID != a.Attempt || at.State == "ended" || resumed(at, a.ResetsAt, c.now()) {
 			return nil
 		}
 		at.ResumedFor = a.ResetsAt
@@ -152,6 +152,15 @@ func (c *Coordinator) resume(a reconcile.Action) error {
 		return err
 	}
 	return c.Resume(a.Session)
+}
+
+// resumed reports whether at was already told to continue: once per known
+// reset, and once per ProbeEvery for an unknown one.
+func resumed(at control.Attempt, reset int64, now time.Time) bool {
+	if reset > 0 {
+		return at.ResumedFor == reset
+	}
+	return at.ResumedFor == 0 && !at.ResumeAt.IsZero() && now.Sub(at.ResumeAt) < reconcile.ProbeEvery
 }
 
 func (c *Coordinator) now() time.Time {
