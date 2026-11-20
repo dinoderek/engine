@@ -8,7 +8,7 @@
 - **Stateless.** Each pass derives everything from the server's records and each host's tmux sessions, harness observations, run directories and readiness.
 - **One pass** runs every 30 seconds and once at start, reading every host's `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer reuses those reads (`control-server.md`, "Session view"). Stopping coordination leaves sessions running; plans move only to `planned` and `done`.
 
-For harness scoring and host eligibility, load `hosts-and-sessions.md`, "Placement". For how a pass reads a session's liveness, stalls or limits, load `session-signals.md`. For lint changes, load `plugins/engine/skills/engine/references/plan.md`.
+For harness scoring and host eligibility, load `hosts-and-sessions.md`, "Placement". For how a pass reads a session's liveness, stalls, early deaths or limits, load `session-signals.md`. For lint changes, load `plugins/engine/skills/engine/references/plan.md`.
 
 ## Dispatch and recovery
 
@@ -16,9 +16,7 @@ Plans are serialized against fresh fleet capacity. A dispatch records its attemp
 
 The host serializes dispatches by run ID and returns an existing run on replay. A spawn failing before its window opens removes what it made (the run directory; the worktree and branch unless reused), naming any leftover; a run directory with no `run.json` and no window is reused. It uses the host's Git credentials and identity, with isolated clones under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin into an owner-only run file whose path the window command exports; hooks recover their connection from the worktree's server-session record. Credential files are never collected.
 
-A window gone from a host that answered ends its attempt `vanished` if the task is resumable: coordination stopped after the window was last seen live, or it was seen live and the task has a PR or open question, unless it resumed a vanished attempt. The task keeps its state and resumes once any question is resolved. Otherwise attempt and task end `failed`, except an early death:
-
-**Early death.** A window gone before its session claimed the task, which neither wrote to the server nor was seen live for `ClaimWait`, is not a vanish unless the vanish rule above already applies. The first such death per task, across attempts, ends the attempt `early-death` with its pane log tail recorded; a running task goes back to `todo` and the next pass dispatches a new attempt, with a notice. The second ends the attempt and task `failed`, and its notice carries both attempts' tails. Deaths of sessions that claimed never count; an early death after one is still the first. An operator's retry of a failed task counts the earlier early deaths, so one more fails it at once.
+A window gone from a host that answered ends its attempt `vanished` if the task is resumable: coordination stopped after the window was last seen live, or it was seen live and the task has a PR or open question, unless it resumed a vanished attempt. The task keeps its state and resumes once any question is resolved. Otherwise attempt and task end `failed`, except an early death (`session-signals.md`, "Early death").
 
 Operator-only `engine attempt reconcile <id> <evidence>` needs a successful host read showing, for a started attempt, no live matching window and a recorded run, then applies the vanish and early-death rules; for a task's `dispatching` one, no window of its name and no run record, ending it vanished with its task back in `todo`. A spawn still in flight shows neither, so it may then open an orphan window, which blocks the next dispatch until removed. Otherwise, a planner's dispatch included, it refuses (`control-server.md`); unknown dispatch outcomes stay reserved.
 
@@ -45,7 +43,7 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
 | `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start (else creation) counts; undated sorts first, ties select the later rollup entry. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. Already merged is done. |
 | `ready` | Probes a repo's readiness (`readiness.md`). |
-| `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or it has changes. Engine never deletes the branch. |
+| `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or it has changes, then deletes the local branch if its tip is the merged head (`--head`) or an ancestor of `origin`'s default branch after a fetch; otherwise keeps it and notes the unmerged commits. Failures are notes; other releases keep the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine` (the build) and `host`. A failure is `{"error": …, "refused": true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is an unreachable host. A caller refuses a reply on another protocol, or not an engine's, and tells the operator to run `engine setup --host <name>`.
 

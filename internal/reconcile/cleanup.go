@@ -84,7 +84,7 @@ func where(s Session) string {
 // task's release also runs the repo's own worktree release.
 func release(t Item, why string) Action {
 	s := *t.Session
-	a := Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: s, Text: why, Done: t.Kind == "task" && t.State == "done"}
+	a := Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: s, Text: why, Done: t.Kind == "task" && t.State == "done", Head: t.MergedHead}
 	if s.Background {
 		a.Key = "released/" + t.Current.ID
 		a.Text = fmt.Sprintf("%s was released, with a background job still running, because %s", s.Name, why)

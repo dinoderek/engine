@@ -45,7 +45,7 @@ func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) r
 func record(st control.State, item control.Item) reconcile.Item {
 	t := reconcile.Item{Item: item, Current: st.Attempts[item.Attempt], Name: sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)),
 		Vanished: control.Vanished(&st, item), Question: control.OwnQuestion(&st, item.ID), PlanHold: control.NewStartHold(&st, item.ID),
-		Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(&st, item.ID)}
+		Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(&st, item.ID), MergedHead: control.MergedHead(&st, item.ID)}
 	for _, id := range item.Depends {
 		if st.Items[id].State != "done" {
 			t.Blocked = append(t.Blocked, id)

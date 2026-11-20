@@ -71,10 +71,13 @@ func (s SSH) Collect(runID string) (hostops.Collected, error) {
 	return reply, s.call("collect", []string{"--run-id", runID}, "", &reply)
 }
 
-func (s SSH) Release(name string, outcome hostops.Outcome) (hostops.Released, error) {
+func (s SSH) Release(name string, outcome hostops.Outcome, mergedHead string) (hostops.Released, error) {
 	args := []string{"--name", name}
 	if outcome != hostops.RunEnded {
 		args = append(args, "--"+string(outcome))
+	}
+	if mergedHead != "" {
+		args = append(args, "--head", mergedHead)
 	}
 	var reply hostops.Released
 	return reply, s.call("release", args, "", &reply)

@@ -142,7 +142,7 @@ func TestQueueStepAppliesOnlyToTheEntryItRead(t *testing.T) {
 	if e.Seq != from.Seq || !e.CheckedAt.Equal(checked.CheckedAt) || last.Recipient != "operator" || last.ReplyTo != req.ID || st.Updates[last.ID-2].Kind != "say" {
 		t.Fatalf("stepped entry %+v, updates %+v", e, st.Updates[len(st.Updates)-2:])
 	}
-	if !MergedAt(&st, task.ID).IsZero() {
+	if !MergedAt(&st, task.ID).IsZero() || MergedHead(&st, task.ID) != "" {
 		t.Fatal("merged before the merge step")
 	}
 	if ok, err := s.QueueStep(QueueStep{From: e, Done: true, Kind: MergeMerged, Text: "Merged at " + head}); err != nil || !ok {
@@ -151,6 +151,13 @@ func TestQueueStepAppliesOnlyToTheEntryItRead(t *testing.T) {
 	st = mustSnapshot(t, s)
 	if got := st.Items[task.ID]; got.State != "done" || got.PR != good().PR || len(st.Queue) != 0 || MergedAt(&st, task.ID).IsZero() {
 		t.Fatalf("task %+v, queue %+v", got, st.Queue)
+	}
+	// The merged update answers the request that named the head.
+	if got := MergedHead(&st, task.ID); got != head {
+		t.Fatalf("merged head %q, want %q", got, head)
+	}
+	if got := MergedHead(&st, "t999"); got != "" {
+		t.Fatalf("merged head of another task %q", got)
 	}
 	if st.Attempts[claimed.Attempt.ID].State == "ended" {
 		t.Fatal("the merge ended the attempt; the executor still reports")
@@ -222,5 +229,26 @@ func TestPRNumber(t *testing.T) {
 		if got := PRNumber(url); got != want {
 			t.Errorf("PRNumber(%q) = %d, want %d", url, got, want)
 		}
+	}
+}
+
+// A merge that landed while the entry took a newer request is recorded
+// against the request the merge acted on, so its head is the merged one.
+func TestRecordMergedAnswersTheRequestTheMergeActedOn(t *testing.T) {
+	s := service(t)
+	task, a, _ := reviewed(t, s)
+	first := call(t, s, a, ready(task.ID, good())).Updates[0]
+	later := good()
+	later.Head = "fedcba9876543210fedcba9876543210fedcba98"
+	second := call(t, s, a, ready(task.ID, later)).Updates[0]
+	if second.ID == first.ID || mustSnapshot(t, s).Queue[task.ID].Request != second.ID {
+		t.Fatalf("the entry holds request %d, want the newer %d", mustSnapshot(t, s).Queue[task.ID].Request, second.ID)
+	}
+	if err := s.RecordMerged(task.ID, good().PR, "merged", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	st := mustSnapshot(t, s)
+	if got := MergedHead(&st, task.ID); got != head || len(st.Queue) != 0 {
+		t.Fatalf("merged head %q, want %q; queue %+v", got, head, st.Queue)
 	}
 }
