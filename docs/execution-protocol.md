@@ -36,8 +36,9 @@ rule or override it for the feature. For watching a run, load `operator-setup.md
   smaller is at most a `low` note in the PR body. More than two `review`
   rulings mean Prepare under-specified the card.
 - **Hard stops are the only interruptions, asked once.** Repeated questions
-  usually share a root cause, such as one red gate on the default branch; a
-  question every task shares is asked once, on the plan.
+  usually share a root cause, such as one red gate on the default branch; only
+  that proved-red gate is asked once, on the plan, and every other question
+  on the task.
 
 ## States
 

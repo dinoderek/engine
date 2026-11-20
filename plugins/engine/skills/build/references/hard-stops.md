@@ -30,6 +30,11 @@ you decide (`SKILL.md`, "Decisions").
 
 The repo's `AGENTS.md` may add classes; they apply too.
 
+## Safe defaults
+
+A question with a safe, reversible default is not a stop: take it and record
+it in the PR body; an engine server task also uses `engine tell`.
+
 ## Ask once
 
 Before asking, look for an answer the operator has already given (in the
@@ -65,5 +70,4 @@ Then end your turn and wait. Only the operator's answer to the question
 counts; reading, acknowledgement, a conversational reply or an automated
 `continue` grants nothing. When it comes, follow it and carry on. An engine
 server task raises it with `engine ask`
-instead, on its plan when the root cause affects every task (the `engine`
-skill).
+instead, on its task or plan as the `engine` skill says.
