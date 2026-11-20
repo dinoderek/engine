@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -46,9 +47,25 @@ func paneTailOf(path string, now time.Time, age time.Duration) string {
 	if err != nil {
 		return ""
 	}
-	lines := strings.Split(strings.TrimRight(string(data), "\r\n"), "\n")
+	lines := strings.Split(strings.TrimRight(stripControl(string(data)), "\r\n"), "\n")
 	if cut && len(lines) > 1 {
 		lines = lines[1:]
 	}
 	return strings.Join(lines[max(len(lines)-PaneTailLines, 0):], "\n")
+}
+
+// controlSeq matches the terminal control sequences a TUI writes to its pane:
+// CSI and OSC sequences, and any other escape.
+var controlSeq = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b.?`)
+
+// stripControl is s without its control sequences, and without the control
+// characters other than newline and tab, which a notice cannot show.
+func stripControl(s string) string {
+	s = controlSeq.ReplaceAllString(s, "")
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 && r != '\n' && r != '\t' || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
 }

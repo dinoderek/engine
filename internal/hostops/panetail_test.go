@@ -40,7 +40,7 @@ func TestPaneTailIsTheLastLinesOfARecentLog(t *testing.T) {
 		t.Errorf("a long log gave %q", got)
 	}
 	short := writeLog(t, t.TempDir(), "one\r\ntwo\n\n", recent)
-	if got := paneTailOf(short, now, time.Hour); got != "one\r\ntwo" {
+	if got := paneTailOf(short, now, time.Hour); got != "one\ntwo" {
 		t.Errorf("a short log gave %q", got)
 	}
 	stale := writeLog(t, t.TempDir(), numbered(3), now.Add(-2*time.Hour))
@@ -80,5 +80,13 @@ func TestStatusShowsThePaneTailOfARunWithNoLiveWindow(t *testing.T) {
 	}
 	if want := map[string]string{"r-1": "", "r-2": "r-2 output", "r-3": "r-3 output"}; fmt.Sprint(tails) != fmt.Sprint(want) {
 		t.Errorf("tails %v, want %v", tails, want)
+	}
+}
+
+func TestPaneTailStripsTerminalControlSequences(t *testing.T) {
+	now := fixedNow()
+	body := "\x1b[2J\x1b[1;31mError:\x1b[0m not logged in\r\n\x1b]0;title\x07\x1b[?25hnext\ttab\x00\n"
+	if got := paneTailOf(writeLog(t, t.TempDir(), body, now), now, time.Hour); got != "Error: not logged in\nnext\ttab" {
+		t.Errorf("tail %q", got)
 	}
 }
