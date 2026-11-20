@@ -102,23 +102,38 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, err
 	return wt, nil
 }
 
-// RemoveWorktree undoes CreateWorktree: it removes the worktree when that
-// call made it, and the branch when it made that too. A worktree it adopted
-// and a branch it found stay, since they hold an earlier attempt's work.
+// RemoveWorktree undoes CreateWorktree: when that call made the worktree,
+// it runs the repo's own `dev worktree release <branch>` if the repo provides
+// it, which tears down what `worktree create` provisioned, then removes any
+// worktree still on the branch, and deletes the branch when CreateWorktree
+// made that too. A worktree it adopted and a branch it found stay, since they
+// hold an earlier attempt's work.
 func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 	if !wt.Created {
 		return nil
+	}
+	if _, err := r.ReleaseWorktree(clone.Path, wt.Branch); err != nil {
+		return err
 	}
 	unlock, err := lock(clone.Path + ".lock")
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	if _, err := r.git(clone.Path, "worktree", "remove", "--force", wt.Path); err != nil {
-		return fmt.Errorf("remove the worktree %s: %w", wt.Path, err)
+	left, err := r.worktreeOf(clone, wt.Branch)
+	if err != nil {
+		return err
+	}
+	if left != "" {
+		if _, err := r.git(clone.Path, "worktree", "remove", "--force", left); err != nil {
+			return fmt.Errorf("remove the worktree %s: %w", left, err)
+		}
 	}
 	if !wt.NewBranch {
 		return nil
+	}
+	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+wt.Branch); err != nil {
+		return nil // the repo's release deleted it
 	}
 	if _, err := r.git(clone.Path, "branch", "-D", wt.Branch); err != nil {
 		return fmt.Errorf("delete the branch %s: %w", wt.Branch, err)

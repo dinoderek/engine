@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -200,6 +201,9 @@ type gitFake struct {
 	// ancestor is true when every merge-base --is-ancestor holds, as for a
 	// worktree a resume adopts.
 	ancestor bool
+	// made is true once worktree add -b made the task's branch, until
+	// branch -D deletes it.
+	made bool
 }
 
 func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string, error) {
@@ -217,6 +221,10 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		return "https://github.com/o/r.git\n", nil
 	case strings.Contains(line, "symbolic-ref"):
 		return "origin/main\n", nil
+	case f.made && strings.Contains(line, "rev-parse --verify --quiet refs/heads/"):
+		return "abc\n", nil
+	case strings.Contains(line, "branch -D"):
+		f.made = false
 	case f.ancestor && strings.Contains(line, "merge-base --is-ancestor"):
 		return "", nil
 	case strings.Contains(line, "worktree remove"):
@@ -228,7 +236,7 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		strings.Contains(line, "merge-base --is-ancestor"):
 		return "", errors.New("exit status 1")
 	case strings.Contains(line, "worktree add"):
-		f.added = args[len(args)-2]
+		f.added, f.made = args[len(args)-2], f.made || slices.Contains(args, "-b")
 		return "", os.MkdirAll(f.added, 0o755)
 	case strings.Contains(line, "worktree list") && f.added != "":
 		return "worktree " + f.added + "\nbranch refs/heads/task/r-7\n", nil

@@ -78,7 +78,7 @@ func (s Service) checkReconcile(a Actor, r Request) (string, error) {
 		return "", err
 	}
 	if s.Reconcile == nil || r.Body == "" {
-		return "", problem(409, "host reconciliation and evidence are required")
+		return "", &Problem{Status: 409, Reason: ReasonReconcileRefused, Message: "host reconciliation and evidence are required"}
 	}
 	st, err := s.Store.Snapshot()
 	if err != nil {

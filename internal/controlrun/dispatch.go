@@ -206,8 +206,9 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 // ConfirmEnded checks, for the operator's attempt reconcile, that a host it
 // reads successfully shows attempt id's session gone, refusing to infer death
 // from an outage or an unfinished dispatch. A running attempt needs no live
-// window and a recorded run; a dispatching one, no window of its name and no
-// run record at all, so no launch of it is in place to adopt. Its refusals
+// window and a recorded run; a task's dispatching one, no window of its name
+// and no run record at all, so no launch of it is in place to adopt. A
+// planner's dispatch is refused: only a retry dispatches a planner again. Its refusals
 // are 409 problems with reason control.ReasonReconcileRefused.
 func (c *Coordinator) ConfirmEnded(id string) error {
 	st, err := c.Service.Store.Snapshot()
@@ -220,6 +221,9 @@ func (c *Coordinator) ConfirmEnded(id string) error {
 	}
 	if at.State == "ended" {
 		return nil
+	}
+	if at.State == "dispatching" && st.Items[at.Item].Kind == "plan" {
+		return refuseReconcile("a planner's dispatch is retried each pass, never reconciled")
 	}
 	cfg, _, err := c.configuration()
 	if err != nil {

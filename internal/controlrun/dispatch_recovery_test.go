@@ -135,3 +135,22 @@ func TestReconcileRefusesADispatchTheHostMayHaveLaunched(t *testing.T) {
 		})
 	}
 }
+
+// A planner's dispatch keeps retrying each pass; ending it would leave the
+// plan with no planner and nothing to dispatch one again.
+func TestReconcileRefusesAPlannersDispatch(t *testing.T) {
+	c, h, _, plan, _ := setup(t)
+	st, _ := c.Service.Store.Snapshot()
+	out, err := c.Service.Dispatch(st.Items[plan.ID], "devbox", "claude", "planner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = c.ConfirmEnded(out.Attempt.ID)
+	var p *control.Problem
+	if !errors.As(err, &p) || p.Status != 409 || p.Reason != control.ReasonReconcileRefused || !strings.Contains(err.Error(), "planner") {
+		t.Fatalf("err = %v, want a 409 reconcile refusal", err)
+	}
+	if h.calls != 0 {
+		t.Errorf("the refusal called the host %d times", h.calls)
+	}
+}
