@@ -50,16 +50,16 @@ type GHAuth struct {
 
 // probeGH runs `gh auth status -h github.com` in a throwaway window of the
 // session engine, so it inherits the tmux server's context as a spawned
-// session does, and reads its output and exit code from runDir. dir is the
-// window's directory.
-func probeGH(d Deps, runDir, dir string) (GHAuth, error) {
+// session does, with path first on PATH, and reads its output and exit code
+// from runDir. dir is the window's directory.
+func probeGH(d Deps, runDir, dir string, path []string) (GHAuth, error) {
 	out, exit := filepath.Join(runDir, ghAuthOut), filepath.Join(runDir, ghAuthExit)
-	script := hosts.ShellWord(ghBin) + " auth status -h github.com > " + hosts.ShellWord(out) + " 2>&1; echo $? > " + hosts.ShellWord(exit)
+	script := hosts.PathExport(path) + ghStep(out, exit)
 	opened, err := d.Tmux.Open(session.Window{Name: GHProbeName, Dir: dir, Command: "exec /bin/sh -c " + hosts.ShellWord(script)})
 	if err != nil {
 		return GHAuth{}, fmt.Errorf("open the gh probe's window: %w", err)
 	}
-	gone, err := waitExited(d, opened.ID)
+	gone, err := waitExited(d, opened.ID, ghProbeTimeout)
 	if !gone {
 		// A dead pane kept for reading, or a gh still running: the files hold
 		// any answer, and a failure is the caller's to report.
@@ -71,10 +71,15 @@ func probeGH(d Deps, runDir, dir string) (GHAuth, error) {
 	return readGHProbe(out, exit), nil
 }
 
+// ghStep is the shell command that runs gh's sign-in check with its output
+// in out and its exit code in exit.
+func ghStep(out, exit string) string {
+	return hosts.ShellWord(ghBin) + " auth status -h github.com < /dev/null > " + hosts.ShellWord(out) + " 2>&1; echo $? > " + hosts.ShellWord(exit)
+}
+
 // waitExited polls, looking before it first sleeps, until the window with id
-// has exited or is gone, or ghProbeTimeout. It reports whether the window is
-// gone.
-func waitExited(d Deps, id string) (bool, error) {
+// has exited or is gone, or timeout. It reports whether the window is gone.
+func waitExited(d Deps, id string, timeout time.Duration) (bool, error) {
 	sleep := d.Sleep
 	if sleep == nil {
 		sleep = time.Sleep
@@ -85,7 +90,7 @@ func waitExited(d Deps, id string) (bool, error) {
 			return false, err
 		}
 		w, listed := find(windows, id)
-		if !listed || w.Dead || waited >= ghProbeTimeout {
+		if !listed || w.Dead || waited >= timeout {
 			return !listed, nil
 		}
 		sleep(ghProbePoll)
@@ -94,20 +99,28 @@ func waitExited(d Deps, id string) (bool, error) {
 
 // readGHProbe reads the probe's files. No exit code means gh did not finish.
 func readGHProbe(outPath, exitPath string) GHAuth {
+	ok, output := readStep(outPath, exitPath, GHCheck, ghProbeTimeout)
+	return GHAuth{OK: ok, Output: output}
+}
+
+// readStep reads a probe step's output and exit code, written by a window
+// that had timeout to run it: what names the step. No exit code means the
+// step did not finish.
+func readStep(outPath, exitPath, what string, timeout time.Duration) (bool, string) {
 	text, _ := os.ReadFile(outPath)
 	output := strings.TrimRight(string(text), "\n")
 	codeText, err := os.ReadFile(exitPath)
 	if err != nil {
-		return GHAuth{Output: fmt.Sprintf("gh auth status did not finish within %s", ghProbeTimeout)}
+		return false, strings.TrimLeft(output+"\n"+fmt.Sprintf("%s did not finish within %s", what, timeout), "\n")
 	}
 	code, err := strconv.Atoi(strings.TrimSpace(string(codeText)))
 	if err != nil {
-		return GHAuth{Output: fmt.Sprintf("gh auth status left an unreadable exit code %q", strings.TrimSpace(string(codeText)))}
+		return false, fmt.Sprintf("%s left an unreadable exit code %q", what, strings.TrimSpace(string(codeText)))
 	}
 	if code != 0 && output == "" {
-		output = fmt.Sprintf("gh auth status exited %d", code)
+		output = fmt.Sprintf("%s exited %d", what, code)
 	}
-	return GHAuth{OK: code == 0, Output: output}
+	return code == 0, output
 }
 
 // reportGH prints the probe's finding, with gh's output and the remedy when

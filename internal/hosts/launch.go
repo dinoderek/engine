@@ -45,6 +45,35 @@ func (h Host) BinPath(harness, home string) (string, error) {
 	return bin, nil
 }
 
+// PathPrefix returns the host's path directories with a leading ~/
+// expanded against home, in order.
+func (h Host) PathPrefix(home string) ([]string, error) {
+	out := make([]string, 0, len(h.Path))
+	for _, dir := range h.Path {
+		if rest, ok := strings.CutPrefix(dir, "~/"); ok {
+			if home == "" {
+				return nil, fmt.Errorf("host %s: no home directory to expand %s", h.Name, dir)
+			}
+			dir = filepath.Join(home, rest)
+		}
+		out = append(out, dir)
+	}
+	return out, nil
+}
+
+// PathExport is the shell command, ending in " && ", that puts dirs first
+// on PATH; empty when there are none.
+func PathExport(dirs []string) string {
+	if len(dirs) == 0 {
+		return ""
+	}
+	words := make([]string, len(dirs))
+	for i, dir := range dirs {
+		words[i] = ShellWord(dir)
+	}
+	return "export PATH=" + strings.Join(words, ":") + `:"$PATH" && `
+}
+
 // LaunchLine expands the harness's launch line for host h into a shell
 // command. Every value is quoted for the shell unless it is a plain word, so
 // a placeholder that stands as its own word stays one argument. A placeholder

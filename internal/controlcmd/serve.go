@@ -131,6 +131,7 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 	hostExec := session.ExecContext(ctx, 30*time.Second)
 	c := &controlrun.Coordinator{Service: service, URL: url, Home: e.Home, Logf: func(format string, args ...any) { fmt.Fprintf(e.Err, format+"\n", args...) }}
 	c.Client = hostClients(ctx, e, 7*time.Minute)
+	c.Ready = &controlrun.Readiness{Client: c.Client, Logf: c.Logf}
 	c.Wake = func(s reconcile.Session, text string) error {
 		cfg, local, err := hosts.Open(hosts.ConfigDir(e.Home))
 		if err != nil {

@@ -105,6 +105,10 @@ type Launch struct {
 	// ServerURL, TokenFile and Attempt are the control server's, or empty
 	// without one.
 	ServerURL, TokenFile, Attempt string
+	// Path are the host's directories the window puts first on PATH. A
+	// session whose agent runs outside the window passes the window's PATH
+	// on when there are any.
+	Path []string
 }
 
 // Snapshot is what one Observe read.

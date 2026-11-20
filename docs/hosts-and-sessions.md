@@ -64,9 +64,10 @@ on `PATH`. Launch lines and tiers are in `harnesses.md`.
 
 In start order, each ready task goes to a host that has a free slot (a free
 heavy slot, for a heavy task), the chosen harness signed in and under its cap,
-and every capability the card requires, and whose tmux server's working
-directory exists (below). Among those, the host with the most free slots wins,
-then the fewest capabilities, then the lowest name.
+every capability the card requires, a tmux server whose working directory
+exists (below), and a passed readiness probe for its repo (`readiness.md`).
+Among those, the host with the most free slots wins, then the fewest
+capabilities, then the lowest name.
 
 For an unpinned card, `harness_ratio` scores each positive-weight harness by
 `(live sessions across hosts + 1) / weight`; the lowest wins, ties prefer
@@ -123,16 +124,15 @@ exits 1 when gh failed or the session was denied, stalled or skipped a step.
 ## tmux setup
 
 Engine owns the tmux session `engine` and sets options only on it and its
-windows, never `~/.tmux.conf` or global options. It targets windows by id
-(`@3`), since tmux reads `.` as a separator. Windows stay after their command
+windows, never globally or in `~/.tmux.conf`. It targets windows by id
+(`@3`): tmux reads `.` as a separator. Windows stay after their command
 exits (`remain-on-exit`). Engine types with `send-keys -l`, then `Enter` after
 a short delay: input boxes can swallow a newline sent with the text.
 
-**Working directory.** Every tmux command runs from `$HOME`, so a server
-engine starts never lives in a worktree that is later removed, failing every
-later window. Host status
-reports a server in that state as `tmux_cwd_gone`, with its restart
-command, and placement skips the host. Engine never kills a server with sessions.
+**Working directory.** Every tmux command runs from `$HOME`, so no server
+engine starts lives in a worktree later removed, failing every later
+window. Host status reports one as `tmux_cwd_gone`, with its restart
+command; placement skips the host. Engine never kills a server with sessions.
 
 **Creation.** A per-server lock, `tmux-<socket>.lock` in
 `~/.local/share/engine`, serialises window creation. A failed `respawn-pane`

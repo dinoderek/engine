@@ -30,6 +30,11 @@ type Coordinator struct {
 	Wake   func(reconcile.Session, string) error
 	// Observer, when set, keeps each pass's host reads for the session view.
 	Observer *Observer
+	// Ready, when set, probes each host's readiness for each coordinated
+	// repo; placement then skips a host until its probe passes.
+	Ready *Readiness
+	// notesDue is true until this pass has posted its readiness notes.
+	notesDue bool
 }
 
 // Run reconciles immediately and then periodically until shutdown.
@@ -77,6 +82,10 @@ func (c *Coordinator) Pass(ctx context.Context) error {
 	if err != nil {
 		return c.notice("", "configuration", err.Error())
 	}
+	if c.Ready != nil {
+		c.askReady(st, ids, cfg)
+		c.notesDue = true
+	}
 	if err = c.queues(cfg); err != nil {
 		return err
 	}
@@ -98,6 +107,10 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	}
 	// Recovery may have launched or adopted a session after the first observation.
 	fleet := c.fleet(cfg, local)
+	if c.notesDue {
+		c.postNotes(fleet)
+		c.notesDue = false
+	}
 	st, v, acts, err := c.decide(id, fleet)
 	if err != nil {
 		return err
@@ -154,6 +167,9 @@ func (c *Coordinator) fleet(cfg *hosts.Config, local hosts.Host) reconcile.Fleet
 			h := cfg.Hosts[name]
 			st, err := c.Client(h).Status()
 			f.Hosts[i] = reconcile.Load(h.Name, h.Harnesses, h.Capabilities, st, err)
+			if c.Ready != nil {
+				f.Hosts[i].Ready = c.Ready.For(h.Name)
+			}
 		})
 	}
 	wg.Wait()

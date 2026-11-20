@@ -302,6 +302,7 @@ func TestLocalModeOpenItems(t *testing.T) {
 	r.local.missing = []string{"gh"}
 	r.local.rev = ""
 	r.check = func() (bool, error) { t.Error("the check ran with items open"); return true, nil }
+	r.ready = func(string) (bool, error) { t.Error("the readiness probe ran with items open"); return true, nil }
 	if mustRun(t, r, "") {
 		t.Fatal("closed")
 	}
@@ -309,7 +310,8 @@ func TestLocalModeOpenItems(t *testing.T) {
 	for _, want := range []string{
 		"1. tools: OPEN (missing: gh", "~/.zshenv.new",
 		"2. engine: OPEN (engine is not on the PATH)",
-		"6. gh auth: OPEN (gh is missing (step 1))", "4 open item(s); run each command, then rerun engine setup:",
+		"6. gh auth: OPEN (gh is missing (step 1))", "9. readiness: OPEN (not run while items above are open)",
+		"5 open item(s); run each command, then rerun engine setup:",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)

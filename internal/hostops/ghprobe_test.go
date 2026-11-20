@@ -119,7 +119,7 @@ func TestGhProbeRunsInARealTmuxWindow(t *testing.T) {
 	t.Cleanup(func() { ghBin = old })
 	runDir, work := t.TempDir(), t.TempDir()
 	d := Deps{Tmux: tm, Sleep: func(time.Duration) { time.Sleep(10 * time.Millisecond) }}
-	got, err := probeGH(d, runDir, work)
+	got, err := probeGH(d, runDir, work, nil)
 	if err != nil || got.OK || !strings.Contains(got.Output, "The token in keyring is invalid.") {
 		t.Fatalf("probe %+v, %v", got, err)
 	}

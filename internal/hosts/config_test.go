@@ -110,6 +110,10 @@ func TestValidationRules(t *testing.T) {
 gb`, `""
 gb`, "top level: default_harness must not be empty"},
 		{"undefined default_harness", `default_harness = "claude"`, `default_harness = "codex"`, `"codex" is not defined`},
+		{"relative path entry", `bin = { claude = "~/bin/claude" }`, `bin = { claude = "~/bin/claude" }` + "\npath = [\"shims\"]", `host.mac: path entry "shims" must be an absolute directory or one under ~/`},
+		{"path entry with a colon", `bin = { claude = "~/bin/claude" }`, `bin = { claude = "~/bin/claude" }` + "\npath = [\"/a:/b\"]", `path entry "/a:/b" must not contain a colon`},
+		{"path entry twice", `bin = { claude = "~/bin/claude" }`, `bin = { claude = "~/bin/claude" }` + "\npath = [\"/a\", \"/a\"]", `host.mac: path lists "/a" twice`},
+		{"path not a list", `bin = { claude = "~/bin/claude" }`, `bin = { claude = "~/bin/claude" }` + "\npath = \"/a\"", `host.mac: path must be`},
 		{"missing gb_per_session", "gb_per_session = 8\n", "", "missing gb_per_session"},
 		{"zero gb_per_session", "gb_per_session = 8", "gb_per_session = 0", "at least 1"},
 		{"missing reserve_gb", "reserve_gb = 8\n", "", "missing reserve_gb"},

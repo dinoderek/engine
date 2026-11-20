@@ -5,7 +5,7 @@
 ## Shape
 
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
-- **Stateless.** Each pass derives everything from the server's records and each host's tmux sessions, harness observations and run directories.
+- **Stateless.** Each pass derives everything from the server's records and each host's tmux sessions, harness observations, run directories and readiness.
 - **One pass** runs every 30 seconds and once at start, reading every host's `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer reuses those reads (`control-server.md`, "Session view"). Stopping coordination leaves sessions running; plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`, "Placement". For how a pass reads a session's liveness, stalls, early deaths or limits, load `session-signals.md`. For lint changes, load `plugins/engine/skills/engine/references/plan.md`.
@@ -28,11 +28,11 @@ Only the queue's head is called: the first eligible entry in request order (in-r
 
 **After the merge**, the `merged` update gives the session a cleanup turn, ending in `engine task cleaned`. Idle after that, it is released; `--left` tells the operator. Without that, it is released once idle `CleanupWait` after the merge, or at once if its window is gone, telling the operator where it ran. A cleanup turn still busy at `CleanupCap` is noticed (`internal/reconcile/session.go`). Other done tasks' sessions go once idle 10 minutes. Releasing a running background job is a notice.
 
-Every wait is bounded. A head outstaying its bound, failing `gh` repeatedly, or whose host is not in `hosts.toml` ends `merge-refused` with the reason, which the operator is told; the executor fixes it and requests again. Leaving in-review except for `needs-human` withdraws the entry (`merge-withdrawn`); a vanished task resumes in-review, keeping its entry. A lost merge result reads as merged.
+Every wait is bounded. A head outstaying its bound, failing `gh` repeatedly, or whose host is not in `hosts.toml` ends `merge-refused`, telling the operator why; the executor fixes it and requests again. Leaving in-review except for `needs-human` withdraws the entry (`merge-withdrawn`); a vanished task resumes in-review, keeping its entry. A lost merge result reads as merged.
 
 ## Reaching hosts
 
-A host does its own work through `engine host <op> --json`: one job, one JSON object on stdout, exit 0, or 1 on failure. The caller passes the model, effort and kickoff; the host reads `hosts.toml` only for its launch line, harness binary and slots. The coordinator calls its own host's ops in-process and another machine's over `ssh` (`internal/remote/ssh.go`). It refuses to run unless `~/.config/engine/host` names a machine in `hosts.toml` (`hosts-and-sessions.md`). An SSH host needs key-based SSH, `engine`, `tmux`, `gh` and the harness CLIs signed in; the coordinator and sessions use the host's own `gh` and Git configuration (`operator-setup.md`).
+A host does its own work through `engine host <op> --json`: one job, one JSON object on stdout, exit 0, or 1 on failure. The caller passes the model, effort and kickoff; the host reads `hosts.toml` only for its launch line, harness binary, `path` and slots. The coordinator calls its own host's ops in-process and another machine's over `ssh` (`internal/remote/ssh.go`). It refuses to run unless `~/.config/engine/host` names a machine in `hosts.toml` (`hosts-and-sessions.md`). An SSH host needs key-based SSH, `engine`, `tmux`, `gh` and the harness CLIs signed in; the coordinator and sessions use the host's own `gh` and Git configuration (`operator-setup.md`).
 
 | Op | Does |
 | --- | --- |
@@ -42,6 +42,7 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `status` | Windows with their state and, unless working, last 20 screen lines and a waiting window's newest denial (`telemetry.md`); newest runs, each with the last 20 lines of its pane log, stripped of control sequences, when it has no live window and the log was written in the last hour; quota, free slots and signed-out harnesses (`internal/hostops/status.go`). |
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
 | `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start (else creation) counts; undated sorts first, ties select the later rollup entry. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. Already merged is done. |
+| `ready` | Probes a repo's readiness (`readiness.md`). |
 | `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or it has changes, then deletes the local branch if its tip is the merged head (`--head`) or an ancestor of `origin`'s default branch after a fetch; otherwise keeps it and notes the unmerged commits. Failures are notes; other releases keep the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine` (the build) and `host`. A failure is `{"error": …, "refused": true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is an unreachable host. A caller refuses a reply on another protocol, or not an engine's, and tells the operator to run `engine setup --host <name>`.

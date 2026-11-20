@@ -219,6 +219,10 @@ func (r Repos) defaultBranch(path string) (string, error) {
 	return def, nil
 }
 
+// Lock takes an exclusive lock on the file at path, waiting for its holder,
+// and returns the function that releases it.
+func Lock(path string) (func(), error) { return lock(path) }
+
 // lock takes an exclusive lock on the file at path, waiting for its holder,
 // and returns the function that releases it. The kernel drops a lock with
 // its process, so a crash leaves nothing stale.

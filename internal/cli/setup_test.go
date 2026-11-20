@@ -84,6 +84,8 @@ func setupEnv(t *testing.T) (Env, *bytes.Buffer, *bytes.Buffer) {
 				_, _ = io.WriteString(o, `{"loggedIn":true,"authMethod":"claude.ai"}`)
 			case strings.HasPrefix(command, "uname"):
 				_, _ = io.WriteString(o, "Darwin\n")
+			case strings.HasPrefix(command, `echo "home $HOME"`):
+				_, _ = io.WriteString(o, "home /h\n/h/.local/share/mise/shims\n")
 			}
 			return 0, nil
 		},
@@ -110,6 +112,10 @@ func TestSetupCommandLine(t *testing.T) {
 	// refuses, and an open item exits 1.
 	if code != 1 || !strings.Contains(out.String(), "7. preflight: OPEN (") || !strings.Contains(out.String(), "is not an executable claude binary") {
 		t.Errorf("the preflight did not run through engine start --check: exit %d\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), `8. path: ok (suggested: tools installed through version manager shims reach sessions only through the host's path; add path = ["~/.local/share/mise/shims"] to [host.mac]`) ||
+		!strings.Contains(out.String(), "9. readiness: OPEN (not run while items above are open)") {
+		t.Errorf("the path suggestion or the readiness step is missing:\n%s", out.String())
 	}
 	var help bytes.Buffer
 	if Run([]string{"help"}, Env{Out: &help}) != 0 || !strings.Contains(help.String(), "setup [--host <name>]") {

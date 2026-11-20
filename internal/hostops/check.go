@@ -98,8 +98,12 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 	if err != nil {
 		return CheckResult{}, err
 	}
+	path, err := host.PathPrefix(d.Home)
+	if err != nil {
+		return CheckResult{}, err
+	}
 	r := CheckResult{RunDir: runDir, hooked: h.HookedState()}
-	if r.GH, err = probeGH(d, runDir, work); err != nil {
+	if r.GH, err = probeGH(d, runDir, work, path); err != nil {
 		return CheckResult{}, err
 	}
 	if d.JoinRemote {
@@ -127,7 +131,7 @@ func Check(d Deps, harnessName string, out io.Writer) (CheckResult, error) {
 		return CheckResult{}, err
 	}
 	defer func() { _ = os.Remove(marker) }()
-	run := launch{line: line, dir: work, runDir: runDir, mode: HandsOff, kickoff: h.CheckKickoff(marker), joined: r.Joined}
+	run := launch{line: line, dir: work, runDir: runDir, mode: HandsOff, kickoff: h.CheckKickoff(marker), joined: r.Joined, path: path}
 	w := session.Window{Name: CheckName, Dir: work, Command: launchCommand(h.Name(), l, run), Log: filepath.Join(runDir, session.PaneLog)}
 	opened, err := d.Tmux.Open(w)
 	if err != nil {

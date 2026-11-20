@@ -89,16 +89,35 @@ func refuse(format string, args ...any) error {
 // which is this one when empty, prints its report, and reports whether an
 // unattended session there would run without a prompt.
 func Check(d Deps, host, harness string, out io.Writer) (bool, error) {
-	if host == "" {
-		return d.HostClient(hosts.Host{}, false).Check(harness, out)
-	}
-	cfg, local, err := hosts.Open(hosts.ConfigDir(d.Home))
-	if err != nil {
-		return false, refuse("%v", err)
-	}
-	target, isRemote, err := pickHost(cfg, local, host)
+	client, err := d.client(host)
 	if err != nil {
 		return false, err
 	}
-	return d.HostClient(target, isRemote).Check(harness, out)
+	return client.Check(harness, out)
+}
+
+// Ready probes the repo's readiness afresh on host, as Check finds it, prints
+// the report to out, and reports whether every check passed.
+func Ready(d Deps, host, repo string, out io.Writer) (bool, error) {
+	client, err := d.client(host)
+	if err != nil {
+		return false, err
+	}
+	return remote.RunReady(client, repo, out)
+}
+
+// client reaches host: this one when empty, else the host of that name.
+func (d Deps) client(host string) (remote.Client, error) {
+	if host == "" {
+		return d.HostClient(hosts.Host{}, false), nil
+	}
+	cfg, local, err := hosts.Open(hosts.ConfigDir(d.Home))
+	if err != nil {
+		return nil, refuse("%v", err)
+	}
+	target, isRemote, err := pickHost(cfg, local, host)
+	if err != nil {
+		return nil, err
+	}
+	return d.HostClient(target, isRemote), nil
 }

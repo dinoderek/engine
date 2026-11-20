@@ -22,7 +22,7 @@ func TestControlDispatchCarriesCredentialsOnlyOnStdin(t *testing.T) {
 		if !strings.Contains(string(b), r.Credential) {
 			t.Fatal("missing stdin credential")
 		}
-		_, err = io.WriteString(out, `{"protocol":8,"engine":"test","host":"devbox","name":"demo-1","window":"@1"}`)
+		_, err = io.WriteString(out, `{"protocol":9,"engine":"test","host":"devbox","name":"demo-1","window":"@1"}`)
 		return 0, err
 	}}
 	got, err := ControlSpawn(ssh, r)
@@ -36,7 +36,7 @@ func TestControlMergeRunsTheHostsMergeOp(t *testing.T) {
 	var command string
 	ssh := SSH{Name: "devbox", Address: "devbox", Exec: func(_ io.Reader, out, _ io.Writer, _ string, args ...string) (int, error) {
 		command = strings.Join(args, " ")
-		_, err := io.WriteString(out, `{"protocol":8,"engine":"test","host":"devbox","outcome":"merged","reason":"merged at `+head+`"}`)
+		_, err := io.WriteString(out, `{"protocol":9,"engine":"test","host":"devbox","outcome":"merged","reason":"merged at `+head+`"}`)
 		return 0, err
 	}}
 	got, err := ControlMerge(ssh, hostops.MergeRequest{Repo: "o/r", PR: 42, Head: head, Method: "squash"})
@@ -54,5 +54,34 @@ func TestControlMergeRunsTheHostsMergeOp(t *testing.T) {
 	}
 	if _, err := ControlMerge(nil, hostops.MergeRequest{}); err == nil {
 		t.Fatal("a client without merges merged")
+	}
+}
+
+func TestReadyRunsTheHostsReadyOp(t *testing.T) {
+	var command string
+	ssh := SSH{Name: "devbox", Address: "devbox", Exec: func(_ io.Reader, out, _ io.Writer, _ string, args ...string) (int, error) {
+		command = strings.Join(args, " ")
+		_, err := io.WriteString(out, `{`+envelope+`,"probed_on":"devbox","repo":"o/r","head":"abc","checks":[{"name":"gh auth status","ok":false,"output":"X Failed"}]}`)
+		return 0, err
+	}}
+	got, err := Ready(ssh, hostops.ReadyRequest{Repo: "o/r", Remote: "ssh://x/o/r", Fresh: true})
+	if err != nil || got.OK() || got.Checks[0].Output != "X Failed" {
+		t.Fatal(got, err)
+	}
+	if want := ShellJoin([]string{"engine", "host", "ready", "--json", "--repo", "o/r", "--remote", "ssh://x/o/r", "--fresh"}); !strings.HasSuffix(command, want) {
+		t.Errorf("command %q, want suffix %q", command, want)
+	}
+	var out strings.Builder
+	if ok, err := RunReady(ssh, "o/r", &out); ok || err != nil || !strings.Contains(out.String(), "FAIL o/r: gh auth status at abc") {
+		t.Errorf("run ready %v, %v:\n%s", ok, err, out.String())
+	}
+	if !strings.HasSuffix(command, ShellJoin([]string{"--repo", "o/r", "--fresh"})) {
+		t.Errorf("setup's probe is not fresh: %q", command)
+	}
+	if _, err := Ready(nil, hostops.ReadyRequest{}); err == nil {
+		t.Fatal("a client without the probe answered")
+	}
+	if _, err := RunReady(nil, "o/r", &out); err == nil {
+		t.Fatal("RunReady without the probe answered")
 	}
 }

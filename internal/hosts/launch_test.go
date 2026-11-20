@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -143,5 +144,37 @@ func TestShellWord(t *testing.T) {
 		if got := ShellWord(in); got != want {
 			t.Errorf("ShellWord(%q) = %s, want %s", in, got, want)
 		}
+	}
+}
+
+func TestHostPathDecodesAndExpands(t *testing.T) {
+	src := strings.Replace(base, `bin = { claude = "~/bin/claude" }`,
+		`bin = { claude = "~/bin/claude" }`+"\n"+`path = ["~/.local/share/mise/shims", "/opt/homebrew/bin"]`, 1)
+	c, err := Parse(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mac := c.Hosts["mac"]
+	if !slices.Equal(mac.Path, []string{"~/.local/share/mise/shims", "/opt/homebrew/bin"}) {
+		t.Fatalf("path %v", mac.Path)
+	}
+	got, err := mac.PathPrefix("/home/me")
+	if err != nil || !slices.Equal(got, []string{"/home/me/.local/share/mise/shims", "/opt/homebrew/bin"}) {
+		t.Errorf("prefix %v, %v", got, err)
+	}
+	if _, err := mac.PathPrefix(""); err == nil || !strings.Contains(err.Error(), "no home directory") {
+		t.Errorf("no home: %v", err)
+	}
+	if got, err := (Host{}).PathPrefix(""); err != nil || len(got) != 0 {
+		t.Errorf("no path: %v, %v", got, err)
+	}
+}
+
+func TestPathExport(t *testing.T) {
+	if got := PathExport(nil); got != "" {
+		t.Errorf("no dirs: %q", got)
+	}
+	if got := PathExport([]string{"/a/b", "/my dir"}); got != `export PATH=/a/b:'/my dir':"$PATH" && ` {
+		t.Errorf("got %q", got)
 	}
 }
