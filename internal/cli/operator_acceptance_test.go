@@ -12,28 +12,12 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
-	"github.com/dinoderek/engine/internal/session"
 )
 
 // The acceptance tests of usage limits, stopping a task, pane answers and
 // the fleet view, through Run against the operations fleet (opsfleet_test.go).
 
 // runVars are the variables a session's commands run with: its run's
-// server endpoint, credential, attempt and run directory.
-func (s *opsSession) runVars() map[string]string {
-	s.f.t.Helper()
-	data, err := os.ReadFile(filepath.Join(s.dir, "server-session.json"))
-	if err != nil {
-		s.f.t.Fatal(err)
-	}
-	var conn struct{ URL, Attempt string }
-	if err = json.Unmarshal(data, &conn); err != nil {
-		s.f.t.Fatal(err)
-	}
-	return map[string]string{"ENGINE_SERVER_URL": conn.URL, "ENGINE_SERVER_TOKEN_FILE": filepath.Join(s.dir, "server-token"),
-		"ENGINE_ATTEMPT_ID": conn.Attempt, session.RunDirVar: s.dir}
-}
-
 // hookWith runs one of the session's harness hooks on the event in, as
 // Claude Code runs it in the session's pane; a hook that starts a
 // background entry runs it to its end first.
@@ -74,17 +58,6 @@ func (f *opsFleet) mustOperator(args ...string) string {
 
 // headOf is the commit the session's worktree has checked out.
 func (s *opsSession) headOf() string { return s.h.git(s.worktree, "rev-parse", "HEAD") }
-
-// branchAt is the commit the branch is at in the host's clone of the repo,
-// or "" when the clone has no such branch.
-func (h *opsHost) branchAt(branch string) string {
-	clone := filepath.Join(h.home, ".local/share/engine/control-repos", opsSlug)
-	out, err := h.run(clone, nil, "git", "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(out)
-}
 
 // resumesOn fails unless the task's current session runs on branch at head:
 // its worktree checked out there and its kickoff naming the commit.
@@ -299,7 +272,7 @@ func TestHostStatusAllShowsEveryHost(t *testing.T) {
 	wantRow(t, out, "box", "yes", "2 of 2 (heavy 2 of 2)", "-", "unready: fleet/app: ./dev doctor failed (the readiness note has the output)")
 	for _, task := range []control.Item{flag, sw} {
 		at := f.get(task.ID).Attempt
-		wantRow(t, out, "mac", fmt.Sprintf("app-%d", control.Number(task.ID)), "working", "claude", task.ID+" ("+at+")")
+		wantRow(t, out, "mac", opsWindow(task), "working", "claude", task.ID+" ("+at+")")
 	}
 
 	var fleet control.HostStatus

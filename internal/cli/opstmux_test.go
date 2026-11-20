@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -77,7 +78,7 @@ func (p *paneServer) run(_ string, args ...string) (string, error) {
 		w := p.add(args)
 		return w.id + " " + w.pane + "\n", nil
 	case "split-window":
-		w := p.byTarget(args[slicesIndex(args, "-t")+1])
+		w := p.byTarget(args[slices.Index(args, "-t")+1])
 		p.next++
 		w.pane = fmt.Sprintf("%%%d", p.next)
 		return w.pane + "\n", nil
@@ -104,20 +105,11 @@ func (p *paneServer) read(args []string) (string, error) {
 	case args[0] == "display-message":
 		return "0\n", nil
 	case args[0] == "capture-pane":
-		return p.byTarget(args[slicesIndex(args, "-t")+1]).screen, nil
+		return p.byTarget(args[slices.Index(args, "-t")+1]).screen, nil
 	case args[0] == "list-windows" || args[0] == "list-panes":
 		return p.list(args[len(args)-1]), nil
 	}
 	return "", nil
-}
-
-func slicesIndex(args []string, s string) int {
-	for i, a := range args {
-		if a == s {
-			return i
-		}
-	}
-	return -1
 }
 
 func (p *paneServer) list(format string) string {
@@ -142,7 +134,7 @@ func (p *paneServer) list(format string) string {
 
 func (p *paneServer) add(args []string) *paneWindow {
 	p.next++
-	w := &paneWindow{id: fmt.Sprintf("@%d", p.next), name: args[slicesIndex(args, "-n")+1], dir: args[slicesIndex(args, "-c")+1]}
+	w := &paneWindow{id: fmt.Sprintf("@%d", p.next), name: args[slices.Index(args, "-n")+1], dir: args[slices.Index(args, "-c")+1]}
 	p.next++
 	w.pane = fmt.Sprintf("%%%d", p.next)
 	p.windows = append(p.windows, w)

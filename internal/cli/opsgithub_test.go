@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,11 +39,10 @@ type ghCheck struct {
 
 // ghPR is a pull request of the fleet's repo.
 type ghPR struct {
-	Number                   int
-	Branch, Head, Title      string
-	Body, State              string
-	Checks                   []ghCheck
-	MergedSubject, MergeBody string
+	Number              int
+	Branch, Head, Title string
+	Body, State         string
+	Checks              []ghCheck
 }
 
 // fakeGitHub is GitHub for the fleet's one repo: its origin is a bare
@@ -154,11 +154,11 @@ func (g *fakeGitHub) view(number string) (string, error) {
 // main as its parent, and the subject and body as its message.
 func (g *fakeGitHub) merge(args []string) (string, error) {
 	n, _ := strconv.Atoi(args[2])
-	flag := func(name string) string { return args[slicesIndex(args, name)+1] }
+	flag := func(name string) string { return args[slices.Index(args, name)+1] }
 	g.mu.Lock()
 	p := g.prs[n]
 	g.mu.Unlock()
-	if p == nil || p.State != "OPEN" || p.Head != flag("--match-head-commit") || args[5] != "--squash" {
+	if p == nil || p.State != "OPEN" || p.Head != flag("--match-head-commit") || !slices.Contains(args, "--squash") {
 		return "", fmt.Errorf("gh pr merge %d: refused %q", n, args)
 	}
 	msg := filepath.Join(g.f.t.TempDir(), "message")
@@ -168,6 +168,6 @@ func (g *fakeGitHub) merge(args []string) (string, error) {
 	_ = os.Remove(msg)
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	p.State, p.MergedSubject, p.MergeBody = "MERGED", flag("--subject"), flag("--body")
+	p.State = "MERGED"
 	return "", nil
 }

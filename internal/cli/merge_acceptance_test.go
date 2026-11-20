@@ -24,17 +24,6 @@ func runningSession(f *opsFleet, task control.Item) *opsSession {
 	return s
 }
 
-// engineClone is the path of engine's clone of the fleet's repo on h.
-func engineClone(h *opsHost) string {
-	return filepath.Join(h.home, ".local/share/engine/control-repos", opsSlug)
-}
-
-// cloneHasBranch reports whether engine's clone on h has the local branch.
-func cloneHasBranch(h *opsHost, branch string) bool {
-	_, err := h.run(engineClone(h), nil, "git", "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
-	return err == nil
-}
-
 // idleAfterCleanup reports the cleanup as the session does after its merge
 // and leaves it idle, so the coordinator releases it.
 func idleAfterCleanup(f *opsFleet, s *opsSession) {
@@ -208,10 +197,10 @@ func TestReleaseDeletesTheMergedBranchAndKeepsAnUnmergedOne(t *testing.T) {
 			t.Errorf("%s's worktree %s is still there", s.name, s.worktree)
 		}
 	}
-	if cloneHasBranch(m.h, m.branch) {
+	if m.h.branchAt(m.branch) != "" {
 		t.Errorf("the merged branch %s is still in the clone", m.branch)
 	}
-	if !cloneHasBranch(x.h, x.branch) {
+	if x.h.branchAt(x.branch) == "" {
 		t.Fatalf("the branch %s with an unmerged commit was deleted", x.branch)
 	}
 	var notes []string

@@ -259,7 +259,7 @@ type opsSession struct {
 // launched it.
 func (f *opsFleet) session(task control.Item) *opsSession {
 	f.t.Helper()
-	name := fmt.Sprintf("app-%d", control.Number(task.ID))
+	name := opsWindow(task)
 	runID := name + "-" + f.get(task.ID).Attempt
 	for _, h := range f.hosts {
 		dir := filepath.Join(h.home, filepath.FromSlash(session.RunsDir), runID)
@@ -271,9 +271,13 @@ func (f *opsFleet) session(task control.Item) *opsSession {
 	return nil
 }
 
-// engine runs an engine command as the session: with its run's server
-// endpoint, credential and attempt in its environment.
-func (s *opsSession) engine(args ...string) (int, string, string) {
+// opsWindow is the task's window name on every host.
+func opsWindow(task control.Item) string { return fmt.Sprintf("app-%d", control.Number(task.ID)) }
+
+// runVars is the session's environment: its run's server endpoint,
+// credential and attempt, and its run directory.
+func (s *opsSession) runVars() map[string]string {
+	s.f.t.Helper()
 	data, err := os.ReadFile(filepath.Join(s.dir, "server-session.json"))
 	if err != nil {
 		s.f.t.Fatal(err)
@@ -282,8 +286,13 @@ func (s *opsSession) engine(args ...string) (int, string, string) {
 	if err = json.Unmarshal(data, &conn); err != nil {
 		s.f.t.Fatal(err)
 	}
-	return s.h.engine(map[string]string{"ENGINE_SERVER_URL": conn.URL, "ENGINE_SERVER_TOKEN_FILE": filepath.Join(s.dir, "server-token"),
-		"ENGINE_ATTEMPT_ID": conn.Attempt, session.RunDirVar: s.dir}, "", args...)
+	return map[string]string{"ENGINE_SERVER_URL": conn.URL, "ENGINE_SERVER_TOKEN_FILE": filepath.Join(s.dir, "server-token"),
+		"ENGINE_ATTEMPT_ID": conn.Attempt, session.RunDirVar: s.dir}
+}
+
+// engine runs an engine command as the session, in its environment.
+func (s *opsSession) engine(args ...string) (int, string, string) {
+	return s.h.engine(s.runVars(), "", args...)
 }
 
 // must runs an engine command as the session and fails the test unless it

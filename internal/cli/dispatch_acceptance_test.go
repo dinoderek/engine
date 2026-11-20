@@ -17,11 +17,6 @@ import (
 // real coordinator and control server against the fake fleet in
 // opsfleet_test.go.
 
-// clonePath is engine's clone of the fleet's repo on h.
-func clonePath(h *opsHost) string {
-	return filepath.Join(h.home, ".local/share/engine/control-repos", filepath.FromSlash(opsSlug))
-}
-
 // current is the task's current attempt.
 func (f *opsFleet) current(task control.Item) control.Attempt {
 	f.t.Helper()
@@ -61,7 +56,7 @@ func containing(bodies []string, part string) []string {
 // window of its name, no run directory, no worktree and no branch.
 func wantNothingLeft(t *testing.T, h *opsHost, task control.Item, at control.Attempt) {
 	t.Helper()
-	name := "app-" + strings.TrimPrefix(task.ID, "t")
+	name := opsWindow(task)
 	if w := h.tmux.window(name); w != nil {
 		t.Errorf("%s keeps the window %s (%s)", h.name, name, w.id)
 	}
@@ -72,10 +67,10 @@ func wantNothingLeft(t *testing.T, h *opsHost, task control.Item, at control.Att
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("%s keeps the run directory %s: %v", h.name, dir, err)
 	}
-	if _, err := os.Stat(clonePath(h) + "-worktrees/task-" + name); !os.IsNotExist(err) {
+	if _, err := os.Stat(h.clone() + "-worktrees/task-" + name); !os.IsNotExist(err) {
 		t.Errorf("%s keeps the worktree of %s: %v", h.name, name, err)
 	}
-	if got := h.git(clonePath(h), "branch", "--list", "task/"+name); got != "" {
+	if got := h.git(h.clone(), "branch", "--list", "task/"+name); got != "" {
 		t.Errorf("%s keeps the branch %q", h.name, got)
 	}
 }
@@ -128,7 +123,9 @@ func TestAFailedLaunchLeavesNothingAndRelaunches(t *testing.T) {
 		t.Fatalf("three failed launches posted %q; want one notice of the trust failure", unresolved)
 	}
 	mend()
+	mac.tmux.mu.Lock()
 	mac.tmux.respawnFails = 2
+	mac.tmux.mu.Unlock()
 	f.pass()
 	wantNothingLeft(t, mac, task, stuck)
 	unresolved = containing(f.noticesOn(task.ID), "unresolved outcome")
@@ -136,7 +133,7 @@ func TestAFailedLaunchLeavesNothingAndRelaunches(t *testing.T) {
 		t.Fatalf("a second error posted %q; want a second notice of it", unresolved)
 	}
 	f.pass()
-	if at := f.current(task); at.ID != stuck.ID || at.State != "running" || mac.tmux.window("app-3") == nil {
+	if at := f.current(task); at.ID != stuck.ID || at.State != "running" || mac.tmux.window(opsWindow(task)) == nil {
 		t.Fatalf("the next pass did not relaunch %s: %+v", stuck.ID, at)
 	}
 
@@ -212,7 +209,7 @@ func TestTmuxRunsFromHomeAndADeadServerDirectoryIsSkipped(t *testing.T) {
 func (f *opsFleet) endEarly(h *opsHost, task control.Item, tail string) control.Attempt {
 	f.t.Helper()
 	at := f.current(task)
-	name := "app-" + strings.TrimPrefix(task.ID, "t")
+	name := opsWindow(task)
 	h.tmux.end(name, 127, tail)
 	if w := h.tmux.window(name); w != nil && w.log != "" {
 		if err := os.Chtimes(w.log, f.clock.now(), f.clock.now()); err != nil {
@@ -244,7 +241,7 @@ func TestAnEarlyDeathRetriesOnceThenFails(t *testing.T) {
 	f.clock.add(time.Minute) // the retry's run is the newer
 	f.pass()
 	second := f.current(task)
-	if second.ID == first.ID || second.State != "running" || mac.tmux.window("app-3") == nil || mac.tmux.window("app-3").dead {
+	if second.ID == first.ID || second.State != "running" || mac.tmux.window(opsWindow(task)) == nil || mac.tmux.window(opsWindow(task)).dead {
 		t.Fatalf("the task was not dispatched again: %+v", second)
 	}
 	ended := f.endEarly(mac, task, "claude: command not found\n")
@@ -313,7 +310,7 @@ func TestAFailingReadinessProbeSkipsTheHostUntilANewHead(t *testing.T) {
 		t.Errorf("box, which is ready, has a note")
 	}
 	export := hosts.PathExport([]string{filepath.Join(box.home, "fakebin")})
-	if w := box.tmux.window("app-3"); w == nil || !strings.Contains(w.command, export) {
+	if w := box.tmux.window(opsWindow(task)); w == nil || !strings.Contains(w.command, export) {
 		t.Errorf("the session's command lacks the PATH prefix %q: %+v", export, w)
 	}
 

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/harness/claude"
-	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -26,8 +25,7 @@ type opsHost struct {
 	name string
 	home string
 	tmux *paneServer
-	// down is ssh failing to connect; ghOut fails the fakebin gh's sign-in
-	// check with this output when set.
+	// down is ssh failing to connect.
 	down bool
 	mu   sync.Mutex
 	// agents is each Claude session's status by window name, busy when
@@ -39,7 +37,7 @@ func newOpsHost(f *opsFleet, name string, pid int) *opsHost {
 	h := &opsHost{f: f, name: name, home: f.t.TempDir(), agents: map[string]string{}}
 	h.tmux = newPaneServer(h.home, pid)
 	writeExec(f.t, filepath.Join(h.home, "bin", "claude"), "#!/bin/sh\nexit 0\n")
-	h.signIn("")
+	writeExec(f.t, filepath.Join(h.home, "fakebin", "gh"), "#!/bin/sh\necho 'github.com: Logged in to github.com account fleet'\nexit 0\n")
 	writeFile(f.t, filepath.Join(h.home, ".gitconfig"), "[user]\n\tname = Fleet\n\temail = fleet@example.test\n[init]\n\tdefaultBranch = main\n")
 	return h
 }
@@ -52,16 +50,6 @@ func writeExec(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
 		t.Fatal(err)
 	}
-}
-
-// signIn sets the fakebin gh's sign-in check: signed in when failure is
-// empty, else failing with it as its output.
-func (h *opsHost) signIn(failure string) {
-	script := "#!/bin/sh\necho 'github.com: Logged in to github.com account fleet'\nexit 0\n"
-	if failure != "" {
-		script = "#!/bin/sh\necho " + hosts.ShellWord(failure) + "\nexit 1\n"
-	}
-	writeExec(h.f.t, filepath.Join(h.home, "fakebin", "gh"), script)
 }
 
 // env is the Env of an engine command run on this host.
@@ -181,6 +169,21 @@ func (h *opsHost) run(dir string, env []string, name string, args ...string) (st
 
 func (h *opsHost) gitEnv() []string {
 	return []string{"HOME=" + h.home, "GIT_CONFIG_GLOBAL=" + filepath.Join(h.home, ".gitconfig"), "GIT_CONFIG_NOSYSTEM=1"}
+}
+
+// clone is engine's clone of the fleet's repo on this host.
+func (h *opsHost) clone() string {
+	return filepath.Join(h.home, ".local/share/engine/control-repos", filepath.FromSlash(opsSlug))
+}
+
+// branchAt is the commit the branch is at in this host's clone, or "" when
+// the clone has no such branch.
+func (h *opsHost) branchAt(branch string) string {
+	out, err := h.run(h.clone(), nil, "git", "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
 }
 
 // git runs git on this host, failing the test on an error.
