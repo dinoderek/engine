@@ -86,7 +86,9 @@ func (g *fakeGitHub) open(branch, head, title, body string) int {
 	return g.next
 }
 
-func (g *fakeGitHub) url(n int) string { return fmt.Sprintf("https://github.com/%s/pull/%d", g.slug, n) }
+func (g *fakeGitHub) url(n int) string {
+	return fmt.Sprintf("https://github.com/%s/pull/%d", g.slug, n)
+}
 
 // check adds a run of the check called name to PR n: pending, or completed
 // with conclusion, started at.

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -203,7 +204,8 @@ func (p *paneServer) respawn(args []string) (string, error) {
 	cmd.Dir, cmd.Env = w.dir, []string{"HOME=" + p.home, "PATH=" + os.Getenv("PATH")}
 	out, err := cmd.CombinedOutput()
 	w.dead, w.screen = true, string(out)
-	if exit, ok := err.(*exec.ExitError); ok {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
 		w.code = exit.ExitCode()
 	}
 	return "", nil
@@ -236,25 +238,6 @@ func (p *paneServer) end(name string, code int, tail string) {
 			_ = f.Close()
 		}
 	}
-}
-
-// show sets what the window's pane shows.
-func (p *paneServer) show(name, screen string) {
-	w := p.window(name)
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	w.screen = screen
-}
-
-// sentTo is every line sent to the window called name.
-func (p *paneServer) sentTo(name string) []string {
-	w := p.window(name)
-	if w == nil {
-		return nil
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return append([]string(nil), w.sent...)
 }
 
 // live is the names of the windows whose command still runs.

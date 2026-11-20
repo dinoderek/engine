@@ -124,7 +124,9 @@ func (f *opsFleet) start() {
 	service := control.Service{Store: store, Now: f.clock.now}
 	c := &controlrun.Coordinator{Service: service, URL: f.url, Home: home, Client: client, Logf: logf}
 	c.Ready = &controlrun.Readiness{Client: client, Now: f.clock.now, Logf: logf}
-	c.Wake = func(s reconcile.Session, text string) error { return f.keys(s, func(tm *session.Tmux, id string) error { return tm.Type(id, text) }) }
+	c.Wake = func(s reconcile.Session, text string) error {
+		return f.keys(s, func(tm *session.Tmux, id string) error { return tm.Type(id, text) })
+	}
 	c.Resume = func(s reconcile.Session, logged func(string) error) error {
 		return f.keys(s, func(tm *session.Tmux, id string) error { return tm.Submit(id, controlrun.ResumeText, logged) })
 	}
