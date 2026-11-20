@@ -34,7 +34,7 @@ func TestPlanQuestionBlocksOnlyNewDispatches(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if at, err := s.EndDead(claimed.Attempt.ID, "window gone"); err != nil || at.Reason != EndVanished {
+	if at, err := s.EndDead(claimed.Attempt.ID, "window gone", ""); err != nil || at.Reason != EndVanished {
 		t.Fatal(at, err)
 	}
 	if _, resumed := dispatch(t, s, task); resumed.Item.State != "in-review" {
