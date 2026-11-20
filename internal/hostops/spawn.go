@@ -205,7 +205,8 @@ func (u *undo) run(cause error) error {
 	if len(left) == 0 {
 		return cause
 	}
-	return fmt.Errorf("%w; left in place, to remove before starting again: %s", cause, strings.Join(left, "; "))
+	// On its own line, after the cause, which may end in tmux's pane list.
+	return fmt.Errorf("%w\nleft in place, to remove before starting again: %s", cause, strings.Join(left, "; "))
 }
 
 // join asks the harness whether the session joins the host's remote

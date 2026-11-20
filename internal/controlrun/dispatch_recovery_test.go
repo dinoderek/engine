@@ -2,6 +2,7 @@ package controlrun
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -20,6 +21,15 @@ func TestRecoveryKeyTellsErrorsApartByTheirFirstLine(t *testing.T) {
 	}
 	if b := recoveryKey("a4", errors.New("ssh: broken pipe")); a == b {
 		t.Error("another attempt shared the key")
+	}
+	// Each try opens a new window, so the same respawn failure names new ids.
+	respawn := "open the tmux window: respawn-pane failed, and again after 1s: first: tmux respawn-pane -k -t %%%d: exit status 1; then: tmux respawn-pane -k -t %%%d @%d\npanes"
+	first := recoveryKey("a3", fmt.Errorf(respawn, 12, 12, 7))
+	if again := recoveryKey("a3", fmt.Errorf(respawn, 13, 13, 8)); first != again {
+		t.Errorf("one failure on new tmux ids gave %s and %s", first, again)
+	}
+	if other := recoveryKey("a3", errors.New("open the tmux window: no server running")); first == other {
+		t.Error("a different tmux failure shared the key")
 	}
 }
 

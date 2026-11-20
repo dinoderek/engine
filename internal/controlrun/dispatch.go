@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/control"
@@ -77,12 +78,17 @@ func (c *Coordinator) launch(st control.State, at control.Attempt, credential st
 
 // recoveryKey is the notice key of a dispatch's unresolved outcome: one per
 // attempt and distinct error, told apart by its first line, so each new
-// error posts once and its repeats on later passes post nothing.
+// error posts once and its repeats on later passes post nothing. tmux's
+// window, pane and session ids are masked, since each try opens a new window
+// and tmux never reuses an id, so the same failure would differ every pass.
 func recoveryKey(attempt string, err error) string {
 	first, _, _ := strings.Cut(err.Error(), "\n")
-	sum := sha256.Sum256([]byte(first))
+	sum := sha256.Sum256([]byte(tmuxID.ReplaceAllString(first, "$1#")))
 	return "dispatch/" + attempt + "/" + hex.EncodeToString(sum[:6])
 }
+
+// tmuxID is a tmux window (@3), pane (%12) or session ($1) id.
+var tmuxID = regexp.MustCompile(`([@%$])\d+`)
 
 // hadEarlierAttempt reports whether an attempt for item other than current
 // ran on a host: a retry or a resume, whose branch is the task's own. An
