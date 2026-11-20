@@ -43,11 +43,10 @@ Claude plugin for yourself with `claude plugin marketplace add dinoderek/engine`
 with your claude.ai account (`/login`): Remote Control rejects API keys and
 `setup-token`. Sign in to Codex (`codex login`). Setup copies the Mac's
 engine commit and Claude plugin version to the other hosts, so update both here
-first. Setup installs and updates the Codex plugin itself, in both Codex
-homes, engine's own and yours (embedded sessions that cannot join engine's
-daemon use yours), through Codex's own `codex plugin` commands. In a Codex session engine did not launch, Codex runs the plugin's hooks only once
-reviewed: review them in the first such session after each install or
-update.
+first. Setup installs and updates the Codex plugin in both Codex homes, engine's own
+and yours (embedded sessions that cannot join engine's daemon use yours), through `codex plugin`. Codex runs the
+plugin's hooks in a session engine did not launch only once reviewed: review
+them in the first such session after each install or update.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
@@ -122,11 +121,6 @@ then run `engine setup --host devbox`.
    lists what is missing, and prints the `PATH` line and the `sudo systemctl
    mask` line that stops the devbox suspending. Sign in once over SSH:
    `ssh -t <address> claude /login`.
-
-## Each target repo
-
-- Confirm the host's `gh` and Git access to the repo.
-- Enable the `engine` plugin in its `.claude/settings.json`.
 
 ## Upgrading
 

@@ -1,9 +1,8 @@
 # Server roles
 
-The server roles' mechanics: reading and writing the server, the planner's
-writes, the executor's changes to `build`, rulings, and hard stops. The
-session's environment supplies the endpoint, credential file and attempt ID
-(`ENGINE_SERVER_URL`, `ENGINE_SERVER_TOKEN_FILE`, `ENGINE_ATTEMPT_ID`).
+The server roles' mechanics. The session's environment supplies the endpoint,
+credential file and attempt ID (`ENGINE_SERVER_URL`, `ENGINE_SERVER_TOKEN_FILE`,
+`ENGINE_ATTEMPT_ID`).
 
 ## Read and write
 
@@ -43,8 +42,8 @@ already shows.
 
 ## Executor
 
-Follow the `build` skill, hands-off, with these changes. They replace the
-repo's own merge step; the merge guard enforces it.
+Follow the `build` skill, hands-off, with these changes. They replace its
+merge step, which the merge guard enforces.
 
 - **Step 1.** The server claimed the task and opened its worktree: work
   there, and create none.
@@ -68,12 +67,9 @@ repo's own merge step; the merge guard enforces it.
      merge guard refuses `gh pr merge` in a server session. The coordinator
      waits for CI.
   3. **Wait by ending your turn**, never in a background job, polling loop
-     or `sleep`: the coordinator types a pointer at its update into your window. Worked
-     example: `engine task merge-ready t7 … --head 3f2c…` prints the
-     request; you write "Merge requested for t7 at 3f2c…; waiting for the
-     coordinator." and stop. Later, `Read the new task updates: engine
-     updates t7 --after 512` arrives as your next prompt: run it, and act on
-     the update it shows.
+     or `sleep`. The coordinator types a pointer at its update into your
+     window, as `Read the new task updates: engine updates t7 --after 512`:
+     run it, and act on the update it shows.
   4. The updates on the task:
      - `merged`: the task is `done`. Record the outcome with `engine tell
        <task>`; from the repo's main checkout, tear down what you provisioned
@@ -105,7 +101,7 @@ bypass gates or the queue.
    merge needs another PR *and* it touches persisted data, a surface other
    people use, or a shape another task builds on, within what the design
    covers; a contract change it does not cover is a hard stop. Anything
-   else is not a ruling: the `build` skill's "Decisions" shows what is not.
+   else is not a ruling (`build`, "Decisions").
 3. **`low` notes** follow `build`: optional, at most five, PR body only.
 4. **One digest per task.** Send every `review` ruling at once, just before
    the merge request: `engine tell <task> --operator <digest>`. Do not wait
@@ -130,7 +126,7 @@ The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
   decides the same root cause covers you: cite its sequence in the PR body
   and carry on. An open question on the plan already blocks your task's
   state changes and merge; if it is your root cause, end your turn and wait,
-  and cite it in the PR body.
+  citing it in the PR body.
 - **Ask:** `engine ask <task> <question>`, then end your turn.
 - **Plan-level questions:** a gate red on the default branch, or a host tool
   or sign-in that every task on that host needs, affects every task. Ask it

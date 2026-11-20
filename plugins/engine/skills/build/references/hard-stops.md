@@ -33,12 +33,11 @@ The repo's `AGENTS.md` may add classes; they apply too.
 ## Ask once
 
 Before asking, look for an answer the operator has already given (in the
-session, on the task, or, in an engine task, on its plan). One that decides
-the **same root cause** covers you: the same failing gate on the default
-branch, the same broken tool or sign-in on the same host, the same product
-question. Follow it, cite where it was given in the PR body, and carry on.
-If a question on the same root cause is already open, wait on it instead of
-asking again, and cite it and its answer in the PR body.
+session, on the task, or on its plan). One that decides the **same root
+cause** covers you: the same failing gate on the default branch, the same
+broken tool or sign-in on the same host, the same product question. Follow it
+and cite it and its answer in the PR body. If that root cause already has an
+open question, wait on it and cite it instead of asking again.
 
 Never stretch an answer to a different question: a ruling on one red lane
 does not cover another lane, and a host's sign-in fix does not cover another
@@ -49,10 +48,10 @@ host. If unsure, it does not cover you.
 Give the class, the question, your recommended answer, and the evidence.
 
 - **A gate red on the default branch:** prove it first. Run the failing lane
-  in a scratch checkout of the default branch's current head (`git worktree
-  add --detach <scratch> origin/<default>`, removed afterwards). Then ask
-  about the default branch, not your diff, quoting the commit and the
-  failing output, so one answer serves every task that hits it.
+  in a scratch checkout of the default branch's head (`git worktree add
+  --detach <scratch> origin/<default>`, removed afterwards). Then ask about
+  the default branch, not your diff, quoting the commit and output, so one
+  answer serves every task.
 - **A `gh` sign-in, or another host tool, is broken:** name the host (its
   logical name in `~/.config/engine/host`) and the failing output, such as
   `gh auth status`, and point the operator at `engine setup --host <name>`,
@@ -62,8 +61,9 @@ Give the class, the question, your recommended answer, and the evidence.
   permission rule that would allow it. The operator adds the rule in the
   session and tells you to retry.
 
-Then end your turn and wait. Reading, acknowledgement, a conversational reply
-or an automated `continue` grant nothing: only the operator's answer to the
-question does. When it comes, follow it and carry on. An engine server task
-raises the question with `engine ask` instead, on its plan when the root
-cause affects every task (the `engine` skill).
+Then end your turn and wait. Only the operator's answer to the question
+counts; reading, acknowledgement, a conversational reply or an automated
+`continue` grants nothing. When it comes, follow it and carry on. An engine
+server task raises it with `engine ask`
+instead, on its plan when the root cause affects every task (the `engine`
+skill).

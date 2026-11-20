@@ -11,8 +11,8 @@ host; `engine setup --host <name>` copies it. Each host keeps its own name in
 `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, a logical
-name, never a hostname or IP. Its `address` is passed to `ssh` as is and is
-never posted anywhere. Other hosts reach it over SSH.
+name, never a hostname or IP. Its `address` goes to `ssh` as is and is never
+posted anywhere.
 
 **Slots.** `(ram_gb - reserve_gb) / gb_per_session`, rounded down, is a
 host's concurrent sessions; `max_sessions` replaces it. Only a live window
