@@ -26,7 +26,7 @@ open while gh fails there or, on macOS, keeps its token in the keychain.
 ## Notifications
 
 1. **Hard stops and notices** reach the operator inbox: read it with
-   `engine inbox --operator` or in the dashboard (`control-server.md`).
+   `engine inbox --operator` or in the dashboard (`dashboard.md`).
 2. **Pull requests:** to hear about PRs and CI, run GitHub Mobile signed in as
    you, and watch each target repo, using Custom → Pull requests.
 
@@ -182,8 +182,10 @@ like:
   waiting task in it).
 - `engine updates <plan>` and `engine updates <task>`, from your read cursor
   (`--after <sequence>`).
-- `engine ui`: the same reads in a browser (`control-server.md`,
-  "Dashboard").
+- `engine task stop <task>`: ends a running task's session, keeps its
+  worktree and branch and holds it in `todo`; edit its card, then
+  `engine task resume <task>` (`control-server.md`).
+- `engine ui`: the same reads in a browser (`dashboard.md`).
 
 A task with many `review` rulings had a weak card (`execution-protocol.md`,
 "Rulings and hard stops"): raise it at the next Prepare.

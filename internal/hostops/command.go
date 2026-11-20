@@ -26,12 +26,13 @@ ops, each printing one JSON object:
   status                             windows and their sessions' states, newest
                                      runs, quota, free slots and free heavy slots
   collect --run-id <id>              a run directory and its run.json
-  release --name <repo>-<task> [--failed | --done [--head <sha>]]
+  release --name <repo>-<task> [--failed | --stopped | --done [--head <sha>]]
                                      close a session's window, remove its
-                                     worktree, kept when --failed, and delete
-                                     the harness's files for it; --done runs
-                                     the repo's dev worktree release first and
-                                     deletes the branch once it is merged
+                                     worktree, kept when --failed or --stopped,
+                                     and delete the harness's files for it;
+                                     --done runs the repo's dev worktree
+                                     release first and deletes the branch once
+                                     it is merged
   merge --repo <owner/repo> --pr <n> --head <sha> --method squash|merge|rebase
                                      merge a green PR pinned to its reviewed
                                      head, with this host's gh
@@ -92,8 +93,8 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	fs.SetOutput(io.Discard)
 	fs.Bool("json", true, "print one JSON object")
 	var req SpawnRequest
-	var name, head string
-	var failed, done bool
+	var name string
+	var rel releaseFlags
 	var merge MergeRequest
 	var ready ReadyRequest
 	run := map[string]func() (any, error){
@@ -115,7 +116,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		},
 		"status":  func() (any, error) { return ReadStatus(d) },
 		"collect": func() (any, error) { return Collect(d, req.RunID) },
-		"release": func() (any, error) { return release(d, name, failed, done, head) },
+		"release": func() (any, error) { return release(d, name, rel) },
 		"merge":   func() (any, error) { return Merge(d, merge) },
 		"ready":   func() (any, error) { return Ready(d, ready) },
 	}[op]
@@ -140,9 +141,10 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		fs.StringVar(&req.RunID, "run-id", "", "")
 	case "release":
 		fs.StringVar(&name, "name", "", "")
-		fs.BoolVar(&failed, "failed", false, "")
-		fs.BoolVar(&done, "done", false, "")
-		fs.StringVar(&head, "head", "", "")
+		fs.BoolVar(&rel.failed, "failed", false, "")
+		fs.BoolVar(&rel.stopped, "stopped", false, "")
+		fs.BoolVar(&rel.done, "done", false, "")
+		fs.StringVar(&rel.head, "head", "", "")
 	case "merge":
 		fs.StringVar(&merge.Repo, "repo", "", "")
 		fs.IntVar(&merge.PR, "pr", 0, "")
@@ -162,18 +164,26 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	return run()
 }
 
-// release runs the release op for its flags: at most one of --failed and
-// --done.
-func release(d Deps, name string, failed, done bool, head string) (Released, error) {
+// releaseFlags are the release op's outcome flags and the head --done merged.
+type releaseFlags struct {
+	failed, stopped, done bool
+	head                  string
+}
+
+// release runs the release op for its flags: at most one of --failed,
+// --stopped and --done.
+func release(d Deps, name string, f releaseFlags) (Released, error) {
 	switch {
-	case failed && done:
-		return Released{}, refuse("engine host release: --failed and --done cannot both be set")
-	case failed:
-		return Release(d, name, RunFailed, head)
-	case done:
-		return Release(d, name, RunDone, head)
+	case f.failed && f.done || f.failed && f.stopped || f.stopped && f.done:
+		return Released{}, refuse("engine host release: --failed, --stopped and --done are exclusive")
+	case f.failed:
+		return Release(d, name, RunFailed, f.head)
+	case f.stopped:
+		return Release(d, name, RunStopped, f.head)
+	case f.done:
+		return Release(d, name, RunDone, f.head)
 	}
-	return Release(d, name, RunEnded, head)
+	return Release(d, name, RunEnded, f.head)
 }
 
 // writeReply prints reply as one JSON object, with the envelope's fields added.
