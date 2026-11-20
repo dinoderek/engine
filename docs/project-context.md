@@ -27,7 +27,7 @@ repo picks the tools for its stack.
 
 ### 2. One command per job
 
-A single script (e.g. `./dev`) has the verbs `doctor` (fixes "can't run"), `run`, `test [lane | for <paths>]` (`for` runs the required lanes whose trigger
+A single script (e.g. `./dev`) has the verbs `doctor` (fixes "can't run"; engine runs it unattended before placing work, so it never prompts and exits non-zero while a gap remains), `run`, `test [lane | for <paths>]` (`for` runs the required lanes whose trigger
 patterns match the paths), `worktree create | release`, `deploy` and `deps`. A verb with no use is left out, and the usage says so.
 Run with no verb, the script prints that usage and does nothing else (engine
 reads it). Docs cite verbs, not commands.

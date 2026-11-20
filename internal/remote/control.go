@@ -3,6 +3,7 @@ package remote
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/dinoderek/engine/internal/hostops"
@@ -49,4 +50,41 @@ func ControlMerge(client Client, r hostops.MergeRequest) (hostops.Merged, error)
 		}
 		return hostops.Merged{}, fmt.Errorf("host client does not support merges")
 	}
+}
+
+// Ready asks the host whether the repo's sessions can work there (the ready
+// op). A client without the op says so in its error.
+func Ready(client Client, r hostops.ReadyRequest) (hostops.Readiness, error) {
+	switch c := client.(type) {
+	case Local:
+		return hostops.Ready(c.Deps, r)
+	case SSH:
+		args := []string{"--repo", r.Repo}
+		if r.Remote != "" {
+			args = append(args, "--remote", r.Remote)
+		}
+		if r.Fresh {
+			args = append(args, "--fresh")
+		}
+		var reply hostops.Readiness
+		return reply, c.call("ready", args, "", &reply)
+	default:
+		if c, ok := client.(interface {
+			Ready(hostops.ReadyRequest) (hostops.Readiness, error)
+		}); ok {
+			return c.Ready(r)
+		}
+		return hostops.Readiness{}, fmt.Errorf("host client does not support the readiness probe")
+	}
+}
+
+// RunReady probes the repo on the host afresh, prints the report to out, and
+// reports whether every check passed.
+func RunReady(client Client, repo string, out io.Writer) (bool, error) {
+	r, err := Ready(client, hostops.ReadyRequest{Repo: repo, Fresh: true})
+	if err != nil {
+		return false, err
+	}
+	hostops.ReportReady(out, r)
+	return r.OK(), nil
 }

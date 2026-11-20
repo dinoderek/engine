@@ -124,6 +124,10 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 	if err != nil {
 		return Spawned{}, err
 	}
+	path, err := s.host.PathPrefix(d.Home)
+	if err != nil {
+		return Spawned{}, err
+	}
 	joined, joinWarning := s.join(d, line)
 	if err := s.l.Trust(wt.Path, clone.Path, joined); err != nil {
 		return Spawned{}, err
@@ -142,7 +146,7 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 			return Spawned{}, err
 		}
 	}
-	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined, control: s.control})
+	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: s.Kickoff, joined: joined, control: s.control, path: path})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
 		return Spawned{}, fmt.Errorf("open the tmux window: %w", err)

@@ -94,6 +94,8 @@ type box struct {
 	noSystemd   bool
 	masked      int // sleep targets masked
 	down        bool
+	shims       []string // version manager shim directories under /home/me
+	clones      []string // repos engine has cloned for the server, owner/name
 
 	mutations []string
 	commands  []string
@@ -161,6 +163,10 @@ func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 		return b.write(cmd, stdin, errOut)
 	case cmd == "gh auth status -h github.com":
 		return b.ghStatus(out, errOut)
+	case cmd == shimsCommand:
+		return say("home /home/me\n%s", strings.Join(b.shims, "\n"))
+	case cmd == clonesCommand:
+		return say("%s", strings.Join(b.clones, "\n"))
 	case strings.HasPrefix(cmd, "uname -s") && b.noSystemd:
 		return say("%s\n", b.os)
 	case strings.HasPrefix(cmd, "uname -s"):
@@ -263,9 +269,13 @@ type rig struct {
 	checked    []string
 	check      func() (bool, error)
 	checkCodex func() (bool, error)
-	gh         session.RunFunc
-	info       version.Info
-	goMod      string // go.mod at the caller's commit, as GitHub serves it
+	// probed are the repos the readiness step probed, in order; ready
+	// answers each.
+	probed []string
+	ready  func(repo string) (bool, error)
+	gh     session.RunFunc
+	info   version.Info
+	goMod  string // go.mod at the caller's commit, as GitHub serves it
 	// claude and codex are the fake adapters, in the registry's order.
 	claude, codex *harnesstest.Fake
 }
@@ -290,6 +300,7 @@ func newRig(t *testing.T) *rig {
 	r.codex = fakeAdapter("codex", "codex", "codex sign-in", "codex home", "codex plugin", "codex daemon")
 	r.check = func() (bool, error) { return true, nil }
 	r.checkCodex = r.check
+	r.ready = func(string) (bool, error) { return true, nil }
 	r.gh = func(_ string, env []string, name string, args ...string) (string, error) {
 		if len(env) != 0 {
 			return "", fmt.Errorf("gh got env %v", env)
@@ -339,6 +350,11 @@ func (r *rig) deps() Deps {
 				return r.checkCodex()
 			}
 			return r.check()
+		},
+		Ready: func(repo string, out io.Writer) (bool, error) {
+			fmt.Fprintln(out, "the readiness report for "+repo)
+			r.probed = append(r.probed, repo)
+			return r.ready(repo)
 		},
 	}
 }

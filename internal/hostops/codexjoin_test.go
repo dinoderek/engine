@@ -445,3 +445,30 @@ func TestSpawnCodexDoesNotJoinUnrecordedEnvironment(t *testing.T) {
 		}
 	}
 }
+
+// A joined session's agent runs in the daemon, so the window hands it its
+// PATH, the host's path first, with the other variables.
+func TestSpawnCodexJoinedPassesThePathPrefix(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	cfg := filepath.Join(h.dir, ".config", "engine", "hosts.toml")
+	data, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, cfg, strings.Replace(string(data), `capabilities = ["macos"]`, `capabilities = ["macos"]`+"\npath = [\"~/shims\"]", 1), 0o600)
+	h.engineCodex(t)
+	argv, _ := h.fakeCodex(t)
+	tm := &tmuxFake{}
+	got, err := Spawn(codexSpawnDeps(t, h, tm, connected(h.dir), map[string]string{"CODEX_HOME": "/operator/codex"}), codexRequest(HandsOff))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runWindow(t, tm.command, tmuxEnv...)
+	want := `TMUX="/tmp/tmux-501/default,42,0",TMUX_PANE="%9",PATH="` + filepath.Join(h.dir, "shims") + `:/usr/bin:/bin"}`
+	if args := lines(t, argv); !slices.ContainsFunc(args, func(a string) bool {
+		return strings.HasPrefix(a, `shell_environment_policy.set={ENGINE_RUN_DIR="`+got.RunDir+`"`) && strings.HasSuffix(a, want)
+	}) {
+		t.Errorf("argv %q lacks the window's PATH, ending %s", args, want)
+	}
+}

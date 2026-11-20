@@ -214,6 +214,7 @@ func (v *validator) host(c *Config, name string, n *node) Host {
 	v.hostLimits(r, &h)
 	v.hostCapabilities(r, &h)
 	v.hostBin(r, &h)
+	v.hostPath(r, &h)
 	v.hostServices(r, &h)
 	r.finish()
 	return h
@@ -291,6 +292,26 @@ func (v *validator) hostBin(r *reader, h *Host) {
 		}
 	}
 	br.finish()
+}
+
+// hostPath reads the optional directories put first on a session's PATH:
+// each absolute or under ~/, with no colon, which PATH reads as a separator.
+func (v *validator) hostPath(r *reader, h *Host) {
+	list, at := r.list("path", false)
+	if at == nil {
+		return
+	}
+	for i, dir := range list {
+		switch {
+		case !strings.HasPrefix(dir, "/") && !strings.HasPrefix(dir, "~/"):
+			v.fail(at.pos, "%s: path entry %q must be an absolute directory or one under ~/", r.where, dir)
+		case strings.Contains(dir, ":"):
+			v.fail(at.pos, "%s: path entry %q must not contain a colon", r.where, dir)
+		case slices.Contains(list[:i], dir):
+			v.fail(at.pos, "%s: path lists %q twice", r.where, dir)
+		}
+	}
+	h.Path = list
 }
 
 // ratio reads optional weights after the harness definitions are known.

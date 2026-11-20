@@ -75,6 +75,9 @@ func TestObserverReachesHostsThroughTheHostConfig(t *testing.T) {
 	if c.Observer != obs || c.Service.Observe == nil || service.Observe == nil || service.Reconcile == nil {
 		t.Fatal("the session view is not wired to the observer")
 	}
+	if c.Ready == nil || c.Ready.Client == nil {
+		t.Fatal("the coordinator does not probe readiness")
+	}
 	if _, err := obs.Config(); err == nil {
 		t.Fatal("a missing hosts.toml was accepted")
 	}

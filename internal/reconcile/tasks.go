@@ -15,7 +15,7 @@ func place(v View) []Action {
 	wants := make([]Want, len(cands))
 	byID := map[string]Item{}
 	for i, t := range cands {
-		wants[i] = Want{ID: t.ID, Requires: t.Requires, Harness: t.Harness}
+		wants[i] = Want{ID: t.ID, Repo: t.Repo, Requires: t.Requires, Harness: t.Harness}
 		byID[t.ID] = t
 	}
 	var acts []Action

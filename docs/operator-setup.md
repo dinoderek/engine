@@ -50,7 +50,10 @@ them in the first such session after each install or update.
 
 **Every other host: `engine setup --host <name>`**, run from the Mac and safe
 to rerun. It brings the host to the Mac's pushed engine commit, plugin and
-config, and ends with `engine start --check --host <name>`. The engine is built
+config, and ends with `engine start --check --host <name>`, a suggested
+`path` for any mise, asdf or nvm shims the host's `path` leaves out, and a
+fresh readiness probe of every repo engine has cloned there
+(`readiness.md`). The engine is built
 with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
 from GitHub. Setup changes only engine's own files (`~/.config/engine/`,
 `~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, Codex's

@@ -36,6 +36,11 @@ ops, each printing one JSON object:
   merge --repo <owner/repo> --pr <n> --head <sha> --method squash|merge|rebase
                                      merge a green PR pinned to its reviewed
                                      head, with this host's gh
+  ready --repo <owner/repo> [--remote <url>] [--fresh]
+                                     whether the repo's sessions can work here:
+                                     gh's sign-in and the repo's doctor on its
+                                     default branch's head, cached until the
+                                     head or hosts.toml changes, or 6 hours pass
 `
 
 // Envelope is what every reply carries.
@@ -91,6 +96,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	var name string
 	var rel releaseFlags
 	var merge MergeRequest
+	var ready ReadyRequest
 	run := map[string]func() (any, error){
 		"control-spawn": func() (any, error) {
 			r, err := readControl(in)
@@ -112,6 +118,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		"collect": func() (any, error) { return Collect(d, req.RunID) },
 		"release": func() (any, error) { return release(d, name, rel) },
 		"merge":   func() (any, error) { return Merge(d, merge) },
+		"ready":   func() (any, error) { return Ready(d, ready) },
 	}[op]
 	if run == nil {
 		return nil, refuse("unknown op %q", op)
@@ -143,6 +150,10 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		fs.IntVar(&merge.PR, "pr", 0, "")
 		fs.StringVar(&merge.Head, "head", "", "")
 		fs.StringVar(&merge.Method, "method", "", "")
+	case "ready":
+		fs.StringVar(&ready.Repo, "repo", "", "")
+		fs.StringVar(&ready.Remote, "remote", "", "")
+		fs.BoolVar(&ready.Fresh, "fresh", false, "")
 	}
 	if err := fs.Parse(args); err != nil {
 		return nil, refuse("engine host %s: %v", op, err)

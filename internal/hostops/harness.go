@@ -40,17 +40,18 @@ func adapterFor(d Deps, name string) (harness.Adapter, error) {
 }
 
 // launch is what a window runs: the expanded launch line, the session's
-// folder, the run directory, the mode, the kickoff, and whether the session
-// joins remote control.
+// folder, the run directory, the mode, the kickoff, whether the session
+// joins remote control, and the host's directories put first on PATH.
 type launch struct {
 	line, dir, runDir, mode, kickoff string
 	joined                           bool
 	control                          *ControlRequest
+	path                             []string
 }
 
 // harnessLaunch is l as the adapter takes it.
 func (l launch) harnessLaunch() harness.Launch {
-	out := harness.Launch{Line: l.line, Dir: l.dir, RunDir: l.runDir, Kickoff: l.kickoff, Unattended: l.mode == HandsOff, Joined: l.joined}
+	out := harness.Launch{Line: l.line, Dir: l.dir, RunDir: l.runDir, Kickoff: l.kickoff, Unattended: l.mode == HandsOff, Joined: l.joined, Path: l.path}
 	if l.control != nil {
 		out.ServerURL, out.TokenFile, out.Attempt = l.control.URL, filepath.Join(l.runDir, "server-token"), l.control.Attempt
 	}
@@ -58,9 +59,9 @@ func (l launch) harnessLaunch() harness.Launch {
 }
 
 func launchCommand(name string, h harness.Launcher, l launch) string {
-	script := ""
+	script := hosts.PathExport(l.path)
 	if l.control != nil {
-		script = "export ENGINE_SERVER_URL=" + hosts.ShellWord(l.control.URL) + " ENGINE_SERVER_TOKEN_FILE=" + hosts.ShellWord(filepath.Join(l.runDir, "server-token")) + " ENGINE_ATTEMPT_ID=" + hosts.ShellWord(l.control.Attempt) + " && "
+		script += "export ENGINE_SERVER_URL=" + hosts.ShellWord(l.control.URL) + " ENGINE_SERVER_TOKEN_FILE=" + hosts.ShellWord(filepath.Join(l.runDir, "server-token")) + " ENGINE_ATTEMPT_ID=" + hosts.ShellWord(l.control.Attempt) + " && "
 	}
 	// The hooks log to the run directory and, unattended, deny or log.
 	script += "export " + session.RunDirVar + "=" + hosts.ShellWord(l.runDir) + " && "
