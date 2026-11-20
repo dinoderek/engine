@@ -25,6 +25,7 @@ func Decide(v View) []Action {
 	acts = append(acts, releaseStopped(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, reaps(v)...)
+	acts = append(acts, limitNotes(v)...)
 	placed := place(v)
 	acts = append(acts, placed...)
 	if len(v.Tasks) > 0 && !slices.ContainsFunc(v.Tasks, Item.open) {
@@ -124,14 +125,21 @@ func limit(v View, t Item) []Action {
 	return nil
 }
 
-// deadSessions ends the attempt of a held open task whose session is dead.
+// deadSessions ends the attempt of a held open task whose session is dead:
+// at a usage limit when its run's limit marker is set.
 func deadSessions(v View) []Action {
 	var acts []Action
 	for _, t := range v.Tasks {
 		s := t.Session
-		if s != nil && t.open() && t.claimed() && !s.Live && !s.Unknown {
-			acts = append(acts, Action{Kind: EndAttempt, Item: t.ID, Attempt: t.Current.ID, Text: "its session " + s.Name + " has died", Tail: s.PaneTail})
+		if s == nil || !t.open() || !t.claimed() || s.Live || s.Unknown {
+			continue
 		}
+		a := Action{Kind: EndAttempt, Item: t.ID, Attempt: t.Current.ID, Text: "its session " + s.Name + " has died", Tail: s.PaneTail}
+		if s.DiedAtLimit {
+			a.Text = "its session " + s.Name + " died at a usage limit"
+			a.AtLimit, a.ResetsAt, a.Probe = true, s.ResetsAt, v.Fleet.probe(t)
+		}
+		acts = append(acts, a)
 	}
 	return acts
 }
@@ -155,6 +163,10 @@ func releaseStopped(v View) []Action {
 func stalls(v View) []Action {
 	var acts []Action
 	for _, t := range v.Tasks {
+		if a, ok := probeHit(v, t); ok {
+			acts = append(acts, a)
+			continue
+		}
 		if t.open() && !t.Stopped {
 			acts = append(acts, limit(v, t)...)
 		}

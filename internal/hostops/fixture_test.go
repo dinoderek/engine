@@ -217,6 +217,9 @@ type gitFake struct {
 	// dev is the usage the clone's own dev prints with no verb; its
 	// worktree create makes the worktree as git's worktree add does.
 	dev string
+	// mark is the run the task's branch is marked with, and the branch is
+	// then at commit def.
+	mark string
 }
 
 func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string, error) {
@@ -228,6 +231,10 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		}
 	}
 	switch {
+	case f.mark != "" && strings.Contains(line, "config --get branch."):
+		return f.mark + "\n", nil
+	case f.mark != "" && (strings.HasSuffix(line, "rev-parse HEAD") || strings.Contains(line, "rev-parse refs/heads/")):
+		return "def\n", nil
 	case strings.HasSuffix(name, "/dev") && len(args) == 0:
 		return f.dev, nil
 	case strings.HasSuffix(name, "/dev") && len(args) == 3 && args[1] == "create":

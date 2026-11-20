@@ -43,7 +43,7 @@ func recordLimit(in io.Reader, dir string, now time.Time) error {
 		if e.Error != "rate_limit" && e.Error != "billing_error" {
 			return nil
 		}
-		r := Limit{Since: now.Unix(), ResetsAt: limitReset(e, dir), Error: e.Error}
+		r := Limit{Since: now.Unix(), ResetsAt: limitReset(e, raw, dir, now), Error: e.Error}
 		if err := logLimit(dir, r, raw); err != nil {
 			return err
 		}
@@ -56,7 +56,11 @@ func recordLimit(in io.Reader, dir string, now time.Time) error {
 	return nil
 }
 
-func limitReset(e limitEvent, dir string) int64 {
+// limitReset is a usage stop's reset: the hook's own value, then its
+// details', then the newest quota reading's, then a "resets <time>" in the
+// stop's message, read in now's zone (the host's) as the next such time.
+// Zero is unknown.
+func limitReset(e limitEvent, raw json.RawMessage, dir string, now time.Time) int64 {
 	if reset := resetTime(e.ResetsAt); reset > 0 {
 		return reset
 	}
@@ -68,6 +72,15 @@ func limitReset(e limitEvent, dir string) int64 {
 			return reset
 		}
 	}
+	if reset := quotaReset(dir); reset > 0 {
+		return reset
+	}
+	return messageReset(raw, now)
+}
+
+// quotaReset is the latest reset of an exhausted window in the run's quota
+// reading, else the five-hour window's, else zero.
+func quotaReset(dir string) int64 {
 	var q quotaReading
 	data, _ := os.ReadFile(filepath.Join(dir, session.QuotaFile))
 	if json.Unmarshal(data, &q) != nil {

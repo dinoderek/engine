@@ -36,7 +36,7 @@ func headOf(t *testing.T, wt Worktree) (branch, commit string) {
 
 func TestCreateWorktreeRefusesOriginsBranchOnAFirstAttempt(t *testing.T) {
 	_, r, clone, _ := resumeFixture(t, "")
-	_, err := r.CreateWorktree(clone, 5, false)
+	_, err := r.CreateWorktree(clone, 5, false, "")
 	var takenErr *BranchTakenError
 	if !errors.As(err, &takenErr) || !strings.Contains(err.Error(), "origin already has branch task/r-5") {
 		t.Fatalf("a stray branch must never be adopted: err = %v", err)
@@ -48,7 +48,7 @@ func TestCreateWorktreeRefusesOriginsBranchOnAFirstAttempt(t *testing.T) {
 
 func TestCreateWorktreeResumesFromOriginsBranch(t *testing.T) {
 	remote, r, clone, tip := resumeFixture(t, "")
-	wt, err := r.CreateWorktree(clone, 5, true)
+	wt, err := r.CreateWorktree(clone, 5, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestCreateWorktreeResumesFromOriginsBranch(t *testing.T) {
 	if _, err := r.Sync(mustRepo(t, "o/r")); err != nil {
 		t.Fatal(err)
 	}
-	wt, err = r.CreateWorktree(clone, 5, true)
+	wt, err = r.CreateWorktree(clone, 5, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCreateWorktreeRefusesALocalBranchAheadOfOrigin(t *testing.T) {
 	mustGit(t, clone.Path+"-wt", "commit", "--quiet", "--allow-empty", "-m", "unpushed")
 	mustGit(t, clone.Path, "worktree", "remove", clone.Path+"-wt")
 	local := mustGit(t, clone.Path, "rev-parse", "task/r-5")
-	_, err := r.CreateWorktree(clone, 5, true)
+	_, err := r.CreateWorktree(clone, 5, true, "")
 	var takenErr *BranchTakenError
 	if !errors.As(err, &takenErr) || !strings.Contains(err.Error(), "has commits that origin lacks") {
 		t.Fatalf("err = %v", err)
@@ -99,7 +99,7 @@ func TestCreateWorktreeResumesWithTheReposOwnCommand(t *testing.T) {
 		"if git show-ref --verify --quiet \"refs/heads/$3\"; then git worktree add --quiet \"$PWD-custom\" \"$3\"\n" +
 		"else git worktree add --quiet --no-track -b \"$3\" \"$PWD-custom\" origin/main; fi\n"
 	_, r, clone, tip := resumeFixture(t, script)
-	wt, err := r.CreateWorktree(clone, 5, true)
+	wt, err := r.CreateWorktree(clone, 5, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestCreateWorktreeResumesWithTheReposOwnCommand(t *testing.T) {
 
 func TestCreateWorktreeOnResumeAdoptsTheWorktreeAnEarlierAttemptLeft(t *testing.T) {
 	remote, r, clone, _ := resumeFixture(t, "")
-	left, err := r.CreateWorktree(clone, 5, true)
+	left, err := r.CreateWorktree(clone, 5, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestCreateWorktreeOnResumeAdoptsTheWorktreeAnEarlierAttemptLeft(t *testing.
 	if _, err := r.Sync(mustRepo(t, "o/r")); err != nil {
 		t.Fatal(err)
 	}
-	wt, err := r.CreateWorktree(clone, 5, true)
+	wt, err := r.CreateWorktree(clone, 5, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,13 +153,13 @@ func TestCreateWorktreeOnResumeRefusesALeftWorktreeWithWork(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, r, clone, _ := resumeFixture(t, "")
-			left, err := r.CreateWorktree(clone, 5, true)
+			left, err := r.CreateWorktree(clone, 5, true, "")
 			if err != nil {
 				t.Fatal(err)
 			}
 			tt.work(t, left.Path)
 			before := mustGit(t, left.Path, "rev-parse", "HEAD")
-			_, err = r.CreateWorktree(clone, 5, true)
+			_, err = r.CreateWorktree(clone, 5, true, "")
 			var takenErr *BranchTakenError
 			if !errors.As(err, &takenErr) || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("err = %v, want a BranchTakenError with %q", err, tt.wantErr)

@@ -64,18 +64,27 @@ func Vanished(st *State, item Item) bool {
 		item.State != "done" && item.State != "failed"
 }
 
-// claimed reports whether at's session claimed its task: it wrote to the
+// Claimed reports whether at's session claimed its task: it wrote to the
 // server, or its window was seen live for ClaimWait.
-func claimed(st *State, at Attempt) bool {
-	if !at.LiveAt.IsZero() && at.LiveAt.Sub(at.Started) >= ClaimWait {
-		return true
-	}
+func Claimed(st *State, at Attempt) bool {
+	return claimedBy(authors(st), at)
+}
+
+// claimed is Claimed.
+func claimed(st *State, at Attempt) bool { return Claimed(st, at) }
+
+// claimedBy is Claimed, given the authors of every update.
+func claimedBy(wrote map[string]bool, at Attempt) bool {
+	return !at.LiveAt.IsZero() && at.LiveAt.Sub(at.Started) >= ClaimWait || wrote[at.ID]
+}
+
+// authors are the names that wrote an update.
+func authors(st *State) map[string]bool {
+	out := map[string]bool{}
 	for _, u := range st.Updates {
-		if u.Author == at.ID {
-			return true
-		}
+		out[u.Author] = true
 	}
-	return false
+	return out
 }
 
 // earlyDeaths counts the earlier attempts of at's task that died before
@@ -95,13 +104,14 @@ func earlyDeaths(st *State, at Attempt) int {
 // its state alone, and its merge queue entry stays queued. A window that died
 // before its session claimed the task ends early-death the first time, with
 // a running task back in todo, and failed the second. Otherwise it ends
-// failed and so does the task, which leaves the queue.
+// failed and so does the task, which leaves the queue. A window that died at
+// a usage limit (at.Limited) is always resumable: the limit paused the work.
 func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	item := st.Items[at.Item]
 	at.State, at.Ended = "ended", s.now()
 	if item.Kind == "task" && item.Attempt == at.ID && item.State != "done" && item.State != "failed" {
 		at.Reason = EndFailed
-		resume := resumable(st, item, at)
+		resume := at.Limited || resumable(st, item, at)
 		early := !resume && !claimed(st, at)
 		switch {
 		case resume:
@@ -154,6 +164,19 @@ func (s Service) endUnlaunched(st *State, a Actor, at Attempt, body string) Atte
 // the session died before claiming its task. It is idempotent and returns
 // the ended attempt.
 func (s Service) EndDead(id, body, tail string) (Attempt, error) {
+	return s.end(id, body, func(at *Attempt) { at.Tail = tail })
+}
+
+// EndAtLimit is EndDead for a window that died with its run's usage limit
+// marker set: the attempt ends vanished, recording the limit and its reset
+// (zero when unknown), and its task is dispatched again once the reset
+// passes (HarnessLimits).
+func (s Service) EndAtLimit(id, body string, resetsAt int64) (Attempt, error) {
+	return s.end(id, body, func(at *Attempt) { at.Limited, at.ResetsAt = true, resetsAt })
+}
+
+// end ends attempt id, set as dead, unless it has ended already.
+func (s Service) end(id, body string, set func(*Attempt)) (Attempt, error) {
 	var out Attempt
 	err := s.Store.Transaction(func(st *State) error {
 		at, ok := st.Attempts[id]
@@ -164,7 +187,7 @@ func (s Service) EndDead(id, body, tail string) (Attempt, error) {
 			out = at
 			return nil
 		}
-		at.Tail = tail
+		set(&at)
 		out = s.endDead(st, Actor{Name: "coordinator", Role: "coordinator"}, at, body)
 		return nil
 	})

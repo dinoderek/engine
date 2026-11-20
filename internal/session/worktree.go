@@ -16,13 +16,21 @@ const worktreeCommand = "dev"
 
 // Worktree is a task's worktree. Created says CreateWorktree made it, and
 // NewBranch that it made the branch too, so RemoveWorktree knows what is its
-// own to remove.
+// own to remove. Adopted says it opened on a branch, or in a worktree, an
+// earlier attempt left, and Head is then the commit it is at.
 type Worktree struct {
 	Path      string
 	Branch    string
 	Created   bool
 	NewBranch bool
+	Adopted   bool
+	Head      string
 }
+
+// runMark is the git config entry, branch.<branch>.engineRun, that names the
+// run which created a task's branch, so a later attempt of the task knows the
+// branch as its own.
+const runMark = "engineRun"
 
 // TaskName is the session name of a task, <repo>-<task>: the tmux window, the
 // remote-control name, and part of the branch.
@@ -53,9 +61,16 @@ func Branch(repo Repo, task int) string {
 // to origin's tip, when it is clean and holds no commits origin lacks;
 // otherwise it is refused, so that work is never discarded.
 //
+// run is the run the worktree is for, or "" for none. The branch it opens on
+// is marked with it (runMark). A branch marked by a run of the same task, which
+// an earlier attempt created whether or not it opened a window, is adopted
+// as it is, with any worktree on it, even with commits origin lacks or
+// uncommitted changes: they are that task's own work. It is fast-forwarded
+// to origin's tip only when that loses nothing.
+//
 // When it made the worktree but a later check fails, it returns the worktree
 // with the error, so the caller can remove it.
-func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, error) {
+func (r Repos) CreateWorktree(clone Clone, task int, resume bool, run string) (Worktree, error) {
 	if task < 1 {
 		return Worktree{}, fmt.Errorf("task number must be positive, got %d", task)
 	}
@@ -65,12 +80,25 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, err
 		return Worktree{}, err
 	}
 	defer unlock()
-	adopt, existing, err := r.prepareBranch(clone, branch, resume)
+	own := r.ownBranch(clone, branch, run)
+	adopt, existing, err := r.prepareBranch(clone, branch, resume, own)
 	if err != nil {
 		return Worktree{}, err
 	}
 	if existing != "" {
-		return Worktree{Path: existing, Branch: branch}, nil
+		head, err := r.git(existing, "rev-parse", "HEAD")
+		if err != nil {
+			return Worktree{}, fmt.Errorf("read the head of %s: %w", existing, err)
+		}
+		return Worktree{Path: existing, Branch: branch, Adopted: true, Head: strings.TrimSpace(head)}, r.mark(clone, branch, run)
+	}
+	tip := ""
+	if own && adopt {
+		out, err := r.git(clone.Path, "rev-parse", "refs/heads/"+branch)
+		if err != nil {
+			return Worktree{}, fmt.Errorf("read the tip of %s: %w", branch, err)
+		}
+		tip = strings.TrimSpace(out)
 	}
 	if script := filepath.Join(clone.Path, worktreeCommand); r.provides(clone.Path, script, "worktree create") {
 		// The repo's command checks out a local branch that exists as it is.
@@ -93,13 +121,40 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool) (Worktree, err
 	if path == "" {
 		return Worktree{}, fmt.Errorf("the worktree command ran but no worktree has branch %s", branch)
 	}
-	wt := Worktree{Path: path, Branch: branch, Created: true, NewBranch: !adopt}
-	if adopt {
-		if err := r.checkAtOrigin(clone, path, branch); err != nil {
-			return wt, err
-		}
+	wt := Worktree{Path: path, Branch: branch, Created: true, NewBranch: !adopt, Adopted: adopt}
+	switch {
+	case tip != "":
+		wt.Head, err = r.checkAt(path, branch, tip)
+	case adopt:
+		wt.Head, err = r.checkAtOrigin(clone, path, branch)
 	}
-	return wt, nil
+	if err != nil {
+		return wt, err
+	}
+	return wt, r.mark(clone, branch, run)
+}
+
+// mark records run as the branch's (runMark), so a later attempt of the
+// task adopts it. Without a run nothing is written.
+func (r Repos) mark(clone Clone, branch, run string) error {
+	if run == "" {
+		return nil
+	}
+	if _, err := r.git(clone.Path, "config", "branch."+branch+"."+runMark, run); err != nil {
+		return fmt.Errorf("mark branch %s as run %s's: %w", branch, run, err)
+	}
+	return nil
+}
+
+// ownBranch reports whether branch is marked as made by a run of its own
+// task, whose runs are named <task name>-<attempt>. Without a run nothing
+// is read.
+func (r Repos) ownBranch(clone Clone, branch, run string) bool {
+	if run == "" {
+		return false
+	}
+	mark, err := r.git(clone.Path, "config", "--get", "branch."+branch+"."+runMark)
+	return err == nil && strings.HasPrefix(strings.TrimSpace(mark), strings.TrimPrefix(branch, "task/")+"-")
 }
 
 // RemoveWorktree undoes CreateWorktree: when that call made the worktree,
@@ -143,17 +198,30 @@ func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 
 // checkAtOrigin fails when a resumed worktree is not at origin's tip of its
 // branch, as when a repo's command made the branch anew rather than checking
-// it out as it is.
-func (r Repos) checkAtOrigin(clone Clone, path, branch string) error {
+// it out as it is. It returns the head.
+func (r Repos) checkAtOrigin(clone Clone, path, branch string) (string, error) {
 	head, err := r.git(path, "rev-parse", "HEAD")
 	if err != nil {
-		return fmt.Errorf("read the head of %s: %w", path, err)
+		return "", fmt.Errorf("read the head of %s: %w", path, err)
 	}
 	tip, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
 	if err != nil || strings.TrimSpace(head) != strings.TrimSpace(tip) {
-		return fmt.Errorf("the worktree at %s is not at origin's tip of %s; the repo's worktree command must check out an existing branch as it is", path, branch)
+		return "", fmt.Errorf("the worktree at %s is not at origin's tip of %s; the repo's worktree command must check out an existing branch as it is", path, branch)
 	}
-	return nil
+	return strings.TrimSpace(head), nil
+}
+
+// checkAt fails when a worktree opened on a branch an earlier attempt left
+// is not at that branch's tip, tip. It returns the head.
+func (r Repos) checkAt(path, branch, tip string) (string, error) {
+	head, err := r.git(path, "rev-parse", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("read the head of %s: %w", path, err)
+	}
+	if strings.TrimSpace(head) != tip {
+		return "", fmt.Errorf("the worktree at %s is not at %s's tip %s, which an earlier attempt left; the repo's worktree command must check out an existing branch as it is", path, branch, tip)
+	}
+	return tip, nil
 }
 
 // BranchTakenError is a worktree CreateWorktree did not create, changing
@@ -171,19 +239,26 @@ func taken(format string, args ...any) error {
 // by a session that ended before it did any work, is deleted instead, so
 // the task can start again. On resume, a branch that origin has is set to
 // origin's tip locally instead, and adopt says the worktree opens on it; a
-// worktree already on the branch is adopted, and existing is its path.
-func (r Repos) prepareBranch(clone Clone, branch string, resume bool) (adopt bool, existing string, err error) {
+// worktree already on the branch is adopted, and existing is its path. A
+// branch of the task's own (own, CreateWorktree) is adopted on any attempt.
+func (r Repos) prepareBranch(clone Clone, branch string, resume, own bool) (adopt bool, existing string, err error) {
 	path, err := r.worktreeOf(clone, branch)
 	if err != nil {
 		return false, "", err
 	}
 	if path != "" {
+		if own {
+			return false, path, r.adoptOwnWorktree(clone, branch, path)
+		}
 		if !resume {
 			return false, "", taken("branch %s already has a worktree at %s; release it first", branch, path)
 		}
 		return false, path, r.adoptWorktree(clone, branch, path)
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch); err == nil {
+		if own {
+			return true, "", r.followOwn(clone, branch)
+		}
 		if !resume {
 			return false, "", taken("origin already has branch %s, from an earlier run; delete it or continue that work by hand", branch)
 		}
@@ -191,6 +266,9 @@ func (r Repos) prepareBranch(clone Clone, branch string, resume bool) (adopt boo
 	}
 	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
 		return false, "", nil
+	}
+	if own {
+		return true, "", nil
 	}
 	if _, err := r.git(clone.Path, "merge-base", "--is-ancestor", "refs/heads/"+branch, "refs/remotes/origin/"+clone.Default); err != nil {
 		return false, "", taken("branch %s already exists in %s with commits of its own and no worktree; delete it or check it out first", branch, clone.Path)
@@ -234,6 +312,56 @@ func (r Repos) adoptWorktree(clone Clone, branch, path string) error {
 		return fmt.Errorf("fast-forward the worktree at %s to %s: %w", path, tip, err)
 	}
 	return nil
+}
+
+// adoptOwnWorktree readies the worktree an earlier attempt of the task left
+// on its own branch: as it is, uncommitted changes and commits origin lacks
+// included, fast-forwarded to origin's tip of the branch only when it is
+// clean and behind it. It refuses engine's clone itself, and a worktree whose
+// folder is gone.
+func (r Repos) adoptOwnWorktree(clone Clone, branch, path string) error {
+	if filepath.Clean(path) == filepath.Clean(clone.Path) {
+		return taken("branch %s is checked out in engine's clone %s; check out its default branch there first", branch, path)
+	}
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return taken("branch %s has a worktree at %s whose folder is gone; run git -C %s worktree prune first", branch, path, clone.Path)
+	}
+	status, err := r.git(path, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("read the status of the worktree at %s: %w", path, err)
+	}
+	tip := "refs/remotes/origin/" + branch
+	if strings.TrimSpace(status) != "" || !r.behind(path, "HEAD", tip) {
+		return nil
+	}
+	if _, err := r.git(path, "merge", "--ff-only", "--quiet", tip); err != nil {
+		return fmt.Errorf("fast-forward the worktree at %s to %s: %w", path, tip, err)
+	}
+	return nil
+}
+
+// followOwn readies the task's own local branch, when origin has it too: set
+// to origin's tip when it is absent or behind it, and otherwise kept as it
+// is, since its commits are the task's own work.
+func (r Repos) followOwn(clone Clone, branch string) error {
+	local, remote := "refs/heads/"+branch, "refs/remotes/origin/"+branch
+	if _, err := r.git(clone.Path, "rev-parse", "--verify", "--quiet", local); err == nil && !r.behind(clone.Path, local, remote) {
+		return nil
+	}
+	if _, err := r.git(clone.Path, "branch", "--force", "--no-track", branch, remote); err != nil {
+		return fmt.Errorf("set branch %s to origin's tip: %w", branch, err)
+	}
+	return nil
+}
+
+// behind reports whether ref is an ancestor of tip, which both exist: moving
+// it there loses nothing.
+func (r Repos) behind(dir, ref, tip string) bool {
+	if _, err := r.git(dir, "rev-parse", "--verify", "--quiet", tip); err != nil {
+		return false
+	}
+	_, err := r.git(dir, "merge-base", "--is-ancestor", ref, tip)
+	return err == nil
 }
 
 // followOrigin sets the local branch to origin's tip, creating it when it is

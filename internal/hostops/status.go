@@ -90,6 +90,15 @@ type Run struct {
 	// PaneTail is the last PaneTailLines lines of the run's pane log, for a
 	// run with no live window whose log was written within PaneTailAge.
 	PaneTail string `json:"pane_tail,omitempty"`
+	// Limit is set for a run with no live window whose harness marker says
+	// it stopped at a usage limit: it died there.
+	Limit *RunLimit `json:"limit,omitempty"`
+}
+
+// RunLimit is the usage limit a run with no live window stopped at.
+type RunLimit struct {
+	// ResetsAt is the reset in epoch seconds, or zero when unknown.
+	ResetsAt int64 `json:"resets_at,omitempty"`
 }
 
 // ReadStatus reads this host's windows and the state of each, each harness's
@@ -146,13 +155,14 @@ func ReadStatus(d Deps) (Status, error) {
 	live, heavy := session.SlotsHeld(windows, runs)
 	s.FreeSlots = max(s.Slots-live, 0)
 	s.FreeHeavySlots = min(max(s.HeavySlots-heavy, 0), s.FreeSlots)
-	s.Runs = d.listRuns(runs, s.Windows)
+	s.Runs = d.listRuns(adapters, runs, s.Windows)
 	return s, nil
 }
 
 // listRuns is the newest run of each session name, sorted by name. A run
-// with no live window carries the tail of its pane log.
-func (d Deps) listRuns(runs map[string]session.Run, windows []Window) []Run {
+// with no live window carries the tail of its pane log, and the usage limit
+// its harness's marker says it stopped at.
+func (d Deps) listRuns(a harness.Adapters, runs map[string]session.Run, windows []Window) []Run {
 	alive := map[string]bool{}
 	for _, w := range windows {
 		alive[w.Name] = alive[w.Name] || w.Alive
@@ -162,11 +172,28 @@ func (d Deps) listRuns(runs map[string]session.Run, windows []Window) []Run {
 		run := Run{Name: name, Dir: r.Dir, Record: r.Record}
 		if !alive[name] {
 			run.PaneTail = d.paneTail(r.Dir)
+			run.Limit = runLimit(a, r)
 		}
 		out = append(out, run)
 	}
 	slices.SortFunc(out, func(a, b Run) int { return strings.Compare(a.Name, b.Name) })
 	return out
+}
+
+// runLimit is the usage limit r's harness marker records, or nil.
+func runLimit(a harness.Adapters, r session.Run) *RunLimit {
+	h, ok := a.Get(r.Record.Harness)
+	if !ok {
+		return nil
+	}
+	m, ok := h.(harness.LimitMarker)
+	if !ok {
+		return nil
+	}
+	if reset, limited := m.RunLimit(r.Dir); limited {
+		return &RunLimit{ResetsAt: reset}
+	}
+	return nil
 }
 
 // observe has each adapter read its harness on this host, given the newest

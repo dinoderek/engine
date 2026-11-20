@@ -42,6 +42,9 @@ func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Con
 // vanished task resumes, a session that died before claiming its task is
 // dispatched again once, and any other death fails the task.
 func (c *Coordinator) endAttempt(a reconcile.Action) error {
+	if a.AtLimit {
+		return c.endAtLimit(a)
+	}
 	at, err := c.Service.EndDead(a.Attempt, a.Text, a.Tail)
 	if err != nil {
 		return err
@@ -59,6 +62,22 @@ func (c *Coordinator) endAttempt(a reconcile.Action) error {
 		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(st, at)))
 	}
 	return c.notice(a.Item, "failed/"+at.ID, a.Text)
+}
+
+// endAtLimit ends the attempt of a session that died at a usage limit,
+// resumable, and tells the operator when its task is dispatched again: a
+// probe's end, which only restarts the wait, tells no one.
+func (c *Coordinator) endAtLimit(a reconcile.Action) error {
+	at, err := c.Service.EndAtLimit(a.Attempt, a.Text, a.ResetsAt)
+	if err != nil || a.Probe {
+		return err
+	}
+	when := fmt.Sprintf("by a probe every %s, the reset being unknown", reconcile.ProbeEvery)
+	if at.ResetsAt > 0 {
+		when = "at " + time.Unix(at.ResetsAt, 0).Add(reconcile.ResumeDelay).UTC().Format(time.RFC3339) + ", once the reset has passed"
+	}
+	return c.notice(a.Item, "limit-death/"+at.ID, fmt.Sprintf("%s; the task stays resumable and is dispatched again %s, from its own branch. "+
+		"Until then no task starts on %s on %s; another host or harness with quota may take it.", a.Text, when, at.Harness, at.Host))
 }
 
 // earlyAttempts are the attempts of at's task that died before claiming it,

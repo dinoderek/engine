@@ -76,6 +76,10 @@ type Attempt struct {
 	// pane log then, when the host showed one.
 	Early bool   `json:"early,omitempty"`
 	Tail  string `json:"tail,omitempty"`
+	// Limited is set when the session ended at a usage limit: its window
+	// died with the run's limit marker set. ResetsAt is then that limit's
+	// reset, or zero when unknown, and the attempt ended vanished.
+	Limited bool `json:"limited,omitempty"`
 }
 
 // Update is immutable history; acknowledgement and resolution are separate records.

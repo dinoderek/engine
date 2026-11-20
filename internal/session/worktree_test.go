@@ -65,7 +65,7 @@ func worktreeFixture(t *testing.T, withDev bool, mode os.FileMode) (Repos, Clone
 
 func TestCreateWorktreeWithTheReposOwnCommand(t *testing.T) {
 	r, clone, f, wt := worktreeFixture(t, true, 0o755)
-	got, err := r.CreateWorktree(clone, 7, false)
+	got, err := r.CreateWorktree(clone, 7, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestCreateWorktreeProbesWithProbeWhenSet(t *testing.T) {
 		probed = append(probed, strings.Join(append([]string{name}, args...), " "))
 		return "", errBoom
 	}
-	got, err := r.CreateWorktree(clone, 7, false)
+	got, err := r.CreateWorktree(clone, 7, false, "")
 	if err != nil || got.Path != wt {
 		t.Fatalf("worktree = %+v, %v", got, err)
 	}
@@ -126,7 +126,7 @@ func TestCreateWorktreeFallsBackToGitWhenTheReposDevHasNoWorktreeVerb(t *testing
 	r, clone, f, wt := worktreeFixture(t, true, 0o755)
 	// A repo's own unrelated ./dev, here an argparse script with other verbs.
 	f.replies[3].out = "usage: ./dev [-h] {test,docs} ...\n./dev: error: the following arguments are required: command\n"
-	got, err := r.CreateWorktree(clone, 7, false)
+	got, err := r.CreateWorktree(clone, 7, false, "")
 	if err != nil || got.Path != wt || got.Branch != "task/r-7" {
 		t.Fatalf("worktree = %+v, %v", got, err)
 	}
@@ -151,7 +151,7 @@ func TestCreateWorktreeFallsBackToGit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r, clone, f, wt := worktreeFixture(t, tt.withDev, tt.mode)
-			got, err := r.CreateWorktree(clone, 7, false)
+			got, err := r.CreateWorktree(clone, 7, false, "")
 			if err != nil || got.Path != wt || got.Branch != "task/r-7" {
 				t.Fatalf("worktree = %+v, %v", got, err)
 			}
@@ -191,7 +191,7 @@ func TestCreateWorktreeRefusals(t *testing.T) {
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, tt.task, false)
+			_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, tt.task, false, "")
 			var takenErr *BranchTakenError
 			if want := strings.Contains(tt.name, "exists") || strings.Contains(tt.name, "has the branch"); errors.As(err, &takenErr) != want {
 				t.Errorf("a taken branch is a BranchTakenError, and nothing else is: %v", err)
@@ -214,7 +214,7 @@ func TestCreateWorktreeFailsWhenTheCommandMakesNone(t *testing.T) {
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7, false)
+	_, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7, false, "")
 	if err == nil || !strings.Contains(err.Error(), "no worktree has branch task/r-7") {
 		t.Errorf("err = %v", err)
 	}
@@ -228,7 +228,7 @@ func TestCreateWorktreeFailsWhenTheLockCannotBeTaken(t *testing.T) {
 		t.Fatal(err)
 	}
 	clone := Clone{Repo: mustRepo(t, "o/r"), Path: filepath.Join(blocker, "clone"), Default: "main"}
-	if _, err := r.CreateWorktree(clone, 7, false); err == nil || len(f.calls) != 0 {
+	if _, err := r.CreateWorktree(clone, 7, false, ""); err == nil || len(f.calls) != 0 {
 		t.Errorf("err %v, commands %v", err, f.lines())
 	}
 }
@@ -238,7 +238,7 @@ func TestCreateWorktreeOnResumeOpensOnOriginsBranch(t *testing.T) {
 		r, clone, f, wt := worktreeFixture(t, withDev, 0o755)
 		// Origin has the branch, and the worktree opens at its tip.
 		f.replies = append([]reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}, {key: "rev-parse HEAD", out: "abc\n"}}, f.replies...)
-		got, err := r.CreateWorktree(clone, 7, true)
+		got, err := r.CreateWorktree(clone, 7, true, "")
 		if err != nil || got.Path != wt {
 			t.Fatalf("dev %v: worktree = %+v, %v", withDev, got, err)
 		}
@@ -258,7 +258,7 @@ func TestCreateWorktreeOnResumeOpensOnOriginsBranch(t *testing.T) {
 func TestCreateWorktreeOnResumeFailsWhenTheBranchCannotBeSet(t *testing.T) {
 	r, clone, f, _ := worktreeFixture(t, false, 0)
 	f.replies = append([]reply{{key: "branch --force", err: errBoom}, {key: "refs/remotes/origin/task/r-7", out: "abc"}}, f.replies...)
-	_, err := r.CreateWorktree(clone, 7, true)
+	_, err := r.CreateWorktree(clone, 7, true, "")
 	var takenErr *BranchTakenError
 	if err == nil || errors.As(err, &takenErr) || !strings.Contains(err.Error(), "set branch task/r-7 to origin's tip") {
 		t.Errorf("err = %v", err)
@@ -272,7 +272,7 @@ func TestCreateWorktreeOnResumeFailsWhenTheReposCommandMovesTheBranch(t *testing
 	r, clone, f, _ := worktreeFixture(t, true, 0o755)
 	// The repo's command made the branch anew from the default branch.
 	f.replies = append([]reply{{key: "refs/remotes/origin/task/r-7", out: "abc"}, {key: "rev-parse HEAD", out: "main-tip\n"}}, f.replies...)
-	if _, err := r.CreateWorktree(clone, 7, true); err == nil || !strings.Contains(err.Error(), "not at origin's tip of task/r-7") {
+	if _, err := r.CreateWorktree(clone, 7, true, ""); err == nil || !strings.Contains(err.Error(), "not at origin's tip of task/r-7") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -306,7 +306,7 @@ func TestCreateWorktreeOnResumeAdoptsALeftWorktree(t *testing.T) {
 				list = "worktree " + path + "\nHEAD abc\nbranch refs/heads/task/r-7\n"
 			}
 			f.replies = append(tt.replies, reply{key: "worktree list", out: list}, reply{key: "rev-parse --verify", err: errBoom})
-			got, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7, tt.resume)
+			got, err := r.CreateWorktree(Clone{Repo: repo, Path: path, Default: "main"}, 7, tt.resume, "")
 			checkAdoption(t, f, tt, got, err)
 		})
 	}
@@ -342,7 +342,7 @@ func checkAdoption(t *testing.T, f *gitFake, tt adoption, got Worktree, err erro
 		}
 		return
 	}
-	if err != nil || got != (Worktree{Path: tt.old, Branch: "task/r-7"}) {
+	if err != nil || got != (Worktree{Path: tt.old, Branch: "task/r-7", Adopted: true}) {
 		t.Fatalf("worktree = %+v, %v", got, err)
 	}
 	want := "git merge --ff-only --quiet " + ff
@@ -371,7 +371,7 @@ func TestRemoveWorktreeRunsTheReposRelease(t *testing.T) {
 			release.err = errBoom
 		}
 		f.replies = append([]reply{release}, f.replies...)
-		got, err := r.CreateWorktree(clone, 7, false)
+		got, err := r.CreateWorktree(clone, 7, false, "")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -28,7 +28,8 @@ func Tasks(st control.State, id string) []control.Item {
 // fleet's observation of their sessions.
 func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) reconcile.View {
 	root := st.Items[id]
-	v := reconcile.View{Now: c.now(), Fleet: fleet, Root: withSession(st, root, fleet)}
+	fleet.Now, fleet.Limits = c.now(), control.HarnessLimits(&st)
+	v := reconcile.View{Now: fleet.Now, Fleet: fleet, Root: withSession(st, root, fleet)}
 	tasks := Tasks(st, id)
 	for _, t := range tasks {
 		v.Tasks = append(v.Tasks, withSession(st, t, fleet))
@@ -45,7 +46,7 @@ func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) r
 func record(st control.State, item control.Item) reconcile.Item {
 	t := reconcile.Item{Item: item, Current: st.Attempts[item.Attempt], Name: sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)),
 		Vanished: control.Vanished(&st, item), Question: control.OwnQuestion(&st, item.ID), PlanHold: control.NewStartHold(&st, item.ID),
-		Stopped: st.Attempts[item.Attempt].Reason == control.EndStopped, Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(&st, item.ID), MergedHead: control.MergedHead(&st, item.ID)}
+		Stopped: st.Attempts[item.Attempt].Reason == control.EndStopped, Claimed: control.Claimed(&st, st.Attempts[item.Attempt]), Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(&st, item.ID), MergedHead: control.MergedHead(&st, item.ID)}
 	for _, id := range item.Depends {
 		if st.Items[id].State != "done" {
 			t.Blocked = append(t.Blocked, id)
@@ -100,6 +101,9 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 		for _, r := range h.Status.Runs {
 			if r.Name == s.Name && r.Record.RunID == at.RunID {
 				s.Worktree, s.Branch, s.PaneTail = r.Record.Worktree, r.Record.Branch, r.PaneTail
+				if r.Limit != nil {
+					s.DiedAtLimit, s.ResetsAt = true, r.Limit.ResetsAt
+				}
 			}
 		}
 		if w, ok := matchWindow(at, h.Status, s.Name); ok {
@@ -108,7 +112,10 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 			s.Waiting = w.Alive && w.State == session.StateWaiting
 			s.Background = w.Alive && w.State == session.StateWorking && w.Background
 			s.Limited = w.Alive && w.State == session.StateLimited
-			s.ResetsAt = w.ResetsAt
+			s.DiedAtLimit = s.DiedAtLimit && !w.Alive
+			if w.Alive {
+				s.ResetsAt = w.ResetsAt
+			}
 			s.Screen = w.Screen
 			s.Denial = w.Denial
 			s.Harness = at.Harness

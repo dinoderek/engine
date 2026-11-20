@@ -133,29 +133,38 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 	c.Client = hostClients(ctx, e, 7*time.Minute)
 	c.Ready = &controlrun.Readiness{Client: c.Client, Logf: c.Logf}
 	c.Wake = func(s reconcile.Session, text string) error {
-		cfg, local, err := hosts.Open(hosts.ConfigDir(e.Home))
-		if err != nil {
-			return err
-		}
-		h := cfg.Hosts[s.Host]
-		tm := session.New()
-		tm.Run, tm.Home = session.ExecContextIn(ctx, 30*time.Second, e.Home), e.Home
-		if h.Name != local.Name {
-			tm = &session.Tmux{Bin: "tmux", Run: remote.TmuxRunner(hostExec, h.Address), Sleep: time.Sleep}
-		}
-		wins, err := tm.Windows()
-		if err != nil {
-			return err
-		}
-		for _, w := range wins {
-			if w.ID == s.WindowID && w.Name == s.Name && !w.Dead {
-				return tm.Type(w.ID, text)
-			}
-		}
-		return fmt.Errorf("execution window changed")
+		return inWindow(ctx, e.Home, hostExec, s, func(tm *session.Tmux, id string) error { return tm.Type(id, text) })
 	}
-	c.Resume = func(s reconcile.Session) error { return c.Wake(s, "continue") }
+	// A resume sends continue, or Enter alone for text already left unsent.
+	c.Resume = func(s reconcile.Session) error {
+		return inWindow(ctx, e.Home, hostExec, s, func(tm *session.Tmux, id string) error { return tm.Submit(id, "continue") })
+	}
 	return c
+}
+
+// inWindow runs keys against the session's window, on its host, once a read
+// shows it is still that session's and live.
+func inWindow(ctx context.Context, home string, hostExec session.Runner, s reconcile.Session, keys func(*session.Tmux, string) error) error {
+	cfg, local, err := hosts.Open(hosts.ConfigDir(home))
+	if err != nil {
+		return err
+	}
+	h := cfg.Hosts[s.Host]
+	tm := session.New()
+	tm.Run, tm.Home = session.ExecContextIn(ctx, 30*time.Second, home), home
+	if h.Name != local.Name {
+		tm = &session.Tmux{Bin: "tmux", Run: remote.TmuxRunner(hostExec, h.Address), Sleep: time.Sleep}
+	}
+	wins, err := tm.Windows()
+	if err != nil {
+		return err
+	}
+	for _, w := range wins {
+		if w.ID == s.WindowID && w.Name == s.Name && !w.Dead {
+			return keys(tm, w.ID)
+		}
+	}
+	return fmt.Errorf("execution window changed")
 }
 
 // hostClients reaches each configured host, bounding every host command by limit.

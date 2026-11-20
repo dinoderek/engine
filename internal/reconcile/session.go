@@ -73,6 +73,10 @@ type Session struct {
 	// PaneTail is the end of the session's pane log, which its host shows
 	// for a run whose window is gone or dead.
 	PaneTail string
+	// DiedAtLimit is true when its window is gone or dead and its run's
+	// limit marker is set: it died at a usage limit, whose reset is then
+	// ResetsAt.
+	DiedAtLimit bool
 	// Denial is the newest entry of a waiting session's permission log,
 	// when that entry is a denial.
 	Denial *hostops.Denial
