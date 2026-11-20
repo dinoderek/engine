@@ -37,8 +37,8 @@ ops, each printing one JSON object:
   ready --repo <owner/repo> [--remote <url>] [--fresh]
                                      whether the repo's sessions can work here:
                                      gh's sign-in and the repo's doctor on its
-                                     default branch's head, cached until either
-                                     or hosts.toml changes, or 6 hours pass
+                                     default branch's head, cached until the
+                                     head or hosts.toml changes, or 6 hours pass
 `
 
 // Envelope is what every reply carries.
