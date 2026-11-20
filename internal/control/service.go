@@ -16,6 +16,8 @@ type Service struct {
 	Reconcile func(string) error
 	// Observe reads an attempt's cached host observation; nil reports unknown.
 	Observe func(attempt string) Observation
+	// Hosts reads the coordinator's latest pass over the hosts; nil reports none.
+	Hosts func() HostStatus
 }
 
 func (s Service) now() time.Time {
@@ -44,7 +46,7 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 				return err
 			}
 		}
-		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view"}, r.Op)
+		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view", "host-status"}, r.Op)
 		if write && (r.Key == "" || len(r.Key) > 200) {
 			return problem(400, "a request key of 1–200 characters is required")
 		}
@@ -117,6 +119,8 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return planView(st, a, r.ID)
 	case "session-view":
 		return s.sessionView(st, a)
+	case "host-status":
+		return s.hostStatus(a)
 	case "get", "list", "attempts":
 		return read(st, a, r)
 	case "create":

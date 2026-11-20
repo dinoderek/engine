@@ -7,8 +7,7 @@
 For dispatch, Git credentials and run credential files, load `coordinator.md`.
 
 **One file, every host.** `~/.config/engine/hosts.toml` is the same on every
-host (`engine setup --host <name>` copies it); each host's own name is in
-`~/.config/engine/host`.
+host (`engine setup --host <name>` copies it); a host's own name is in `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, never a
 hostname or IP. Its `address` goes to `ssh` as is and is never posted.
@@ -74,16 +73,13 @@ For an unpinned card, `harness_ratio` scores each positive-weight harness by
 `default_harness`, then name. If no host fits, the next harness is tried.
 Without a ratio, `default_harness` is used.
 
-An unplaced task stays ready; the operator is notified once if no host could
-take it even with every slot free. The planner starts at `deep` on the plan's
+An unplaced task stays ready; the operator is told once if no host could take it even with every slot free. The planner starts at `deep` on the plan's
 harness, else `default_harness`.
 
 ## Attempts and naming
 
 An attempt is the session registry: the server's record of a task's or plan's
 session (host, harness, run ID, tmux window, state; `engine attempt list`).
-`engine ps`, `engine attach` and the dashboard resolve a session through it.
-
 A session is named `<repo>-<task>` in its tmux window, run ID and branch; the
 harness apps title it `t<n> · <title>` (`p<n>` for a planner).
 
@@ -117,7 +113,7 @@ exits 1 when gh failed or the session was denied, stalled or skipped a step.
 | Where | How |
 | --- | --- |
 | Browser | The dashboard, `engine ui`, on loopback or through a tunnel. |
-| Terminal | `engine ps` lists tasks with their attempts; `engine attach <task-id>` runs `tmux attach` on the host, over `ssh -t` if remote. |
+| Terminal | `engine ps` lists tasks with their attempts; `engine attach <task-id>` runs `tmux attach` on the host, over `ssh -t` if remote; `engine host status --all` shows the fleet. |
 | Phone | An SSH app over Tailscale: `tmux attach -t engine`, `Ctrl-b w`. |
 | Apps | Claude apps and claude.ai/code through Remote Control; Codex apps when the session joined the daemon. |
 

@@ -53,12 +53,12 @@ func TestHookRefusesEveryMergeInAnEngineSessionAndPointsAtMergeReady(t *testing.
 }
 
 func TestServerCommandsRouteByTheirIDs(t *testing.T) {
-	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"run", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps"}, {"ps", "--json"}, {"lint", "p2"}, {"task", "complete-external", "t3", "--version", "1", "--pr", "url"}} {
+	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"run", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps"}, {"ps", "--json"}, {"lint", "p2"}, {"host", "status", "--all"}, {"host", "status", "--all", "--json"}, {"task", "complete-external", "t3", "--version", "1", "--pr", "url"}} {
 		if !serverCommand(args) {
 			t.Fatal(args)
 		}
 	}
-	for _, args := range [][]string{{"run", ghIssue}, {"run"}, {"ps", "--github"}, {"tell", "r-7", "hi"}, {"attach", "r-7"}, {"lint", ghIssue}, {"start", "t3"}, {"labels", "sync", "o/r"}} {
+	for _, args := range [][]string{{"run", ghIssue}, {"run"}, {"ps", "--github"}, {"tell", "r-7", "hi"}, {"attach", "r-7"}, {"lint", ghIssue}, {"start", "t3"}, {"host", "status", "--json"}, {"host", "spawn", "--json"}, {"labels", "sync", "o/r"}} {
 		if serverCommand(args) {
 			t.Fatal("not a server form:", args)
 		}
