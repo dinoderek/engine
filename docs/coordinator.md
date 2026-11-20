@@ -39,7 +39,7 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `spawn` | Starts a session; the kickoff arrives on stdin (`hosts-and-sessions.md`). |
 | `status` | Windows with their state and, unless working, last 20 screen lines and a waiting window's newest denial (`telemetry.md`); newest runs; quota, free slots and signed-out harnesses (`internal/hostops/status.go`). |
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
-| `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Already merged is done. |
+| `merge` | Merges a PR pinned to the reviewed head, once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start (else creation) counts; undated sorts first, ties select the later rollup entry. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. Already merged is done. |
 | `release` | Closes the window and deletes each harness's files for it. For a done task, runs the repo's `dev worktree release <branch>` if provided (bounded; a failure is a note). Removes a remaining worktree unless the run failed or it has changes. Engine never deletes the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine` (the build) and `host`. A failure is `{"error": …, "refused": true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is an unreachable host. A caller refuses a reply on another protocol, or not an engine's, and tells the operator to run `engine setup --host <name>`.
