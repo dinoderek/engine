@@ -1,6 +1,6 @@
 {
   "name": "engine",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "description": "Two skills, with a merge guard: build takes one task to a merged PR in any repo; engine holds the server roles, planner and executor.",
   "author": {
     "name": "dinoderek"
@@ -59,6 +59,10 @@
             {
               "type": "command",
               "command": "engine hook state --harness codex"
+            },
+            {
+              "type": "command",
+              "command": "engine hook prompt --harness codex"
             }
           ]
         }

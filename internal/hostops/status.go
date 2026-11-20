@@ -93,6 +93,8 @@ type Run struct {
 	// Limit is set for a run with no live window whose harness marker says
 	// it stopped at a usage limit: it died there.
 	Limit *RunLimit `json:"limit,omitempty"`
+	// PaneKey is the public key, in hex, of a server run's pane key.
+	PaneKey string `json:"pane_key,omitempty"`
 }
 
 // RunLimit is the usage limit a run with no live window stopped at.
@@ -170,6 +172,9 @@ func (d Deps) listRuns(a harness.Adapters, runs map[string]session.Run, windows 
 	out := []Run{}
 	for name, r := range runs {
 		run := Run{Name: name, Dir: r.Dir, Record: r.Record}
+		if r.Record.Control {
+			run.PaneKey, _ = session.PanePublicKey(r.Dir) // a run spawned before pane keys has none
+		}
 		if !alive[name] {
 			run.PaneTail = d.paneTail(r.Dir)
 			run.Limit = runLimit(a, r)

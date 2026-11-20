@@ -49,7 +49,7 @@ func limitedAskedOn(t *testing.T, onPlan bool) (c *Coordinator, task control.Ite
 	h.status.Windows[0].State = session.StateLimited
 	h.status.Windows[0].ResetsAt = now.Add(-3 * time.Minute).Unix()
 	resumes = new(int)
-	c.Resume = func(reconcile.Session) error { *resumes++; return nil }
+	c.Resume = func(reconcile.Session, func(string) error) error { *resumes++; return nil }
 	target := task.ID
 	if onPlan {
 		target = plan.ID

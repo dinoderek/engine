@@ -41,7 +41,15 @@ ops, each printing one JSON object:
                                      gh's sign-in and the repo's doctor on its
                                      default branch's head, cached until the
                                      head or hosts.toml changes, or 6 hours pass
+  typed --run-id <id> --sha256 <hash>
+                                     log the hash of a text about to be typed
+                                     into the run's session, so its prompt
+                                     hook knows engine typed it
 `
+
+// UnknownOp is the refusal of an op this engine does not define, which a
+// caller reads to tell a host whose engine predates the op.
+func UnknownOp(op string) string { return fmt.Sprintf("unknown op %q", op) }
 
 // Envelope is what every reply carries.
 type Envelope struct {
@@ -97,6 +105,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 	var rel releaseFlags
 	var merge MergeRequest
 	var ready ReadyRequest
+	var hash string
 	run := map[string]func() (any, error){
 		"control-spawn": func() (any, error) {
 			r, err := readControl(in)
@@ -119,9 +128,10 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		"release": func() (any, error) { return release(d, name, rel) },
 		"merge":   func() (any, error) { return Merge(d, merge) },
 		"ready":   func() (any, error) { return Ready(d, ready) },
+		"typed":   func() (any, error) { return LogTyped(d, req.RunID, hash) },
 	}[op]
 	if run == nil {
-		return nil, refuse("unknown op %q", op)
+		return nil, refuse("%s", UnknownOp(op))
 	}
 	switch op {
 	case "sync-repo":
@@ -139,6 +149,9 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		fs.BoolVar(&req.Heavy, "heavy", false, "")
 	case "collect":
 		fs.StringVar(&req.RunID, "run-id", "", "")
+	case "typed":
+		fs.StringVar(&req.RunID, "run-id", "", "")
+		fs.StringVar(&hash, "sha256", "", "")
 	case "release":
 		fs.StringVar(&name, "name", "", "")
 		fs.BoolVar(&rel.failed, "failed", false, "")

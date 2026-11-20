@@ -26,7 +26,10 @@ type Coordinator struct {
 	// Config is injected by tests; production loads hosts.toml on every pass.
 	Config *hosts.Config
 	Host   hosts.Host
-	Resume func(reconcile.Session) error
+	// Resume types continue into a session at a usage limit, or sends the
+	// text already left unsent there, passing what it submits to logged
+	// before it sends it.
+	Resume func(s reconcile.Session, logged func(text string) error) error
 	Wake   func(reconcile.Session, string) error
 	// Observer, when set, keeps each pass's host reads for the session view.
 	Observer *Observer
@@ -125,7 +128,7 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	if err = c.keepObservations(v); err != nil {
 		return err
 	}
-	if err = c.wakeMessages(st, v); err != nil {
+	if err = c.wakeMessages(st, v, cfg); err != nil {
 		c.log("wake messages: %v", err)
 	}
 	released := true

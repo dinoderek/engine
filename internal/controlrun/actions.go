@@ -29,7 +29,7 @@ func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Con
 	case reconcile.Notice:
 		return c.mark(a)
 	case reconcile.Resume:
-		return c.resume(a)
+		return c.resume(a, cfg)
 	case reconcile.Release:
 		return c.release(a, cfg)
 	case reconcile.Stop:
@@ -126,19 +126,24 @@ func (c *Coordinator) mark(a reconcile.Action) error {
 	})
 }
 
+// ResumeText is what a resume types into a session stopped at a usage
+// limit.
+const ResumeText = "continue"
+
 // resume types continue once per reset, after rechecking that the attempt
 // is current and no hard stop parks it.
-func (c *Coordinator) resume(a reconcile.Action) error {
+func (c *Coordinator) resume(a reconcile.Action, cfg *hosts.Config) error {
 	if c.Resume == nil {
 		return nil
 	}
 	eligible := false
+	var at control.Attempt
 	err := c.Service.Store.Transaction(func(st *control.State) error {
 		current := st.Items[a.Item]
 		if control.OwnQuestion(st, current.ID) > 0 {
 			return nil
 		}
-		at := st.Attempts[current.Attempt]
+		at = st.Attempts[current.Attempt]
 		if current.State == "needs-human" || at.ID != a.Attempt || at.State == "ended" || resumed(at, a.ResetsAt, c.now()) {
 			return nil
 		}
@@ -151,7 +156,7 @@ func (c *Coordinator) resume(a reconcile.Action) error {
 	if err != nil || !eligible {
 		return err
 	}
-	return c.Resume(a.Session)
+	return c.Resume(a.Session, func(text string) error { return c.typed(cfg, at, text) })
 }
 
 // resumed reports whether at was already told to continue: once per known

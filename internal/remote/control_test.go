@@ -2,10 +2,13 @@ package remote
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dinoderek/engine/internal/hostops"
+	"github.com/dinoderek/engine/internal/session"
 )
 
 func TestControlDispatchCarriesCredentialsOnlyOnStdin(t *testing.T) {
@@ -83,5 +86,50 @@ func TestReadyRunsTheHostsReadyOp(t *testing.T) {
 	}
 	if _, err := RunReady(nil, "o/r", &out); err == nil {
 		t.Fatal("RunReady without the probe answered")
+	}
+}
+
+func TestTypedLogsTheTextsHashOnTheHost(t *testing.T) {
+	hash := session.TextHash("continue")
+	var command string
+	ssh := SSH{Name: "devbox", Address: "devbox", Exec: func(_ io.Reader, out, _ io.Writer, _ string, args ...string) (int, error) {
+		command = strings.Join(args, " ")
+		_, err := io.WriteString(out, `{`+envelope+`,"sha256":"`+hash+`"}`)
+		return 0, err
+	}}
+	if err := Typed(ssh, "r-7-1", "continue"); err != nil {
+		t.Fatal(err)
+	}
+	if want := ShellJoin([]string{"engine", "host", "typed", "--json", "--run-id", "r-7-1", "--sha256", hash}); !strings.HasSuffix(command, want) {
+		t.Errorf("command %q, want suffix %q", command, want)
+	}
+	home := t.TempDir()
+	dir, _ := session.RunDir(home, "r-7-1")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Typed(Local{Deps: hostops.Deps{Home: home}}, "r-7-1", "continue"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, session.TypedLog)); !strings.Contains(string(data), hash) {
+		t.Errorf("local typed-text log %q", data)
+	}
+	if err := Typed(nil, "r-7-1", "continue"); err == nil {
+		t.Fatal("a client without the typed op logged")
+	}
+}
+
+func TestTypedOnAHostThatPredatesTheOpGoesAhead(t *testing.T) {
+	reply := func(failure string) SSH {
+		return SSH{Name: "devbox", Address: "devbox", Exec: func(_ io.Reader, out, _ io.Writer, _ string, _ ...string) (int, error) {
+			_, err := io.WriteString(out, `{`+envelope+`,`+failure+`}`)
+			return 1, err
+		}}
+	}
+	if err := Typed(reply(`"error":"unknown op \"typed\"; nothing was changed","refused":true`), "r-7-1", "continue"); err != nil {
+		t.Errorf("an engine with no typed op, and so no prompt hook: %v", err)
+	}
+	if err := Typed(reply(`"error":"no run directory /x; nothing was changed","refused":true`), "r-7-1", "continue"); err == nil {
+		t.Error("a host that refused to log the text let it be typed")
 	}
 }

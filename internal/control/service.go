@@ -147,6 +147,8 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return mergeQueue(st, a, r.ID)
 	case "cleaned":
 		return s.cleaned(st, a, r)
+	case "pane-input":
+		return s.paneInput(st, a, r)
 	default:
 		return Response{}, problem(400, "unknown operation %q", r.Op)
 	}

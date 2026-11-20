@@ -8,7 +8,7 @@ window.engine.panel = function (ctx) {
   const $ = ctx.$;
   const view = ctx.view;
   const TABS = ["description", "communications"];
-  const KINDS = { say: "Message", ask: "Question", reply: "Reply", acknowledged: "Acknowledged", resolved: "Decision", ruling: "Plan ruling" };
+  const KINDS = { say: "Message", ask: "Question", reply: "Reply", acknowledged: "Acknowledged", resolved: "Decision", ruling: "Plan ruling", "pane-answer": "Pane answer", "pane-message": "Pane message" };
 
   // shown is the open item's ID. item and threadEnv are envelopes in the page's
   // usual shape; thread holds the messages read so far and the cursor.

@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -88,11 +89,15 @@ func TestInputLine(t *testing.T) {
 
 func TestSubmitSendsUnsentTextWithEnterAlone(t *testing.T) {
 	f := &fake{}
-	f.answer("capture-pane", "work\n────────\n❯ continue\n────────\n", nil)
+	f.answer("capture-pane", "work\n────────\n❯ go on please\n────────\n", nil)
 	f.answer("display-message", "0\n", nil)
 	tm := &Tmux{Run: f.run, Bin: "tmux", Sleep: func(time.Duration) { t.Error("waited before a lone Enter") }}
-	if err := tm.Submit("@4", "continue"); err != nil {
+	var logged []string
+	if err := tm.Submit("@4", "continue", func(s string) error { logged = append(logged, s); return nil }); err != nil {
 		t.Fatal(err)
+	}
+	if len(logged) != 1 || logged[0] != "go on please" {
+		t.Errorf("before got %q, want the unsent text it submits", logged)
 	}
 	want := "tmux capture-pane -p -e -t =engine:@4\n" +
 		"tmux display-message -p -t =engine:@4 #{pane_in_mode}\ntmux send-keys -t =engine:@4 Enter"
@@ -107,8 +112,12 @@ func TestSubmitTypesIntoAnEmptyInputLine(t *testing.T) {
 		f.answer("capture-pane", screen, nil)
 		f.answer("display-message", "0\n", nil)
 		tm := &Tmux{Run: f.run, Bin: "tmux", Sleep: func(time.Duration) {}}
-		if err := tm.Submit("@4", "continue"); err != nil {
+		var logged []string
+		if err := tm.Submit("@4", "continue", func(s string) error { logged = append(logged, s); return nil }); err != nil {
 			t.Fatal(err)
+		}
+		if len(logged) != 1 || logged[0] != "continue" {
+			t.Errorf("screen %q: before got %q, want the text it types", screen, logged)
 		}
 		want := "tmux capture-pane -p -e -t =engine:@4\n" +
 			"tmux display-message -p -t =engine:@4 #{pane_in_mode}\n" +
@@ -126,8 +135,14 @@ func TestSubmitFailures(t *testing.T) {
 		f.answer("display-message", "1\n", nil)
 		f.answer(sub, "", errors.New("no such window"))
 		tm := &Tmux{Run: f.run, Bin: "tmux", Sleep: func(time.Duration) {}}
-		if err := tm.Submit("@4", "continue"); err == nil {
+		if err := tm.Submit("@4", "continue", nil); err == nil {
 			t.Errorf("%s failing: no error; calls %q", sub, f.calls)
 		}
+	}
+	f := &fake{}
+	f.answer("capture-pane", "────\n❯ \n", nil)
+	tm := &Tmux{Run: f.run, Bin: "tmux", Sleep: func(time.Duration) {}}
+	if err := tm.Submit("@4", "continue", func(string) error { return errors.New("not logged") }); err == nil || strings.Contains(f.dump(), "send-keys") {
+		t.Errorf("a text before refused was sent: %v, calls\n%s", err, f.dump())
 	}
 }

@@ -113,7 +113,7 @@ func TestAdapterEntriesGetTheirArguments(t *testing.T) {
 		t.Errorf("exit %d, stderr %q", code, errs.String())
 	}
 	errs.Reset()
-	if code := Run([]string{"hook", "label", "--harness", "fake"}, env); code != 1 || !strings.Contains(errs.String(), "(want pre-tool-use, permission, state, fail, ping)") {
+	if code := Run([]string{"hook", "label", "--harness", "fake"}, env); code != 1 || !strings.Contains(errs.String(), "(want pre-tool-use, permission, state, prompt, fail, ping)") {
 		t.Errorf("exit %d, stderr %q", code, errs.String())
 	}
 }

@@ -52,6 +52,8 @@ type Spawned struct {
 	// Warning is a problem the session runs despite, such as a host that
 	// may sleep.
 	Warning string `json:"warning,omitempty"`
+	// PaneKey is the public key, in hex, of a server run's pane key.
+	PaneKey string `json:"pane_key,omitempty"`
 }
 
 // spawn is a request that has passed every check.
@@ -141,12 +143,20 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 			return Spawned{}, fmt.Errorf("write run.json: %w", err)
 		}
 	}
+	paneKey := ""
 	if s.control != nil {
 		if err := writeControl(s.runDir, *s.control); err != nil {
 			return Spawned{}, err
 		}
+		if paneKey, err = session.NewPaneKey(s.runDir); err != nil {
+			return Spawned{}, err
+		}
 	}
-	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: adoptedKickoff(s.Kickoff, wt), joined: joined, control: s.control, path: path})
+	kickoff := adoptedKickoff(s.Kickoff, wt)
+	if err := logTyped(s.runDir, kickoff); err != nil {
+		return Spawned{}, err
+	}
+	command := launchCommand(s.h.Name(), s.l, launch{line: line, dir: wt.Path, runDir: s.runDir, mode: s.Mode, kickoff: kickoff, joined: joined, control: s.control, path: path})
 	opened, err := d.Tmux.Open(session.Window{Name: s.name, Dir: wt.Path, Command: command, Log: log})
 	if err != nil {
 		return Spawned{}, fmt.Errorf("open the tmux window: %w", err)
@@ -155,7 +165,7 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 	if err := session.WriteRecord(s.runDir, s.record(wt, opened.ID, log, d)); err != nil {
 		return Spawned{}, fmt.Errorf("the session is running in %s:%s, but run.json was not written: %w", session.Name, opened.ID, err)
 	}
-	out := Spawned{Name: s.name, Window: opened.ID, RunDir: s.runDir, Worktree: wt.Path, Branch: wt.Branch,
+	out := Spawned{Name: s.name, Window: opened.ID, RunDir: s.runDir, Worktree: wt.Path, Branch: wt.Branch, PaneKey: paneKey,
 		Attach: "tmux attach -t '=" + session.Name + ":" + opened.ID + "'"}
 	var warnings []string
 	if opened.AwakeErr != nil {

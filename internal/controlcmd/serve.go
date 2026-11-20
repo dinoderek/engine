@@ -138,9 +138,10 @@ func newCoordinator(service control.Service, url string, e Env) *controlrun.Coor
 	c.Wake = func(s reconcile.Session, text string) error {
 		return inWindow(ctx, e.Home, hostExec, s, func(tm *session.Tmux, id string) error { return tm.Type(id, text) })
 	}
-	// A resume sends continue, or Enter alone for text already left unsent.
-	c.Resume = func(s reconcile.Session) error {
-		return inWindow(ctx, e.Home, hostExec, s, func(tm *session.Tmux, id string) error { return tm.Submit(id, "continue") })
+	// A resume sends continue, or Enter alone for text already left unsent,
+	// logging whichever it submits first.
+	c.Resume = func(s reconcile.Session, logged func(string) error) error {
+		return inWindow(ctx, e.Home, hostExec, s, func(tm *session.Tmux, id string) error { return tm.Submit(id, controlrun.ResumeText, logged) })
 	}
 	return c
 }

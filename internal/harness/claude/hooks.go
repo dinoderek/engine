@@ -34,14 +34,16 @@ type hooks Adapter
 
 // event is the part of a Claude Code hook event engine reads.
 type event struct {
-	Name      string          `json:"hook_event_name"`
-	SessionID string          `json:"session_id"`
-	TurnID    string          `json:"turn_id"`
-	Cwd       string          `json:"cwd"`
-	Tool      string          `json:"tool_name"`
-	Input     json.RawMessage `json:"tool_input"`
-	Mode      string          `json:"permission_mode"`
-	Reason    string          `json:"reason"`
+	Name       string          `json:"hook_event_name"`
+	SessionID  string          `json:"session_id"`
+	TurnID     string          `json:"turn_id"`
+	Cwd        string          `json:"cwd"`
+	Tool       string          `json:"tool_name"`
+	Input      json.RawMessage `json:"tool_input"`
+	Mode       string          `json:"permission_mode"`
+	Reason     string          `json:"reason"`
+	Prompt     string          `json:"prompt"`
+	Transcript string          `json:"transcript_path"`
 }
 
 func (hooks) Event(raw []byte) (harness.Event, error) {
@@ -50,7 +52,7 @@ func (hooks) Event(raw []byte) (harness.Event, error) {
 		return harness.Event{}, err
 	}
 	ev := harness.Event{Kind: harness.Other, Name: e.Name, SessionID: e.SessionID, TurnID: e.TurnID, Cwd: e.Cwd,
-		Tool: e.Tool, Input: e.Input, Mode: e.Mode, Reason: e.Reason}
+		Tool: e.Tool, Input: e.Input, Mode: e.Mode, Reason: e.Reason, Prompt: e.Prompt, Transcript: e.Transcript}
 	if k, ok := kinds[e.Name]; ok {
 		ev.Kind = k
 	}

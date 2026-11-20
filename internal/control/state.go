@@ -200,6 +200,11 @@ func cutSlug(s string) (string, string, bool) {
 
 // SetAttempt records a host observation. Unknown dispatch outcomes stay reserved.
 func (s Service) SetAttempt(id, state, window string) error {
+	return s.setAttempt(id, state, window, "")
+}
+
+// setAttempt is SetAttempt, also recording the run's pane key when given.
+func (s Service) setAttempt(id, state, window, paneKey string) error {
 	return s.Store.Transaction(func(st *State) error {
 		at, ok := st.Attempts[id]
 		if !ok {
@@ -217,6 +222,9 @@ func (s Service) SetAttempt(id, state, window string) error {
 		at.State = state
 		if window != "" {
 			at.Window = window
+		}
+		if paneKey != "" {
+			at.PaneKey = paneKey
 		}
 		if state == "ended" {
 			at.Ended = s.now()

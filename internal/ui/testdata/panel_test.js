@@ -247,6 +247,14 @@ const scenarios = {
     });
   },
 
+  async "pane input shows with its own labels"() {
+    const fx = { thread: (id) => ({ item: id, messages: [msg(9, "pane-answer", { reply_to: 7, body: "Yes" }), msg(10, "pane-message", { body: "Also this" })], questions: [], next: 10, more: false }) };
+    await page("#/plans/p24?panel=p24&tab=communications", fx, async (t) => {
+      assert.ok(t.$("update-9").textContent.includes("Pane answer"));
+      assert.ok(t.$("update-10").textContent.includes("Pane message"));
+    });
+  },
+
   async "pages load on demand, move focus to the first new message and open at an update"() {
     const all = Array.from({ length: 120 }, (_, i) => msg(i + 1, "say"));
     const thread = (id, after, anchor) => {

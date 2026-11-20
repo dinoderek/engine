@@ -34,14 +34,25 @@ func (t *Tmux) Type(id, text string) error {
 // Submit sends text as Type does, unless the window's input line already
 // holds text, as when the harness typed its own continue and never sent it:
 // then it presses Enter alone, which sends that. A screen whose input line
-// it cannot find is typed into as before.
-func (t *Tmux) Submit(id, text string) error {
+// it cannot find is typed into as before. Before it sends anything, it
+// passes what it will submit to before, when set; an error sends nothing.
+func (t *Tmux) Submit(id, text string, before func(string) error) error {
 	target := sessionTarget + id
 	screen, err := t.tmux("capture-pane", "-p", "-e", "-t", target)
 	if err != nil {
 		return err
 	}
-	if unsent, ok := InputLine(screen); !ok || unsent == "" {
+	unsent, ok := InputLine(screen)
+	typing := !ok || unsent == ""
+	if typing {
+		unsent = text
+	}
+	if before != nil {
+		if err := before(unsent); err != nil {
+			return err
+		}
+	}
+	if typing {
 		return t.Type(id, text)
 	}
 	if err := t.leaveMode(target); err != nil {

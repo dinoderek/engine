@@ -87,7 +87,7 @@ func TestQuotaMarkersAreIndependentForEachReset(t *testing.T) {
 	h.status.Windows[0].State = session.StateLimited
 	h.status.Windows[0].ResetsAt = now.Add(-3 * time.Minute).Unix()
 	resumed := 0
-	c.Resume = func(reconcile.Session) error { resumed++; return nil }
+	c.Resume = func(reconcile.Session, func(string) error) error { resumed++; return nil }
 	pass(t, c)
 	pass(t, c)
 	if resumed != 1 {

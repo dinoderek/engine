@@ -6,9 +6,10 @@ import (
 )
 
 // CoreEntries are the `engine hook <entry>` commands every harness gets, which
-// the core runs on the adapter's events: the merge guard, the permission log
-// and the state file. An adapter's own entries never take these names.
-var CoreEntries = []string{"pre-tool-use", "permission", "state"}
+// the core runs on the adapter's events: the merge guard, the permission log,
+// the state file and the prompt hook, which records the operator's pane input
+// on the server. An adapter's own entries never take these names.
+var CoreEntries = []string{"pre-tool-use", "permission", "state", "prompt"}
 
 // Hooks translates a harness's hook events into engine's, and engine's
 // replies back. The core owns the merge guard, the permission log and the
@@ -30,6 +31,10 @@ type Hooks interface {
 	Signalled(c HookContext, ev Event)
 	// Entries are the adapter's own `engine hook <entry>` commands, by entry.
 	Entries() map[string]Entry
+	// Prompts are the prompts the session whose transcript is at path
+	// submitted, as the harness recorded them there; a transcript it cannot
+	// read is an error.
+	Prompts(transcript string) ([]string, error)
 }
 
 // EventKind is what a hook event means to engine.
@@ -65,6 +70,9 @@ type Event struct {
 	// Mode is the session's permission mode; Reason why the harness denied a
 	// call, on a PermissionDenied event.
 	Mode, Reason string
+	// Prompt is the text a PromptSubmitted event submitted, as the harness
+	// sent it; Transcript is the path of the session's transcript.
+	Prompt, Transcript string
 }
 
 // PermissionPolicy is what an unattended session's permission request gets.

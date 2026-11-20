@@ -22,6 +22,6 @@ Each task has one summary: done is done; failed and needs-human are blocked; an 
 - `last_seen` is when a host last reported the window live; it survives `unknown` and `exited` observations.
 - `observed` is the harness's `working`, `waiting` or `limited`; `live` for an open window with no harness state; `exited` once a reachable host shows the window gone; otherwise `unknown`. An exited attempt stays listed until engine ends it.
 - `feedback` is the item's unresolved question, including one its session asked on its plan. Waiting without one is not a feedback request.
-- `latest` is the item's newest `say`, `ask`, `reply` or `resolved` update with a body, excluding coordinator notices. A task's preview never shows its plan's messages.
+- `latest` is the item's newest message update (`humanKinds` in `internal/control/sessions.go`) with a body, excluding coordinator notices. A task's preview never shows its plan's messages.
 
 Observations live in an in-memory cache keyed by attempt, so a request never contacts a host. Coordinator passes store their host reads, and a background loop refreshes stale ones, one read in flight per host. The cache drops ended and replaced attempts and starts empty with the server. An unreachable host, unreadable run records or an old observation give `unknown`; the timings are in `internal/controlrun/observe.go`.

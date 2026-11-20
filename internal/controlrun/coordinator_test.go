@@ -36,6 +36,18 @@ type host struct {
 	// the error unresolvedErr, or "connection closed" when it is empty.
 	unresolved    bool
 	unresolvedErr string
+	// typed are the runs and hashes the typed op logged, as "<run> <hash>";
+	// typedErr, when set, fails it.
+	typed    []string
+	typedErr error
+}
+
+func (h *host) Typed(runID, hash string) error {
+	if h.typedErr != nil {
+		return h.typedErr
+	}
+	h.typed = append(h.typed, runID+" "+hash)
+	return nil
 }
 
 func (h *host) SyncRepo(string) (hostops.Synced, error)             { panic("legacy GitHub path used") }

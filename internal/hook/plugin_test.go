@@ -185,7 +185,9 @@ func TestClaudePluginRegistersLimitHook(t *testing.T) {
 		want := map[string][]string{matcher: {"engine hook limit --harness claude"}}
 		got := plugin.Hooks.commands(event)
 		for m, cmds := range got {
-			got[m] = slices.DeleteFunc(cmds, func(c string) bool { return strings.HasPrefix(c, "engine hook state ") })
+			got[m] = slices.DeleteFunc(cmds, func(c string) bool {
+				return strings.HasPrefix(c, "engine hook state ") || strings.HasPrefix(c, "engine hook prompt ")
+			})
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: got %v, want %v", event, got, want)
@@ -218,6 +220,26 @@ func TestClaudePluginRegistersStateHook(t *testing.T) {
 	for _, event := range want {
 		if stateFor(kindOf(t, claudeHooks, event), false) == "" {
 			t.Errorf("%s is registered but the state hook ignores it", event)
+		}
+	}
+}
+
+// Both plugins run the prompt hook on every submitted prompt, and on nothing
+// else, so the operator's pane input reaches the server.
+func TestPluginsRegisterThePromptHook(t *testing.T) {
+	var claude struct{ Hooks hookGroups }
+	readJSON(t, "../../plugins/engine/hooks/hooks.json", &claude)
+	var codex struct{ Hooks struct{ Hooks hookGroups } }
+	readJSON(t, "../../plugins/engine/.codex-plugin/plugin.json", &codex)
+	for name, groups := range map[string]hookGroups{"claude": claude.Hooks, "codex": codex.Hooks.Hooks} {
+		command := "engine hook prompt --harness " + name
+		for event := range groups {
+			for matcher, cmds := range groups.commands(event) {
+				on := slices.Contains(cmds, command)
+				if want := event == "UserPromptSubmit" && matcher == ""; on != want {
+					t.Errorf("%s %s (%q): prompt hook registered %v, want %v", name, event, matcher, on, want)
+				}
+			}
 		}
 	}
 }
