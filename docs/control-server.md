@@ -44,7 +44,7 @@ The operator credential is an owner-only regular file. Every dispatch creates a 
 
 ## Updates and operator inbox
 
-Updates are immutable and ordered; read up to 200 after a cursor. Comments leave workflow state alone. A question atomically holds a task in `needs-human`: its own, or the asking task (the update's `task`) when a task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements and replies leave it unresolved. Resolution records the decision and atomically restores each held task's earlier state, unless another question holds it, its state changed or its execution ended. A task's own questions, including one it asked on its plan, block its state changes, completion, merge, wakes and automatic quota resume. A plan's question blocks planner handoff and the first dispatch of its tasks only: finished tasks still reach `in-review` and merge, and a task with an earlier attempt is dispatched again.
+Updates are immutable and ordered; read up to 200 after a cursor. Comments leave workflow state alone. A question atomically holds a task in `needs-human`: its own, or the asking task (the update's `task`) when a task's session asks on its plan. A task's session asks only on its task or plan. Acknowledgements and replies leave it unresolved. Resolution records the decision and atomically restores each held task's earlier state, unless another question holds it, its state changed or its execution ended. A task's own questions, including one it asked on its plan, block its state changes, completion, merge and quota resume. A plan's question blocks only planner handoff and the first dispatch of its tasks.
 
 Messages addressed to the operator appear in the cross-repository inbox. Informational messages leave the inbox on acknowledgement; questions leave on resolution. Idle, unrestricted sessions get wake-up pointers for others' messages on their item; tasks also for others' plan messages and resolutions, except coordinator notices and those to the operator. Messages persist when wake-up fails.
 
@@ -56,7 +56,7 @@ The process forwards only read operations (`list`, `plan-view`, `attempts`, `get
 
 The per-plan view lists unfinished prerequisites, including other plans' tasks. A todo task waiting to start has the plan's question as feedback. On both tabs, "Needs feedback" opens the question's thread at its update over the tab, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
 
-Each task has one summary: done is done; failed and needs-human are blocked; an active attempt, or a running or in-review state, is in progress; an unfinished prerequisite or a todo task waiting under the plan's open question (the plan read's `question`) is blocked; todo under an approved plan is ready; anything else is blocked. Coordination does not change it.
+Each task has one summary: done is done; failed and needs-human are blocked; an active attempt, or a running or in-review state, is in progress; an unfinished prerequisite or a todo task under the plan's open question (its read's `question`) is blocked; todo under an approved plan is ready; anything else is blocked. Coordination does not change it.
 
 ## Session view
 
