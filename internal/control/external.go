@@ -25,7 +25,7 @@ func (s Service) completeExternal(st *State, a Actor, r Request) (Response, erro
 	if active(st, item) || !slices.Contains([]string{"todo", "failed"}, item.State) {
 		return Response{}, problem(409, "external completion requires an inactive, unfinished task without a hard stop")
 	}
-	if PendingQuestion(st, item.ID) > 0 {
+	if OwnQuestion(st, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	if !completionPR(r.Item.PR, st.Items[item.Repo].Slug) {

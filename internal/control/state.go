@@ -108,7 +108,7 @@ func stateChange(st *State, a Actor, item Item, want string) error {
 	if item.State == "needs-human" && a.Role != "operator" && a.Role != "coordinator" {
 		return problem(403, "operator must resolve the hard stop")
 	}
-	if want != "failed" && PendingQuestion(st, item.ID) > 0 {
+	if want != "failed" && OwnQuestion(st, item.ID) > 0 {
 		return problem(409, "operator question is unresolved")
 	}
 	if want == "done" && item.Kind == "plan" {
@@ -132,7 +132,7 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	if a.Role == "coordinator" && r.Version != item.Version {
 		return Response{}, problem(409, "card changed since placement; version is %d", item.Version)
 	}
-	if PendingQuestion(st, item.ID) > 0 {
+	if OwnQuestion(st, item.ID) > 0 || NewStartHold(st, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	if !approved(st, item) {
@@ -172,6 +172,18 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	st.Items[item.ID] = item
 	st.update(a, r, "dispatch", id, s.now())
 	return Response{Item: &item, Attempt: &at, Credential: secret}, nil
+}
+
+// NewStartHold is the open plan question that holds task id from starting,
+// or 0. A task with an earlier attempt is a recovery, not a new start, and
+// is never held by it.
+func NewStartHold(st *State, id string) int {
+	for _, at := range st.Attempts {
+		if at.Item == id {
+			return 0
+		}
+	}
+	return PlanQuestion(st, id)
 }
 
 func cutSlug(s string) (string, string, bool) {
@@ -226,19 +238,25 @@ func (s Service) CheckDispatch(id, attempt string) error {
 		if !dispatchIntent(st, item) {
 			return problem(409, "coordination was stopped")
 		}
-		if PendingQuestion(st, item.ID) > 0 {
+		if OwnQuestion(st, item.ID) > 0 {
 			return problem(409, "operator question is unresolved")
 		}
 		return nil
 	})
 }
 
+// endAttempt is the operator's attempt reconcile, after the host read
+// confirmed the session gone (Service.Reconcile).
 func (s Service) endAttempt(st *State, a Actor, r Request) (Response, error) {
 	at, ok := st.Attempts[r.ID]
 	if !ok {
 		return Response{}, problem(404, "unknown execution")
 	}
-	if at.State != "ended" {
+	switch at.State {
+	case "ended":
+	case "dispatching":
+		at = s.endUnlaunched(st, a, at, r.Body)
+	default:
 		at = s.endDead(st, a, at, r.Body)
 	}
 	return Response{Attempt: &at}, nil

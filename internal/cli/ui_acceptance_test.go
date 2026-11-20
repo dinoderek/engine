@@ -92,9 +92,13 @@ func acceptPlans(t *testing.T, d *dashboard, w *world) {
 	var hardening ui.PlanDetail
 	d.get(t, "/api/plans/"+w.hardening.ID, &hardening)
 	for _, row := range hardening.Tasks {
-		// The plan's open question holds up both: the coordinator dispatches
-		// no task of a plan whose question is unresolved.
-		check(t, row.Feedback != nil && row.Feedback.Item == w.hardening.ID && row.Feedback.Update == w.hardeningQuestion, "%s must link its plan's question: %+v", row.ID, row.Feedback)
+		// The plan's open question holds up only the task waiting to start:
+		// the running one carries on.
+		if row.ID == w.keys.ID {
+			check(t, row.Feedback != nil && row.Feedback.Item == w.hardening.ID && row.Feedback.Update == w.hardeningQuestion, "%s must link its plan's question: %+v", row.ID, row.Feedback)
+		} else {
+			check(t, row.Feedback == nil, "%s is running and must not link its plan's question: %+v", row.ID, row.Feedback)
+		}
 	}
 	check(t, hardening.Counts == ui.Counts{InProgress: 1, Blocked: 1}, "a queued task under an open plan question is blocked, not ready: %+v", hardening.Tasks)
 	status, env := d.get(t, "/api/plans/p99999", nil)
@@ -162,8 +166,8 @@ func acceptSessions(t *testing.T, s *controlStack, d *dashboard, w *world) {
 	for _, r := range list.Sessions {
 		order = append(order, r.Item)
 	}
-	want := []string{w.links.ID, w.hardening.ID, w.rotate.ID, w.rollout.ID, w.sessionsUI.ID, w.plansView.ID}
-	check(t, status == 200 && list.Feedback == 3 && slices.Equal(order, want), "sessions %v (feedback %d), want %v", order, list.Feedback, want)
+	want := []string{w.links.ID, w.hardening.ID, w.rollout.ID, w.sessionsUI.ID, w.plansView.ID, w.rotate.ID}
+	check(t, status == 200 && list.Feedback == 2 && slices.Equal(order, want), "sessions %v (feedback %d), want %v", order, list.Feedback, want)
 	rows := sessionMap(list)
 	for id, want := range map[string]struct{ role, host, observed string }{
 		w.rollout.ID: {"planner", "devbox", "working"}, w.plansView.ID: {"executor", "devbox", "waiting"}, w.links.ID: {"executor", "devbox", "waiting"},
@@ -179,14 +183,14 @@ func acceptSessions(t *testing.T, s *controlStack, d *dashboard, w *world) {
 	check(t, links.State == "needs-human" && links.Feedback.Update == w.linksQuestion && links.Latest.Update == w.linksReply && links.Latest.Author == "operator",
 		"links keeps its question open after an acknowledgement and a reply, and previews the reply: %+v %+v", links.Feedback, links.Latest)
 	rotate := rows[w.rotate.ID]
-	check(t, rotate.Feedback != nil && rotate.Feedback.Item == w.hardening.ID && rotate.Latest == nil, "a task links its plan's question but previews only its own messages: %+v", rotate)
+	check(t, rotate.Feedback == nil && rotate.Latest == nil, "a running task is not held by its plan's question: %+v", rotate)
 	build := rows[w.sessionsUI.ID]
 	check(t, build.Latest.Update == w.lastProgress && build.Latest.Author == w.attempts[w.sessionsUI.ID].ID && build.Latest.Summary == fmt.Sprintf("Progress note %d", progressSays), "latest: %+v", build.Latest)
 
 	resolution := s.post(t, control.Request{Op: "resolve", ReplyTo: w.linksQuestion, Body: "Yes, link the same feedback"})
 	list = readSessions(t, d)
 	links = sessionMap(list)[w.links.ID]
-	check(t, list.Feedback == 2 && links.Feedback == nil && links.Latest.Update == resolution && links.Latest.Kind == "resolved",
+	check(t, list.Feedback == 1 && links.Feedback == nil && links.Latest.Update == resolution && links.Latest.Kind == "resolved",
 		"a recorded resolution clears the request: %+v", links)
 	check(t, links.State == "running" && links.Observed == "waiting", "the resolution restores the task's state, and host state stays: %+v", links)
 	check(t, list.Sessions[0].Item == w.hardening.ID, "the remaining requests lead: %+v", list.Sessions[0])

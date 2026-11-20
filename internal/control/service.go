@@ -27,14 +27,10 @@ func (s Service) now() time.Time {
 
 // Execute deduplicates successful writes by actor and caller-supplied request key.
 func (s Service) Execute(a Actor, r Request) (Response, error) {
+	checked := "" // the attempt's state the host check confirmed
 	if r.Op == "attempt-reconcile" {
-		if err := operator(a); err != nil {
-			return Response{}, err
-		}
-		if s.Reconcile == nil || r.Body == "" {
-			return Response{}, problem(409, "host reconciliation and evidence are required")
-		}
-		if err := s.Reconcile(r.ID); err != nil {
+		var err error
+		if checked, err = s.checkReconcile(a, r); err != nil {
 			return Response{}, err
 		}
 	}
@@ -42,6 +38,11 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 	err := s.Store.Transaction(func(st *State) error {
 		if err := authorizeExecution(st, a); err != nil {
 			return err
+		}
+		if r.Op == "attempt-reconcile" {
+			if err := stillChecked(st, r.ID, checked); err != nil {
+				return err
+			}
 		}
 		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view"}, r.Op)
 		if write && (r.Key == "" || len(r.Key) > 200) {
@@ -67,6 +68,36 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 		return nil
 	})
 	return out, err
+}
+
+// checkReconcile runs the operator's attempt reconcile's host check and
+// returns the attempt's state as it stood before the check, which the check
+// confirmed.
+func (s Service) checkReconcile(a Actor, r Request) (string, error) {
+	if err := operator(a); err != nil {
+		return "", err
+	}
+	if s.Reconcile == nil || r.Body == "" {
+		return "", &Problem{Status: 409, Reason: ReasonReconcileRefused, Message: "host reconciliation and evidence are required"}
+	}
+	st, err := s.Store.Snapshot()
+	if err != nil {
+		return "", err
+	}
+	state := st.Attempts[r.ID].State
+	return state, s.Reconcile(r.ID)
+}
+
+// stillChecked refuses a reconcile whose attempt moved on after its host
+// check, such as a dispatch a coordinator pass launched meanwhile: the check
+// never confirmed the state it is in now.
+func stillChecked(st *State, id, checked string) error {
+	at, ok := st.Attempts[id]
+	if !ok || at.State == checked || at.State == "ended" {
+		return nil
+	}
+	return &Problem{Status: 409, Reason: ReasonReconcileRefused,
+		Message: "execution moved from " + checked + " to " + at.State + " while its host was checked; reconcile again"}
 }
 
 func authorizeExecution(st *State, a Actor) error {
@@ -185,7 +216,7 @@ func (s Service) create(st *State, a Actor, r Request) (Response, error) {
 	if strings.TrimSpace(item.Title) == "" {
 		return Response{}, problem(400, "title is required")
 	}
-	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" {
+	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" || item.Question != nil {
 		return Response{}, problem(400, "server-owned fields cannot be set on creation")
 	}
 	if err := validateCreation(st, a, item); err != nil {

@@ -1,6 +1,6 @@
 # Hosts and sessions
 
-> **Owns:** host config, task placement, the attempt as the session registry, how sessions are started and reached. **Not here:** dispatch, host ops and session signals (`coordinator.md`), what a session does (the skills, `plugins/engine/skills/`), what it records (`telemetry.md`), each harness's launch line, tiers and adapter (`harnesses.md`).
+> **Owns:** host config, task placement, the attempt as the session registry, how sessions are started and reached. **Not here:** dispatch and host ops (`coordinator.md`), session signals (`session-signals.md`), what a session does (the skills, `plugins/engine/skills/`), what it records (`telemetry.md`), each harness's launch line, tiers and adapter (`harnesses.md`).
 
 ## Hosts
 
@@ -131,7 +131,7 @@ a short delay: input boxes can swallow a newline sent with the text.
 
 **Working directory.** Every tmux command runs from `$HOME`, so no server
 engine starts lives in a worktree later removed, failing every later
-window. Host status reports such a server as `tmux_cwd_gone`, with its restart
+window. Host status reports one as `tmux_cwd_gone`, with its restart
 command; placement skips the host. Engine never kills a server with sessions.
 
 **Creation.** A per-server lock, `tmux-<socket>.lock` in

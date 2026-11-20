@@ -183,7 +183,7 @@ func (s Service) release(st *State, a Actor, question Update) []Update {
 	var out []Update
 	for _, id := range slices.Compact(ids) {
 		item, ok := st.Items[id]
-		if !ok || item.Kind != "task" || item.State != "needs-human" || !active(st, item) || PendingQuestion(st, id) > 0 {
+		if !ok || item.Kind != "task" || item.State != "needs-human" || !active(st, item) || OwnQuestion(st, id) > 0 {
 			continue
 		}
 		prior := heldFrom(st, id)
@@ -247,11 +247,27 @@ func (s Service) Dispatch(item Item, host, harness, key string) (Response, error
 	return s.Execute(Actor{Name: "coordinator", Role: "coordinator"}, Request{Op: "claim", ID: item.ID, Version: item.Version, Body: host, State: harness, Key: key})
 }
 
-// PendingQuestion includes a task's own questions and its parent plan's questions.
-func PendingQuestion(st *State, id string) int {
-	parent := st.Items[id].Plan
+// OwnQuestion is the first open question that holds item id: one asked on
+// it, or asked by its session on its plan. It is 0 when none is open. A
+// plan's question holds the task that asked it, not the plan's other tasks.
+func OwnQuestion(st *State, id string) int {
 	for _, u := range st.Updates {
-		if u.RequiresReply && (u.Item == id || parent != "" && u.Item == parent) && !resolved(st, u.ID) {
+		if u.RequiresReply && (u.Item == id || u.Task == id) && !resolved(st, u.ID) {
+			return u.ID
+		}
+	}
+	return 0
+}
+
+// PlanQuestion is an open question on the plan of task id, or 0. It blocks
+// only the first dispatch of a task in that plan.
+func PlanQuestion(st *State, id string) int {
+	parent := st.Items[id].Plan
+	if parent == "" {
+		return 0
+	}
+	for _, u := range st.Updates {
+		if u.RequiresReply && u.Item == parent && !resolved(st, u.ID) {
 			return u.ID
 		}
 	}

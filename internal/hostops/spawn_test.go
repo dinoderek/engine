@@ -145,8 +145,11 @@ func TestSpawnRefusalsChangeNothing(t *testing.T) {
 		{name: "bad run id", req: with(func(r *SpawnRequest) { r.RunID = "a/b" }), want: `run id "a/b"`},
 		{name: "another session's run id", req: with(func(r *SpawnRequest) { r.RunID = "r-8-20260102T030405Z" }), want: "is not a run of r-7"},
 		{name: "a run id in use", setup: func(t *testing.T, h home) {
+			write(t, filepath.Join(h.dir, session.RunsDir, "r-7-20260102T030405Z", session.RecordFile), "{}\n", 0o644)
+		}, want: "run r-7-20260102T030405Z already has a run record"},
+		{name: "a leftover run directory beside a window of its name", windows: []string{"@1 %1 1 r-7"}, setup: func(t *testing.T, h home) {
 			write(t, filepath.Join(h.dir, session.RunsDir, "r-7-20260102T030405Z", session.PaneLog), "x\n", 0o644)
-		}, want: "run r-7-20260102T030405Z already has a directory"},
+		}, want: "already has a window r-7"},
 		{name: "no hosts.toml", setup: remove(".config/engine/hosts.toml"), want: "read host config"},
 		{name: "host does not run claude", host: "box", want: "host box does not run claude"},
 		{name: "no harness binary", setup: remove("bin/claude"), want: "is not an executable claude binary"},
@@ -222,8 +225,8 @@ func remove(rel string) func(*testing.T, home) {
 	}
 }
 
-// A failure after the worktree exists says how to remove it.
-func TestSpawnFailuresNameTheWorktreeLeft(t *testing.T) {
+// A failure before or while the worktree is made says what failed.
+func TestSpawnFailuresSayWhatFailed(t *testing.T) {
 	h := newHome(t, "mac")
 	h.clone(t)
 	tm := &tmuxFake{fail: errors.New("tmux died")}
@@ -240,8 +243,9 @@ func TestSpawnFailuresNameTheWorktreeLeft(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(h.dir, ".claude.json"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, &tmuxFake{}, nil), request())
-	if err == nil || !strings.Contains(err.Error(), "trust ") || !strings.Contains(err.Error(), "worktree remove --force") {
-		t.Errorf("trust failed: %v", err)
+	git = &gitFake{}
+	_, err := Spawn(spawnDeps(t, h, git.run, &tmuxFake{}, nil), request())
+	if err == nil || !strings.Contains(err.Error(), "trust ") || !slices.ContainsFunc(git.calls, func(c string) bool { return strings.Contains(c, "worktree remove --force") }) {
+		t.Errorf("trust failed: %v, git %v", err, git.calls)
 	}
 }

@@ -38,7 +38,7 @@ func ready(v View) []Item {
 	var cands []Item
 	for _, t := range v.Tasks {
 		s := t.observed()
-		if t.open() && len(t.Blocked) == 0 && !t.taken() && !s.Live && !s.Unknown && !v.Fleet.LiveAnywhere(t.Name) {
+		if t.open() && len(t.Blocked) == 0 && t.PlanHold == 0 && !t.taken() && !s.Live && !s.Unknown && !v.Fleet.LiveAnywhere(t.Name) {
 			cands = append(cands, t)
 		}
 	}
