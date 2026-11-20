@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -54,20 +55,40 @@ var fullSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // prState is the part of gh pr view the merge reads.
 type prState struct {
-	State          string `json:"state"`
-	Head           string `json:"headRefOid"`
-	Base           string `json:"baseRefName"`
-	Mergeable      string `json:"mergeable"`
-	MergeState     string `json:"mergeStateStatus"`
-	ReviewDecision string `json:"reviewDecision"`
-	Checks         []struct {
-		Type       string `json:"__typename"`
-		Name       string `json:"name"`
-		Context    string `json:"context"`
-		Status     string `json:"status"`
-		Conclusion string `json:"conclusion"`
-		State      string `json:"state"`
-	} `json:"statusCheckRollup"`
+	State          string    `json:"state"`
+	Head           string    `json:"headRefOid"`
+	Base           string    `json:"baseRefName"`
+	Mergeable      string    `json:"mergeable"`
+	MergeState     string    `json:"mergeStateStatus"`
+	ReviewDecision string    `json:"reviewDecision"`
+	Title          string    `json:"title"`
+	Body           string    `json:"body"`
+	Checks         []prCheck `json:"statusCheckRollup"`
+}
+
+type prCheck struct {
+	Type       string    `json:"__typename"`
+	Name       string    `json:"name"`
+	Context    string    `json:"context"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion"`
+	State      string    `json:"state"`
+	StartedAt  time.Time `json:"startedAt"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+func (c prCheck) name() string {
+	if c.Type == "StatusContext" {
+		return c.Context
+	}
+	return c.Name
+}
+
+func (c prCheck) start() time.Time {
+	if c.StartedAt.IsZero() {
+		return c.CreatedAt
+	}
+	return c.StartedAt
 }
 
 // Merge merges a PR with this host's gh, pinned to the reviewed head, once
@@ -83,7 +104,7 @@ func Merge(d Deps, r MergeRequest) (Merged, error) {
 		return Merged{}, refuse("merge needs a PR number, the full head commit and squash, merge or rebase")
 	}
 	pr := strconv.Itoa(r.PR)
-	out, err := d.Run(d.Home, nil, "gh", "pr", "view", pr, "-R", r.Repo, "--json", "state,headRefOid,baseRefName,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup")
+	out, err := d.Run(d.Home, nil, "gh", "pr", "view", pr, "-R", r.Repo, "--json", "state,headRefOid,baseRefName,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,title,body")
 	if err != nil {
 		return Merged{}, fmt.Errorf("read PR %s#%d: %w", r.Repo, r.PR, err)
 	}
@@ -101,7 +122,8 @@ func Merge(d Deps, r MergeRequest) (Merged, error) {
 	if n := strings.TrimSpace(behind); n != "0" {
 		return Merged{MergeRefused, CodeBehind, fmt.Sprintf("%s moved: the head is %s commits behind it; merge it in and gate again", p.Base, n)}, nil
 	}
-	if _, err := d.Run(d.Home, nil, "gh", "pr", "merge", pr, "-R", r.Repo, "--"+r.Method, "--match-head-commit", r.Head); err != nil {
+	if _, err := d.Run(d.Home, nil, "gh", "pr", "merge", pr, "-R", r.Repo, "--"+r.Method, "--match-head-commit", r.Head,
+		"--subject", fmt.Sprintf("%s (#%d)", p.Title, r.PR), "--body", p.Body); err != nil {
 		if policy(err) {
 			return Merged{MergeRefused, CodeBlocked, "a branch rule blocks the merge: " + err.Error()}, nil
 		}
@@ -157,10 +179,24 @@ func judge(p prState, head string) (Merged, bool) {
 	return Merged{}, false
 }
 
-// checks returns the first failed check and the first pending one.
+// checks judges only the newest run per name. Ties select the later rollup
+// entry; undated runs sort before dated runs.
 func checks(p prState) (failed, pending string) {
+	newest := make(map[string]prCheck)
+	var names []string
 	for _, c := range p.Checks {
-		name, ok, waiting := c.Name, false, false
+		name := c.name()
+		old, exists := newest[name]
+		if !exists {
+			names = append(names, name)
+		}
+		if !exists || !c.start().Before(old.start()) {
+			newest[name] = c
+		}
+	}
+	for _, name := range names {
+		c := newest[name]
+		ok, waiting := false, false
 		if c.Type == "StatusContext" {
 			name, ok, waiting = c.Context, c.State == "SUCCESS", c.State == "PENDING" || c.State == "EXPECTED"
 		} else {
