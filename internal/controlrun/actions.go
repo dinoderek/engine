@@ -110,7 +110,7 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 	if a.Done {
 		outcome = hostops.RunDone
 	}
-	reply, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, outcome)
+	reply, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, outcome, a.Head)
 	if err != nil {
 		return err
 	}

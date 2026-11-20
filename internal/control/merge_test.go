@@ -142,7 +142,7 @@ func TestQueueStepAppliesOnlyToTheEntryItRead(t *testing.T) {
 	if e.Seq != from.Seq || !e.CheckedAt.Equal(checked.CheckedAt) || last.Recipient != "operator" || last.ReplyTo != req.ID || st.Updates[last.ID-2].Kind != "say" {
 		t.Fatalf("stepped entry %+v, updates %+v", e, st.Updates[len(st.Updates)-2:])
 	}
-	if !MergedAt(&st, task.ID).IsZero() {
+	if !MergedAt(&st, task.ID).IsZero() || MergedHead(&st, task.ID) != "" {
 		t.Fatal("merged before the merge step")
 	}
 	if ok, err := s.QueueStep(QueueStep{From: e, Done: true, Kind: MergeMerged, Text: "Merged at " + head}); err != nil || !ok {
@@ -151,6 +151,13 @@ func TestQueueStepAppliesOnlyToTheEntryItRead(t *testing.T) {
 	st = mustSnapshot(t, s)
 	if got := st.Items[task.ID]; got.State != "done" || got.PR != good().PR || len(st.Queue) != 0 || MergedAt(&st, task.ID).IsZero() {
 		t.Fatalf("task %+v, queue %+v", got, st.Queue)
+	}
+	// The merged update answers the request that named the head.
+	if got := MergedHead(&st, task.ID); got != head {
+		t.Fatalf("merged head %q, want %q", got, head)
+	}
+	if got := MergedHead(&st, "t999"); got != "" {
+		t.Fatalf("merged head of another task %q", got)
 	}
 	if st.Attempts[claimed.Attempt.ID].State == "ended" {
 		t.Fatal("the merge ended the attempt; the executor still reports")

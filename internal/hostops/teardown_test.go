@@ -55,12 +55,16 @@ func doneRelease(t *testing.T, f *teardown, outcome Outcome, gone bool) (Release
 	}
 	writeRun(t, h, session.Record{RunID: "r-7-a", Repo: "o/r", Name: "r-7", Branch: "task/r-7", Worktree: worktree, Spawned: fixedNow()})
 	git := &gitFake{}
-	r, err := Release(Deps{Run: git.run, Probe: f.probe, Teardown: f.run, Tmux: (&tmuxFake{}).tmux(), Home: h.dir}, "r-7", outcome)
+	r, err := Release(Deps{Run: git.run, Probe: f.probe, Teardown: f.run, Tmux: (&tmuxFake{}).tmux(), Home: h.dir}, "r-7", outcome, "")
 	if err != nil {
 		t.Fatalf("release: %v", err)
 	}
 	return r, clone, worktree, git
 }
+
+// branchLookup is the git call that finds a done run's branch, which these
+// runs no longer have.
+const branchLookup = "git rev-parse --verify --quiet refs/heads/task/r-7"
 
 const releaseUsage = "usage: ./dev <verb>\n  worktree create <branch>\n  worktree release <branch>\n"
 
@@ -71,8 +75,8 @@ func TestReleaseOfADoneRunRunsTheReposWorktreeRelease(t *testing.T) {
 		t.Errorf("teardown %v, want %v", f.released, want)
 	}
 	// The repo's command removed the worktree, so engine's own removal has
-	// nothing left to do.
-	if r != (Released{Name: "r-7", RepoReleased: true}) || len(git.calls) != 0 {
+	// nothing left to do; the branch it left is looked up and found gone.
+	if r != (Released{Name: "r-7", RepoReleased: true}) || !slices.Equal(git.calls, []string{branchLookup}) {
 		t.Errorf("released %+v, git %v", r, git.calls)
 	}
 }
@@ -82,7 +86,7 @@ func TestReleaseOfADoneRunRunsTheReposWorktreeRelease(t *testing.T) {
 func TestReleaseOfADoneRunRunsTheReposReleaseWhenTheWorktreeIsGone(t *testing.T) {
 	f := &teardown{usage: releaseUsage}
 	r, _, _, git := doneRelease(t, f, RunDone, true)
-	if len(f.released) != 1 || !r.RepoReleased || r.WorktreeKept || r.Note != "" || len(git.calls) != 0 {
+	if len(f.released) != 1 || !r.RepoReleased || r.WorktreeKept || r.Note != "" || !slices.Equal(git.calls, []string{branchLookup}) {
 		t.Errorf("released %+v, teardown %v, git %v", r, f.released, git.calls)
 	}
 }
@@ -94,7 +98,7 @@ func TestAFailedRepoReleaseIsANote(t *testing.T) {
 	if !r.RepoReleased || r.WorktreeKept || r.Worktree != worktree || !strings.Contains(r.Note, "no answer within") {
 		t.Errorf("released %+v", r)
 	}
-	if want := []string{"git worktree remove " + worktree}; !slices.Equal(git.calls, want) {
+	if want := []string{"git worktree remove " + worktree, branchLookup}; !slices.Equal(git.calls, want) {
 		t.Errorf("git calls %v, want %v", git.calls, want)
 	}
 }
@@ -106,9 +110,10 @@ func TestReleaseRunsOnlyAReleaseTheRepoProvidesForADoneRun(t *testing.T) {
 		usage   string
 		outcome Outcome
 		probed  int
+		git     []string
 	}{
-		"no such verb": {"usage: ./dev worktree create <branch>\n", RunDone, 1},
-		"ended run":    {releaseUsage, RunEnded, 0},
+		"no such verb": {"usage: ./dev worktree create <branch>\n", RunDone, 1, []string{"worktree remove", branchLookup}},
+		"ended run":    {releaseUsage, RunEnded, 0, []string{"worktree remove"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := &teardown{usage: c.usage}
@@ -116,7 +121,9 @@ func TestReleaseRunsOnlyAReleaseTheRepoProvidesForADoneRun(t *testing.T) {
 			if len(f.released) != 0 || f.probed != c.probed || r.RepoReleased || r.WorktreeKept {
 				t.Errorf("released %+v, teardown %v, probed %d", r, f.released, f.probed)
 			}
-			if want := []string{"git worktree remove " + worktree}; !slices.Equal(git.calls, want) {
+			want := slices.Clone(c.git)
+			want[0] = "git worktree remove " + worktree
+			if !slices.Equal(git.calls, want) {
 				t.Errorf("git calls %v, want %v", git.calls, want)
 			}
 		})

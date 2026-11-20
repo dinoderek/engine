@@ -232,3 +232,20 @@ func MergedAt(st *State, id string) time.Time {
 	}
 	return time.Time{}
 }
+
+// MergedHead is the head commit the task's PR merged at: the head of the
+// merge request its newest merged update answers. It is empty when the task
+// has no merged update or the request is gone.
+func MergedHead(st *State, id string) string {
+	for i := len(st.Updates) - 1; i >= 0; i-- {
+		u := st.Updates[i]
+		if u.Item != id || u.Kind != MergeMerged {
+			continue
+		}
+		if u.ReplyTo < 1 || u.ReplyTo > len(st.Updates) || st.Updates[u.ReplyTo-1].Merge == nil {
+			return ""
+		}
+		return st.Updates[u.ReplyTo-1].Merge.Head
+	}
+	return ""
+}

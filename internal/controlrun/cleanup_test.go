@@ -18,12 +18,12 @@ type flaky struct {
 	fails int
 }
 
-func (f *flaky) Release(name string, keep hostops.Outcome) (hostops.Released, error) {
+func (f *flaky) Release(name string, keep hostops.Outcome, head string) (hostops.Released, error) {
 	if f.fails > 0 {
 		f.fails--
 		return hostops.Released{}, errors.New("tmux is busy")
 	}
-	return f.host.Release(name, keep)
+	return f.host.Release(name, keep, head)
 }
 
 // Once its plan is done, every waiting session is released in the pass,
