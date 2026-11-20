@@ -70,5 +70,4 @@ Then end your turn and wait. Only the operator's answer to the question
 counts; reading, acknowledgement, a conversational reply or an automated
 `continue` grants nothing. When it comes, follow it and carry on. An engine
 server task raises it with `engine ask`
-instead, on its plan when the root cause affects every task (the `engine`
-skill).
+instead, on its task or plan as the `engine` skill says.

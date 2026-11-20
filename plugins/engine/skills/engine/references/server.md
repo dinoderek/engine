@@ -41,33 +41,31 @@ already shows.
 
 ## Executor
 
-Follow the `build` skill, hands-off, with these changes. They replace its
-merge step, which the merge guard enforces.
+Follow the `build` skill, hands-off, with these changes; they replace its
+merge step.
 
-- **Step 1.** The server opened the task's worktree: work there.
+- **Step 1.** The server opened the task's worktree: work there, create none.
 
 - **Step 2.** Also read the parent plan, `engine updates` for the task and
   the plan, and the card's and plan's `## Overrides`. A dependency not
   `done` is a **Drift** hard stop.
 - **Updates are the inbox.** Read them before you change code, before the PR,
-  before the merge request, and first thing when the session resumes.
-- **Step 8.** Omit issue-closing directives. Put `low` notes and the
-  digest in the repo template's rulings section if it has one. Then set the
-  task `in-review` with its PR URL.
+  before the merge request, and when the session resumes.
+- **Step 8.** Omit issue-closing directives. Put `low` notes and the digest
+  in the template's rulings section if it has one. Then set the task
+  `in-review` with its PR URL.
 - **Reviewer verdicts.** Post every reviewer verdict, APPROVED or not, with
   `engine tell <task>`, and list each round in the PR body.
-- **Step 10: the merge request.** You never merge, and never wait for a
-  lock: the coordinator's merge queue orders merges. Once the PR is
-  `in-review`, reviewed and pushed:
-  1. Send the rulings digest, if any (below),
-     once: a repeated request does not resend it. Approval the repo or card
-     requires is an `engine ask` before the request.
+- **Step 10: the merge request.** You never merge or wait for a lock:
+  the coordinator's merge queue orders merges. Once the PR is `in-review`,
+  reviewed and pushed:
+  1. Send the rulings digest, if any (below), once. Approval the repo or
+     card requires is an `engine ask` before the request.
   2. Request the merge only when `gh pr checks` shows nothing pending, and
      never edit the PR body after `merge-ready`: it becomes the merge commit
      body. `engine task merge-ready <task> --pr <url> --head <full-sha> --method
      <the repo's merge method> --verdict APPROVED`, then end your turn. The
-     merge guard refuses `gh pr merge` in a server session. The coordinator
-     waits for CI.
+     merge guard refuses `gh pr merge` here; the coordinator waits for CI.
   3. **Wait by ending your turn**, never in a background job, polling loop
      or `sleep`. The coordinator types a pointer at its update into your
      window, as `Read the new task updates: engine updates t7 --after 512`:
@@ -135,6 +133,7 @@ The classes and "Ask once" are `build`'s (`hard-stops.md`). Here:
   `engine ask <plan> <question>`. It holds your task and the plan's new
   dispatches; its resolution answers them all.
 - **Host problems are the coordinator's readiness job, not a question.**
+  A tool that breaks mid-task is `engine ask <task>`, never on the plan.
 - **Never say the operator agreed without citing the update that holds it.**
   When the operator answers in the pane, the hook records it; do not re-post
   it.

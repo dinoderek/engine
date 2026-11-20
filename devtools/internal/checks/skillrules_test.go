@@ -1,6 +1,7 @@
 package checks
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,8 +62,8 @@ func TestSkillRulesPresent(t *testing.T) {
 
 func TestSkillRulesFailWhenASentenceIsRemoved(t *testing.T) {
 	root := filepath.Join("..", "..", "..")
-	for _, r := range skillRules {
-		t.Run(r.file+" "+r.sentence[:20], func(t *testing.T) {
+	for i, r := range skillRules {
+		t.Run(fmt.Sprintf("%d %s", i, r.file), func(t *testing.T) {
 			dir := t.TempDir()
 			for _, f := range []string{engineSkill, serverRef, buildSkill, hardStops, reviewRef} {
 				b, err := os.ReadFile(filepath.Join(root, f))
