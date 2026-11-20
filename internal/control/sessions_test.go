@@ -112,8 +112,8 @@ func TestSessionViewFeedbackAndLatestItemMessage(t *testing.T) {
 	parent := call(t, s, planner, Request{Op: "ask", ID: plan.ID, Body: "May the plan change scope?"}).Updates[0]
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "Plan-level note", Recipient: "task"})
 	rows := sessionRows(t, s)
-	if f := rows[task.ID].Feedback; f == nil || f.Item != plan.ID || f.Update != parent.ID || f.Summary != "May the plan change scope?" {
-		t.Fatalf("parent question missing from the task row: %+v", f)
+	if f := rows[task.ID].Feedback; f != nil {
+		t.Fatalf("a plan question reached a task that did not ask it: %+v", f)
 	}
 	if l := rows[task.ID].Latest; l.Update != resolution.ID {
 		t.Fatalf("task message must stay scoped to the task: %+v", l)
@@ -217,11 +217,12 @@ func TestSessionViewKeepsAVanishedAttemptUntilItsResume(t *testing.T) {
 	failed := newTask(t, s, repo.ID, plan.ID)
 	approve(t, s, plan)
 	a, out := dispatch(t, s, task)
-	_, other := dispatch(t, s, failed)
+	otherWorker, other := dispatch(t, s, failed)
 	launched(t, s, out.Attempt.ID)
 	launched(t, s, other.Attempt.ID)
 	question := call(t, s, a, Request{Op: "ask", ID: task.ID, Body: "Which API?"}).Updates[0]
 	seenLive(t, s, out.Attempt.ID)
+	call(t, s, otherWorker, Request{Op: "say", ID: failed.ID, Body: "started"})
 	call(t, s, op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "host rebooted"})
 	call(t, s, op, Request{Op: "attempt-reconcile", ID: other.Attempt.ID, Body: "crashed"})
 	rows := sessionRows(t, s)

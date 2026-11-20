@@ -186,7 +186,7 @@ func TestLeavingInReviewLeavesTheQueueExceptForAHardStop(t *testing.T) {
 	}
 	failing, c, claimed := inReview(t, s, repo, plan)
 	call(t, s, c, ready(failing.ID, good()))
-	if _, err := s.EndDead(claimed.Attempt.ID, "window gone"); err != nil {
+	if _, err := s.EndDead(claimed.Attempt.ID, "window gone", ""); err != nil {
 		t.Fatal(err)
 	}
 	st = mustSnapshot(t, s)
@@ -207,7 +207,7 @@ func TestAVanishedTaskKeepsItsPlace(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if at, err := s.EndDead(claimed.Attempt.ID, "window gone"); err != nil || at.Reason != EndVanished {
+	if at, err := s.EndDead(claimed.Attempt.ID, "window gone", ""); err != nil || at.Reason != EndVanished {
 		t.Fatal(at, err)
 	}
 	st := mustSnapshot(t, s)

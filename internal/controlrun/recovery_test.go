@@ -28,7 +28,7 @@ func TestDeathDuringUnresolvedQuestionParksTheTaskUntilAnswered(t *testing.T) {
 	if h.calls != 1 || st.Items[task.ID].Attempt != first {
 		t.Fatal("a task parked on an operator question was dispatched again")
 	}
-	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.PendingQuestion(&st, task.ID), Body: "Take the first option."})
+	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.OwnQuestion(&st, task.ID), Body: "Take the first option."})
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
 	resumed := st.Attempts[st.Items[task.ID].Attempt]
@@ -116,6 +116,7 @@ func TestRetriedTaskDispatchesAsAResume(t *testing.T) {
 	if h.launches[first.RunID].Spawn.Resume {
 		t.Fatal("a first attempt dispatched as a resume")
 	}
+	claim(t, c, task)
 	h.status.Windows[0].Alive = false
 	if err := c.ConfirmEnded(first.ID); err != nil {
 		t.Fatal(err)
@@ -185,6 +186,7 @@ func TestDeathAfterCoordinationRestartedStillFails(t *testing.T) {
 	now = now.Add(time.Minute)
 	execute(t, c.Service, control.Request{Op: "run", ID: plan.ID})
 	pass(t, c)
+	claim(t, c, task)
 	h.status.Windows[0].Alive = false
 	now = now.Add(time.Minute)
 	pass(t, c)
@@ -195,25 +197,19 @@ func TestDeathAfterCoordinationRestartedStillFails(t *testing.T) {
 	}
 }
 
-func TestAPlanQuestionParksAVanishedTaskUntilAnswered(t *testing.T) {
-	c, h, _, plan, task := setup(t)
-	pass(t, c)
-	pass(t, c)
+func TestAPlanQuestionDoesNotStopTheRecoveryOfAVanishedTask(t *testing.T) {
+	c, m, task, _ := requested(t, nil)
 	pass(t, c) // the coordinator sees the session live
-	execute(t, c.Service, control.Request{Op: "ask", ID: plan.ID, Body: "Is the plan still right?"})
-	h.status.Windows = nil
-	pass(t, c)
-	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
-	first := st.Attempts[st.Items[task.ID].Attempt]
-	if first.Reason != control.EndVanished || h.calls != 1 {
-		t.Fatalf("a task under an open plan question was failed or dispatched again: %+v, %d launches", first, h.calls)
-	}
-	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.PendingQuestion(&st, task.ID), Body: "Yes."})
+	first := st.Items[task.ID].Attempt
+	execute(t, c.Service, control.Request{Op: "ask", ID: st.Items[task.ID].Plan, Body: "Is the plan still right?"})
+	m.status.Windows = nil
+	pass(t, c)
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
-	if resumed := st.Attempts[st.Items[task.ID].Attempt]; resumed.ID == first.ID || !h.launches[resumed.RunID].Spawn.Resume {
-		t.Fatalf("the answered task was not resumed: %+v", resumed)
+	resumed := st.Attempts[st.Items[task.ID].Attempt]
+	if st.Attempts[first].Reason != control.EndVanished || resumed.ID == first || !m.launches[resumed.RunID].Spawn.Resume {
+		t.Fatalf("the vanished task was not resumed under an open plan question: %+v", resumed)
 	}
 }
 

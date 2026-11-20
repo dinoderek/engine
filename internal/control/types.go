@@ -34,6 +34,9 @@ type Item struct {
 	ApprovedVersion int  `json:"approved_version,omitempty"`
 	// Status is a plan's PlanStatus in read responses. It is never stored.
 	Status string `json:"status,omitempty"`
+	// Question is a plan's oldest open question in read responses, however
+	// it was asked. It is never stored.
+	Question *UpdateRef `json:"question,omitempty"`
 	// StoppedAt is when the operator last stopped this plan's coordination.
 	StoppedAt time.Time `json:"stopped_at,omitzero"`
 }
@@ -62,8 +65,14 @@ type Attempt struct {
 	StuckFor   int64     `json:"stuck_for,omitempty"`
 	// LiveAt is the last coordinator pass that saw the attempt's window live.
 	LiveAt time.Time `json:"live_at,omitzero"`
-	// Reason is why a dead window ended the attempt: EndVanished or EndFailed.
+	// Reason is why a dead window ended the attempt: EndVanished,
+	// EndEarlyDeath or EndFailed.
 	Reason string `json:"reason,omitempty"`
+	// Early is set when the session died before claiming its task, whether
+	// that ended the attempt early-death or failed; Tail is the end of its
+	// pane log then, when the host showed one.
+	Early bool   `json:"early,omitempty"`
+	Tail  string `json:"tail,omitempty"`
 }
 
 // Update is immutable history; acknowledgement and resolution are separate records.

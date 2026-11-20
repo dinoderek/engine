@@ -2,7 +2,7 @@ package control
 
 import "testing"
 
-func TestTaskAsksOnItsPlanAndTheResolutionReleasesEveryTask(t *testing.T) {
+func TestTaskAsksOnItsPlanAndTheResolutionReleasesTheAsker(t *testing.T) {
 	s := service(t)
 	repo, plan := repoPlan(t, s)
 	other := *call(t, s, op, Request{Op: "create", Item: Item{Kind: "plan", Repo: repo.ID, Title: "Another", Body: "Other"}}).Item
@@ -21,10 +21,10 @@ func TestTaskAsksOnItsPlanAndTheResolutionReleasesEveryTask(t *testing.T) {
 	if st.Items[one.ID].State != "needs-human" || st.Items[two.ID].State != "running" {
 		t.Fatalf("states = %s, %s", st.Items[one.ID].State, st.Items[two.ID].State)
 	}
-	if PendingQuestion(&st, two.ID) != question.ID {
-		t.Fatal("the plan question does not block the sibling")
+	if OwnQuestion(&st, one.ID) != question.ID || OwnQuestion(&st, two.ID) != 0 || PlanQuestion(&st, two.ID) != question.ID {
+		t.Fatal("the plan question holds the sibling, or not the asker")
 	}
-	reject(t, s, second, Request{Op: "state", ID: two.ID, Version: claimed.Item.Version, State: "in-review"}, 409)
+	call(t, s, second, Request{Op: "state", ID: two.ID, Version: claimed.Item.Version, State: "in-review", Item: Item{PR: good().PR}})
 	seen := call(t, s, second, Request{Op: "updates", ID: plan.ID}).Updates
 	if len(seen) == 0 || seen[len(seen)-1].ID != question.ID {
 		t.Fatalf("sibling reads %+v, want the plan question", seen)
@@ -35,8 +35,8 @@ func TestTaskAsksOnItsPlanAndTheResolutionReleasesEveryTask(t *testing.T) {
 		t.Fatalf("resolution = %+v, want the plan resolution and the asker's restored state", out.Updates)
 	}
 	st = mustSnapshot(t, s)
-	if st.Items[one.ID].State != "running" || PendingQuestion(&st, one.ID) != 0 || PendingQuestion(&st, two.ID) != 0 {
-		t.Fatalf("after resolution: %s, pending %d and %d", st.Items[one.ID].State, PendingQuestion(&st, one.ID), PendingQuestion(&st, two.ID))
+	if st.Items[one.ID].State != "running" || OwnQuestion(&st, one.ID) != 0 || OwnQuestion(&st, two.ID) != 0 {
+		t.Fatalf("after resolution: %s, pending %d and %d", st.Items[one.ID].State, OwnQuestion(&st, one.ID), OwnQuestion(&st, two.ID))
 	}
 }
 
@@ -84,7 +84,7 @@ func TestTaskStaysHeldUntilItsLastQuestionIsResolved(t *testing.T) {
 	}
 }
 
-func TestPlanResolutionReleasesASiblingWhoseOwnQuestionWasResolvedFirst(t *testing.T) {
+func TestASiblingsOwnResolutionReleasesItWhileThePlanQuestionIsOpen(t *testing.T) {
 	s := service(t)
 	repo, plan := repoPlan(t, s)
 	one := newTask(t, s, repo.ID, plan.ID)
@@ -98,8 +98,11 @@ func TestPlanResolutionReleasesASiblingWhoseOwnQuestionWasResolvedFirst(t *testi
 	own := call(t, s, second, Request{Op: "ask", ID: two.ID, Body: "Approve the schema change?"}).Updates[0]
 	shared := call(t, s, first, Request{Op: "ask", ID: plan.ID, Body: "The unit lane is red on main"}).Updates[0]
 	call(t, s, op, Request{Op: "resolve", ReplyTo: own.ID, Body: "Approved"})
-	if got := mustSnapshot(t, s).Items[two.ID].State; got != "needs-human" {
-		t.Fatalf("the open plan question let %s go to %s", two.ID, got)
+	if got := mustSnapshot(t, s).Items[two.ID].State; got != "running" {
+		t.Fatalf("the open plan question kept %s at %s", two.ID, got)
+	}
+	if got := mustSnapshot(t, s).Items[one.ID].State; got != "needs-human" {
+		t.Fatalf("the asker is %s while its question is open", got)
 	}
 	call(t, s, op, Request{Op: "resolve", ReplyTo: shared.ID, Body: "Fixed on main"})
 	st := mustSnapshot(t, s)

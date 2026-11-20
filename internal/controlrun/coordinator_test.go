@@ -132,6 +132,19 @@ func execute(t *testing.T, s control.Service, r control.Request) control.Item {
 	}
 	return *out.Item
 }
+
+// claim has the task's current session write to the server, as one that has
+// started its work does.
+func claim(t *testing.T, c *Coordinator, task control.Item) {
+	t.Helper()
+	st, _ := c.Service.Store.Snapshot()
+	at := st.Attempts[st.Items[task.ID].Attempt]
+	_, err := c.Service.Execute(control.Actor{Name: at.ID, Role: "worker", Attempt: at.ID}, control.Request{Op: "say", ID: task.ID, Body: "started", Key: control.Secret()})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func pass(t *testing.T, c *Coordinator) {
 	t.Helper()
 	if err := c.Pass(context.Background()); err != nil {

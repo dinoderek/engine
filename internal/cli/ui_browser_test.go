@@ -157,8 +157,8 @@ func sessionsAndOutage(t *testing.T, b *browser, s *controlStack, w *world, shot
 	b.waitFor("six sessions", "document.querySelectorAll('#sessions tbody tr').length === 6")
 	var order []string
 	b.value("[...document.querySelectorAll('#sessions tbody tr')].map((r) => r.id)", &order)
-	want := []string{"session-" + w.links.ID, "session-" + w.hardening.ID, "session-" + w.rotate.ID}
-	if strings.Join(order[:3], ",") != strings.Join(want, ",") {
+	want := []string{"session-" + w.links.ID, "session-" + w.hardening.ID}
+	if strings.Join(order[:2], ",") != strings.Join(want, ",") {
 		t.Errorf("feedback requests must lead: %v", order)
 	}
 	if got := text(b, "#tab-sessions"); got != "Sessions · 6" {
@@ -168,8 +168,8 @@ func sessionsAndOutage(t *testing.T, b *browser, s *controlStack, w *world, shot
 	if text(b, pv+" .observed") != "Waiting" || text(b, pv+" .feedback") != "" || !strings.Contains(text(b, pv+` td[data-label="Latest attached update"]`), "Waiting for the harness") {
 		t.Errorf("an ordinary wait must show as waiting, without feedback: %q", text(b, pv))
 	}
-	if got := text(b, "#session-"+w.rotate.ID+" .feedback"); got != "Needs feedback · plan "+w.hardening.ID {
-		t.Errorf("the parent plan's question: %q", got)
+	if got := text(b, "#session-"+w.rotate.ID+" .feedback"); got != "" {
+		t.Errorf("a running task is not held by its plan's question: %q", got)
 	}
 	b.tabTo(fmt.Sprintf(`a[data-key="s-fb-%s"]`, w.links.ID), 40)
 	b.press("Enter")

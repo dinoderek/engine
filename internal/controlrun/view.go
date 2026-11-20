@@ -44,7 +44,7 @@ func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) r
 // record is item as a pass reads it from st, without its session.
 func record(st control.State, item control.Item) reconcile.Item {
 	t := reconcile.Item{Item: item, Current: st.Attempts[item.Attempt], Name: sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)),
-		Vanished: control.Vanished(&st, item), Question: control.PendingQuestion(&st, item.ID),
+		Vanished: control.Vanished(&st, item), Question: control.OwnQuestion(&st, item.ID), PlanHold: control.NewStartHold(&st, item.ID),
 		Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(&st, item.ID), MergedHead: control.MergedHead(&st, item.ID)}
 	for _, id := range item.Depends {
 		if st.Items[id].State != "done" {
@@ -99,7 +99,7 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 		}
 		for _, r := range h.Status.Runs {
 			if r.Name == s.Name && r.Record.RunID == at.RunID {
-				s.Worktree, s.Branch = r.Record.Worktree, r.Record.Branch
+				s.Worktree, s.Branch, s.PaneTail = r.Record.Worktree, r.Record.Branch, r.PaneTail
 			}
 		}
 		if w, ok := matchWindow(at, h.Status, s.Name); ok {

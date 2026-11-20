@@ -104,39 +104,40 @@ func TestExternalCompletionInactiveStatesAndQuestions(t *testing.T) {
 			}
 		})
 	}
-	for _, parentQuestion := range []bool{false, true} {
-		t.Run(fmt.Sprint("question-", parentQuestion), func(t *testing.T) {
-			s := service(t)
-			repo, plan := repoPlan(t, s)
-			task := newTask(t, s, repo.ID, plan.ID)
-			target := task.ID
-			if parentQuestion {
-				target = plan.ID
-			}
-			if !parentQuestion {
-				if err := s.Store.Transaction(func(st *State) error {
-					item := st.Items[task.ID]
-					item.State = "running"
-					st.Items[item.ID] = item
-					return nil
-				}); err != nil {
-					t.Fatal(err)
-				}
-			}
-			call(t, s, op, Request{Op: "ask", ID: target, Body: "Need a decision"})
-			if !parentQuestion {
-				task.Version++
-				task = *call(t, s, op, Request{Op: "state", ID: task.ID, Version: task.Version, State: "failed"}).Item
-			}
-			reject(t, s, op, Request{Op: "complete-external", ID: task.ID, Version: task.Version, Item: Item{PR: externalPR(repo.Slug)}}, 409)
-		})
-	}
+	t.Run("question", func(t *testing.T) {
+		s := service(t)
+		repo, plan := repoPlan(t, s)
+		task := newTask(t, s, repo.ID, plan.ID)
+		if err := s.Store.Transaction(func(st *State) error {
+			item := st.Items[task.ID]
+			item.State = "running"
+			st.Items[item.ID] = item
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		call(t, s, op, Request{Op: "ask", ID: task.ID, Body: "Need a decision"})
+		task.Version++
+		task = *call(t, s, op, Request{Op: "state", ID: task.ID, Version: task.Version, State: "failed"}).Item
+		reject(t, s, op, Request{Op: "complete-external", ID: task.ID, Version: task.Version, Item: Item{PR: externalPR(repo.Slug)}}, 409)
+	})
 	s := service(t)
 	repo, plan := repoPlan(t, s)
 	for _, item := range []Item{repo, plan} {
 		reject(t, s, op, Request{Op: "complete-external", ID: item.ID, Version: item.Version, Item: Item{PR: externalPR(repo.Slug)}}, 400)
 	}
 	reject(t, s, op, Request{Op: "complete-external", ID: "t999", Version: 1}, 404)
+}
+
+func TestExternalCompletionIgnoresItsPlansQuestion(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	call(t, s, op, Request{Op: "ask", ID: plan.ID, Body: "Need a decision"})
+	done := call(t, s, op, Request{Op: "complete-external", ID: task.ID, Version: task.Version, Item: Item{PR: externalPR(repo.Slug)}}).Item
+	if done.State != "done" {
+		t.Fatalf("task is %s, want done", done.State)
+	}
 }
 
 func TestCompletionPR(t *testing.T) {

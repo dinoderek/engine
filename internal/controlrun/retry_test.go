@@ -20,6 +20,7 @@ func endFirstAttempt(t *testing.T, c *Coordinator, h *host, task control.Item, a
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
 	first := st.Attempts[st.Items[task.ID].Attempt]
+	claim(t, c, task)
 	h.status.Windows[0].Alive = false
 	if err := c.ConfirmEnded(first.ID); err != nil {
 		t.Fatal(err)
