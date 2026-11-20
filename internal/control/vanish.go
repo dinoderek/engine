@@ -28,12 +28,14 @@ func resumable(st *State, item Item, at Attempt) bool {
 	return !stopped.IsZero() && !stopped.Before(last)
 }
 
-// resumedVanished reports whether the attempt of at's task just before at
-// ended vanished. Attempt numbers are allocated in order.
+// resumedVanished reports whether the attempt of at's task that ran just
+// before at ended vanished. Attempt numbers are allocated in order. An
+// attempt that never opened a window, such as a dispatch the operator ended
+// unlaunched, ran nothing, so at is not its resume.
 func resumedVanished(st *State, at Attempt) bool {
 	var prev Attempt
 	for _, o := range st.Attempts {
-		if o.Item == at.Item && Number(o.ID) < Number(at.ID) && Number(o.ID) > Number(prev.ID) {
+		if o.Item == at.Item && o.Window != "" && Number(o.ID) < Number(at.ID) && Number(o.ID) > Number(prev.ID) {
 			prev = o
 		}
 	}

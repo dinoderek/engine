@@ -79,8 +79,27 @@ func TestReconcileEndsADispatchTheHostNeverLaunched(t *testing.T) {
 	h.unresolved = false
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
-	if next := st.Attempts[st.Items[task.ID].Attempt]; next.ID == stuck.ID || next.State != "running" {
+	next := st.Attempts[st.Items[task.ID].Attempt]
+	if next.ID == stuck.ID || next.State != "running" {
 		t.Fatalf("no new attempt was dispatched: %+v", next)
+	}
+	// The new attempt is no resume of the unlaunched one: seen live with a
+	// PR, it stays resumable when its window goes.
+	pass(t, c)
+	worker, err := c.Service.Authenticate(h.launches[next.RunID].Credential, "operator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ = c.Service.Store.Snapshot()
+	if _, err = c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "in-review",
+		Item: control.Item{PR: reviewedPR}, Key: "review"}); err != nil {
+		t.Fatal(err)
+	}
+	h.status.Windows = nil
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	if at := st.Attempts[next.ID]; at.Reason != control.EndVanished || st.Items[task.ID].State == "failed" {
+		t.Fatalf("the attempt after an unlaunched one lost its resume: %+v, task %s", at, st.Items[task.ID].State)
 	}
 }
 

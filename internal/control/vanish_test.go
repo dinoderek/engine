@@ -2,6 +2,7 @@ package control
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -28,6 +29,7 @@ func TestResumableWhenWorkRemainsAfterTheWindowWentAway(t *testing.T) {
 		{name: "stopped, then seen live after the restart", plan: Item{StoppedAt: live.Add(-time.Minute)}, at: Attempt{Started: start, LiveAt: live}},
 		{name: "resume of a vanished attempt", prev: EndVanished, task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}},
 		{name: "retry of a failed attempt", prev: EndFailed, task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}, want: true},
+		{name: "after an unlaunched attempt that ended vanished", prev: "unlaunched", task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}, want: true},
 		{name: "resume of a vanished attempt, then stopped", prev: EndVanished, plan: Item{StoppedAt: live}, at: Attempt{Started: start, LiveAt: live}, want: true},
 		{name: "stopped before it was ever seen live", plan: Item{StoppedAt: start.Add(time.Minute)}, at: Attempt{Started: start}, want: true},
 	}
@@ -38,8 +40,12 @@ func TestResumableWhenWorkRemainsAfterTheWindowWentAway(t *testing.T) {
 			c.at.ID, c.at.Item, c.at.State = "a3", "t2", "running"
 			st := emptyState()
 			st.Items[c.plan.ID], st.Items[c.task.ID], st.Attempts[c.at.ID] = c.plan, c.task, c.at
-			if c.prev != "" {
-				st.Attempts["a1"] = Attempt{ID: "a1", Item: "t2", State: "ended", Reason: c.prev}
+			switch c.prev {
+			case "":
+			case "unlaunched": // the operator ended a dispatch that opened no window
+				st.Attempts["a1"] = Attempt{ID: "a1", Item: "t2", State: "ended", Reason: EndVanished}
+			default:
+				st.Attempts["a1"] = Attempt{ID: "a1", Item: "t2", State: "ended", Reason: c.prev, Window: "@1"}
 				st.Attempts["a9"] = Attempt{ID: "a9", Item: "t8", State: "ended", Reason: EndFailed}
 			}
 			if c.question {
@@ -182,5 +188,25 @@ func TestReconcileRefusalIsTheChecksProblem(t *testing.T) {
 	}
 	if at := mustSnapshot(t, s).Attempts[out.Attempt.ID]; at.State != "dispatching" {
 		t.Fatalf("a refused reconcile changed the attempt: %+v", at)
+	}
+}
+
+// A dispatch launched between the host check and the transaction was never
+// checked as running, so the reconcile is refused and the task kept.
+func TestReconcileRefusesAnAttemptThatMovedDuringTheCheck(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	_, out := dispatch(t, s, task)
+	s.Reconcile = func(id string) error { return s.SetAttempt(id, "running", "@1") }
+	_, err := s.Execute(op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "gone", Key: "k"})
+	var p *Problem
+	if !errors.As(err, &p) || p.Status != 409 || p.Reason != ReasonReconcileRefused || !strings.Contains(err.Error(), "moved from dispatching to running") {
+		t.Fatalf("err = %v", err)
+	}
+	st := mustSnapshot(t, s)
+	if at := st.Attempts[out.Attempt.ID]; at.State != "running" || st.Items[task.ID].State != "running" {
+		t.Fatalf("a reconcile of a moved attempt changed it: %+v, task %s", at, st.Items[task.ID].State)
 	}
 }
