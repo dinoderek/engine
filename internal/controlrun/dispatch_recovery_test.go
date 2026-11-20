@@ -111,7 +111,10 @@ func TestReconcileRefusesADispatchTheHostMayHaveLaunched(t *testing.T) {
 			h.status.Windows = []hostops.Window{{Name: "demo-3", ID: "@4"}}
 		},
 		"a run record": func(h *host, run string) {
-			h.status.Runs = []hostops.Run{{Name: "demo-3", Record: session.Record{RunID: run}}}
+			h.status.Runs = []hostops.Run{{Name: "demo-3", Record: session.Record{RunID: run, Tmux: "engine:@4"}}}
+		},
+		"an incomplete run record": func(h *host, run string) {
+			h.status.Runs = []hostops.Run{{Name: "demo-3", Dir: "/runs/" + run, Record: session.Record{RunID: run, Tmux: "engine:"}}}
 		},
 		"an unreadable host": func(h *host, _ string) { h.outage = true },
 		"unreadable runs":    func(h *host, _ string) { h.status.RunsError = "run.json: bad" },
@@ -131,6 +134,9 @@ func TestReconcileRefusesADispatchTheHostMayHaveLaunched(t *testing.T) {
 			var p *control.Problem
 			if !errors.As(err, &p) || p.Status != 409 || p.Reason != control.ReasonReconcileRefused {
 				t.Fatalf("err = %v, want a 409 reconcile refusal", err)
+			}
+			if name == "an incomplete run record" && !strings.Contains(err.Error(), "remove /runs/"+at.RunID+" on the host and reconcile again") {
+				t.Errorf("the refusal names no remedy: %v", err)
 			}
 		})
 	}

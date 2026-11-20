@@ -266,9 +266,14 @@ func dispatchGone(status hostops.Status, name string, at control.Attempt) error 
 		}
 	}
 	for _, r := range status.Runs {
-		if r.Record.RunID == at.RunID {
-			return refuseReconcile("dispatch has not completed: host %s has a run record for %s", at.Host, at.RunID)
+		if r.Record.RunID != at.RunID {
+			continue
 		}
+		if _, window, _ := strings.Cut(r.Record.Tmux, ":"); window == "" {
+			return refuseReconcile("host %s has an incomplete run record for %s, which a spawn that died before its window left; "+
+				"once no window %s is open, remove %s on the host and reconcile again", at.Host, at.RunID, name, r.Dir)
+		}
+		return refuseReconcile("dispatch has not completed: host %s has a run record for %s", at.Host, at.RunID)
 	}
 	return nil
 }

@@ -87,7 +87,8 @@ func Spawn(d Deps, r SpawnRequest) (Spawned, error) {
 			return Spawned{}, fmt.Errorf("clear the leftover run directory %s: %w", s.runDir, err)
 		}
 	}
-	repos := session.Repos{Run: d.Run, Probe: d.Probe, Home: d.Home, BaseURL: d.BaseURL}
+	// Teardown bounds the repo's own release, which a failed spawn's undo runs.
+	repos := session.Repos{Run: d.Run, Probe: d.Probe, Teardown: d.Teardown, Home: d.Home, BaseURL: d.BaseURL}
 	if s.control != nil {
 		repos.Control = true
 		repos.RemoteURL = s.control.Remote

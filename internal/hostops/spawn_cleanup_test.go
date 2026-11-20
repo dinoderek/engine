@@ -131,3 +131,30 @@ func TestSpawnReusesALeftoverRunDirectory(t *testing.T) {
 		t.Errorf("run.json: %v", err)
 	}
 }
+
+// A failed spawn's undo of a worktree the repo's own command made runs the
+// repo's release through Teardown, which carries the deadline, never Run.
+func TestSpawnCleanupRunsTheReposReleaseUnderItsDeadline(t *testing.T) {
+	h := newHome(t, "mac")
+	clone := h.clone(t)
+	write(t, filepath.Join(clone, "dev"), "#!/bin/sh\n", 0o755)
+	git := &gitFake{dev: "usage: ./dev <verb>\n  worktree create <branch>\n  worktree release <branch>\n"}
+	var torn []string
+	d := spawnDeps(t, h, git.run, &tmuxFake{openErr: errors.New("tmux died")}, nil)
+	d.Teardown = func(_ string, _ []string, name string, args ...string) (string, error) {
+		torn = append(torn, name+" "+strings.Join(args, " "))
+		return "", nil
+	}
+	if _, err := Spawn(d, request()); err == nil || strings.Contains(err.Error(), "left in place") {
+		t.Fatalf("err = %v, want the tmux failure with nothing left", err)
+	}
+	if want := filepath.Join(clone, "dev") + " worktree release task/r-7"; !slices.Equal(torn, []string{want}) {
+		t.Errorf("teardown ran %v, want %s", torn, want)
+	}
+	if ran(git, "worktree release") {
+		t.Errorf("the release ran without its deadline: %v", git.calls)
+	}
+	if !ran(git, "worktree remove --force") || !ran(git, "branch -D task/r-7") {
+		t.Errorf("what the release left was not removed: %v", git.calls)
+	}
+}

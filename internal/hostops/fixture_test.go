@@ -204,6 +204,9 @@ type gitFake struct {
 	// made is true once worktree add -b made the task's branch, until
 	// branch -D deletes it.
 	made bool
+	// dev is the usage the clone's own dev prints with no verb; its
+	// worktree create makes the worktree as git's worktree add does.
+	dev string
 }
 
 func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string, error) {
@@ -215,6 +218,11 @@ func (f *gitFake) run(_ string, _ []string, name string, args ...string) (string
 		}
 	}
 	switch {
+	case strings.HasSuffix(name, "/dev") && len(args) == 0:
+		return f.dev, nil
+	case strings.HasSuffix(name, "/dev") && len(args) == 3 && args[1] == "create":
+		f.added, f.made = filepath.Dir(name)+"-worktrees/task-r-7", true
+		return "", os.MkdirAll(f.added, 0o755)
 	case name == "gh":
 		return "", errors.New("unexpected gh call")
 	case strings.Contains(line, "get-url") || strings.Contains(line, "config --get remote.origin.url"):
