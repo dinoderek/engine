@@ -46,12 +46,11 @@ hook posts at once, without waiting or retrying.
 
 ## Detection, not prevention
 
-A server run's spawn writes an Ed25519 key's seed to the owner-only
-`pane-key` and returns its public half, which the coordinator stores on the
-attempt. The hook signs the attempt ID, request key, time, transcript claim and
-text with it. A post unsigned,
-failing the attempt's key, or missing from the transcript is still
-recorded and still resolves, but the server raises one coordinator note. The
-note shows a post made without the hook; a session that reads its own run
-directory can avoid it. `collect` never lists
-`pane-key`.
+A server run's spawn writes an Ed25519 seed to the owner-only `pane-key`
+and returns its public half, which the coordinator stores on the attempt.
+The hook signs the attempt, request key, time, transcript claim and text
+with it. A post unsigned, failing the attempt's key, or missing from the
+transcript is still recorded and resolves, but the server raises one
+coordinator note. The note shows a post made without the hook; a session
+that runs the hook or reads its run directory can avoid it. `collect`
+never lists `pane-key`.

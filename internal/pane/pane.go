@@ -7,7 +7,8 @@
 // It detects a fake, it does not prevent one: the hook signs each post with
 // the run's pane key and says whether the text is among the prompts in the
 // session's transcript, and the server raises a note for a post that lacks
-// either. A session set on faking a post can read its own run directory.
+// either. A session set on faking a post can avoid the note: it can run the
+// hook itself, or read its own run directory.
 package pane
 
 import (

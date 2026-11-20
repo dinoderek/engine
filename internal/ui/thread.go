@@ -28,7 +28,7 @@ type Message struct {
 	ID            int       `json:"id"`
 	Author        string    `json:"author"`
 	At            time.Time `json:"at"`
-	Kind          string    `json:"kind"` // say, ask, reply, acknowledged or resolved
+	Kind          string    `json:"kind"` // one of messageKinds
 	Body          string    `json:"body"`
 	Recipient     string    `json:"recipient,omitempty"`
 	ReplyTo       int       `json:"reply_to,omitempty"`
