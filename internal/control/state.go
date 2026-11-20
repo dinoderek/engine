@@ -233,12 +233,18 @@ func (s Service) CheckDispatch(id, attempt string) error {
 	})
 }
 
+// endAttempt is the operator's attempt reconcile, after the host read
+// confirmed the session gone (Service.Reconcile).
 func (s Service) endAttempt(st *State, a Actor, r Request) (Response, error) {
 	at, ok := st.Attempts[r.ID]
 	if !ok {
 		return Response{}, problem(404, "unknown execution")
 	}
-	if at.State != "ended" {
+	switch at.State {
+	case "ended":
+	case "dispatching":
+		at = s.endUnlaunched(st, a, at, r.Body)
+	default:
 		at = s.endDead(st, a, at, r.Body)
 	}
 	return Response{Attempt: &at}, nil

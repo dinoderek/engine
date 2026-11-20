@@ -28,5 +28,5 @@ files there too, named in its package under `internal/harness/`.
 
 The coordinator logs each resume attempt with the task, timestamp and
 `resumed-for=<resets_at>`, and its notes retain the attempt and limit-alert
-times per reset and session. For recovery semantics, load `coordinator.md`,
+times per reset and session. For recovery semantics, load `session-signals.md`,
 "Limit recovery".

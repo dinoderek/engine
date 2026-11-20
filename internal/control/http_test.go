@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -167,5 +168,27 @@ func TestCredentialsAndWorkerAuth(t *testing.T) {
 	b, _ := json.Marshal(Response{Credential: token})
 	if !strings.Contains(string(b), token) {
 		t.Fatal("dispatch token response omitted")
+	}
+}
+
+// A reconcile the host check refuses comes back once, as a 409 carrying its
+// reason, which the client neither retries nor reports as storage.
+func TestReconcileRefusalCrossesHTTPAsA409WithItsReason(t *testing.T) {
+	s := service(t)
+	checks := 0
+	s.Reconcile = func(string) error {
+		checks++
+		return &Problem{Status: 409, Reason: ReasonReconcileRefused, Message: "execution is still alive"}
+	}
+	token := Secret()
+	server := httptest.NewServer(Handler(s, token, t.Logf))
+	defer server.Close()
+	_, err := Client{URL: server.URL, Token: token}.Call(context.Background(), Request{Op: "attempt-reconcile", ID: "a1", Body: "gone"})
+	var p *Problem
+	if !errors.As(err, &p) || p.Status != 409 || p.Reason != ReasonReconcileRefused || err.Error() != "reconcile-refused: execution is still alive" {
+		t.Fatalf("err = %v", err)
+	}
+	if checks != 1 {
+		t.Errorf("the refusal was retried: %d checks", checks)
 	}
 }

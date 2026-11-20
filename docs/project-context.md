@@ -42,7 +42,9 @@ reads it). Docs cite verbs, not commands.
   at its root lists `worktree create` in the usage it prints with no verb
   (within three minutes); otherwise a plain `git worktree add`. When a task
   is done, it runs `dev worktree release` if the usage lists it, then
-  `git worktree remove` on any worktree left, which keeps the branch.
+  `git worktree remove` on any worktree left, which keeps the branch. A
+  launch failing before its window opens does the same, then deletes a
+  branch it made.
 
 ### 4. Quality gates
 

@@ -48,6 +48,7 @@ const Usage = "engine serve\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
 	"engine merge-queue <repo-id>\n" +
 	"engine attempt list [<task-id>]\n" +
+	"engine attempt reconcile <attempt-id> <evidence> | --body <evidence>\n" +
 	"All writes accept --request-key <key>; edits require --version. Output is JSON.\n"
 
 // Main executes a server command. Serve owns its own signal lifecycle.
@@ -315,8 +316,11 @@ func positionals(r *control.Request, pos []string) error {
 		}
 	}
 	if len(pos) > 0 {
-		if r.Op != "say" && r.Op != "ask" && r.Op != "reply" && r.Op != "resolve" {
+		if r.Op != "say" && r.Op != "ask" && r.Op != "reply" && r.Op != "resolve" && r.Op != "attempt-reconcile" {
 			return fmt.Errorf("unexpected arguments")
+		}
+		if r.Op == "attempt-reconcile" && r.Body != "" {
+			return fmt.Errorf("give the evidence once, as an argument or with --body")
 		}
 		r.Body = strings.Join(pos, " ")
 	}

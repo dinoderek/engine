@@ -127,8 +127,8 @@ func TestCreateWorktreeOnResumeAdoptsTheWorktreeAnEarlierAttemptLeft(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wt != left {
-		t.Errorf("worktree = %+v, want the left one %+v", wt, left)
+	if wt.Path != left.Path || wt.Branch != left.Branch || wt.Created || wt.NewBranch {
+		t.Errorf("worktree = %+v, want the left one %+v, adopted", wt, left)
 	}
 	if branch, head := headOf(t, wt); branch != "task/r-5" || head != newer {
 		t.Errorf("worktree on %s at %s, want task/r-5 at origin's tip %s", branch, head, newer)
