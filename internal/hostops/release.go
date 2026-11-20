@@ -21,6 +21,9 @@ const (
 	RunEnded Outcome = ""
 	// RunFailed keeps the worktree for the operator.
 	RunFailed Outcome = "failed"
+	// RunStopped is a run the operator stopped: its task is held, and the
+	// worktree stays for the resume.
+	RunStopped Outcome = "stopped"
 	// RunDone is a done task's run: the repo's own `worktree release` runs
 	// first.
 	RunDone Outcome = "done"
@@ -47,15 +50,15 @@ type Released struct {
 
 // Release closes the session's window if it is still open, deletes what each
 // harness adapter wrote for this session alone, and removes the worktree of
-// its newest run, unless the run failed: a failed run's worktree is kept for
-// the operator. For a done task's run, the repo's own `dev worktree release
-// <branch>` runs first, from engine's clone, when the repo provides it, best
-// effort under TeardownLimit. Engine's removal is git's plain `worktree
-// remove` of a worktree still on disk, which keeps one with uncommitted
-// changes. For a done task's run, once the worktree is gone, engine deletes
-// the local branch when its tip is mergedHead or an ancestor of origin's
-// default branch, and otherwise keeps it and says so in the note. Any other
-// release never deletes the branch.
+// its newest run, unless the run failed, when it is kept for the operator, or
+// was stopped, when it is kept for the resume. For a done task's run, the
+// repo's own `dev worktree release <branch>` runs first, from engine's clone,
+// when the repo provides it, best effort under TeardownLimit. Engine's
+// removal is git's plain `worktree remove` of a worktree still on disk, which
+// keeps one with uncommitted changes. For a done task's run, once the
+// worktree is gone, engine deletes the local branch when its tip is
+// mergedHead or an ancestor of origin's default branch, and otherwise keeps
+// it and says so in the note. Any other release never deletes the branch.
 func Release(d Deps, name string, outcome Outcome, mergedHead string) (Released, error) {
 	if !nameRe.MatchString(name) {
 		return Released{}, refuse("session name %q: use letters, digits, _, . and -, not starting with -", name)
@@ -106,13 +109,13 @@ func Release(d Deps, name string, outcome Outcome, mergedHead string) (Released,
 }
 
 // releaseWorktree removes rec's worktree unless it is gone already or the
-// run failed, and records what it found in r.
+// run failed or was stopped, and records what it found in r.
 func (r *Released) releaseWorktree(d Deps, rec session.Record, outcome Outcome) {
 	if _, err := os.Stat(rec.Worktree); errors.Is(err, fs.ErrNotExist) {
 		return
 	}
 	r.Worktree, r.WorktreeKept = rec.Worktree, true
-	if outcome == RunFailed {
+	if outcome == RunFailed || outcome == RunStopped {
 		return
 	}
 	if err := removeWorktree(d, rec); err != nil {

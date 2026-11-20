@@ -31,14 +31,14 @@ func place(v View) []Action {
 	return acts
 }
 
-// ready are the tasks to dispatch, in start order. A task whose session is
-// live, or unknown, is not ready; nor is one whose window is live on any
-// host that answered, as an earlier attempt's may be.
+// ready are the tasks to dispatch, in start order. A held task is not ready.
+// A task whose session is live, or unknown, is not ready; nor is one whose
+// window is live on any host that answered, as an earlier attempt's may be.
 func ready(v View) []Item {
 	var cands []Item
 	for _, t := range v.Tasks {
 		s := t.observed()
-		if t.open() && len(t.Blocked) == 0 && t.PlanHold == 0 && !t.taken() && !s.Live && !s.Unknown && !v.Fleet.LiveAnywhere(t.Name) {
+		if t.open() && !t.Held && len(t.Blocked) == 0 && t.PlanHold == 0 && !t.taken() && !s.Live && !s.Unknown && !v.Fleet.LiveAnywhere(t.Name) {
 			cands = append(cands, t)
 		}
 	}

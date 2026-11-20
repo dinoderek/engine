@@ -159,6 +159,20 @@ func TestPlanDetail(t *testing.T) {
 	}
 }
 
+// An operator-held todo task is not ready: nothing dispatches it.
+func TestPlanDetailShowsAHeldTaskAsBlocked(t *testing.T) {
+	view := fixtureView()
+	for i := range view {
+		if view[i].ID == "t31" {
+			view[i].Held = true
+		}
+	}
+	got := planDetail("p24", view, fixtureAttempts(), nil)
+	if want := (Counts{Done: 1, InProgress: 2, Blocked: 4}); got.Counts != want {
+		t.Fatalf("counts = %+v, want %+v", got.Counts, want)
+	}
+}
+
 func TestPlanDetailEdges(t *testing.T) {
 	empty := planDetail("p24", fixtureView()[:2], nil, nil)
 	if empty.Tasks == nil || len(empty.Tasks) != 0 || empty.Counts != (Counts{}) {

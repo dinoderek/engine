@@ -47,6 +47,9 @@ type Item struct {
 	// Resume is true when an earlier attempt opened a window, so the next
 	// dispatch resumes the item's own branch.
 	Resume bool
+	// Stopped is true when the operator stopped the current attempt: its
+	// window, if any is left, is released keeping the worktree and branch.
+	Stopped bool
 	// Merge is the request of the task's merge queue entry, nil when it has
 	// none.
 	Merge *control.Update
@@ -121,6 +124,9 @@ type Action struct {
 	// Done is a Release of a done task's session: the host runs the repo's
 	// own worktree release too, and deletes the branch once it is merged.
 	Done bool
+	// Stopped is a Release of a stopped task's session: the host keeps its
+	// worktree and branch.
+	Stopped bool
 	// Head is the head commit a done task's PR merged at.
 	Head string
 	// Entry is the merge queue entry a Merge acts on, Request its newest
@@ -157,7 +163,7 @@ func (t Item) taken() bool { return t.claimed() || t.state() == "failed" }
 // item's session: the session is idle, so typing cuts into no turn, and the
 // item is at no hard stop.
 func (t Item) Wakeable() bool {
-	return t.Session != nil && t.Session.Idle() && t.State != "needs-human" && t.Question == 0
+	return t.Session != nil && t.Session.Idle() && t.State != "needs-human" && t.Question == 0 && !t.Stopped
 }
 
 // observed returns the item's session, or a zero one that is neither live

@@ -43,6 +43,7 @@ const Usage = "engine serve\n" +
 	"engine task complete-external <task-id> --version <n> --pr <url>\n" +
 	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
 	"engine task cleaned <task-id> [--left <text>]\n" +
+	"engine task stop|resume <task-id>\n" +
 	"engine ps\nengine run <plan-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
@@ -218,6 +219,10 @@ func Parse(args []string, e Env) (control.Request, error) {
 // the request's.
 var taskOps = map[string]string{"complete-external": "complete-external", "merge-ready": "merge-request", "cleaned": "cleaned"}
 
+// lifecycleOps are the request ops of the operator's approve, stop and
+// resume, by what they act on.
+var lifecycleOps = map[string]string{"plan approve": "approve", "plan stop": "stop", "task stop": "task-stop", "task resume": "task-resume"}
+
 func operation(args []string) (control.Request, []string, error) {
 	r := control.Request{}
 	head, rest := args[0], args[1:]
@@ -252,11 +257,10 @@ func operation(args []string) (control.Request, []string, error) {
 				return r, nil, fmt.Errorf("%s requires a task", op)
 			}
 			r.Op = taskOps[op]
-		case "approve", "stop":
-			if head != "plan" {
-				return r, nil, fmt.Errorf("%s requires a plan", op)
+		case "approve", "stop", "resume":
+			if r.Op = lifecycleOps[head+" "+op]; r.Op == "" {
+				return r, nil, fmt.Errorf("%s requires %s", op, map[string]string{"approve": "a plan", "stop": "a plan or a task", "resume": "a task"}[op])
 			}
-			r.Op = op
 		case "edit", "state":
 			r.Op = op
 		default:

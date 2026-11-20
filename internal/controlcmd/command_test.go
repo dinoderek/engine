@@ -88,17 +88,18 @@ func TestCLIPlanTasksAndOperatorMessages(t *testing.T) {
 
 func itoa(n int) string { return fmt.Sprint(n) }
 
-// Every task belongs to a plan, and only a plan is approved, run or stopped.
+// Every task belongs to a plan, and only a plan is approved.
 func TestCLITasksBelongToAPlan(t *testing.T) {
 	e, _ := environment(t)
 	repo := command(t, e, "repo", "add", "--title", "Demo", "--slug", "x/y", "--remote", "remote").Item
 	if code := Main([]string{"task", "create", "--repo", repo.ID, "--title", "Alone"}, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), "a task requires its plan") {
 		t.Fatalf("a task without a plan exited %d: %s", code, e.Err)
 	}
-	for _, op := range []string{"approve", "stop"} {
-		if _, err := Parse([]string{"task", op, "t2", "--version", "1"}, e); err == nil || !strings.Contains(err.Error(), "requires a plan") {
-			t.Fatalf("task %s parsed: %v", op, err)
-		}
+	if _, err := Parse([]string{"task", "approve", "t2", "--version", "1"}, e); err == nil || !strings.Contains(err.Error(), "requires a plan") {
+		t.Fatalf("task approve parsed: %v", err)
+	}
+	if _, err := Parse([]string{"plan", "resume", "p2"}, e); err == nil || !strings.Contains(err.Error(), "requires a task") {
+		t.Fatalf("plan resume parsed: %v", err)
 	}
 	if items := command(t, e, "task", "list").Items; len(items) != 0 {
 		t.Fatalf("a rejected task was stored: %+v", items)

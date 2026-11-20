@@ -7,7 +7,7 @@ import "time"
 // before it did any work.
 const ClaimWait = 5 * time.Minute
 
-// The reasons a confirmed-dead window ends an attempt.
+// The reasons an attempt ends: a confirmed-dead window, or the operator.
 const (
 	// EndVanished leaves the task resumable: its next dispatch is a resume.
 	EndVanished = "vanished"
@@ -17,6 +17,9 @@ const (
 	EndEarlyDeath = "early-death"
 	// EndFailed marks the task failed; only the operator moves it to todo.
 	EndFailed = "failed"
+	// EndStopped is the operator's stop: the task is todo and held, and its
+	// worktree and branch are kept for the resume.
+	EndStopped = "stopped"
 )
 
 // resumable reports whether task item still has work to resume after its
