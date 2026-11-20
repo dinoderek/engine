@@ -52,6 +52,8 @@ type Item struct {
 	Merge *control.Update
 	// MergedAt is when the coordinator recorded the item's merge, or zero.
 	MergedAt time.Time
+	// MergedHead is the head commit the PR merged at, or "" when unknown.
+	MergedHead string
 	// Cleaned is the task's newest cleanup report, nil when it has none.
 	Cleaned *control.Update
 }
@@ -117,8 +119,10 @@ type Action struct {
 	// Session is the window a Resume types into or a Release closes.
 	Session Session
 	// Done is a Release of a done task's session: the host runs the repo's
-	// own worktree release too.
+	// own worktree release too, and deletes the branch once it is merged.
 	Done bool
+	// Head is the head commit a done task's PR merged at.
+	Head string
 	// Entry is the merge queue entry a Merge acts on, Request its newest
 	// request.
 	Entry   control.QueueEntry

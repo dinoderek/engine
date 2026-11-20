@@ -61,7 +61,7 @@ Read these at each session start:
 | changes how agents plan, build or review | `plugins/engine/skills/build/SKILL.md`, `plugins/engine/skills/engine/SKILL.md` and their references |
 | changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
 | changes dispatch, recovery, merges, the merge queue or host ops | `docs/coordinator.md` |
-| changes how the coordinator reads a session's liveness, stalls or limit recovery | `docs/session-signals.md` |
+| changes how the coordinator reads a session's liveness, stalls, early deaths or limit recovery | `docs/session-signals.md` |
 | changes server records, API, credentials, inbox or `engine ui` | `docs/control-server.md` |
 | changes host config, placement, attempts or session access | `docs/hosts-and-sessions.md` |
 | changes a harness adapter or what the core asks of one | `docs/harnesses.md` |

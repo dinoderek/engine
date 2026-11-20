@@ -104,6 +104,11 @@ func TestAfterMergeTexts(t *testing.T) {
 	if len(unknown) != 1 || !strings.Contains(unknown[0].Text, "worktree unknown, branch unknown") {
 		t.Errorf("a release with no run listed %+v", unknown)
 	}
+	headed := mergedAt(with(task(2, "done"), at(waiting(0))), time.Minute)
+	headed.MergedHead = "3f2c"
+	if got := first(view(plan("planned"), cleaned(headed, ""))); len(got) != 1 || got[0].Kind != Release || got[0].Head != "3f2c" {
+		t.Errorf("a done task's release %+v, want it to carry the merged head", got)
+	}
 	planner := first(view(with(plan("done"), waiting(0))))
 	if len(planner) != 1 || planner[0].Kind != Release || planner[0].Done {
 		t.Errorf("the planner's release %+v, want one that is not a done task's", planner)
