@@ -161,6 +161,30 @@ const scenarios = {
     });
   },
 
+  async "focus stays with the item after run, and the URL is editable again after a refusal that follows a lost reply"() {
+    const fx = { plan: planOf("planned", 4, ["run"], [task("t32", "failed", ["complete-external"], { version: 11 })]), answer: ok };
+    await page("#/plans/p24", fx, async (t) => {
+      const run = t.act("pane", "p24", "run");
+      run.focus();
+      fx.plan = planOf("executing", 5, ["stop"], [task("t32", "failed", ["complete-external"], { version: 11 })]);
+      await t.click(run);
+      assert.equal(t.p.doc.activeElement.dataset.key, "acts-pane-p24", "the Run button is gone, so focus goes to the plan's buttons");
+    });
+    let calls = 0;
+    const lossy = {
+      plan: planOf("blocked", 4, ["stop"], [task("t32", "failed", ["complete-external"], { version: 11 })]),
+      answer: () => (++calls === 1 ? new TypeError("fetch failed") : { status: 400, body: { error: "a GitHub PR URL for this repository is required" } }),
+    };
+    await page("#/plans/p24", lossy, async (t) => {
+      await t.click(t.act("pane", "t32", "complete-external"));
+      t.$("sheet-pr").value = "nonsense";
+      await t.click(t.$("sheet-ok"));
+      assert.equal(t.$("sheet-pr").hasAttribute("readonly"), true, "locked while a resend must match");
+      await t.click(t.$("sheet-ok"));
+      assert.equal(t.$("sheet-pr").hasAttribute("readonly"), false, "a refusal frees the text");
+    });
+  },
+
   async "retry confirms and sends the version"() {
     const fx = { plan: planOf("blocked", 4, ["stop"], [task("t32", "failed", ["retry", "complete-external"], { version: 11 })]), answer: ok };
     await page("#/plans/p24", fx, async (t) => {

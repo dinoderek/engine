@@ -74,7 +74,7 @@ window.engine.control = function (ctx) {
       if (!spec) continue;
       const key = "act-" + scope + "-" + f.id + "-" + op;
       const b = el("button", { type: "button", class: "act" + (spec.danger ? " danger" : ""), "data-key": key }, spec.text);
-      b.addEventListener("click", () => (spec.confirm ? open(f, op, key, scope) : direct(f, op, b)));
+      b.addEventListener("click", () => (spec.confirm ? open(f, op, key, scope) : direct(f, op, b, scope)));
       row.append(b);
     }
     if (n) row.append(el("p", { class: "action-note" + (n.bad ? " bad" : ""), role: "status" }, n.text));
@@ -103,7 +103,8 @@ window.engine.control = function (ctx) {
     return { done: false, text: r.error || "The dashboard refused the write." };
   }
 
-  async function direct(f, op, button) {
+  async function direct(f, op, button, scope) {
+    const was = button.dataset.key;
     button.setAttribute("disabled", "");
     const r = await formFor(f.id, op).send(OPS[op].path(f.id), {});
     const out = await settle(f, op, r);
@@ -112,6 +113,7 @@ window.engine.control = function (ctx) {
       ctx.render();
     }
     button.removeAttribute("disabled");
+    if (document.activeElement === document.body) refocus([was], scope, f.id);
   }
 
   function fieldsFor(f, op, input) {
@@ -148,8 +150,24 @@ window.engine.control = function (ctx) {
     }
     // A resend must carry the same body as the first, so the text is fixed
     // until the answer comes; a refusal leaves it editable.
-    if (out.retry && s.input) s.input.setAttribute("readonly", "");
+    if (s.input) {
+      if (out.retry) s.input.setAttribute("readonly", "");
+      else s.input.removeAttribute("readonly");
+    }
     say(out.text, true);
+  }
+
+  // refocus puts focus on the first of the keys that exists, else on the
+  // item's buttons, else on its link: an action's button is often gone once
+  // it is done, because the item no longer offers it.
+  function refocus(keys, scope, id) {
+    for (const key of [...keys, "acts-" + scope + "-" + id, "open-" + id]) {
+      const back = document.querySelector('[data-key="' + CSS.escape(key) + '"]');
+      if (back) {
+        back.focus();
+        if (document.activeElement === back) return;
+      }
+    }
   }
 
   // close ends the sheet; while a confirm is in flight it stays, so the
@@ -163,13 +181,7 @@ window.engine.control = function (ctx) {
     $("sheet").replaceChildren();
     // The button may be gone: a stopped task offers Resume instead. Focus
     // then goes to the item's buttons, or to its link.
-    for (const key of [s.opener, "acts-" + s.scope + "-" + s.f.id, "open-" + s.f.id]) {
-      const back = document.querySelector('[data-key="' + CSS.escape(key) + '"]');
-      if (back) {
-        back.focus();
-        if (document.activeElement === back) return;
-      }
-    }
+    refocus([s.opener], s.scope, s.f.id);
   }
 
   // open asks before sending: it names the item, its state and the effect.
@@ -211,10 +223,12 @@ window.engine.control = function (ctx) {
     stops[next].focus();
   }
 
+  // Clicking text in the sheet leaves focus on the sheet, not the page.
+  $("sheet").setAttribute("tabindex", "-1");
   $("sheet-back").addEventListener("keydown", keys);
   $("sheet-back").addEventListener("click", (e) => {
     if (e.target === $("sheet-back")) close(false);
   });
 
-  return { bar, fromPlan, fromTask, fromItem, isOpen: () => !!sheet };
+  return { bar, fromPlan, fromTask, fromItem };
 };
