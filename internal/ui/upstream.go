@@ -44,6 +44,7 @@ type Envelope struct {
 	Fetched time.Time `json:"fetched"`
 	Stale   bool      `json:"stale,omitempty"`
 	Error   string    `json:"error,omitempty"`
+	Reason  string    `json:"reason,omitempty"` // the control server's, for a refused write
 }
 
 func newUpstream(client Caller, now func() time.Time, logf func(string, ...any)) *upstream {

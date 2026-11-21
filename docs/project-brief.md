@@ -20,13 +20,13 @@ session through to a merged PR.
 
 ## State
 
-Built: every part above, with a read-only local dashboard and
+Built: every part above, with a local dashboard that reads and makes a fixed set of operator writes, and
 `engine upgrade` for the fleet, plus the repo's own `./dev` gates.
 
 ## Scope
 
 The control server is the only plan source; GitHub carries code, PRs and CI.
-Out of scope: dashboard writes, phone push, GitHub issues or in-repo files as
+Out of scope: phone push, GitHub issues or in-repo files as
 plans, and deploys: engine has no deploy target, so `./dev` has no `deploy`
 verb.
 

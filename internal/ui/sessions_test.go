@@ -137,8 +137,8 @@ func TestSessionsRouteWithoutDataReportsTheFailure(t *testing.T) {
 }
 
 func TestSessionsRouteRefusesNonReads(t *testing.T) {
-	d := newDashboard(newFakeControl(t).client())
-	if res, _ := d.get(t, "POST", "127.0.0.1", "/api/sessions"); res.StatusCode != 405 {
+	c := &recorder{}
+	if res, _ := post(t, newWriter(c), attempt{dashHost, "https://" + dashHost, "application/json"}, "/api/sessions", `{"key":"k"}`); res.StatusCode != 405 || len(c.sent()) != 0 {
 		t.Fatalf("POST = %d, want 405", res.StatusCode)
 	}
 }
