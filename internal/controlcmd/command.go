@@ -45,7 +45,9 @@ const Usage = "engine serve\n" +
 	"engine task cleaned <task-id> [--left <text>]\n" +
 	"engine task stop|resume <task-id>\n" +
 	"engine ps\nengine run <plan-id>\nengine updates <id> [--after <sequence>]\n" +
-	"engine tell|ask <id> <text> [--operator]\nengine inbox [--operator]\n" +
+	"engine tell <id> <text> [--operator]\n" +
+	"engine ask <id> <text> [--choice <text>]... [--recommend <index from 0>] [--class <hard-stop class>]\n" +
+	"engine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
 	"engine merge-queue <repo-id>\n" +
 	"engine host status --all [--json]\n" +
@@ -169,10 +171,14 @@ func Parse(args []string, e Env) (control.Request, error) {
 	depends, requires := "", ""
 	fs.StringVar(&depends, "depends", "", "")
 	fs.StringVar(&requires, "requires", "", "")
+	questionFlags(fs, &r)
 	// Go flag parsing stops at a positional; allow IDs and text before flags.
 	flags, position := splitFlags(rest)
 	if err = fs.Parse(flags); err != nil {
 		return r, err
+	}
+	if r.Op != "ask" && (r.Choices != nil || r.Recommended != nil || r.Class != "") {
+		return r, fmt.Errorf("--choice, --recommend and --class are only for ask")
 	}
 	if *toOperator {
 		r.Recipient = "operator"
@@ -277,6 +283,24 @@ func operation(args []string) (control.Request, []string, error) {
 		return r, nil, fmt.Errorf("unknown server command %s", head)
 	}
 	return r, rest, nil
+}
+
+// questionFlags reads an ask's choices, recommendation and class. Each
+// --choice is one choice, taken verbatim: commas never split it.
+func questionFlags(fs *flag.FlagSet, r *control.Request) {
+	fs.Func("choice", "", func(v string) error {
+		r.Choices = append(r.Choices, v)
+		return nil
+	})
+	fs.Func("recommend", "", func(v string) error {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("--recommend takes the recommended choice's index, from 0")
+		}
+		r.Recommended = &n
+		return nil
+	})
+	fs.StringVar(&r.Class, "class", "", "")
 }
 
 func splitFlags(args []string) ([]string, []string) {

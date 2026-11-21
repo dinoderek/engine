@@ -7,14 +7,7 @@ import (
 
 // resolved reports whether question id was resolved: by the operator, or
 // by their answer typed into the asking session's pane.
-func resolved(st *State, id int) bool {
-	for _, u := range st.Updates {
-		if u.ReplyTo == id && (u.Kind == "resolved" || u.Kind == KindPaneAnswer) {
-			return true
-		}
-	}
-	return false
-}
+func resolved(st *State, id int) bool { return resolution(st, id) > 0 }
 
 func acknowledged(st *State, id int) bool {
 	for _, u := range st.Updates {
@@ -133,6 +126,9 @@ func replyCommand(st *State, a Actor, r Request) (Request, string, error) {
 		}
 		if r.Body == "" {
 			return r, "", problem(400, "resolution must record the decision")
+		}
+		if err := alreadyResolved(st, r.ReplyTo); err != nil {
+			return r, "", err
 		}
 		kind = "resolved"
 	}

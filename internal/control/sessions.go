@@ -43,6 +43,10 @@ type UpdateRef struct {
 	Author  string    `json:"author"`
 	At      time.Time `json:"at"`
 	Summary string    `json:"summary"`
+	// Choices, Recommended and Class are a question's (Update).
+	Choices     []string `json:"choices,omitempty"`
+	Recommended *int     `json:"recommended,omitempty"`
+	Class       string   `json:"class,omitempty"`
 }
 
 // SummaryRunes bounds an update summary in the session view.
@@ -104,7 +108,8 @@ func (s Service) sessionRow(st *State, item Item, at Attempt) SessionRow {
 }
 
 func updateRef(u Update) *UpdateRef {
-	return &UpdateRef{Item: u.Item, Update: u.ID, Kind: u.Kind, Author: u.Author, At: u.At, Summary: Summary(u.Body)}
+	return &UpdateRef{Item: u.Item, Update: u.ID, Kind: u.Kind, Author: u.Author, At: u.At, Summary: Summary(u.Body),
+		Choices: u.Choices, Recommended: u.Recommended, Class: u.Class}
 }
 
 // Summary is a body as one line of plain text, cut to SummaryRunes.

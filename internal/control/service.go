@@ -115,6 +115,9 @@ func authorizeExecution(st *State, a Actor) error {
 }
 
 func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
+	if err := questionFields(r); err != nil {
+		return Response{}, err
+	}
 	switch r.Op {
 	case "plan-view":
 		return planView(st, a, r.ID)

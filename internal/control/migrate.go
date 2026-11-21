@@ -8,8 +8,11 @@ import (
 
 // schemaVersion is the control database's schema. Version 2 stores only
 // prepare, approved, planned and done for a plan. Versions 1 and 2 held
-// repository merge locks; version 3 holds the merge queue instead.
-const schemaVersion = 3
+// repository merge locks; version 3 holds the merge queue instead. Version
+// 4 adds a question's choices, recommendation and class; a version 3
+// database needs no rewrite, and an older server refuses a version 4 one
+// rather than drop those fields.
+const schemaVersion = 4
 
 // legacyLock is the part of a version 1 lock record the migration reads.
 type legacyLock struct {
@@ -23,7 +26,7 @@ const LockRetired = "lock-retired"
 const retiredText = "Merge locks are retired: the coordinator's merge queue orders merges. Never run engine lock. " +
 	"Once your PR is in-review, reviewed and pushed, run engine task merge-ready and end your turn; a merge request you already made is queued."
 
-// migrate brings a version 1 or 2 database to version 3 in one
+// migrate brings a version 1 or 2 database to the current version in one
 // transaction: plans move to their stored states, each
 // unfinished task's unanswered merge request from its current attempt joins
 // the queue in request order, every lock record is deleted, and the executor
