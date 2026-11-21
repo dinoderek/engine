@@ -79,7 +79,7 @@ func TestOperateEngineFromAPhone(t *testing.T) {
 		{"O9 every dashboard view renders well on a phone", (*phone).viewsOnAPhone},
 		{"O10 plan and task control works from the dashboard", (*phone).controlFromAPhone},
 	} {
-		if !t.Run(g.name, func(t *testing.T) { p.t, p.b.t = t, t; g.run(p) }) {
+		if !t.Run(g.name, func(t *testing.T) { p.t, p.b.t, p.s.t = t, t, t; g.run(p) }) {
 			return
 		}
 	}
@@ -274,9 +274,11 @@ func (p *phone) telegramAlerts() {
 	check(t, strings.Contains(dtext, "Docs are green and waiting.") && len(buttons(digest)) == 0 && digest.Body["disable_notification"] == true,
 		"the message goes as a silent digest: %v", digest.Body)
 
-	// A restart neither resends nor skips: the question asked while the
-	// server was down is the only send after it.
+	// A restart neither resends nor skips: the server reopens its store, and
+	// the question asked before the new loop starts is the only send after it.
 	p.stopFirstLoop()
+	p.s.stop()
+	p.s.start()
 	p.second = p.ask("Is the wording right?", "product", 0, "Keep it", "Shorten it")
 	p.tg.loop(p.s.service, operatorChat, dashboardURL)
 	eventually(t, "the second alert", func() bool { return len(p.tg.sent("sendMessage")) >= 3 })
@@ -346,7 +348,13 @@ func (p *phone) settledOnce() {
 	before := len(p.updates())
 	loopback := strings.TrimPrefix(p.d.base, "http://")
 	status, env := p.post(loopback, p.d.base, "application/json", fmt.Sprintf("/api/updates/%d/resolve", p.first), map[string]any{"key": "again", "choice": 0})
-	want := fmt.Sprintf("question %d is already resolved, by update", p.first)
+	by := 0
+	for _, u := range p.updates() {
+		if u.Kind == "resolved" && u.ReplyTo == p.first {
+			by = u.ID
+		}
+	}
+	want := fmt.Sprintf("question %d is already resolved, by update %d", p.first, by)
 	check(p.t, status == 409 && env.Reason == control.ReasonAlreadyResolved && strings.Contains(env.Error, want), "resolving again: %d %+v", status, env)
 	check(p.t, len(p.updates()) == before, "the refused resolve wrote an update")
 }
@@ -392,6 +400,7 @@ func (p *phone) writesSafely() {
 		{"an unknown field", p.origin, "application/json", path, map[string]any{"key": "x", "body": "hi", "op": "delete"}, 400},
 		{"an op off the allowlist", p.origin, "application/json", "/api/tasks/" + p.task.ID + "/edit", map[string]any{"key": "x"}, 404},
 		{"a read as a write", p.origin, "application/json", "/api/inbox", map[string]any{"key": "x"}, 405},
+		{"an item the server does not have", p.origin, "application/json", "/api/items/t999/say", map[string]any{"key": "x", "body": "hi"}, 404},
 	} {
 		status, _ := p.post(host, r.origin, r.kind, r.path, r.body)
 		check(t, status == r.want, "%s: %d, want %d", r.name, status, r.want)
