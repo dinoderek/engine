@@ -8,22 +8,25 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/dinoderek/engine/internal/harness"
 )
 
 // Prompts are the prompts in a Codex rollout: its user messages, as
-// response items of input text or as user-message events.
-func (hooks) Prompts(transcript string) ([]string, error) {
+// response items of input text or as user-message events. A rollout marks
+// none as injected.
+func (hooks) Prompts(transcript string) ([]harness.Prompt, error) {
 	f, err := os.Open(transcript)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	var prompts []string
+	var prompts []harness.Prompt
 	r := bufio.NewReader(f)
 	for {
 		line, err := r.ReadBytes('\n')
 		if p, ok := userMessage(line); ok {
-			prompts = append(prompts, p)
+			prompts = append(prompts, harness.Prompt{Text: p})
 		}
 		if errors.Is(err, io.EOF) {
 			return prompts, nil

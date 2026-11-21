@@ -140,17 +140,25 @@ func (h fakeHooks) Event(raw []byte) (harness.Event, error) {
 	return harness.Event{Kind: e.Kind, Name: e.Name, SessionID: e.SessionID, Cwd: e.Cwd, Command: e.Command, Prompt: e.Prompt, Transcript: e.Transcript}, nil
 }
 
-// Prompts reads a fake transcript: one JSON string per line.
-func (fakeHooks) Prompts(transcript string) ([]string, error) {
+// Prompts reads a fake transcript: one JSON string per line, or an object
+// {"injected": text} for a turn the harness injected.
+func (fakeHooks) Prompts(transcript string) ([]harness.Prompt, error) {
 	data, err := os.ReadFile(transcript)
 	if err != nil {
 		return nil, err
 	}
-	var prompts []string
+	var prompts []harness.Prompt
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
 		var p string
-		if line != "" && json.Unmarshal([]byte(line), &p) == nil {
-			prompts = append(prompts, p)
+		var injected struct {
+			Text *string `json:"injected"`
+		}
+		switch {
+		case line == "":
+		case json.Unmarshal([]byte(line), &p) == nil:
+			prompts = append(prompts, harness.Prompt{Text: p})
+		case json.Unmarshal([]byte(line), &injected) == nil && injected.Text != nil:
+			prompts = append(prompts, harness.Prompt{Text: *injected.Text, Injected: true})
 		}
 	}
 	return prompts, nil
