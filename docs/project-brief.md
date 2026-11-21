@@ -26,7 +26,7 @@ Built: every part above, with a local dashboard that reads and makes a fixed set
 ## Scope
 
 The control server is the only plan source; GitHub carries code, PRs and CI.
-Out of scope: phone push, GitHub issues or in-repo files as
+Out of scope: GitHub issues or in-repo files as
 plans, and deploys: engine has no deploy target, so `./dev` has no `deploy`
 verb.
 

@@ -69,13 +69,19 @@ func ServerAddress(h Host) (listen, origin string) {
 }
 
 func parseServer(src string) (Server, error) {
+	s, _, err := parseOperatorConfig(src)
+	return s, err
+}
+
+func parseOperatorConfig(src string) (Server, Telegram, error) {
 	root, err := parse(src)
 	if err != nil {
-		return Server{}, err
+		return Server{}, Telegram{}, err
 	}
 	v := &validator{}
 	r := v.reader(root, "top level")
-	table := r.table("server", true)
+	telegram := r.table("telegram", false)
+	table := r.table("server", telegram == nil)
 	r.finish()
 	var s Server
 	if table != nil {
@@ -83,12 +89,29 @@ func parseServer(src string) (Server, error) {
 		s.Host, _ = t.text("host", false)
 		s.URL, _ = t.text("url", false)
 		t.finish()
+		if v.first() == nil && (s.Host == "") == (s.URL == "") {
+			v.fail(table.pos, "[server] must set exactly one of host and url")
+		}
+	}
+	var tg Telegram
+	if telegram != nil {
+		t := v.reader(telegram, "telegram")
+		if raw, at := t.text("dashboard_url", false); at != nil {
+			tg.DashboardURL = raw
+			if !dashboardOrigin(raw) {
+				v.fail(at.pos, "telegram: dashboard_url must be an HTTP(S) origin without credentials, query or fragment")
+			}
+		}
+		if chat := t.lookup("chat", kInt, false); chat != nil {
+			tg.Chat = int64(chat.num)
+			if tg.Chat == 0 {
+				v.fail(chat.pos, "telegram: chat must not be zero")
+			}
+		}
+		t.finish()
 	}
 	if bad := v.first(); bad != nil {
-		return Server{}, bad
+		return Server{}, Telegram{}, bad
 	}
-	if (s.Host == "") == (s.URL == "") {
-		return Server{}, errors.New("[server] must set exactly one of host and url")
-	}
-	return s, nil
+	return s, tg, nil
 }

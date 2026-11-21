@@ -4,8 +4,8 @@
 
 ## GitHub access
 
-Each host needs a working `gh` installation with access to engine and its
-target repositories, plus normal Git authentication and commit identity.
+Each host needs `gh` access to engine and its target repositories, Git
+authentication and commit identity.
 Engine uses that configuration for GitHub calls, clones, pushes and PRs.
 Check access with `gh api user` and `gh repo view <owner/repo>`.
 
@@ -24,6 +24,8 @@ auth` step runs `gh auth status` on the host (over ssh for `--host`) and stays
 open while gh fails there or, on macOS, keeps its token in the keychain.
 
 ## Notifications
+
+For Telegram alerts and pairing, load `telegram.md`.
 
 1. **Hard stops and notices** reach the operator inbox: read it with
    `engine inbox --operator` or in the dashboard (`dashboard.md`).

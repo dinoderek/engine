@@ -5,6 +5,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -43,6 +44,7 @@ commands:
   start --check [--harness <name>] [--host <name>]
                             launch a throwaway session to find prompts that would
                             stop an unattended one
+  setup telegram            pair a Telegram bot with the operator chat
   setup [--host <name>]     bring a host to this engine's commit, plugin and config,
                             or check this one; exits 1 while any item is open
   upgrade [--dry-run]       bring every host to the head of main: stop the server,
@@ -58,10 +60,12 @@ commands:
 // Env is what a command reads and runs: the standard streams, the runners for
 // outside CLIs, the environment, the home directory and the clock.
 type Env struct {
-	In     io.Reader
-	Out    io.Writer
-	Err    io.Writer
-	Stream Streamer
+	// TelegramHTTP replaces the Bot API transport in setup tests.
+	TelegramHTTP *http.Client
+	In           io.Reader
+	Out          io.Writer
+	Err          io.Writer
+	Stream       Streamer
 	// Local runs the host's own CLIs (tmux, the harnesses, git) and returns their
 	// standard output.
 	Local session.Runner
