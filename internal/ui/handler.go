@@ -23,13 +23,14 @@ var assets = map[string]struct{ file, kind string }{
 	"/dom.js":      {"static/dom.js", "text/javascript; charset=utf-8"},
 	"/panel.js":    {"static/panel.js", "text/javascript; charset=utf-8"},
 	"/sessions.js": {"static/sessions.js", "text/javascript; charset=utf-8"},
+	"/writes.js":   {"static/writes.js", "text/javascript; charset=utf-8"},
 }
 
 const policy = "default-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
-// handler serves the page and its fixed read routes, same-origin, to loopback
-// clients that name a loopback host.
-func handler(up *upstream) http.Handler {
+// handler serves the page, its fixed read routes and its write routes,
+// same-origin, to requests that name a loopback host or the host name given.
+func handler(up *upstream, host string) http.Handler {
 	mux := http.NewServeMux()
 	for route := range assets {
 		pattern := "GET " + route
@@ -80,6 +81,7 @@ func handler(up *upstream) http.Handler {
 		env, status := up.thread(r.Context(), id, after, anchor)
 		reply(w, status, env)
 	})
+	registerWrites(mux, up)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Cache-Control", "no-store")
@@ -87,13 +89,20 @@ func handler(up *upstream) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Content-Security-Policy", policy)
-		if !LoopbackHost(r.Host) {
-			http.Error(w, "the dashboard answers only to a loopback host name", http.StatusMisdirectedRequest)
+		if !AllowedHost(r.Host, host) {
+			http.Error(w, "the dashboard answers only to a loopback host name or its --host", http.StatusMisdirectedRequest)
 			return
 		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			h.Set("Allow", "GET, HEAD")
-			http.Error(w, "the dashboard is read-only", http.StatusMethodNotAllowed)
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+		case http.MethodPost:
+			if status, msg := refuseWrite(r); status != 0 {
+				http.Error(w, msg, status)
+				return
+			}
+		default:
+			h.Set("Allow", "GET, HEAD, POST")
+			http.Error(w, "the dashboard takes GET, HEAD and POST", http.StatusMethodNotAllowed)
 			return
 		}
 		mux.ServeHTTP(w, r)
@@ -132,6 +141,19 @@ func count(s string) (int, bool) {
 	}
 	n, err := strconv.Atoi(s)
 	return n, err == nil && n >= 0 && n < 1<<31
+}
+
+// AllowedHost reports whether a Host header names a loopback host or the
+// one host name --host gave, on any port.
+func AllowedHost(hostport, name string) bool {
+	if LoopbackHost(hostport) {
+		return true
+	}
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	return name != "" && strings.EqualFold(host, name)
 }
 
 // LoopbackHost reports whether a Host header or listen address names this
