@@ -28,9 +28,10 @@ func at(s Session) Session {
 }
 
 // A merged task's session gets a turn to clean up. It is released once idle
-// after reporting it, or without a report once idle CleanupWait after the
-// merge or once its window is gone; a turn running past CleanupCap without
-// a report is noticed. A done plan uses the same rule.
+// after reporting it, or at CleanupCap if still in a turn then; without a
+// report, once idle CleanupWait after the merge or once its window is gone,
+// and a turn running past CleanupCap is noticed. A done plan uses the same
+// rule.
 func TestAfterMerge(t *testing.T) {
 	merged := func(s Session, d time.Duration) Item { return mergedAt(with(task(2, "done"), at(s)), d) }
 	limited := waiting(time.Minute)
@@ -43,7 +44,9 @@ func TestAfterMerge(t *testing.T) {
 		{"cleaned and idle: released at once", view(plan("planned"), cleaned(merged(waiting(0), time.Minute), "")), []string{"release t2 a2"}},
 		{"cleaned with leftovers: released, telling the operator", view(plan("planned"), cleaned(merged(waiting(0), time.Minute), "a volume")), []string{"release t2 a2 cleaned/a2"}},
 		{"cleaned, still in its turn: waits", view(plan("planned"), cleaned(merged(working(), CleanupCap-time.Second), "")), nil},
-		{"cleaned, still in its turn at the cap: noticed", view(plan("planned"), cleaned(merged(working(), CleanupCap), "")), []string{"notice t2 cleanup-busy/a2"}},
+		{"cleaned, still in its turn at the cap: released, telling the operator", view(plan("planned"), cleaned(merged(working(), CleanupCap), "")), []string{"release t2 a2 cleaned-busy/a2"}},
+		{"cleaned, limited at the cap: released, telling the operator", view(plan("planned"), cleaned(merged(limited, CleanupCap), "")), []string{"release t2 a2 cleaned-busy/a2"}},
+		{"a done plan releases a cleaned session still in its turn at the cap, then stops", view(plan("done"), cleaned(merged(working(), CleanupCap), "")), []string{"release t2 a2 cleaned-busy/a2", "stop p1"}},
 		{"not cleaned, waiting on a limit reset at the wait: waits", view(plan("planned"), merged(resetPending(), CleanupWait)), nil},
 		{"cleaned, window gone: released", view(plan("planned"), cleaned(merged(gone(), time.Minute), "")), []string{"release t2 a2"}},
 		{"not cleaned, idle, within the wait: waits", view(plan("planned"), merged(waiting(StallWait), CleanupWait-time.Second)), nil},
@@ -97,8 +100,14 @@ func TestAfterMergeTexts(t *testing.T) {
 		t.Errorf("cap notice %+v", busy)
 	}
 	cleanedBusy := first(view(plan("planned"), cleaned(mergedAt(with(task(2, "done"), working()), CleanupCap), "")))
-	if !strings.Contains(cleanedBusy[0].Text, "after reporting its cleanup") {
-		t.Errorf("cap notice after a report %+v", cleanedBusy)
+	if cleanedBusy[0].Kind != Release || !cleanedBusy[0].Done || cleanedBusy[0].Text !=
+		"demo-2 was released still in a turn 30m0s after t2 merged, after reporting its cleanup" {
+		t.Errorf("cap release after a report %+v", cleanedBusy)
+	}
+	busyLeft := first(view(plan("planned"), cleaned(mergedAt(with(task(2, "done"), working()), CleanupCap), "a volume")))
+	if busyLeft[0].Key != "cleaned-busy/a2" || busyLeft[0].Text !=
+		"demo-2 was released still in a turn 30m0s after t2 merged, after reporting its cleanup; demo-2 cleaned up after t2 merged, but left on host devbox: a volume" {
+		t.Errorf("cap release with leftovers %+v", busyLeft)
 	}
 	unknown := first(view(plan("planned"), mergedAt(with(task(2, "done"), gone()), 0)))
 	if len(unknown) != 1 || !strings.Contains(unknown[0].Text, "worktree unknown, branch unknown") {

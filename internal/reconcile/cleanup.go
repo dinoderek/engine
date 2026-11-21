@@ -3,6 +3,7 @@ package reconcile
 import (
 	"cmp"
 	"fmt"
+	"strings"
 )
 
 // reaps releases each done task's session: a merged task's by the cleanup
@@ -29,10 +30,11 @@ func reaps(v View) []Action {
 // afterMerge is a merged task's session's step, and whether it releases the
 // session. The merged update gives the session a turn to tear down what it
 // provisioned and report it with engine task cleaned. It is released once
-// idle after that report; or, without one, once idle CleanupWait after the
-// merge with no limit reset pending, or at once when its window is gone,
-// telling the operator. One still in a turn CleanupCap after the merge is
-// noticed once and released when it goes idle.
+// idle after that report, or at CleanupCap after the merge if still in a
+// turn; or, without one, once idle CleanupWait after the merge with no limit
+// reset pending, or at once when its window is gone, telling the operator.
+// One without a report still in a turn CleanupCap after the merge is noticed
+// once and released when it goes idle.
 //
 // A turn stopped on a usage limit is resumed, or alerted, as an open task's
 // is, and waits for its reset meanwhile.
@@ -51,27 +53,44 @@ func releaseAfterMerge(v View, t Item) ([]Action, bool) {
 	since := v.Now.Sub(t.MergedAt)
 	busy := s.Live && !s.Idle()
 	switch {
-	case t.Cleaned != nil && !busy:
-		a := release(t, "its task is merged and cleaned up")
-		if t.Cleaned.Left != "" {
-			a = told(a, "cleaned/"+t.Current.ID, fmt.Sprintf("%s cleaned up after %s merged, but left on host %s: %s",
-				s.Name, t.ID, s.Host, t.Cleaned.Left))
-		}
-		return []Action{a}, true
+	case t.Cleaned != nil && (!busy || since >= CleanupCap):
+		return []Action{releaseCleaned(t, busy)}, true
 	case t.Cleaned == nil && (!s.Live || s.Idle() && s.ResetsAt <= 0 && since >= CleanupWait):
 		a := release(t, "its task is merged")
 		return []Action{told(a, "uncleaned/"+t.Current.ID, fmt.Sprintf("%s was released without confirming cleanup after %s merged: %s",
 			s.Name, t.ID, where(s)))}, true
 	case busy && since >= CleanupCap:
-		how := "without confirming cleanup"
-		if t.Cleaned != nil {
-			how = "after reporting its cleanup"
-		}
 		return []Action{notice(t, "cleanup-busy/"+t.Current.ID, fmt.Sprintf(
-			"%s on host %s is still in a turn %s after %s merged, %s. It is released once it goes idle",
-			s.Name, s.Host, CleanupCap, t.ID, how))}, false
+			"%s on host %s is still in a turn %s after %s merged, without confirming cleanup. It is released once it goes idle",
+			s.Name, s.Host, CleanupCap, t.ID))}, false
 	}
 	return nil, false
+}
+
+// releaseCleaned releases a merged task's session that reported its cleanup.
+// One still in a turn is released too, at CleanupCap, telling the operator:
+// its report says the protocol is done, and a session whose hooks can no
+// longer run, as when its folder is gone, never reads idle.
+func releaseCleaned(t Item, busy bool) Action {
+	s := *t.Session
+	a := release(t, "its task is merged and cleaned up")
+	var text []string
+	if busy {
+		text = append(text, fmt.Sprintf("%s was released still in a turn %s after %s merged, after reporting its cleanup",
+			s.Name, CleanupCap, t.ID))
+	}
+	if t.Cleaned.Left != "" {
+		text = append(text, fmt.Sprintf("%s cleaned up after %s merged, but left on host %s: %s",
+			s.Name, t.ID, s.Host, t.Cleaned.Left))
+	}
+	if len(text) == 0 {
+		return a
+	}
+	key := "cleaned/" + t.Current.ID
+	if busy {
+		key = "cleaned-busy/" + t.Current.ID
+	}
+	return told(a, key, strings.Join(text, "; "))
 }
 
 // where names a session's host, worktree and branch for the operator.
