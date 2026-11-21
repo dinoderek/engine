@@ -23,9 +23,11 @@ const writeLimit = 64 << 10
 // reads in readOps are separate: a write never widens them.
 var writeOps = []string{"resolve", "reply", "ack", "say", "approve", "run", "stop", "task-stop", "task-resume", "state", "complete-external"}
 
-// questionRead is the one read a write makes: the operator inbox, to turn a
-// resolve's choice index into the choice's text.
-const questionRead = "inbox"
+// questionRead is the one read a write makes: the updates from a question
+// on, to turn a resolve's choice index into the choice's text. Unlike the
+// inbox it still lists a question once resolved, so a resend of an applied
+// resolve reaches the server's replay.
+const questionRead = "updates"
 
 // writeBody is every field a write may carry; each route accepts its own
 // subset (writeRoute.fields).
@@ -254,8 +256,8 @@ func (u *upstream) apply(ctx context.Context, rt writeRoute, subject string, b w
 	return Envelope{Data: out, Fetched: u.now().UTC()}, 200
 }
 
-// forward sends a request on the write allowlist, and nothing else. A state
-// change is only a retry, to todo.
+// forward sends a request on the write allowlist, or the one question read,
+// and nothing else. A state change is only a retry, to todo.
 func (u *upstream) forward(ctx context.Context, r control.Request) (control.Response, error) {
 	if !slices.Contains(writeOps, r.Op) && r.Op != questionRead || r.Op == "state" && r.State != "todo" {
 		return control.Response{}, errors.New("operation " + r.Op + " is not a dashboard write")
@@ -265,8 +267,8 @@ func (u *upstream) forward(ctx context.Context, r control.Request) (control.Resp
 	return u.client.Call(ctx, r)
 }
 
-// choiceText is the text of choice i of the open question n, read from the
-// operator's inbox, which lists a question until it is resolved.
+// choiceText is the text of choice i of question n, read from the updates
+// that start at it. A question already resolved is the server's to refuse.
 func (u *upstream) choiceText(ctx context.Context, n, i int) (string, error) {
 	got, err := u.forward(ctx, control.Request{Op: questionRead, After: n - 1})
 	if err != nil {
@@ -281,7 +283,7 @@ func (u *upstream) choiceText(ctx context.Context, n, i int) (string, error) {
 		}
 		return up.Choices[i], nil
 	}
-	return "", &control.Problem{Status: 404, Message: "no open question with that number"}
+	return "", &control.Problem{Status: 404, Message: "no question with that number"}
 }
 
 // writeFailure is failure, with the control server's reason when it gave one.

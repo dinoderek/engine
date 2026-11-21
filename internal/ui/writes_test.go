@@ -78,7 +78,10 @@ func question(n int, choices ...string) control.Response {
 
 func TestEveryWriteBecomesOneControlRequest(t *testing.T) {
 	inbox := func(r control.Request) (control.Response, error) {
-		if r.Op == "inbox" {
+		if r.Op == "updates" {
+			if r.After != 39 || r.ID != "" {
+				t.Errorf("question read = %+v, want the updates after 39", r)
+			}
 			return question(40, "keep", "drop"), nil
 		}
 		return control.Response{Item: &control.Item{Version: 7}, Updates: []control.Update{{ID: 91}}}, nil
@@ -214,7 +217,7 @@ func TestChoiceNeedsAnOpenQuestionWithThatChoice(t *testing.T) {
 			t.Errorf("%s: %d %+v, want %d", name, res.StatusCode, env, tc.status)
 		}
 		for _, r := range c.sent() {
-			if r.Op != "inbox" {
+			if r.Op != "updates" {
 				t.Errorf("%s: sent %s, want only the question read", name, r.Op)
 			}
 		}
@@ -222,6 +225,35 @@ func TestChoiceNeedsAnOpenQuestionWithThatChoice(t *testing.T) {
 	c := &recorder{}
 	if res, _ := send(t, newWriter(c), "/api/updates/40/resolve", `{"key":"k"}`); res.StatusCode != 400 || len(c.sent()) != 0 {
 		t.Fatalf("an empty resolution = %d with %d calls, want 400 and none", res.StatusCode, len(c.sent()))
+	}
+}
+
+// A resolve whose reply was lost is resent with its key: the question read
+// still finds the question, and the request is the same, so the server replays.
+func TestAResentResolveStillReadsItsQuestion(t *testing.T) {
+	applied := false
+	c := &recorder{}
+	c.reply = func(r control.Request) (control.Response, error) {
+		if r.Op == "updates" {
+			return question(40, "keep", "drop"), nil // listed whether or not resolved
+		}
+		applied = true
+		return control.Response{Updates: []control.Update{{ID: 91}}}, nil
+	}
+	h := newWriter(c)
+	for range 2 {
+		if res, env := send(t, h, "/api/updates/40/resolve", `{"key":"k","choice":1}`); res.StatusCode != 200 || env.Error != "" {
+			t.Fatalf("resolve = %d %+v, want 200 each time", res.StatusCode, env)
+		}
+	}
+	var writes []control.Request
+	for _, r := range c.sent() {
+		if r.Op == "resolve" {
+			writes = append(writes, r)
+		}
+	}
+	if !applied || len(writes) != 2 || !reflect.DeepEqual(writes[0], writes[1]) || writes[0].Key != "k" {
+		t.Fatalf("resolves sent %+v, want the same request twice", writes)
 	}
 }
 

@@ -24,7 +24,7 @@ A write is a `POST` of one JSON object, at most 64 KiB, with only the fields its
 | `/api/tasks/{id}/retry` | `version` | `state` to `todo` |
 | `/api/tasks/{id}/complete-external` | `version`, `pr` | `complete-external` |
 
-Writes have their own allowlist (`writeOps` in `internal/ui/writes.go`), apart from the reads'. Resolve needs a `choice` or a `note`. `choice` is an index into the question's choices: the process reads the operator inbox from the update before the question, finds the update, and sends the choice's text, a newline, then the note. A question already resolved is not in the inbox, so a choice for it is refused. `version` is the one the page read; a stale one is the server's 409.
+Writes have their own allowlist (`writeOps` in `internal/ui/writes.go`), apart from the reads'. Resolve needs a `choice` or a `note`. `choice` is an index into the question's choices: the process reads the updates from the question on, finds it, and sends the choice's text, a newline, then the note. The read lists a resolved question too, so a resend of an applied resolve replays; one resolved elsewhere gets the server's `409`. `version` is the one the page read; a stale one is the server's 409.
 
 ## Origin and content type
 
@@ -32,4 +32,4 @@ The `Origin` must be `http` or `https` with no path and the same host and port a
 
 ## Request keys
 
-The server applies a key once: a resend with the same key and body returns the first result, and the same key with another body is `409`. The page's helper (`internal/ui/static/writes.js`) makes one key with `crypto.randomUUID()` when a form opens and resends it after no answer or a 5xx. A 2xx or 4xx ends the attempt and the next send makes a new key. The control server's status and reason pass through for `400`, `404` and `409`; a server or transport failure is `502` with no detail.
+The server applies a key once: a resend with the same key and body returns the first result, and the same key with another body is `409`. The page's helper (`internal/ui/static/writes.js`) makes one key with `crypto.randomUUID()` when a form opens and resends it after no answer or a 5xx. A 2xx or 4xx ends the attempt and the next send makes a new key. The control server's status and reason pass through for `400`, `404` and `409`; a server or transport failure is `502`, with the server's message for a server error and no reason.
