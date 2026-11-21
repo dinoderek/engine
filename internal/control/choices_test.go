@@ -231,7 +231,7 @@ func TestAVersion3DatabaseOpensAndReads(t *testing.T) {
 		t.Fatalf("inbox after the migration: %+v, %v", out.Updates, err)
 	}
 	version, err := reader.Store.sql("PRAGMA user_version;")
-	if err != nil || !strings.Contains(string(version), `"user_version":4`) {
+	if err != nil || !strings.Contains(string(version), fmt.Sprintf(`"user_version":%d`, schemaVersion)) {
 		t.Fatalf("schema after opening: %s, %v", version, err)
 	}
 	if _, err := reader.Execute(op, Request{Op: "resolve", Key: Secret(), ReplyTo: question.ID, Body: "Approved"}); err != nil {
