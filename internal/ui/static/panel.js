@@ -310,7 +310,6 @@ window.engine.panel = function (ctx) {
     sync,
     refresh,
     head: () => { if (st.shown) renderHead(); },
-    item: () => (st.item && st.item.data) || null,
     reload: () => (st.shown ? fetchItem() : Promise.resolve()),
     envs: () => [st.item, st.threadEnv].filter(Boolean),
     noteOpener: (key) => {

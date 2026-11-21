@@ -256,7 +256,7 @@ const scenarios = {
       await t.click(t.$("sheet-ok"));
       assert.equal(t.sheetOpen(), false);
       const row = t.$("task-t30").textContent;
-      assert.ok(row.includes("Not applied: task t30 has no running execution to stop"), row);
+      assert.ok(row.includes("Not applied: task t30 has no running execution to stop. t30 is now Failed; the page showed Running."), row);
       assert.ok(row.includes("t30 is now Failed; the page showed Running."), row);
       assert.deepEqual(names(t, "pane", "t30"), ["Retry", "Complete externally"], "the view shows what is allowed now");
     });
@@ -282,7 +282,7 @@ const scenarios = {
       await t.click(t.act("pane", "p24", "stop"));
       await t.click(t.$("sheet-ok"));
       assert.equal(t.sheetOpen(), true);
-      assert.ok(t.sheetText().includes("the dashboard did not answer"));
+      assert.ok(t.sheetText().includes("the dashboard did not answer. Try again"), t.sheetText());
       assert.equal(t.p.doc.activeElement, t.$("sheet-ok"), "focus stays in the sheet after a failure");
       await t.click(t.$("sheet-ok"));
       assert.equal(fx.posts.length, 2);

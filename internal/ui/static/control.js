@@ -63,6 +63,9 @@ window.engine.control = function (ctx) {
     return "";
   }
 
+  // sentence ends a message with a full stop, so two can be joined.
+  const sentence = (text) => (/[.!?]$/.test(text) ? text : text + ".");
+
   // note keeps an item's last result. A refusal also keeps the facts the
   // write was made on, so the bar can say what has changed since.
   function note(id, text, bad, before) {
@@ -85,7 +88,7 @@ window.engine.control = function (ctx) {
     }
     if (n) {
       const what = n.before ? changed(n.before, f) : "";
-      row.append(el("p", { class: "action-note" + (n.bad ? " bad" : ""), role: "status" }, (n.text + " " + what).trim()));
+      row.append(el("p", { class: "action-note" + (n.bad ? " bad" : ""), role: "status" }, (sentence(n.text) + " " + what).trim()));
     }
     return row;
   }
@@ -94,7 +97,7 @@ window.engine.control = function (ctx) {
   // refreshes the view and says what changed. It reports whether it applied.
   async function settle(f, op, r) {
     const spec = OPS[op];
-    if (r.status === 0 || r.status >= 500) return { done: false, retry: true, text: (r.error || "No answer.") + " Try again; the same request is resent." };
+    if (r.status === 0 || r.status >= 500) return { done: false, retry: true, text: sentence(r.error || "No answer") + " Try again; the same request is resent." };
     forms.delete(slot(f, op));
     if (r.ok) {
       note(f.id, spec.done, false);
@@ -197,7 +200,7 @@ window.engine.control = function (ctx) {
   function open(f, op, opener, scope) {
     if (sheet) return;
     const spec = OPS[op];
-    const what = spec.text === "Stop" ? "Stop " + f.id : spec.text + " " + f.id;
+    const what = spec.text + " " + f.id;
     const input = spec.pr ? el("input", { type: "url", id: "sheet-pr", class: "sheet-input", placeholder: "https://github.com/owner/repo/pull/…", autocomplete: "off", "aria-label": "Pull request URL" }) : null;
     const cancel = el("button", { type: "button", class: "act", id: "sheet-cancel" }, "Cancel");
     const ok = el("button", { type: "button", class: "act primary" + (spec.danger ? " danger" : ""), id: "sheet-ok" }, spec.text);
