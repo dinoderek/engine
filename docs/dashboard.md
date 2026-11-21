@@ -1,14 +1,14 @@
 # Dashboard and session view
 
-> **Owns:** the read-only dashboard (`engine ui`) and the session view it and the CLI read. **Not here:** the records, API and inbox they read (`control-server.md`), how a pass reads a session (`session-signals.md`).
+> **Owns:** the dashboard's reads (`engine ui`) and the session view it and the CLI read. **Not here:** the records, API and inbox they read (`control-server.md`), the dashboard's writes (`dashboard-writes.md`), how a pass reads a session (`session-signals.md`).
 
-`engine ui` and `session-view` read the server's records (`control-server.md`) and never write them.
+`engine ui` and `session-view` read the server's records (`control-server.md`). To change its writes, load `dashboard-writes.md`.
 
 ## Dashboard
 
-`engine ui` serves a read-only dashboard on `127.0.0.1:7332`; `--listen` chooses another loopback address. It uses the CLI's server configuration and operator credential, which never reaches the browser. Any local user reaching the port reads with operator rights; run it only on a single-user machine.
+`engine ui` serves a dashboard on `127.0.0.1:7332`; `--listen` takes another loopback address. It uses the CLI's server configuration and operator credential, never sent to the browser. Any local user reaching the port has operator rights; run it only on a single-user machine.
 
-The process forwards only read operations (`list`, `plan-view`, `attempts`, `get`, `updates`, `session-view`) and answers GET and HEAD for a loopback host name on any port, so an SSH tunnel works. It sends `Cache-Control: no-store`. When the control server fails, the page keeps its last data, marked stale. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only the page's scripts.
+Reads forward only `list`, `plan-view`, `attempts`, `get`, `updates` and `session-view`, for GET and HEAD to a loopback host name on any port, so an SSH tunnel works. It sends `Cache-Control: no-store`. When the control server fails, the page keeps its last data, marked stale. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only its scripts.
 
 The per-plan view lists unfinished prerequisites, including other plans' tasks. A todo task waiting to start has the plan's question as feedback. On both tabs, "Needs feedback" opens the question's thread at its update over the tab, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
 

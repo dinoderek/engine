@@ -1,6 +1,6 @@
-// Package ui is `engine ui`: a local, read-only dashboard over the control
-// server. The browser talks only to this process, which holds the operator
-// credential and forwards a fixed set of reads.
+// Package ui is `engine ui`: a local dashboard over the control server. The
+// browser talks only to this process, which holds the operator credential and
+// forwards a fixed set of reads and writes.
 package ui
 
 import (
@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 	"time"
 )
@@ -21,7 +22,10 @@ import (
 const DefaultListen = "127.0.0.1:7332"
 
 // Usage is the command's synopsis.
-const Usage = "usage: engine ui [--listen " + DefaultListen + "]\n"
+const Usage = "usage: engine ui [--listen " + DefaultListen + "] [--host <name>]\n"
+
+// hostName is a DNS name: labels of letters, digits and hyphens, no port.
+var hostName = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$`)
 
 // Env is the command boundary. Connect builds the control client from the
 // CLI's server configuration and credential.
@@ -37,12 +41,17 @@ func Main(args []string, e Env) int {
 	fs := flag.NewFlagSet("engine ui", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	listen := fs.String("listen", DefaultListen, "")
+	host := fs.String("host", "", "")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
 		fmt.Fprint(e.Err, Usage)
 		return 2
 	}
 	if !LoopbackHost(*listen) {
 		fmt.Fprintf(e.Err, "engine ui: --listen must be a loopback address, such as %s\n", DefaultListen)
+		return 2
+	}
+	if *host != "" && !hostName.MatchString(*host) {
+		fmt.Fprintln(e.Err, "engine ui: --host must be a host name, such as devbox.tailnet.ts.net")
 		return 2
 	}
 	client, err := e.Connect()
@@ -67,7 +76,7 @@ func Main(args []string, e Env) int {
 	}
 	logf := func(format string, args ...any) { fmt.Fprintf(e.Err, "engine ui: "+format+"\n", args...) }
 	fmt.Fprintf(e.Out, "engine ui: serving http://%s/\n", ln.Addr())
-	if err = serve(ctx, ln, handler(newUpstream(client, now, logf))); err != nil {
+	if err = serve(ctx, ln, handler(newUpstream(client, now, logf), *host)); err != nil {
 		fmt.Fprintln(e.Err, "engine ui:", err)
 		return 1
 	}

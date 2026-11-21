@@ -114,7 +114,7 @@ type dashboard struct {
 func newDashboard(c Caller) *dashboard {
 	d := &dashboard{now: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), log: &strings.Builder{}}
 	logf := func(format string, args ...any) { d.log.WriteString(format) }
-	d.h = handler(newUpstream(c, func() time.Time { return d.now }, logf))
+	d.h = handler(newUpstream(c, func() time.Time { return d.now }, logf), "")
 	return d
 }
 
@@ -136,6 +136,7 @@ func TestRoutesServePageAndReads(t *testing.T) {
 		{"/app.js", "text/javascript", "textContent"},
 		{"/app.css", "text/css", "prefers-color-scheme"},
 		{"/dom.js", "text/javascript", "window.engine.dom"},
+		{"/writes.js", "text/javascript", "crypto.randomUUID"},
 		{"/panel.js", "text/javascript", "description_html"},
 		{"/api/plans?repo=r1&state=executing&q=rollout", "application/json", `"id":"p24"`},
 		{"/api/plans/p24", "application/json", `"in_progress":2`},
@@ -184,7 +185,6 @@ func TestRoutesRejectHostsMethodsAndUnknownPaths(t *testing.T) {
 		{"GET", "127.0.0.1.evil.example", "/", http.StatusMisdirectedRequest},
 		{"GET", "192.168.1.4:7332", "/", http.StatusMisdirectedRequest},
 		{"GET", "", "/", http.StatusMisdirectedRequest},
-		{"POST", "127.0.0.1:7332", "/api/plans", http.StatusMethodNotAllowed},
 		{"DELETE", "127.0.0.1:7332", "/api/plans/p24", http.StatusMethodNotAllowed},
 		{"GET", "127.0.0.1:7332", "/v1/command", 404},
 		{"GET", "127.0.0.1:7332", "/api/tasks", 404},
@@ -200,7 +200,7 @@ func TestRoutesRejectHostsMethodsAndUnknownPaths(t *testing.T) {
 			t.Errorf("%s %s is cacheable", tc.method, tc.target)
 		}
 	}
-	if res, _ := d.get(t, "PUT", "127.0.0.1", "/"); res.Header.Get("Allow") != "GET, HEAD" {
+	if res, _ := d.get(t, "PUT", "127.0.0.1", "/"); res.Header.Get("Allow") != "GET, HEAD, POST" {
 		t.Fatalf("Allow = %q", res.Header.Get("Allow"))
 	}
 	if got := fc.calls(); len(got) != 0 {
