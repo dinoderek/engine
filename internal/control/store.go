@@ -97,7 +97,7 @@ func (s *Store) initialize() error {
 	if v := version[0].Version; v == 1 || v == 2 {
 		return s.migrate()
 	}
-	_, err = s.sql("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, data TEXT NOT NULL); " + migratePlanStates + fmt.Sprintf("PRAGMA user_version=%d; COMMIT;", schemaVersion))
+	_, err = s.sql("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, data TEXT NOT NULL); " + migratePlanStates + telegramSchema + fmt.Sprintf("PRAGMA user_version=%d; COMMIT;", schemaVersion))
 	return err
 }
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -10,9 +11,10 @@ import (
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/setup"
 	"github.com/dinoderek/engine/internal/start"
+	"github.com/dinoderek/engine/internal/telegram"
 )
 
-const setupUsage = "usage: engine setup [--host <name>]\n"
+const setupUsage = "usage: engine setup [--host <name>] | telegram\n"
 
 // parseSetup reads the host to set up, as `--host name` or `--host=name`; no
 // flag is this host.
@@ -31,6 +33,17 @@ func parseSetup(args []string) (string, error) {
 // runSetup brings a host to this engine's commit, plugin and config, or checks
 // this one. It exits 1 while any item is open.
 func runSetup(args []string, env Env) int {
+	if len(args) > 0 && args[0] == "telegram" {
+		if len(args) != 1 {
+			fmt.Fprint(env.Err, setupUsage)
+			return 2
+		}
+		if err := telegram.Setup(context.Background(), env.Home, env.In, env.Out, telegram.Bot{HTTP: env.TelegramHTTP}); err != nil {
+			fmt.Fprintln(env.Err, "engine setup telegram:", err)
+			return 1
+		}
+		return 0
+	}
 	host, err := parseSetup(args)
 	if err != nil {
 		fmt.Fprintf(env.Err, "engine setup: %v\n%s", err, setupUsage)

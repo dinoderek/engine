@@ -62,6 +62,7 @@ Read these at each session start:
 | changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
 | changes dispatch, recovery, merges, the merge queue or host ops | `docs/coordinator.md` |
 | changes how the coordinator reads a session's liveness, stalls, early deaths or limit recovery | `docs/session-signals.md` |
+| changes Telegram alerts, callbacks or bot setup | `docs/telegram.md` |
 | changes server records, API, credentials or inbox | `docs/control-server.md` |
 | changes `engine ui` or the session view | `docs/dashboard.md` |
 | changes what `engine ui` writes, its `--host`, Origin check or request keys | `docs/dashboard-writes.md` |

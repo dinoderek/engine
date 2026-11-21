@@ -10,9 +10,10 @@ import (
 // prepare, approved, planned and done for a plan. Versions 1 and 2 held
 // repository merge locks; version 3 holds the merge queue instead. Version
 // 4 adds a question's choices, recommendation and class; a version 3
-// database needs no rewrite, and an older server refuses a version 4 one
+// database needs no rewrite. Version 5 adds Telegram delivery and poll state;
+// an older server refuses the newer database
 // rather than drop those fields.
-const schemaVersion = 4
+const schemaVersion = 5
 
 // legacyLock is the part of a version 1 lock record the migration reads.
 type legacyLock struct {
@@ -41,7 +42,7 @@ func (s *Store) migrate() error {
 		before["lock/"+l.Repo] = "legacy"
 	}
 	retire(&st, locks, time.Now().UTC())
-	return s.commit(before, flatten(st), migratePlanStates+fmt.Sprintf("PRAGMA user_version=%d;\n", schemaVersion))
+	return s.commit(before, flatten(st), migratePlanStates+telegramSchema+fmt.Sprintf("PRAGMA user_version=%d;\n", schemaVersion))
 }
 
 func retire(st *State, locks []legacyLock, now time.Time) {

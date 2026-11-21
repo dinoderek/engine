@@ -10,7 +10,7 @@ Two programs share one Go module:
   command. The server side: `internal/control` holds records, transactions and HTTP;
   `internal/reconcile` decides each pass from a View of records and host
   observations; `internal/controlrun` builds the View and applies the
-  actions. Hosts are reached through `internal/remote`, whose peer
+  actions; `internal/telegram` delivers the operator inbox beside it. Hosts are reached through `internal/remote`, whose peer
   `internal/hostops` runs on the host. A harness is the `internal/harness`
   `Adapter` interface, one package per harness; `internal/hostops`,
   `internal/setup` and `internal/upgrade` see only the interface.

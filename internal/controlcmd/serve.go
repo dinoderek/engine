@@ -24,6 +24,7 @@ import (
 	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
+	"github.com/dinoderek/engine/internal/telegram"
 )
 
 // ServerDBPath is the control server's default database, under home.
@@ -104,7 +105,7 @@ func serveMain(args []string, e Env) int {
 	logf := func(format string, args ...any) { fmt.Fprintf(e.Err, format+"\n", args...) }
 	service, c, obs := wire(store, *advertise, e)
 	fmt.Fprintf(e.Out, "engine server listening on %s\n", ln.Addr())
-	if err = Serve(ctx, ln, control.Handler(service, token, logf), background(c.Run, obs.Run)); err != nil {
+	if err = Serve(ctx, ln, control.Handler(service, token, logf), background(c.Run, obs.Run, telegram.Configured(e.Home, service, logf))); err != nil {
 		fmt.Fprintln(e.Err, "engine serve:", err)
 		return 1
 	}
