@@ -73,3 +73,43 @@ func TestWriteTelegramChatOncePreservesConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestTelegramDashboardURL(t *testing.T) {
+	for _, tc := range []struct {
+		raw   string
+		valid bool
+	}{
+		{raw: "https://phone.example.test", valid: true},
+		{raw: "https://phone.example.test:8443/", valid: true},
+		{raw: "http://localhost:9000", valid: true},
+		{raw: "http://[::1]:7332/", valid: true},
+		{raw: "ftp://phone.example.test"},
+		{raw: "https://operator:secret@phone.example.test"},
+		{raw: "https://phone.example.test/path"},
+		{raw: "https://phone.example.test?x=y"},
+		{raw: "https://phone.example.test?"},
+		{raw: "https://phone.example.test#fragment"},
+		{raw: "https://phone.example.test#"},
+		{raw: "phone.example.test"},
+		{raw: "https:///"},
+		{raw: ""},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "config.toml"), "[server]\nurl='http://api.example.test:7331'\n[telegram]\nchat=123\ndashboard_url='"+tc.raw+"'\n")
+			cfg, err := ReadTelegram(dir)
+			if !tc.valid {
+				if err == nil || !strings.Contains(err.Error(), "dashboard_url") {
+					t.Fatalf("accepted %q: %v", tc.raw, err)
+				}
+				return
+			}
+			if err != nil || cfg.DashboardURL != tc.raw || cfg.Chat != 123 {
+				t.Fatalf("config %+v: %v", cfg, err)
+			}
+			if origin, err := ServerOrigin(dir); err != nil || origin != "http://api.example.test:7331" {
+				t.Fatalf("API origin %q: %v", origin, err)
+			}
+		})
+	}
+}

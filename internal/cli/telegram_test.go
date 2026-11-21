@@ -50,7 +50,7 @@ func TestSetupTelegramCommandConfirmsSenderBeforeWriting(t *testing.T) {
 			if err != nil || got.Chat != tc.chat {
 				t.Fatalf("chat %+v %v", got, err)
 			}
-			if tc.chat != 0 && !strings.Contains(out.String(), "Sender  (@operator), user 42; chat 99") {
+			if tc.chat != 0 && (!strings.Contains(out.String(), "Sender  (@operator), user 42; chat 99") || !strings.Contains(out.String(), "dashboard_url")) {
 				t.Fatal(out.String())
 			}
 			if tc.chat == 0 {
@@ -102,5 +102,24 @@ func TestSetupTelegramRefusesAnExistingChat(t *testing.T) {
 	}
 	if code := Run([]string{"setup", "telegram"}, env); code != 1 || !strings.Contains(errOut.String(), "already configured") {
 		t.Fatalf("reconfigure %d: %s", code, errOut.String())
+	}
+}
+
+func TestSetupTelegramPreservesDashboardURL(t *testing.T) {
+	env, out, errOut, config := telegramSetupEnv(t, "\ny\n", "")
+	const dashboard = "https://phone-ui.example.test:8443/"
+	path := filepath.Join(hosts.ConfigDir(env.Home), "config.toml")
+	if err := os.WriteFile(path, []byte(config+"\n[telegram]\ndashboard_url='"+dashboard+"'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := Run([]string{"setup", "telegram"}, env); code != 0 {
+		t.Fatalf("setup %d: %s", code, errOut.String())
+	}
+	cfg, err := hosts.ReadTelegram(hosts.ConfigDir(env.Home))
+	if err != nil || cfg.Chat != 99 || cfg.DashboardURL != dashboard {
+		t.Fatalf("config %+v %v", cfg, err)
+	}
+	if strings.Contains(out.String(), "For dashboard links, set") {
+		t.Fatal(out.String())
 	}
 }

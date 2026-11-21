@@ -47,7 +47,10 @@ func question(u control.Update, dashboard string) (string, keyboard) {
 	if u.Class != "" {
 		text += "\nClass: " + u.Class
 	}
-	text += "\n\n" + clip(u.Body, 1000) + "\n\n" + dashboard
+	text += "\n\n" + clip(u.Body, 1000)
+	if dashboard != "" {
+		text += "\n\n" + dashboard
+	}
 	keys := keyboard{Rows: [][]button{}}
 	for i, choice := range u.Choices {
 		if u.Recommended != nil && *u.Recommended == i {

@@ -3,8 +3,6 @@ package telegram
 import (
 	"context"
 	"errors"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 
@@ -17,19 +15,22 @@ const TokenFile = "telegram-token"
 
 // Configured starts nothing unless both chat and token are present. Invalid
 // credentials fail closed and are logged without affecting the server.
-func Configured(home string, service control.Service, origin string, logf func(string, ...any)) func(context.Context) {
-	loop, err := configured(home, service, origin)
+func Configured(home string, service control.Service, logf func(string, ...any)) func(context.Context) {
+	loop, err := configured(home, service)
 	if err != nil && logf != nil {
 		logf("telegram: %v", err)
 	}
 	if loop == nil {
 		return func(context.Context) {}
 	}
+	if loop.Dashboard == "" && logf != nil {
+		logf("telegram: dashboard links omitted; set [telegram] dashboard_url in config.toml to the published engine ui HTTP(S) origin")
+	}
 	loop.Logf = logf
 	return loop.Run
 }
 
-func configured(home string, service control.Service, origin string) (*Loop, error) {
+func configured(home string, service control.Service) (*Loop, error) {
 	tg, err := hosts.ReadTelegram(hosts.ConfigDir(home))
 	if err != nil || tg.Chat == 0 {
 		return nil, err
@@ -41,10 +42,5 @@ func configured(home string, service control.Service, origin string) (*Loop, err
 	if err != nil {
 		return nil, err
 	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return nil, errors.New("invalid dashboard host")
-	}
-	u.Host = net.JoinHostPort(u.Hostname(), "7332")
-	return &Loop{Service: service, Bot: Bot{Token: token}, Chat: tg.Chat, Dashboard: u.String()}, nil
+	return &Loop{Service: service, Bot: Bot{Token: token}, Chat: tg.Chat, Dashboard: tg.DashboardURL}, nil
 }

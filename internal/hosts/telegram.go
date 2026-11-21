@@ -3,12 +3,24 @@ package hosts
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Telegram is the optional [telegram] table in the operator's config.toml.
-type Telegram struct{ Chat int64 }
+type Telegram struct {
+	Chat         int64
+	DashboardURL string
+}
+
+func dashboardOrigin(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u != nil && (u.Scheme == "http" || u.Scheme == "https") &&
+		u.Hostname() != "" && u.User == nil && (u.Path == "" || u.Path == "/") &&
+		u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && !strings.Contains(raw, "#")
+}
 
 // ReadTelegram leaves an absent configuration disabled.
 func ReadTelegram(dir string) (Telegram, error) {

@@ -96,6 +96,12 @@ func parseOperatorConfig(src string) (Server, Telegram, error) {
 	var tg Telegram
 	if telegram != nil {
 		t := v.reader(telegram, "telegram")
+		if raw, at := t.text("dashboard_url", false); at != nil {
+			tg.DashboardURL = raw
+			if !dashboardOrigin(raw) {
+				v.fail(at.pos, "telegram: dashboard_url must be an HTTP(S) origin without credentials, query or fragment")
+			}
+		}
 		if chat := t.lookup("chat", kInt, false); chat != nil {
 			tg.Chat = int64(chat.num)
 			if tg.Chat == 0 {

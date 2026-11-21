@@ -62,5 +62,8 @@ func Setup(ctx context.Context, home string, in io.Reader, out io.Writer, bot Bo
 		return err
 	}
 	fmt.Fprintln(out, "Telegram chat configured. Start engine serve on this host to receive alerts.")
+	if cfg.DashboardURL == "" {
+		fmt.Fprintln(out, "For dashboard links, set [telegram] dashboard_url in config.toml to the published engine ui HTTP(S) origin. Without it, alerts and answer buttons work with no link.")
+	}
 	return nil
 }

@@ -22,7 +22,12 @@ and leave the server running.
    `~/.config/engine/config.toml`, preserving its other settings. Pairing refuses
    to replace an existing chat. With no message, multiple pending messages or a
    group chat, setup writes nothing and explains the problem.
-4. Start `engine serve`. To disable Telegram, remove the chat setting or token
+4. For dashboard links, optionally add `dashboard_url = "https://dashboard.example"`
+   under `[telegram]` in that file. Use the published dashboard origin, including
+   its scheme and any port, as the phone reaches it. For the tailnet proxy and
+   `--host`, load `dashboard-writes.md`. With no URL, alerts and choice answers
+   still work, links are omitted, and the server logs how to configure them.
+5. Start `engine serve`. To disable Telegram, remove the chat setting or token
    file and restart the server. To pair a replacement chat, remove the chat
    setting first and repeat setup.
 
@@ -32,11 +37,12 @@ messages go to Telegram, so choose a bot and private chat you control.
 ## Alerts and answers
 
 Each open question gets its own audible message: item ID, title, hard-stop class,
-plain question text truncated to 1000 Unicode characters, and a dashboard link.
+plain question text truncated to 1000 Unicode characters, and the configured
+dashboard link when present.
 Each choice gets a button; a star marks the recommendation. Questions without
-choices link to the dashboard and can be answered through the CLI or session.
-The link uses the server's advertised hostname and scheme with the dashboard's
-default port, 7332. For dashboard exposure and tunnels, load `dashboard.md`.
+choices can be answered through the CLI or session. Links use `dashboard_url`
+exactly; it accepts an HTTP(S) origin without credentials, a path other than
+`/`, a query or a fragment. The API address never determines the dashboard link.
 
 A tap is accepted only from the configured chat and the question's recorded bot
 message. It resolves with the choice's exact text. A callback's request key is

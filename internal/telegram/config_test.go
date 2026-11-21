@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func TestIncompleteConfigDoesNotStartLoop(t *testing.T) {
 				}
 			}
 			logged := false
-			run := Configured(home, control.Service{}, "http://server.test:7331", func(string, ...any) { logged = true })
+			run := Configured(home, control.Service{}, func(string, ...any) { logged = true })
 			// A started loop would dereference the deliberately absent service store.
 			run(context.Background())
 			if logged != tc.log {
@@ -70,7 +71,29 @@ func TestRetryAndCancellation(t *testing.T) {
 	l.Run(ctx)
 }
 
-func TestConfiguredLoopUsesServerHostAndPrivateToken(t *testing.T) {
+func TestConfiguredLoopUsesExplicitDashboardAndPrivateToken(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".config", "engine")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range map[string]string{"config.toml": "[telegram]\nchat=123\ndashboard_url='https://phone-ui.example.test:8443/'\n", TokenFile: strings.Repeat("x", 40)} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	l, err := configured(home, control.Service{})
+	if err != nil || l == nil || l.Chat != 123 || l.Dashboard != "https://phone-ui.example.test:8443/" || l.Bot.Token != strings.Repeat("x", 40) {
+		t.Fatalf("loop %+v %v", l, err)
+	}
+
+	// A cancelled context proves the configured launcher does not outlive serve.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	Configured(home, control.Service{}, nil)(ctx)
+}
+
+func TestMissingDashboardURLKeepsLoopAndButtonsAndLogsSetup(t *testing.T) {
 	home := t.TempDir()
 	dir := filepath.Join(home, ".config", "engine")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -81,15 +104,45 @@ func TestConfiguredLoopUsesServerHostAndPrivateToken(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	l, err := configured(home, control.Service{}, "http://server.test:7331")
-	if err != nil || l == nil || l.Chat != 123 || l.Dashboard != "http://server.test:7332" || l.Bot.Token != strings.Repeat("x", 40) {
+	l, err := configured(home, control.Service{})
+	if err != nil || l == nil || l.Chat != 123 || l.Dashboard != "" {
 		t.Fatalf("loop %+v %v", l, err)
 	}
-	if _, err = configured(home, control.Service{}, ":invalid"); err == nil {
-		t.Fatal("invalid origin")
+	text, keys := question(control.Update{ID: 1, Item: "t1", Body: "Pick?", Choices: []string{"yes"}}, l.Dashboard)
+	if strings.Contains(text, "http") || strings.HasSuffix(text, "\n") || len(keys.Rows) != 1 {
+		t.Fatalf("rendered %q %+v", text, keys)
 	}
-	// A cancelled context proves the configured launcher does not outlive serve.
+	var log strings.Builder
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	Configured(home, control.Service{}, "http://server.test:7331", nil)(ctx)
+	Configured(home, control.Service{}, func(format string, args ...any) { fmt.Fprintf(&log, format, args...) })(ctx)
+	if !strings.Contains(log.String(), "dashboard links omitted; set [telegram] dashboard_url") {
+		t.Fatal(log.String())
+	}
+}
+
+func TestAlertPreservesConfiguredDashboardOrigin(t *testing.T) {
+	l, f, plan := testLoop(t)
+	home := t.TempDir()
+	dir := filepath.Join(home, ".config", "engine")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const dashboard = "https://phone-ui.example.test:8443/"
+	for name, value := range map[string]string{"config.toml": "[server]\nurl='http://api.example.test:7331'\n[telegram]\nchat=99\ndashboard_url='" + dashboard + "'\n", TokenFile: strings.Repeat("x", 40)} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configuredLoop, err := configured(home, l.Service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuredLoop.Bot = l.Bot
+	ask(t, l, plan)
+	pass(t, configuredLoop, instant)
+	text := f.calls["sendMessage"][0]["text"].(string)
+	if !strings.HasSuffix(text, "\n\n"+dashboard) || strings.Contains(text, "api.example.test") {
+		t.Fatal(text)
+	}
 }
