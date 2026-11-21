@@ -275,7 +275,7 @@ func (r *recordingCaller) Call(_ context.Context, req control.Request) (control.
 func TestUpstreamForwardsOnlyReads(t *testing.T) {
 	rc := &recordingCaller{}
 	up := newUpstream(rc, time.Now, nil)
-	for _, op := range []string{"create", "state", "say", "ask", "lock-acquire", "approve", "run", "inbox", ""} {
+	for _, op := range []string{"create", "state", "say", "ask", "lock-acquire", "approve", "run", ""} {
 		if _, err := up.call(context.Background(), control.Request{Op: op}); err == nil || !strings.Contains(err.Error(), "not a dashboard read") {
 			t.Errorf("op %q: err = %v, want refusal", op, err)
 		}

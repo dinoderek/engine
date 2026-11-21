@@ -12,13 +12,14 @@ import (
 // behaviour, focus handling and rendering of server data. Each scenario file
 // prints one "ok"/"FAIL" line per scenario: panel_test.js covers the item
 // panel, sessions_test.js the Sessions tab and the feedback links, writes_test.js
-// the request-key helper (no DOM).
+// the request-key helper (no DOM), inbox_test.js the Inbox cards, drafts and
+// conflicts.
 func TestDashboardScripts(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node is not installed")
 	}
-	for _, file := range []string{"panel_test.js", "sessions_test.js", "writes_test.js"} {
+	for _, file := range []string{"panel_test.js", "sessions_test.js", "writes_test.js", "inbox_test.js"} {
 		t.Run(file, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()

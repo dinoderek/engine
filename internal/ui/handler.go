@@ -24,6 +24,11 @@ var assets = map[string]struct{ file, kind string }{
 	"/panel.js":    {"static/panel.js", "text/javascript; charset=utf-8"},
 	"/sessions.js": {"static/sessions.js", "text/javascript; charset=utf-8"},
 	"/writes.js":   {"static/writes.js", "text/javascript; charset=utf-8"},
+	"/inbox.js":    {"static/inbox.js", "text/javascript; charset=utf-8"},
+
+	"/manifest.webmanifest": {"static/manifest.webmanifest", "application/manifest+json"},
+	"/icon-192.png":         {"static/icon-192.png", "image/png"},
+	"/icon-512.png":         {"static/icon-512.png", "image/png"},
 }
 
 const policy = "default-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
@@ -55,6 +60,10 @@ func handler(up *upstream, host string) http.Handler {
 	})
 	mux.HandleFunc("GET /api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		env, status := up.sessions(r.Context())
+		reply(w, status, env)
+	})
+	mux.HandleFunc("GET /api/inbox", func(w http.ResponseWriter, r *http.Request) {
+		env, status := up.inbox(r.Context())
 		reply(w, status, env)
 	})
 	mux.HandleFunc("GET /api/items/{id}", func(w http.ResponseWriter, r *http.Request) {
