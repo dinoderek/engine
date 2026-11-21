@@ -37,7 +37,8 @@ type Item struct {
 	// Question is a plan's oldest open question in read responses, however
 	// it was asked. It is never stored.
 	Question *UpdateRef `json:"question,omitempty"`
-	// StoppedAt is when the operator last stopped this plan's coordination.
+	// StoppedAt is when this plan's coordination last stopped: the
+	// operator's stop, or a planner's second death without a task.
 	StoppedAt time.Time `json:"stopped_at,omitzero"`
 	// Held is a todo task the operator stopped: no pass places it until
 	// the operator resumes it.
@@ -74,9 +75,10 @@ type Attempt struct {
 	// Reason is why the attempt ended: EndVanished, EndEarlyDeath or
 	// EndFailed for a dead window, EndStopped for the operator's stop.
 	Reason string `json:"reason,omitempty"`
-	// Early is set when the session died before claiming its task, whether
-	// that ended the attempt early-death or failed; Tail is the end of its
-	// pane log then, when the host showed one.
+	// Early is set when the session died before claiming its task, or a
+	// planner's before writing any task, whether that ended the attempt
+	// early-death or failed; Tail is the end of its pane log then, when the
+	// host showed one.
 	Early bool   `json:"early,omitempty"`
 	Tail  string `json:"tail,omitempty"`
 	// Limited is set when the session ended at a usage limit: its window

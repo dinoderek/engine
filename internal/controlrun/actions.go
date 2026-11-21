@@ -49,16 +49,19 @@ func (c *Coordinator) endAttempt(a reconcile.Action) error {
 	if err != nil {
 		return err
 	}
+	st, err := c.Service.Store.Snapshot()
+	if err != nil {
+		return err
+	}
+	if st.Items[a.Item].Kind == "plan" {
+		return c.plannerEnded(st, a, at)
+	}
 	switch {
 	case at.Reason == control.EndVanished:
 		return c.notice(a.Item, "vanished/"+at.ID, a.Text+"; the task stays resumable and is dispatched again as a resume")
 	case at.Reason == control.EndEarlyDeath:
 		return c.notice(a.Item, "early/"+at.ID, a.Text+" before it claimed the task; the task is dispatched again once"+tails([]control.Attempt{at}))
 	case at.Early:
-		st, err := c.Service.Store.Snapshot()
-		if err != nil {
-			return err
-		}
 		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(st, at)))
 	}
 	return c.notice(a.Item, "failed/"+at.ID, a.Text)
@@ -72,12 +75,24 @@ func (c *Coordinator) endAtLimit(a reconcile.Action) error {
 	if err != nil || a.Probe {
 		return err
 	}
-	when := fmt.Sprintf("by a probe every %d minutes, the reset being unknown", int(reconcile.ProbeEvery.Minutes()))
-	if reconcile.KnownReset(at.ResetsAt, at.Ended) {
-		when = "at " + time.Unix(at.ResetsAt, 0).Add(reconcile.ResumeDelay).UTC().Format(time.RFC3339) + ", once the reset has passed"
+	st, err := c.Service.Store.Snapshot()
+	if err != nil {
+		return err
+	}
+	if st.Items[a.Item].Kind == "plan" {
+		return c.plannerAtLimit(st, a, at)
 	}
 	return c.notice(a.Item, "limit-death/"+at.ID, fmt.Sprintf("%s; the task stays resumable and is dispatched again %s, from its own branch. "+
-		"Until then no task starts on %s on %s; another host or harness with quota may take it.", a.Text, when, at.Harness, at.Host))
+		"Until then no task starts on %s on %s; another host or harness with quota may take it.", a.Text, limitWhen(at), at.Harness, at.Host))
+}
+
+// limitWhen says when the item of at, ended at a usage limit, is dispatched
+// again.
+func limitWhen(at control.Attempt) string {
+	if reconcile.KnownReset(at.ResetsAt, at.Ended) {
+		return "at " + time.Unix(at.ResetsAt, 0).Add(reconcile.ResumeDelay).UTC().Format(time.RFC3339) + ", once the reset has passed"
+	}
+	return fmt.Sprintf("by a probe every %d minutes, the reset being unknown", int(reconcile.ProbeEvery.Minutes()))
 }
 
 // earlyAttempts are the attempts of at's task that died before claiming it,
