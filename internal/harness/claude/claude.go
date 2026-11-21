@@ -151,7 +151,7 @@ func (a Adapter) Observe(_ context.Context, host hosts.Host, runs map[string]ses
 const StartupWait = time.Minute
 
 // startupDialog is what a session held at a dialog before it starts waits for.
-const startupDialog = "an answer to a dialog shown before the session started"
+const startupDialog = "likely an answer to a dialog: Claude Code has not listed the session since its launch"
 
 // probe is the state of the window called name, whose newest run is r: the
 // state of the run's session (findAgent), or, when started says the session

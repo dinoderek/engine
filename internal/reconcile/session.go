@@ -170,9 +170,10 @@ func WaitText(s Session, plain string) string {
 }
 
 // DialogText is a stall text for a session held at a dialog: the operator
-// answers it in the window, since typing there would take its default.
+// answers it in the window, since typing there would take its default. A
+// harness may infer the dialog, so the text says likely.
 func DialogText(plain string) string {
-	return plain + ": it is held at a dialog in its window. Answer it there; engine types nothing into it"
+	return plain + ": its harness says it is likely held at a dialog in its window. Answer it there; engine types nothing into it"
 }
 
 // deniedInput is a denied tool's input quoted for a comment: a shell

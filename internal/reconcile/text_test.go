@@ -44,11 +44,11 @@ func TestActionTextsAndMarks(t *testing.T) {
 		{"a plain wait says how long", view(plan("planned"), with(task(2, "running"), waiting(StallWait))),
 			[]string{"demo-2 has waited for input for 10m0s, outside a hard stop"}, nil},
 		{"a planner at a dialog says to answer it", view(with(plan("approved"), atDialog(StallWait))),
-			[]string{"the planner demo-1 has waited for input for 10m0s: it is held at a dialog in its window. Answer it there"}, nil},
+			[]string{"the planner demo-1 has waited for input for 10m0s: its harness says it is likely held at a dialog in its window. Answer it there"}, nil},
 		{"a claimed task at a dialog says to answer it", view(plan("planned"), with(task(2, "running"), atDialog(StallWait))),
-			[]string{"demo-2 has waited for input for 10m0s: it is held at a dialog"}, nil},
+			[]string{"demo-2 has waited for input for 10m0s: its harness says it is likely held at a dialog"}, nil},
 		{"an unclaimed task at a dialog says to answer it", view(plan("planned"), with(task(2, "todo"), atDialog(time.Minute))),
-			[]string{"demo-2 has not claimed the task 5m0s after it started: it is held at a dialog in its window"}, nil},
+			[]string{"demo-2 has not claimed the task 5m0s after it started: its harness says it is likely held at a dialog in its window"}, nil},
 		{"the claim wait says so", view(plan("planned"), with(task(2, "todo"), working())),
 			[]string{"demo-2 has not claimed the task 5m0s after it started"}, func(a Action) bool { return a.Stalled.Equal(t0.Add(-time.Hour)) }},
 		{"a far reset is marked far", view(plan("planned"), with(task(2, "running"), limited(48*time.Hour, 0))),
@@ -87,8 +87,6 @@ func TestAnOldDenialIsAPlainWait(t *testing.T) {
 	}
 }
 
-// signedOutWait is a claude session waiting for input on a host that says
-// claude is signed out there.
 // atDialog is a live session held at a dialog since d before t0.
 func atDialog(d time.Duration) Session {
 	s := working()
@@ -96,6 +94,8 @@ func atDialog(d time.Duration) Session {
 	return s
 }
 
+// signedOutWait is a claude session waiting for input on a host that says
+// claude is signed out there.
 func signedOutWait() Session {
 	s := waiting(StallWait)
 	s.Harness, s.SignedOut = "claude", true
