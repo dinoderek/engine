@@ -6,7 +6,7 @@
 // is also a draft in localStorage, one per update, until it is sent.
 window.engine = window.engine || {};
 window.engine.inbox = function (ctx) {
-  const { el } = window.engine.dom;
+  const { el, keep } = window.engine.dom;
   const { ago } = window.engine.fmt;
   const $ = ctx.$;
   const DRAFT = "engine.draft.";
@@ -107,7 +107,7 @@ window.engine.inbox = function (ctx) {
   // sync turns a card's buttons on or off for what it can do now.
   function sync(e) {
     const empty = !e.note.value.trim();
-    const off = e.busy || e.gone;
+    const off = e.busy || e.gone || e.done;
     const set = (b, disabled) => {
       if (disabled) b.setAttribute("disabled", "");
       else b.removeAttribute("disabled");
@@ -144,6 +144,8 @@ window.engine.inbox = function (ctx) {
   function settle(e, r, sent) {
     if (r.ok) {
       say(e, sent.message, false);
+      // An answered or acknowledged card is spent until the refresh drops it.
+      if (sent.done) e.done = true;
       if (sent.clear) {
         e.note.value = "";
         keepDraft(e.card.update, "");
@@ -163,7 +165,7 @@ window.engine.inbox = function (ctx) {
   function actions(e) {
     const c = e.card;
     const note = () => e.note.value.trim();
-    const answer = (extra) => send(e, "/api/updates/" + c.update + "/resolve", Object.assign(note() ? { note: note() } : {}, extra), { message: "Answered.", clear: true });
+    const answer = (extra) => send(e, "/api/updates/" + c.update + "/resolve", Object.assign(note() ? { note: note() } : {}, extra), { message: "Answered.", clear: true, done: true });
     const row = el("div", { class: "card-buttons" });
     if (c.kind === "question") {
       (c.choices || []).forEach((text, i) => {
@@ -177,7 +179,7 @@ window.engine.inbox = function (ctx) {
     }
     e.reply = button("Reply", "act", () => send(e, "/api/updates/" + c.update + "/reply", { body: note() }, { message: "Reply sent.", clear: true }));
     if (c.item) e.say = button("Say", "act", () => send(e, "/api/items/" + c.item + "/say", { body: note() }, { message: "Sent.", clear: true }));
-    if (c.kind === "message") e.ack = button("Acknowledge", "act", () => send(e, "/api/updates/" + c.update + "/ack", {}, { message: "Acknowledged.", clear: false }));
+    if (c.kind === "message") e.ack = button("Acknowledge", "act", () => send(e, "/api/updates/" + c.update + "/ack", {}, { message: "Acknowledged.", clear: false, done: true }));
     e.dismiss = button("Dismiss", "act", () => dismiss(c.update));
     row.append(...[e.answer, e.reply, e.say, e.ack, e.dismiss].filter(Boolean));
     return row;
@@ -210,15 +212,18 @@ window.engine.inbox = function (ctx) {
     e.gone = gone;
     if (json !== e.json) {
       e.json = json;
-      e.statics.replaceChildren(...statics(c), gone ? el("p", { class: "banner" }, "This is no longer in the inbox; it may have been settled elsewhere.") : "");
+      const banner = gone ? el("p", { class: "banner" }, "This is no longer in the inbox; it may have been settled elsewhere.") : "";
+      keep(() => e.statics.replaceChildren(...statics(c), banner));
     }
     sync(e);
   }
 
+  // reorder puts the cards in order by inserting only the ones out of place,
+  // because moving a card would take the focus from a note being typed.
   function reorder(list, wanted) {
-    const have = [...list.children];
-    if (have.length === wanted.length && have.every((n, i) => n === wanted[i])) return;
-    list.replaceChildren(...wanted);
+    wanted.forEach((node, i) => {
+      if (list.children[i] !== node) list.insertBefore(node, list.children[i] || null);
+    });
   }
 
   function counts(d) {

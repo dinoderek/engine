@@ -219,12 +219,11 @@ const scenarios = {
       await t.tap(5, "Hold");
       assert.ok(t.card(5).querySelector(".card-result").textContent.includes("Tap again"));
       await t.tap(5, "Hold");
-      await t.tap(5, "Hold");
-      assert.deepEqual(fx.posts.map((p) => p.body.key), Array(3).fill(fx.posts[0].body.key));
+      assert.deepEqual(fx.posts.map((p) => p.body.key), Array(2).fill(fx.posts[0].body.key));
       t.type(5, "changed my mind");
-      fx.answer = () => ({ status: 200, body: { data: {} } });
       await t.tap(5, "Hold");
-      assert.notEqual(fx.posts[3].body.key, fx.posts[0].body.key);
+      assert.notEqual(fx.posts[2].body.key, fx.posts[0].body.key);
+      assert.equal(fx.posts[2].body.note, "changed my mind");
     });
   },
 
@@ -241,6 +240,47 @@ const scenarios = {
       assert.equal(area.value, "typing");
       assert.ok(t.card(5).querySelector(".card-latest").textContent.includes("Newer line"), "the card is brought up to date");
       assert.deepEqual(t.cards().map((c) => c.id), ["card-5", "card-3"]);
+    });
+  },
+
+  async "a new card ahead of the one being typed in leaves the focus alone"() {
+    const fx = { inbox: inboxOf([MESSAGE]), answer: ok };
+    await page("#/inbox", fx, async (t) => {
+      t.type(3, "typing in the message");
+      const area = t.note(3);
+      area.focus();
+      fx.inbox = inboxOf([QUESTION, PLAIN, MESSAGE]); // questions lead, so both arrive ahead of it
+      await t.refresh();
+      assert.deepEqual(t.cards().map((c) => c.id), ["card-5", "card-7", "card-3"]);
+      assert.equal(t.note(3), area);
+      assert.equal(t.p.doc.activeElement, area, "focus stays");
+      assert.equal(area.value, "typing in the message");
+    });
+  },
+
+  async "a refused card that moves to the end keeps the focus in its note"() {
+    const fx = { inbox: inboxOf([QUESTION, MESSAGE]), answer: () => ({ status: 409, body: { error: "already resolved" } }) };
+    await page("#/inbox", fx, async (t) => {
+      t.type(5, "my answer");
+      fx.inbox = inboxOf([MESSAGE]);
+      await t.tap(5, "Hold");
+      assert.deepEqual(t.cards().map((c) => c.id), ["card-3", "card-5"], "the card moved behind the live ones");
+      t.note(5).focus();
+      fx.inbox = inboxOf([card(8, "message", { item: "t9" }), MESSAGE]);
+      await t.refresh();
+      assert.equal(t.p.doc.activeElement, t.note(5));
+      assert.equal(t.note(5).value, "my answer");
+    });
+  },
+
+  async "an answered card cannot be answered again while it waits to go"() {
+    const fx = { inbox: inboxOf([QUESTION]), answer: ok };
+    await page("#/inbox", fx, async (t) => {
+      fx.inbox = inboxOf([QUESTION]); // the refresh has not dropped it yet
+      await t.tap(5, "Hold");
+      assert.equal(t.button(5, "Merge").hasAttribute("disabled"), true);
+      await t.tap(5, "Merge");
+      assert.equal(fx.posts.length, 1, "a second tap sends nothing");
     });
   },
 

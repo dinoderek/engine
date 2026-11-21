@@ -70,20 +70,36 @@ class Element {
   setAttribute(k, v) { this.attrs.set(k, String(v)); }
   removeAttribute(k) { this.attrs.delete(k); }
   hasAttribute(k) { return this.attrs.has(k); }
+  // detach takes a node out of its parent. As in a browser, a node that holds
+  // focus, or holds an element that does, drops it: focus goes to the body.
+  detach(node) {
+    const doc = this.ownerDocument;
+    if (node.nodeType === 1 && doc.activeElement && node.contains(doc.activeElement)) doc.activeElement = doc.body;
+    const at = node.parentNode ? node.parentNode.childNodes.indexOf(node) : -1;
+    if (at >= 0) node.parentNode.childNodes.splice(at, 1);
+    node.parentNode = null;
+  }
   append(...nodes) {
     for (const n of nodes) {
       const node = typeof n === "string" ? new TextNode(n) : n;
-      if (node.parentNode) node.parentNode.childNodes.splice(node.parentNode.childNodes.indexOf(node), 1);
+      this.detach.call(this, node);
       node.parentNode = this;
       this.childNodes.push(node);
     }
   }
+  insertBefore(node, ref) {
+    this.detach.call(this, node);
+    node.parentNode = this;
+    const at = ref ? this.childNodes.indexOf(ref) : -1;
+    if (at < 0) this.childNodes.push(node);
+    else this.childNodes.splice(at, 0, node);
+    return node;
+  }
   replaceChildren(...nodes) {
-    for (const c of this.childNodes) c.parentNode = null;
-    this.childNodes = [];
+    for (const c of [...this.childNodes]) this.detach.call(this, c);
     this.append(...nodes);
   }
-  remove() { if (this.parentNode) this.parentNode.replaceChildren(...this.parentNode.childNodes.filter((n) => n !== this)); }
+  remove() { if (this.parentNode) this.parentNode.detach(this); }
   contains(n) { for (let x = n; x; x = x.parentNode) if (x === this) return true; return false; }
   scrollIntoView() { this.ownerDocument.scrolled.push(this.id || this.localName); }
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
@@ -96,6 +112,7 @@ class Element {
     return !ev.defaultPrevented;
   }
   click() {
+    if (this.hasAttribute("disabled")) return; // a disabled control takes no click
     const ev = new Event("click", { bubbles: true });
     if (this.dispatchEvent(ev) && this.localName === "a" && (this.getAttribute("href") || "").startsWith("#")) {
       this.ownerDocument.defaultView.navigate(this.getAttribute("href"));
