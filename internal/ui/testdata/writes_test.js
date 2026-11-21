@@ -7,12 +7,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function boot(replies) {
+// boot loads the helper with a scripted fetch. Without secure, crypto has no
+// randomUUID, as in a page served over plain http on a name other than
+// localhost.
+function boot(replies, secure = true) {
   const sent = [];
   let n = 0;
+  const crypto = secure ? { randomUUID: () => "key-" + ++n } : { getRandomValues: (a) => a.fill(++n) };
   const sandbox = {
     window: {},
-    crypto: { randomUUID: () => "key-" + ++n },
+    crypto,
     fetch: async (url, init) => {
       sent.push({ url, init, body: JSON.parse(init.body) });
       const r = replies.shift();
@@ -70,6 +74,14 @@ async function scenario(name, fn) {
     const r = await writes.form().send("/api/tasks/t5/stop", {});
     assert.equal(r.status, 200);
     assert.equal(r.error, "text");
+  });
+  await scenario("outside a secure context the key comes from getRandomValues", async () => {
+    const { writes, sent } = boot([{ status: 200, body: { data: {} } }, { status: 500, body: {} }, { status: 200, body: {} }], false);
+    const f = writes.form();
+    assert.equal((await f.send("/api/updates/4/ack", {})).ok, true);
+    await f.send("/api/updates/4/ack", {});
+    await f.send("/api/updates/4/ack", {});
+    assert.deepEqual(sent.map((s) => s.body.key), ["01".repeat(16), "02".repeat(16), "02".repeat(16)]);
   });
   await scenario("each form has its own key", async () => {
     const { writes, sent } = boot([{ status: 500, body: {} }, { status: 500, body: {} }]);

@@ -26,7 +26,9 @@ commands:
   updates, inbox            read durable task updates or operator messages
   ask, reply, ack, resolve  exchange and resolve operator questions
   merge-queue, attempt      a repository's merge queue and execution attempts
-  ui [--listen <addr>]      serve the read-only dashboard on loopback (127.0.0.1:7332)
+  ui [--listen <addr>] [--host <name>]
+                            serve the dashboard on loopback (127.0.0.1:7332),
+                            and to --host for a tailnet proxy
   version                   print the engine version
   hook <entry> --harness <name> [args]
                             run a harness hook on the event on stdin: pre-tool-use

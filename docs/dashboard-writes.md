@@ -32,7 +32,7 @@ The `Origin` must be `http` or `https` with no path and the same host and port a
 
 ## Request keys
 
-The server applies a key once: a resend with the same key and body returns the first result, and the same key with another body is `409`. The page's helper (`internal/ui/static/writes.js`) makes one key with `crypto.randomUUID()` when a form opens and resends it after no answer or a 5xx. A 2xx or 4xx ends the attempt and the next send makes a new key. The control server's status and reason pass through for `400`, `404` and `409`; a server or transport failure is `502`, with the server's message for a server error and no reason.
+The server applies a key once: a resend with the same key and body returns the first result, and the same key with another body is `409`. The page's helper (`internal/ui/static/writes.js`) makes one key when a form opens, with `crypto.randomUUID()`, or from `crypto.getRandomValues()` where the page is not a secure context, as over plain http by its `--host` name, and resends it after no answer or a 5xx. A 2xx or 4xx ends the attempt and the next send makes a new key. The control server's status and reason pass through for `400`, `404` and `409`; a server or transport failure is `502`, with the server's message for a server error and no reason.
 
 ## Inbox
 

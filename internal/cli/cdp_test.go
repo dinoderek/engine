@@ -84,7 +84,8 @@ type cdpMessage struct {
 }
 
 // launchBrowser starts the browser with one blank page and attaches to it.
-func launchBrowser(t *testing.T, path string) *browser {
+// extra are more browser flags, such as host resolver rules.
+func launchBrowser(t *testing.T, path string, extra ...string) *browser {
 	t.Helper()
 	toBrowser, fromTest, err := os.Pipe()
 	if err != nil {
@@ -100,6 +101,7 @@ func launchBrowser(t *testing.T, path string) *browser {
 		"--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-extensions",
 		"--disable-background-networking", "--disable-sync", "--disable-component-update", "--mute-audio",
 		"--use-mock-keychain", "--password-store=basic", "--window-size=1280,900"}
+	args = append(args, extra...)
 	if !sandboxAvailable() {
 		args = append(args, "--no-sandbox")
 	}
