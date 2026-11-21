@@ -19,6 +19,10 @@ doc comments are the contract. What each answer drives:
 | `engine setup` steps, preflight failure advice, the user's plugin update | runs the steps after the host's, on hosts that list the harness; `engine upgrade` runs the update on the caller first |
 | the preflight kickoff, and whether state comes from hooks alone | fails a check whose window stayed open, skipped a step, or wrote no state file |
 
+A harness runs its hooks in the session's folder, so a session never removes
+its own worktree: with the folder gone, no hook runs, and the state they
+reported stays as it was. Its release removes the worktree.
+
 What each harness answers today:
 
 | | Claude Code | Codex |

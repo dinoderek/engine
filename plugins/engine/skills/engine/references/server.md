@@ -73,9 +73,9 @@ merge step.
   4. The updates on the task:
      - `merged`: the task is `done`. Record the outcome with `engine tell
        <task>`; from the repo's main checkout, tear down what you provisioned
-       by its post-merge cleanup rules, and do nothing else; run `engine task
-       cleaned <task> [--left <what remains>]`; end your turn. The
-       coordinator closes the window.
+       by its post-merge cleanup rules, **except your worktree and branch,
+       which the release removes**, and do nothing else; run `engine task
+       cleaned <task> [--left <what remains>]`; end your turn.
      - `merge-turn`: your turn. Redo step 7 (fetch, merge the default
        branch in, rerun the gates and the review, push), then request again
        for the new head, within the time it names.
