@@ -252,8 +252,9 @@ const (
 )
 
 // lookUp finds q's prompt in the session's transcript, rereading it until
-// Wait has passed while it holds the prompt nowhere. A typed turn with the
-// text outweighs an injected one.
+// Wait has passed while it holds the prompt nowhere. The first read that
+// holds it decides: there, a typed turn with the text outweighs an
+// injected one.
 func (p Poster) lookUp(q pending) found {
 	want := strings.TrimSpace(q.Prompt)
 	deadline := p.Now().Add(p.Wait)
