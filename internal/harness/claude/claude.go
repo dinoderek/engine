@@ -3,12 +3,17 @@
 // A session is launched in auto mode, whose classifier approves or refuses
 // most actions without a prompt. The launch line names the session for
 // Remote Control (-n and --remote-control), so a session never joins a
-// daemon. Claude Code shows a workspace trust dialog in a new folder, whose
-// default answer exits, so Trust records the folder as accepted in Claude
-// Code's own state file, where the key stays: every session shares it.
+// daemon. Claude Code shows a workspace trust dialog in a new folder, and an
+// add-directory dialog for an --add-dir directory that holds skills, both
+// before the session starts and both defaulting to exit, so Trust records
+// the worktree and the plugin directory as accepted in Claude Code's own
+// state file, where the keys stay: every session shares them.
 //
 // The session's state comes from `claude agents --json`, which lists every
-// live session on the host, engine's or not. Busy there also covers a session
+// live session on the host, engine's or not. A session held at a dialog
+// before it starts is not listed yet, so a run missing from a list read past
+// StartupWait is at a dialog: waiting, but never typed into, since Enter
+// would take the dialog's default and exit. Busy there also covers a session
 // whose turn has ended while a background job runs, and Claude Code takes
 // typed input then, so the state hook's file tells the two apart. A usage
 // stop is the limit hook's marker (LimitFile).
@@ -20,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/hosts"
@@ -77,13 +83,16 @@ type launcher Adapter
 func (launcher) Join(string, string) (bool, string) { return false, "" }
 
 func (l launcher) Trust(dir, _ string, _ bool) error {
-	if err := TrustFolder(Config(l.env.Var, l.env.Home), dir); err != nil {
-		return fmt.Errorf("trust %s for Claude Code: %w", dir, err)
+	config := Config(l.env.Var, l.env.Home)
+	for _, d := range []string{dir, PluginDir(l.env.Var, l.env.Home)} {
+		if err := TrustFolder(config, d); err != nil {
+			return fmt.Errorf("trust %s for Claude Code: %w", d, err)
+		}
 	}
 	return nil
 }
 
-// Release leaves the folder trusted: the trust is a key in a file Claude
+// Release leaves the folders trusted: the trust is a key in a file Claude
 // Code shares with every session.
 func (launcher) Release(string) error { return nil }
 
@@ -112,11 +121,13 @@ func (a Adapter) Observe(_ context.Context, host hosts.Host, runs map[string]ses
 		snap.Quota = &q
 	}
 	var agents []Agent
+	listed := false
 	if host.Runs(Name) {
 		bin, err := host.BinPath(Name, a.env.Home)
 		if err == nil && a.env.Exec != nil {
 			snap.SignedOut = signedOut(a.env.Exec(bin, "auth", "status"))
 			agents, err = ListAgents(a.env.Exec, bin)
+			listed = err == nil
 		}
 		if err != nil {
 			snap.Error = err.Error()
@@ -126,18 +137,27 @@ func (a Adapter) Observe(_ context.Context, host hosts.Host, runs map[string]ses
 	// A host that does not run Claude lists no sessions, but a limit marker
 	// still says a window's session is limited.
 	snap.Sessions = map[string]harness.State{}
+	now := a.env.Time()
 	for name, r := range runs {
-		if st, ok := probe(name, r, agents); ok {
+		if st, ok := probe(name, r, agents, listed && now.Sub(r.Record.Spawned) >= StartupWait); ok {
 			snap.Sessions[name] = st
 		}
 	}
 	return snap
 }
 
+// StartupWait is how long a launched session may take to appear in Claude
+// Code's session list. One still missing after it is held at a dialog.
+const StartupWait = time.Minute
+
+// startupDialog is what a session held at a dialog before it starts waits for.
+const startupDialog = "an answer to a dialog shown before the session started"
+
 // probe is the state of the window called name, whose newest run is r: the
-// state of the run's session (findAgent), unless a limit marker makes a live,
-// non-busy session limited.
-func probe(name string, r session.Run, agents []Agent) (harness.State, bool) {
+// state of the run's session (findAgent), or, when started says the session
+// should be listed by now and it is not, waiting at a dialog; unless a limit
+// marker makes a live, non-busy session limited.
+func probe(name string, r session.Run, agents []Agent, started bool) (harness.State, bool) {
 	var st harness.State
 	if ag, ok := findAgent(name, r, agents); ok {
 		st.State = AgentState(ag)
@@ -145,6 +165,8 @@ func probe(name string, r session.Run, agents []Agent) (harness.State, bool) {
 			st.WaitingFor = ag.WaitingFor
 		}
 		st.Background = st.State == session.StateWorking && turnEnded(r.Dir, ag.SessionID)
+	} else if started {
+		st = harness.State{State: session.StateWaiting, Dialog: true, WaitingFor: startupDialog}
 	}
 	if l, ok := ReadLimit(r.Dir); ok && st.State != session.StateWorking {
 		st = harness.State{State: session.StateLimited, ResetsAt: l.ResetsAt}

@@ -7,7 +7,7 @@ Agent state is never scraped from the pane: task state and questions are server 
 1. **The harness** gives each window of session `engine` a `state` (`working`, `waiting` or `limited`) from the observation of the harness its newest `run.json` names (`harnesses.md`). A window with no run included is unknown.
 2. **tmux.** A window whose command has not exited is alive; a dead window is dead whatever the harness says.
 
-A session is **idle** when `waiting`, or `working` with `background` set. Only idle sessions get wake-up pointers.
+A session is **idle** when `waiting`, or `working` with `background` set. Only idle sessions get wake-up pointers. A `waiting` window the harness marks `dialog` is held at a dialog typed input would answer, such as a trust prompt whose default exits: it is never idle, so nothing is typed into it, but its wait counts toward a stall, whose notice says to answer it in the window.
 
 **Stalls.** Limited, queued and background-only sessions never stall. A dispatched session that has not claimed its task 5 minutes after it started is noticed once, and one that ended before claiming is an early death. A session waiting 10 minutes on an open task with no hard stop or question has stopped outside the protocol; the operator is notified once, naming the sign-in for a signed-out harness. A denial at most 10 minutes older than the wait makes the stall a Permission hard stop naming the tool, input and reason.
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dinoderek/engine/internal/harness"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -258,5 +259,27 @@ func TestTrustFolderGivesUpOnABusyFile(t *testing.T) {
 	}
 	if leftovers, _ := filepath.Glob(config + ".engine-*"); len(leftovers) > 0 {
 		t.Errorf("temp files left: %v", leftovers)
+	}
+}
+
+// A session's trust covers its worktree and the plugin directory its launch
+// adds, whose add-directory dialog would otherwise stop the session before
+// it starts.
+func TestLauncherTrustsTheWorktreeAndThePluginDir(t *testing.T) {
+	home := t.TempDir()
+	cfg := filepath.Join(home, "cfg")
+	if err := os.Mkdir(cfg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	getenv := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": cfg}[k] }
+	dir := t.TempDir()
+	if err := New(harness.Env{Home: home, Getenv: getenv}).Session("r-7").Trust(dir, filepath.Dir(dir), false); err != nil {
+		t.Fatal(err)
+	}
+	config := Config(getenv, home)
+	for _, d := range []string{dir, PluginDir(getenv, home)} {
+		if !trusted(t, config, d) {
+			t.Errorf("%s not trusted:\n%s", d, readFile(config))
+		}
 	}
 }

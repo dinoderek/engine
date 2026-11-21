@@ -140,6 +140,10 @@ type State struct {
 	State string
 	// WaitingFor says what a waiting session needs, when the harness says.
 	WaitingFor string
+	// Dialog is a waiting session held at a dialog that typed input would
+	// answer, such as a trust prompt whose default exits: it stalls as a
+	// wait does, but nothing is typed into it.
+	Dialog bool
 	// Background is a working session whose last turn has ended: only a
 	// background job keeps it busy, and it takes typed input.
 	Background bool

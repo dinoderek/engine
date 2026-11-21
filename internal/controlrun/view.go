@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/lint"
 	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/session"
@@ -107,17 +108,7 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 			}
 		}
 		if w, ok := matchWindow(at, h.Status, s.Name); ok {
-			s.Live = w.Alive
-			s.DeadWindow = !w.Alive
-			s.Waiting = w.Alive && w.State == session.StateWaiting
-			s.Background = w.Alive && w.State == session.StateWorking && w.Background
-			s.Limited = w.Alive && w.State == session.StateLimited
-			s.DiedAtLimit = s.DiedAtLimit && !w.Alive
-			if w.Alive {
-				s.ResetsAt = w.ResetsAt
-			}
-			s.Screen = w.Screen
-			s.Denial = w.Denial
+			withWindow(&s, w)
 			s.Harness = at.Harness
 			s.SignedOut = h.SignedOut(at.Harness)
 			return s
@@ -127,6 +118,22 @@ func observe(at control.Attempt, fleet reconcile.Fleet, slug string, number int)
 	}
 	s.Unknown = true
 	return s
+}
+
+// withWindow sets what the session's window says of it.
+func withWindow(s *reconcile.Session, w hostops.Window) {
+	s.Live = w.Alive
+	s.DeadWindow = !w.Alive
+	s.Dialog = w.Alive && w.State == session.StateWaiting && w.Dialog
+	s.Waiting = w.Alive && w.State == session.StateWaiting && !w.Dialog
+	s.Background = w.Alive && w.State == session.StateWorking && w.Background
+	s.Limited = w.Alive && w.State == session.StateLimited
+	s.DiedAtLimit = s.DiedAtLimit && !w.Alive
+	if w.Alive {
+		s.ResetsAt = w.ResetsAt
+	}
+	s.Screen = w.Screen
+	s.Denial = w.Denial
 }
 
 func (c *Coordinator) keepObservations(v reconcile.View) error {
@@ -165,7 +172,7 @@ func since(start time.Time, holds bool, now time.Time) time.Time {
 // is recorded as seen live only while coordination runs, so a pass that
 // overlaps a stop never dates the sighting after it.
 func kept(at control.Attempt, sess reconcile.Session, now time.Time, coordinating bool) control.Attempt {
-	at.WaitingSince = since(at.WaitingSince, sess.Waiting && sess.Idle() && sess.ResetsAt == 0, now)
+	at.WaitingSince = since(at.WaitingSince, (sess.Waiting && sess.Idle() || sess.AtDialog()) && sess.ResetsAt == 0, now)
 	at.IdleSince = since(at.IdleSince, sess.Idle() && sess.ResetsAt == 0, now)
 	at.LimitedSince = since(at.LimitedSince, sess.Live && sess.Limited, now)
 	if sess.ResetsAt > 0 {

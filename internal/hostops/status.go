@@ -69,6 +69,9 @@ type Window struct {
 	State   string `json:"state,omitempty"`
 	// WaitingFor says what a waiting session needs, when its harness says.
 	WaitingFor string `json:"waiting_for,omitempty"`
+	// Dialog is true for a waiting session held at a dialog that typed
+	// input would answer: nothing may be typed into it.
+	Dialog bool `json:"dialog,omitempty"`
 	// Background is true for a working session whose last turn has ended:
 	// only a background job keeps it busy, and it takes typed input.
 	Background bool `json:"background,omitempty"`
@@ -142,7 +145,7 @@ func ReadStatus(d Deps) (Status, error) {
 		if r, ok := runs[w.Name]; ok {
 			out.Harness = r.Record.Harness
 			if st, ok := states[w.Name]; ok && out.Alive {
-				out.State, out.WaitingFor, out.Background, out.ResetsAt = st.State, st.WaitingFor, st.Background, st.ResetsAt
+				out.State, out.WaitingFor, out.Dialog, out.Background, out.ResetsAt = st.State, st.WaitingFor, st.Dialog, st.Background, st.ResetsAt
 			}
 			if out.State == session.StateWaiting {
 				out.Denial = LastDenial(filepath.Join(r.Dir, session.PermissionLog))
