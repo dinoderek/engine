@@ -65,10 +65,8 @@ func TestAPlannerThatDiesWithoutATaskIsReplacedThenStops(t *testing.T) {
 	if second.ID == first.ID || second.Reason != control.EndFailed || st.Items[plan.ID].Coordinating {
 		t.Fatalf("the second planner's end: %+v, coordinating %v", second, st.Items[plan.ID].Coordinating)
 	}
-	for _, req := range h.launches {
-		if req.Spawn.RunID == second.RunID && !req.Spawn.Resume {
-			t.Fatal("the new planner was not a resume")
-		}
+	if req, ok := h.launches[second.RunID]; !ok || !req.Spawn.Resume {
+		t.Fatalf("the new planner was not launched as a resume: %+v, %v", req.Spawn, ok)
 	}
 	n := taskNotices(c, plan)
 	if last := n[len(n)-1]; !strings.Contains(last, "for the second time; coordination of the plan stopped") ||
@@ -112,5 +110,13 @@ func TestAPlannerDeadAtALimitIsStartedAfterTheReset(t *testing.T) {
 	pass(t, c)
 	if st, _ = c.Service.Store.Snapshot(); len(st.Attempts) != 2 {
 		t.Fatal("no planner started after the reset")
+	}
+	// The replacement meets the limit again: the operator was told already.
+	h.status.Windows, h.status.FreeSlots = nil, 2
+	h.status.Runs[len(h.status.Runs)-1].Limit = &hostops.RunLimit{ResetsAt: later.Add(time.Hour).Unix()}
+	pass(t, c)
+	st, _ = c.Service.Store.Snapshot()
+	if ended := st.Attempts[st.Items[plan.ID].Attempt]; !ended.Limited || len(taskNotices(c, plan)) != 1 {
+		t.Fatalf("a repeat death at a limit: %+v, notices %q", ended, taskNotices(c, plan))
 	}
 }

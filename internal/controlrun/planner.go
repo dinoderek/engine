@@ -31,3 +31,20 @@ func (c *Coordinator) plannerStopped(st control.State, a reconcile.Action, at co
 	return c.notice(a.Item, "failed/"+at.ID, a.Text+" without writing any task, for the second time; coordination of the plan stopped. "+
 		"Run the plan again to start a new planner"+tails(deaths))
 }
+
+// plannerAtLimit tells the operator when a new planner starts after one died
+// at a usage limit, unless the planner before it died at a limit too: the
+// operator was told then, so a replacement that meets the limit again is
+// quiet.
+func (c *Coordinator) plannerAtLimit(st control.State, a reconcile.Action, at control.Attempt) error {
+	var prev control.Attempt
+	for _, o := range st.Attempts {
+		if o.Item == at.Item && control.Number(o.ID) < control.Number(at.ID) && control.Number(o.ID) > control.Number(prev.ID) {
+			prev = o
+		}
+	}
+	if prev.Limited {
+		return nil
+	}
+	return c.notice(a.Item, "limit-death/"+at.ID, a.Text+"; a new planner is started "+limitWhen(at))
+}

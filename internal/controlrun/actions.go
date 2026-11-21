@@ -75,8 +75,12 @@ func (c *Coordinator) endAtLimit(a reconcile.Action) error {
 	if err != nil || a.Probe {
 		return err
 	}
-	if st, err := c.Service.Store.Snapshot(); err != nil || st.Items[a.Item].Kind == "plan" {
-		return cmp.Or(err, c.notice(a.Item, "limit-death/"+at.ID, a.Text+"; a new planner is started "+limitWhen(at)))
+	st, err := c.Service.Store.Snapshot()
+	if err != nil {
+		return err
+	}
+	if st.Items[a.Item].Kind == "plan" {
+		return c.plannerAtLimit(st, a, at)
 	}
 	return c.notice(a.Item, "limit-death/"+at.ID, fmt.Sprintf("%s; the task stays resumable and is dispatched again %s, from its own branch. "+
 		"Until then no task starts on %s on %s; another host or harness with quota may take it.", a.Text, limitWhen(at), at.Harness, at.Host))

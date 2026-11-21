@@ -38,7 +38,7 @@ func TestADeadPlannerIsEndedThenStartedAgain(t *testing.T) {
 		{"a planner whose window is gone without a task is ended", view(with(plan("approved"), gone())), []string{"end p1 a1"}},
 		{"a dead planner that wrote tasks leaves the plan to be planned", view(with(plan("approved"), gone()), task(2, "todo")), []string{"state p1 planned"}},
 		{"an ended planner without tasks is started again as a resume", view(plannerDied(control.EndEarlyDeath)), []string{"dispatch p1 devbox claude true"}},
-		{"a planner the operator ended is started again too", view(plannerDied(control.EndVanished)), []string{"dispatch p1 devbox claude true"}},
+		{"a planner ended vanished is started again too", view(plannerDied(control.EndVanished)), []string{"dispatch p1 devbox claude true"}},
 		{"a new planner waits for a free local slot", withFleet(view(plannerDied(control.EndEarlyDeath)), fleet(0)), nil},
 		{"a new planner waits on the plan's own question", view(question(plannerDied(control.EndEarlyDeath), 4)), nil},
 		{"a new planner waits for a known reset", view(plannerAtLimit(plannerDied(control.EndVanished), -time.Minute)), nil},
