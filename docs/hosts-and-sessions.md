@@ -102,7 +102,7 @@ The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
    when clean and behind it, and refused when the two diverged or `origin` is
    ahead of uncommitted changes; the kickoff names its head. A resume of an
    unmarked branch reopens `origin`'s at its tip;
-2. trusts the worktree for its harness and opens the window `<repo>-<task>`
+2. trusts the worktree, and any directory the launch adds, for its harness, and opens the window `<repo>-<task>`
    in the session `engine`;
 3. runs the launch line at the task's tier with the adapter's flags and the
    kickoff, which names the `engine` skill's executor or planner mode, the

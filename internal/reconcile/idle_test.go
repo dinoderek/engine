@@ -23,6 +23,7 @@ func TestWakeable(t *testing.T) {
 		{"busy only in a background job", with(task(2, "in-review"), background(time.Minute)), true},
 		{"a done task busy only in a background job", with(task(2, "done"), background(0)), true},
 		{"busy in a turn", with(task(2, "running"), working()), false},
+		{"held at a dialog", with(task(2, "running"), atDialog(StallWait)), false},
 		{"limited", with(task(2, "running"), limitedWait), false},
 		{"unknown", with(task(2, "running"), unknown), false},
 		{"gone", with(task(2, "running"), dead), false},
@@ -51,6 +52,13 @@ func TestIdleSpells(t *testing.T) {
 	}
 	if short := background(StallWait - time.Second); short.IdleFor(t0, StallWait) {
 		t.Error("a short background spell counted as StallWait")
+	}
+	dialog := atDialog(StallWait)
+	if dialog.IdleFor(t0, StallWait) || !dialog.Waited(t0, StallWait) {
+		t.Errorf("at a dialog: IdleFor %v, Waited %v; want false, true", dialog.IdleFor(t0, StallWait), dialog.Waited(t0, StallWait))
+	}
+	if short := atDialog(StallWait - time.Second); short.Waited(t0, StallWait) {
+		t.Error("a short wait at a dialog counted as StallWait")
 	}
 	reset := waiting(StallWait)
 	reset.ResetsAt = unix(time.Hour)

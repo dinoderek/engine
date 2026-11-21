@@ -58,6 +58,11 @@ type Session struct {
 	StuckNoted   bool
 	// Waiting is true when its window's state, from status, is waiting.
 	Waiting bool
+	// Dialog is true when its window's state is waiting at a dialog that
+	// typed input would answer, such as a trust prompt whose default exits.
+	// Waiting is then false: the session stalls as a wait does, but is not
+	// idle, so nothing is typed into it.
+	Dialog bool
 	// Background is true when its window's state is working but its last
 	// turn has ended: only a background job keeps it busy, and it takes
 	// typed input as a waiting session does.
@@ -101,7 +106,12 @@ func (s Session) Flagged(at time.Time) bool {
 
 // Waited reports whether the session has waited for input for d by now.
 func (s Session) Waited(now time.Time, d time.Duration) bool {
-	return s.Waiting && s.Idle() && s.ResetsAt <= 0 && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
+	return (s.Waiting && s.Idle() || s.AtDialog()) && s.ResetsAt <= 0 && !s.WaitingSince.IsZero() && now.Sub(s.WaitingSince) >= d
+}
+
+// AtDialog reports whether the live session is held at a dialog.
+func (s Session) AtDialog() bool {
+	return s.Live && !s.Unknown && !s.Limited && s.Dialog
 }
 
 // Idle reports whether the session takes typed input without cutting into
@@ -128,8 +138,12 @@ func (s Session) Denied() bool {
 // its harness is signed out, which names the sign-in, or the wait follows a
 // permission denial. Then it is the Permission hard stop the session did
 // not raise, naming the tool, its exact input and why. A signed-out wait
-// leads with the sign-in and names the denial too.
+// leads with the sign-in and names the denial too. A session held at a
+// dialog says so instead.
 func WaitText(s Session, plain string) string {
+	if s.AtDialog() {
+		return DialogText(strings.TrimSuffix(plain, ", outside a hard stop"))
+	}
 	denial := ""
 	if s.Denied() {
 		d := s.Denial
@@ -153,6 +167,13 @@ func WaitText(s Session, plain string) string {
 	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (hard-stops.md): "+
 		"%s. Allow it with a permission rule in the session, or do it by hand, then tell the session to carry on",
 		s.Name, StallWait, denial)
+}
+
+// DialogText is a stall text for a session held at a dialog: the operator
+// answers it in the window, since typing there would take its default. A
+// harness may infer the dialog, so the text says likely.
+func DialogText(plain string) string {
+	return plain + ": its harness says it is likely held at a dialog in its window. Answer it there; engine types nothing into it"
 }
 
 // deniedInput is a denied tool's input quoted for a comment: a shell

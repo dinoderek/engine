@@ -1,10 +1,17 @@
 package claude
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/dinoderek/engine/internal/harness"
+	"github.com/dinoderek/engine/internal/hosts"
 
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -94,5 +101,57 @@ func TestFindAgent(t *testing.T) {
 		if got := map[bool]int{true: ag.PID}[ok]; got != tt.want {
 			t.Errorf("%s: found %d, want %d", tt.name, got, tt.want)
 		}
+	}
+}
+
+// A session Claude Code has not listed by StartupWait is held at a dialog
+// before it started, such as a trust prompt; before then, or when no list
+// was read, it is unknown. A limit marker still says limited.
+func TestProbeAtAStartupDialog(t *testing.T) {
+	run := session.Run{Dir: t.TempDir(), Record: session.Record{Name: "r-7", Worktree: "/w/r-7"}}
+	if st, ok := probe("r-7", run, nil, true); !ok || st.State != session.StateWaiting || !st.Dialog || st.WaitingFor == "" {
+		t.Errorf("unlisted past StartupWait: %+v, %v; want waiting at a dialog", st, ok)
+	}
+	if st, ok := probe("r-7", run, nil, false); ok {
+		t.Errorf("unlisted, just started: %+v; want unknown", st)
+	}
+	listed := []Agent{{Name: "r-7", Status: AgentWaiting, WaitingFor: "approval"}}
+	if st, ok := probe("r-7", run, listed, true); !ok || st.Dialog || st.WaitingFor != "approval" {
+		t.Errorf("listed: %+v, %v; want its own state", st, ok)
+	}
+	if err := os.WriteFile(filepath.Join(run.Dir, LimitFile), []byte(`{"since": 1, "resets_at": 1700000000, "error": "rate_limit"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := probe("r-7", run, nil, true); st.State != session.StateLimited || st.Dialog {
+		t.Errorf("unlisted with a limit marker: %+v; want limited", st)
+	}
+}
+
+// Observe reads a session as at a dialog only from a list it read, once the
+// run is StartupWait old.
+func TestObserveFindsASessionAtAStartupDialog(t *testing.T) {
+	now := time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
+	exec := func(_ string, args ...string) (string, error) {
+		if args[0] == "agents" {
+			return "[]", nil
+		}
+		return `{"loggedIn": true}`, nil
+	}
+	env := harness.Env{Exec: exec, Home: t.TempDir(), Now: func() time.Time { return now }}
+	host := hosts.Host{Name: "h", Harnesses: []string{Name}, Bin: map[string]string{Name: "/bin/claude"}}
+	runs := map[string]session.Run{
+		"old": {Dir: t.TempDir(), Record: session.Record{Name: "old", Spawned: now.Add(-StartupWait)}},
+		"new": {Dir: t.TempDir(), Record: session.Record{Name: "new", Spawned: now.Add(-StartupWait + time.Second)}},
+	}
+	snap := New(env).Observe(context.Background(), host, runs)
+	if st := snap.Sessions["old"]; !st.Dialog || st.State != session.StateWaiting {
+		t.Errorf("old: %+v; want at a dialog", st)
+	}
+	if st, ok := snap.Sessions["new"]; ok {
+		t.Errorf("new: %+v; want unknown", st)
+	}
+	other := New(env).Observe(context.Background(), hosts.Host{Name: "h"}, runs)
+	if st, ok := other.Sessions["old"]; ok {
+		t.Errorf("a host without Claude: %+v; want unknown", st)
 	}
 }

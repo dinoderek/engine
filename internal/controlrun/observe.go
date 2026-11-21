@@ -249,7 +249,7 @@ func hostState(at control.Attempt, h reconcile.HostLoad, slug string, number int
 		return "exited"
 	case s.Limited:
 		return session.StateLimited
-	case s.Waiting:
+	case s.Waiting || s.Dialog:
 		return session.StateWaiting
 	}
 	if w, _ := matchWindow(at, h.Status, s.Name); w.State == session.StateWorking {

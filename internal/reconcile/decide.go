@@ -184,7 +184,11 @@ func stalls(v View) []Action {
 		}
 		switch {
 		case !t.claimed() && v.Now.Sub(s.Spawned) >= ClaimWait && !s.Flagged(s.Spawned):
-			acts = append(acts, stall(t, s.Spawned, fmt.Sprintf("%s has not claimed the task %s after it started", s.Name, ClaimWait))...)
+			text := fmt.Sprintf("%s has not claimed the task %s after it started", s.Name, ClaimWait)
+			if s.AtDialog() {
+				text = DialogText(text)
+			}
+			acts = append(acts, stall(t, s.Spawned, text)...)
 		case t.claimed() && t.state() != "needs-human" && t.Question == 0 && s.Waited(v.Now, StallWait) && !s.Flagged(s.WaitingSince):
 			acts = append(acts, stall(t, s.WaitingSince, WaitText(*s, fmt.Sprintf("%s has waited for input for %s, outside a hard stop", s.Name, StallWait)))...)
 		}

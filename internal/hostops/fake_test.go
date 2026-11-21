@@ -54,16 +54,19 @@ func TestStatusReportsEachAdaptersSnapshot(t *testing.T) {
 	writeRun(t, h, session.Record{RunID: "a", Name: "w-a", Harness: "alpha", Spawned: at})
 	writeRun(t, h, session.Record{RunID: "b", Name: "w-b", Harness: "beta", Spawned: at})
 	writeRun(t, h, session.Record{RunID: "c", Name: "w-c", Harness: "alpha", Spawned: at})
-	tm := &tmuxFake{windows: []string{"@1 %1 0 w-a", "@2 %2 0 w-b", "@3 %3 1 w-c"}, screens: map[string]string{"@2": "waiting"}}
+	writeRun(t, h, session.Record{RunID: "d", Name: "w-d", Harness: "alpha", Spawned: at})
+	tm := &tmuxFake{windows: []string{"@1 %1 0 w-a", "@2 %2 0 w-b", "@3 %3 1 w-c", "@4 %4 0 w-d"},
+		screens: map[string]string{"@2": "waiting", "@4": "Adding a new directory"}}
 	q := session.Quota{Harness: "alpha", ObservedAt: at.Unix(), Windows: map[string]session.QuotaWindow{"five_hour": {Used: 10, ResetsAt: at.Unix() + 60}}}
 	alpha := &harnesstest.Fake{Called: "alpha", Snapshot: harness.Snapshot{Quota: &q, SignedOut: true,
-		Sessions: map[string]harness.State{"w-a": {State: session.StateWorking, Background: true}, "w-c": {State: session.StateWorking}}}}
+		Sessions: map[string]harness.State{"w-a": {State: session.StateWorking, Background: true}, "w-c": {State: session.StateWorking},
+			"w-d": {State: session.StateWaiting, Dialog: true, WaitingFor: "a dialog"}}}}
 	beta := &harnesstest.Fake{Called: "beta", Snapshot: harness.Snapshot{Error: "beta cannot list its sessions"}}
 	got, err := ReadStatus(Deps{Home: h.dir, Tmux: tm.tmux(), Harnesses: harness.NewAdapters(alpha, beta)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(alpha.Observed) != 1 || len(alpha.Observed[0]) != 1 || alpha.Observed[0]["w-a"].Record.RunID != "a" {
+	if len(alpha.Observed) != 1 || len(alpha.Observed[0]) != 2 || alpha.Observed[0]["w-a"].Record.RunID != "a" {
 		t.Errorf("alpha observed %v", alpha.Observed)
 	}
 	if len(beta.Observed) != 1 || len(beta.Observed[0]) != 1 {
@@ -84,6 +87,9 @@ func TestStatusReportsEachAdaptersSnapshot(t *testing.T) {
 	}
 	if c.Alive || c.State != "" {
 		t.Errorf("a dead window has a state: %+v", c)
+	}
+	if d := got.Windows[3]; d.State != session.StateWaiting || !d.Dialog || d.WaitingFor != "a dialog" || d.Screen != "Adding a new directory" {
+		t.Errorf("a window at a dialog: %+v", d)
 	}
 }
 
