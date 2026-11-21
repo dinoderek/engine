@@ -28,7 +28,8 @@ you decide (`SKILL.md`, "Decisions").
     and no route without a new permission works (such as `cat` for a denied
     Read).
 
-The repo's `AGENTS.md` may add classes; they apply too, as **Repo rule**.
+The repo's `AGENTS.md` may add classes; they apply under the closest class,
+else **Repo rule**.
 
 ## Safe defaults
 
@@ -61,8 +62,8 @@ Give the class, the question, your recommended answer, and the evidence.
   `gh auth status`, and point the operator at `engine setup --host <name>`,
   run from their machine, which prints the fix. Never run setup yourself.
 - **Permission:** the tool, its exact input, why you need it, and the
-  permission rule that would allow it, which the operator adds before telling
-  you to retry.
+  permission rule that would allow it, which the operator adds before you
+  retry.
 
 Then end your turn and wait. Only the operator's answer counts; reading,
 acknowledgement, a conversational reply or an automated `continue` grants
