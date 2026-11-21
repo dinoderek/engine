@@ -182,7 +182,17 @@ func (u *upstream) item(ctx context.Context, id string) (Envelope, int) {
 		if got.Item == nil {
 			return nil, errors.New("the control server sent no item")
 		}
-		return itemDetail(*got.Item), nil
+		active := false
+		// A task's controls depend on whether its attempt has ended, which
+		// its state does not say.
+		if got.Item.Kind == "task" && got.Item.State != "done" && got.Item.Attempt != "" {
+			attempts, err := u.call(ctx, control.Request{Op: "attempts", ID: got.Item.ID})
+			if err != nil {
+				return nil, err
+			}
+			active = liveAttempt(attempts.Attempts, got.Item.Attempt)
+		}
+		return itemDetail(*got.Item, active), nil
 	})
 }
 

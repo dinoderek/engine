@@ -148,3 +148,29 @@ tr.needs-feedback td { background: var(--warn-bg); }
   .filters select { flex: 1; min-width: 0; }
   .panel button { padding: 8px 14px; }
 }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 6px 0; }
+.act { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.act:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.act:disabled { opacity: .5; cursor: default; }
+.act.danger { color: var(--blocked); border-color: var(--blocked); }
+.act.primary { background: var(--select); border-color: var(--accent); color: var(--accent); }
+.act.primary.danger { background: var(--blocked); border-color: var(--blocked); color: var(--panel); }
+.action-note { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
+.action-note.bad, .sheet-result.bad { color: var(--blocked); }
+.sheet-back { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .45); }
+.sheet-back[hidden] { display: none; }
+.sheet { width: 100%; max-width: 440px; max-height: 100%; overflow: auto; overflow-wrap: anywhere; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.sheet h2 { font-size: 16px; margin: 0 0 8px; }
+.sheet p { margin: 6px 0; }
+.sheet-state { color: var(--muted); }
+.sheet-field { display: block; margin: 10px 0; color: var(--muted); }
+.sheet-input { display: block; width: 100%; margin-top: 4px; padding: 8px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.sheet-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sheet-result:empty { display: none; }
+.sheet-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+@media (max-width: 800px) {
+  .sheet-back { align-items: flex-end; padding: 0; }
+  .sheet { max-width: none; max-height: 90%; border-radius: 12px 12px 0 0; }
+  .sheet-buttons .act { flex: 1; }
+  .act { padding: 8px 14px; }
+}

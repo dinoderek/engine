@@ -142,17 +142,21 @@ func TestPlanDetail(t *testing.T) {
 	if want := (Counts{Done: 1, InProgress: 2, Ready: 1, Blocked: 3}); got.Counts != want {
 		t.Fatalf("counts = %+v, want %+v", got.Counts, want)
 	}
+	acts := func(a ...string) Controls { return Controls{Actions: append([]string{}, a...)} }
 	want := []TaskRow{
-		{ID: "t26", Title: "Store", State: "done", Group: groupDone, Waiting: []Prerequisite{}},
-		{ID: "t28", Title: "API", State: "running", Group: groupInProgress, Host: "devbox",
+		{ID: "t26", Title: "Store", State: "done", Group: groupDone, Waiting: []Prerequisite{}, Controls: acts()},
+		{ID: "t28", Title: "API", State: "running", Group: groupInProgress, Host: "devbox", Controls: acts("task-stop"),
 			Waiting: []Prerequisite{{ID: "t5", Title: "Fix in another plan", State: "todo", Plan: "p3"}}},
-		{ID: "t29", Title: "Review", State: "in-review", Group: groupInProgress, Host: "mac", Waiting: []Prerequisite{}},
-		{ID: "t30", Title: "Acceptance", State: "todo", Group: groupBlocked, Waiting: []Prerequisite{
+		{ID: "t29", Title: "Review", State: "in-review", Group: groupInProgress, Host: "mac", Waiting: []Prerequisite{}, Controls: acts("task-stop")},
+		{ID: "t30", Title: "Acceptance", State: "todo", Group: groupBlocked, Controls: acts("complete-external"), Waiting: []Prerequisite{
 			{ID: "t28", Title: "API", State: "running", Plan: "p24"}, {ID: "t29", Title: "Review", State: "in-review", Plan: "p24"}}},
-		{ID: "t31", Title: "Docs", State: "todo", Group: groupReady, Waiting: []Prerequisite{}},
-		{ID: "t32", Title: "Migrate", State: "todo", Group: groupBlocked,
+		{ID: "t31", Title: "Docs", State: "todo", Group: groupReady, Waiting: []Prerequisite{}, Controls: acts("complete-external")},
+		{ID: "t32", Title: "Migrate", State: "todo", Group: groupBlocked, Controls: acts("complete-external"),
 			Waiting: []Prerequisite{{ID: "t7", Title: "Schema in another plan", State: "in-review", Plan: "p2"}}},
-		{ID: "t33", Title: "Retry me", State: "failed", Group: groupBlocked, Waiting: []Prerequisite{}},
+		{ID: "t33", Title: "Retry me", State: "failed", Group: groupBlocked, Waiting: []Prerequisite{}, Controls: acts("retry", "complete-external")},
+	}
+	if !reflect.DeepEqual(got.Controls, acts("run")) {
+		t.Fatalf("plan controls = %+v, want run for an approved plan that is not coordinating", got.Controls)
 	}
 	if !reflect.DeepEqual(got.Tasks, want) {
 		t.Fatalf("tasks =\n%+v\nwant\n%+v", got.Tasks, want)

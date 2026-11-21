@@ -16,8 +16,8 @@ const screenshotsVar = "ENGINE_TEST_SCREENSHOTS"
 // from the acceptance stack, in a headless Chromium-family browser. It
 // drives the page from the keyboard, checks the narrow layout, and takes
 // the control server down and up again while an item panel is open, then
-// shows every view at the size of a phone and answers questions from the
-// inbox (ui_inbox_test.go).
+// shows every view at the size of a phone, answers questions from the inbox
+// (ui_inbox_test.go) and stops a task from the plan view (ui_control_test.go).
 func TestDashboardInBrowser(t *testing.T) {
 	path, ok := findBrowser()
 	if !ok {
@@ -52,6 +52,7 @@ func TestDashboardInBrowser(t *testing.T) {
 	phoneViews(t, b, w, shots)
 	answerOnAPhone(b, s, w, questions, shots)
 	installable(t, b)
+	controlOnAPhone(t, b, s, w, shots)
 }
 
 // text is the trimmed text of the first element matching selector.

@@ -24,6 +24,7 @@ var assets = map[string]struct{ file, kind string }{
 	"/panel.js":    {"static/panel.js", "text/javascript; charset=utf-8"},
 	"/sessions.js": {"static/sessions.js", "text/javascript; charset=utf-8"},
 	"/writes.js":   {"static/writes.js", "text/javascript; charset=utf-8"},
+	"/control.js":  {"static/control.js", "text/javascript; charset=utf-8"},
 	"/inbox.js":    {"static/inbox.js", "text/javascript; charset=utf-8"},
 
 	"/manifest.webmanifest": {"static/manifest.webmanifest", "application/manifest+json"},

@@ -74,13 +74,18 @@ type TaskRow struct {
 	// Feedback is the unresolved question that applies to the task, its own
 	// or its plan's, as the Sessions tab shows it.
 	Feedback *control.UpdateRef `json:"feedback,omitempty"`
+	// Held is a todo task the operator stopped. Controls are its version
+	// and the writes its state allows.
+	Held bool `json:"held,omitempty"`
+	Controls
 }
 
-// PlanDetail is the selected plan's task pane.
+// PlanDetail is the selected plan's task pane, with the plan's controls.
 type PlanDetail struct {
 	Plan   PlanRow   `json:"plan"`
 	Counts Counts    `json:"counts"`
 	Tasks  []TaskRow `json:"tasks"`
+	Controls
 }
 
 func byNumber[T any](items []T, id func(T) string) {
@@ -130,7 +135,7 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 		items[it.ID] = it
 	}
 	plan := items[id]
-	out := PlanDetail{Plan: PlanRow{ID: plan.ID, Repo: plan.Repo, Slug: items[plan.Repo].Slug, Title: plan.Title, State: cmp.Or(plan.Status, plan.State)}, Tasks: []TaskRow{}}
+	out := PlanDetail{Plan: PlanRow{ID: plan.ID, Repo: plan.Repo, Slug: items[plan.Repo].Slug, Title: plan.Title, State: cmp.Or(plan.Status, plan.State)}, Tasks: []TaskRow{}, Controls: itemControls(plan, false)}
 	hosts := activeHosts(live)
 	feedback := feedbackByTask(sessions)
 	asked := plan.Question
@@ -139,7 +144,9 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 		if t.Kind != "task" || t.Plan != id {
 			continue
 		}
-		row := TaskRow{ID: t.ID, Title: t.Title, State: t.State, Host: hosts[t.Attempt], Waiting: []Prerequisite{}, Feedback: feedback[t.ID]}
+		_, running := hosts[t.Attempt]
+		row := TaskRow{ID: t.ID, Title: t.Title, State: t.State, Host: hosts[t.Attempt], Waiting: []Prerequisite{}, Feedback: feedback[t.ID],
+			Held: t.Held, Controls: itemControls(t, running)}
 		// The plan's open question holds up every task waiting to start.
 		held := asked != nil && row.Host == "" && t.State == "todo"
 		if held && row.Feedback == nil {

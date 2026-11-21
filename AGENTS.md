@@ -65,7 +65,7 @@ Read these at each session start:
 | changes Telegram alerts, callbacks or bot setup | `docs/telegram.md` |
 | changes server records, API, credentials or inbox | `docs/control-server.md` |
 | changes `engine ui` or the session view | `docs/dashboard.md` |
-| changes what `engine ui` writes, the inbox, its `--host`, Origin check or request keys | `docs/dashboard-writes.md` |
+| changes what `engine ui` writes, the inbox, plan and task control, its `--host`, Origin check or request keys | `docs/dashboard-writes.md` |
 | changes host config, placement, attempts or session access | `docs/hosts-and-sessions.md` |
 | changes a harness adapter or what the core asks of one | `docs/harnesses.md` |
 | changes the prompt hook, the typed-text log or how pane answers reach the server | `docs/pane-input.md` |
