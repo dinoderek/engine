@@ -310,6 +310,30 @@ const scenarios = {
     });
   },
 
+  async "while a confirmation is in flight, focus and Tab stay in the sheet and no second sheet opens"() {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const fx = {
+      plan: planOf("executing", 5, ["stop"], [task("t30", "running", ["task-stop"])]),
+      answer: async () => { await gate; return ok(); },
+    };
+    await page("#/plans/p24", fx, async (t) => {
+      await t.click(t.act("pane", "p24", "stop"));
+      t.$("sheet-ok").click();
+      await t.flush();
+      assert.equal(t.p.doc.activeElement, t.$("sheet"), "focus did not fall to the page behind");
+      t.key(t.$("sheet-back"), "Tab");
+      assert.equal(t.p.doc.activeElement, t.$("sheet"), "no control is enabled, so Tab stays on the sheet");
+      t.act("pane", "t30", "task-stop").click();
+      await t.flush();
+      assert.ok(t.sheetText().includes("Stop p24?"), "the first sheet is still the one shown");
+      release();
+      await t.flush();
+      assert.equal(t.sheetOpen(), false);
+      assert.equal(fx.posts.length, 1);
+    });
+  },
+
   async "the item panel acts too, and Tab stays inside the sheet"() {
     const fx = {
       plan: planOf("executing", 5, ["stop"], [task("t30", "running", ["task-stop"])]),

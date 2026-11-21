@@ -144,9 +144,9 @@ func planDetail(id string, view []control.Item, live []control.Attempt, sessions
 		if t.Kind != "task" || t.Plan != id {
 			continue
 		}
-		_, live := hosts[t.Attempt]
+		_, running := hosts[t.Attempt]
 		row := TaskRow{ID: t.ID, Title: t.Title, State: t.State, Host: hosts[t.Attempt], Waiting: []Prerequisite{}, Feedback: feedback[t.ID],
-			Held: t.Held, Controls: itemControls(t, live)}
+			Held: t.Held, Controls: itemControls(t, running)}
 		// The plan's open question holds up every task waiting to start.
 		held := asked != nil && row.Host == "" && t.State == "todo"
 		if held && row.Feedback == nil {

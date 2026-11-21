@@ -130,20 +130,22 @@ window.engine.control = function (ctx) {
     return fields;
   }
 
-  function say(text, bad) {
-    sheet.result.textContent = text;
-    sheet.result.className = bad ? "sheet-result bad" : "sheet-result";
+  function say(s, text, bad) {
+    s.result.textContent = text;
+    s.result.className = bad ? "sheet-result bad" : "sheet-result";
   }
 
   async function confirm() {
     const s = sheet;
     if (!s || s.busy) return;
     if (OPS[s.op].pr && !s.input.value.trim()) {
-      say("Enter the pull request URL.", true);
+      say(s, "Enter the pull request URL.", true);
       s.input.focus();
       return;
     }
     s.busy = true;
+    // Disabling the focused button would drop focus to the page behind.
+    $("sheet").focus();
     s.ok.setAttribute("disabled", "");
     s.cancel.setAttribute("disabled", "");
     // The text is fixed while the write is out: a resend must match it.
@@ -159,7 +161,7 @@ window.engine.control = function (ctx) {
     }
     // A lost reply keeps the text fixed for the resend; a refusal frees it.
     if (s.input && !out.retry) s.input.removeAttribute("readonly");
-    say(out.text, true);
+    say(s, out.text, true);
     // Disabling the button dropped focus; put it back inside the sheet.
     (s.input && !out.retry ? s.input : s.ok).focus();
   }
@@ -193,6 +195,7 @@ window.engine.control = function (ctx) {
 
   // open asks before sending: it names the item, its state and the effect.
   function open(f, op, opener, scope) {
+    if (sheet) return;
     const spec = OPS[op];
     const what = spec.text === "Stop" ? "Stop " + f.id : spec.text + " " + f.id;
     const input = spec.pr ? el("input", { type: "url", id: "sheet-pr", class: "sheet-input", placeholder: "https://github.com/owner/repo/pull/…", autocomplete: "off", "aria-label": "Pull request URL" }) : null;
@@ -215,7 +218,7 @@ window.engine.control = function (ctx) {
   }
 
   // trap keeps Tab inside the sheet and lets Escape or a tap outside cancel.
-  function keys(e) {
+  function trap(e) {
     if (!sheet) return;
     if (e.key === "Escape") {
       e.preventDefault();
@@ -223,16 +226,20 @@ window.engine.control = function (ctx) {
       return;
     }
     if (e.key !== "Tab") return;
-    const stops = [sheet.input, $("sheet-cancel"), sheet.ok].filter(Boolean);
+    const stops = [sheet.input, $("sheet-cancel"), sheet.ok].filter((n) => n && !n.hasAttribute("disabled"));
+    e.preventDefault();
+    if (!stops.length) {
+      $("sheet").focus();
+      return;
+    }
     const at = stops.indexOf(document.activeElement);
     const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at < 0 || at === stops.length - 1 ? 0 : at + 1);
-    e.preventDefault();
     stops[next].focus();
   }
 
   // Clicking text in the sheet leaves focus on the sheet, not the page.
   $("sheet").setAttribute("tabindex", "-1");
-  $("sheet-back").addEventListener("keydown", keys);
+  $("sheet-back").addEventListener("keydown", trap);
   $("sheet-back").addEventListener("click", (e) => {
     if (e.target === $("sheet-back")) close(false);
   });
