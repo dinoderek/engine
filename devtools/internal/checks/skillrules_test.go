@@ -33,6 +33,7 @@ var skillRules = []skillRule{
 	{serverRef, "Request the merge only when `gh pr checks` shows nothing pending"},
 	{serverRef, "never edit the PR body after `merge-ready`: it becomes the merge commit body."},
 	{serverRef, "**Never say the operator agreed without citing the update that holds it.**"},
+	{serverRef, "**except your worktree and branch, which the release removes**"},
 	{serverRef, "When the operator answers in the pane, the hook records it; do not re-post it."},
 	{serverRef, "Post every reviewer verdict, APPROVED or not, with `engine tell <task>`, and list each round in the PR body."},
 	{reviewRef, "The gate evidence in the PR body matches the CI run on the head."},

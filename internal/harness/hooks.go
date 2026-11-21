@@ -32,9 +32,18 @@ type Hooks interface {
 	// Entries are the adapter's own `engine hook <entry>` commands, by entry.
 	Entries() map[string]Entry
 	// Prompts are the prompts the session whose transcript is at path
-	// submitted, as the harness recorded them there; a transcript it cannot
-	// read is an error.
-	Prompts(transcript string) ([]string, error)
+	// submitted, as the harness recorded them there, each saying whether
+	// the harness injected it; a transcript it cannot read is an error.
+	Prompts(transcript string) ([]Prompt, error)
+}
+
+// Prompt is one prompt in a session's transcript.
+type Prompt struct {
+	Text string
+	// Injected is true when the transcript marks the turn as one the
+	// harness added, such as a subagent's report or a background task's
+	// notice, rather than one a person typed.
+	Injected bool
 }
 
 // EventKind is what a hook event means to engine.

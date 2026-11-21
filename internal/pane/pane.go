@@ -148,8 +148,10 @@ const (
 // OutcomeLog. It retries an unreachable or failing server for RetryFor,
 // under one request key, so a repeat is the same request. A posted prompt
 // leaves the queue, and so does one the server refused or a run with no
-// server session holds; one still unposted stays for the next prompt to post. A post of a prompt another post holds
-// does nothing.
+// server session holds; one still unposted stays for the next prompt to
+// post. A prompt the transcript holds only as a turn the harness injected
+// is no operator's: it leaves the queue unposted. A post of a prompt
+// another post holds does nothing.
 func (p Poster) Post(ctx context.Context, dir string, seq int) error {
 	file := pendingFile(dir, seq)
 	f, err := os.Open(file)
@@ -173,7 +175,12 @@ func (p Poster) Post(ctx context.Context, dir string, seq int) error {
 	}
 	key := fmt.Sprintf("pane/%s/%d", conn.Attempt, seq)
 	if q.Vouch == nil {
-		q.Vouch = &control.PaneInput{Transcript: p.inTranscript(q), At: q.At}
+		found := p.lookUp(q)
+		if found == injected {
+			_ = os.Remove(file) // the harness's turn, never the operator's
+			return p.record(dir, outcome{Seq: seq, Injected: true}, nil)
+		}
+		q.Vouch = &control.PaneInput{Transcript: found == typed, At: q.At}
 		q.Vouch.Signature, _ = session.SignPane(dir, control.PaneMessage(conn.Attempt, key, *q.Vouch, q.Prompt)) // unsigned is flagged, not refused
 		data, err := json.Marshal(q)
 		if err != nil {
@@ -235,25 +242,47 @@ func (p Poster) sleep(d time.Duration) {
 	p.Sleep(d)
 }
 
-// inTranscript reports whether the session's transcript holds q's prompt,
-// rereading it until Wait has passed.
-func (p Poster) inTranscript(q pending) bool {
+// found is where a session's transcript holds a queued prompt.
+type found int
+
+const (
+	missing  found = iota // nowhere yet
+	typed                 // as a prompt a person submitted
+	injected              // only as a turn the harness injected
+)
+
+// lookUp finds q's prompt in the session's transcript, rereading it until
+// Wait has passed while it holds the prompt nowhere. The first read that
+// holds it decides: there, a typed turn with the text outweighs an
+// injected one.
+func (p Poster) lookUp(q pending) found {
 	want := strings.TrimSpace(q.Prompt)
 	deadline := p.Now().Add(p.Wait)
 	for {
-		if q.Transcript != "" {
-			prompts, _ := p.Hooks.Prompts(q.Transcript) // unreadable is not found
-			for _, got := range prompts {
-				if strings.TrimSpace(got) == want {
-					return true
-				}
-			}
-		}
-		if !p.Now().Before(deadline) {
-			return false
+		if f := p.match(q.Transcript, want); f != missing || !p.Now().Before(deadline) {
+			return f
 		}
 		p.sleep(pollEvery)
 	}
+}
+
+// match is where the transcript at path holds want, read once.
+func (p Poster) match(path, want string) found {
+	if path == "" {
+		return missing
+	}
+	prompts, _ := p.Hooks.Prompts(path) // unreadable is not found
+	f := missing
+	for _, got := range prompts {
+		switch {
+		case strings.TrimSpace(got.Text) != want:
+		case !got.Injected:
+			return typed
+		default:
+			f = injected
+		}
+	}
+	return f
 }
 
 // outcome is one line of the run's OutcomeLog.
@@ -263,6 +292,7 @@ type outcome struct {
 	Updates    []int     `json:"updates,omitempty"`
 	Signed     bool      `json:"signed,omitempty"`
 	Transcript bool      `json:"transcript,omitempty"`
+	Injected   bool      `json:"injected,omitempty"`
 	Error      string    `json:"error,omitempty"`
 }
 
