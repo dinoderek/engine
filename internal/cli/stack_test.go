@@ -221,8 +221,9 @@ type dashboard struct {
 
 // startDashboard runs `engine ui` as its own process under a fresh home
 // whose engine config names the control server and holds the operator
-// credential, at the paths every engine command reads.
-func startDashboard(t *testing.T, s *controlStack) *dashboard {
+// credential, at the paths every engine command reads. extra are more
+// flags, such as --host.
+func startDashboard(t *testing.T, s *controlStack, extra ...string) *dashboard {
 	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
@@ -236,7 +237,7 @@ func startDashboard(t *testing.T, s *controlStack) *dashboard {
 	writeFile(t, filepath.Join(dir, "config.toml"), "[server]\nurl = \""+s.url()+"\"\n")
 	writeFile(t, filepath.Join(dir, "server-token"), s.token+"\n")
 	d := &dashboard{t: t, stderr: &syncBuffer{}}
-	d.cmd = exec.Command(self, "ui", "--listen", "127.0.0.1:0")
+	d.cmd = exec.Command(self, append([]string{"ui", "--listen", "127.0.0.1:0"}, extra...)...)
 	d.cmd.Env = append(processEnv(), "HOME="+home, engineProcessVar+"=1")
 	d.cmd.Stderr = d.stderr
 	stdout, err := d.cmd.StdoutPipe()

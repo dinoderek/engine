@@ -24,6 +24,7 @@ func TestRun(t *testing.T) {
 		{"no command", nil, "", none, 2, "", "usage: engine"},
 		{"version", []string{"version"}, "", none, 0, "engine ", ""},
 		{"help", []string{"--help"}, "", none, 0, "usage: engine", ""},
+		{"help names the dashboard's --host", []string{"--help"}, "", none, 0, "ui [--listen <addr>] [--host <name>]", ""},
 		{"unknown", []string{"frobnicate"}, "", none, 2, "", `unknown command "frobnicate"`},
 		{"labels is gone", []string{"labels", "sync", "o/r"}, "", none, 2, "", `unknown command "labels"`},
 		{"removed gh wrapper", []string{"gh", "pr", "view"}, "", none, 2, "", `unknown command "gh"`},
