@@ -20,7 +20,7 @@
 
   const { el, label, load, keep, failed } = window.engine.dom;
   const $ = (id) => document.getElementById(id);
-  const control = window.engine.control({ $, refresh: () => afterWrite(), facts: (id) => factsFor(id), render: () => { renderPane(); panel.head(); } });
+  const control = window.engine.control({ $, refresh: () => afterWrite(), render: () => { renderPane(); panel.head(); } });
   const panel = window.engine.panel({
     $, view, writeHash, status: () => status(), repoName, control,
     href: (id, tab, update) => here({ id, tab, update }),
@@ -193,17 +193,6 @@
   function actionsCell(t) {
     const bar = control.bar(control.fromTask(t), "pane");
     return el("td", { "data-label": "Actions" }, bar || "—");
-  }
-
-  // factsFor is what the page holds about an item now: from the plan pane,
-  // else from the open panel.
-  function factsFor(id) {
-    const d = fetched.plan && fetched.plan.data;
-    if (d && d.plan.id === id) return control.fromPlan(d);
-    const row = d && d.tasks.find((t) => t.id === id);
-    if (row) return control.fromTask(row);
-    const item = panel.item();
-    return item && item.id === id ? control.fromItem(item) : null;
   }
 
   // afterWrite brings every view a write may have changed up to date.

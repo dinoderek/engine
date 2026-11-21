@@ -31,8 +31,12 @@ window.engine.control = function (ctx) {
   const notes = new Map(); // item -> the last result, kept across redraws
   let sheet = null; // the open confirmation: what it is for and its nodes
 
-  const formFor = (id, op) => {
-    const k = id + " " + op;
+  // A form is kept per item, action and version the page read: a lost reply
+  // is resent with its key, but once the item has changed, a retained key
+  // would only replay an old result, so the next try makes a new one.
+  const slot = (f, op) => f.id + " " + op + " " + f.version;
+  const formFor = (f, op) => {
+    const k = slot(f, op);
     if (!forms.has(k)) forms.set(k, window.engine.writes.form());
     return forms.get(k);
   };
@@ -59,8 +63,10 @@ window.engine.control = function (ctx) {
     return "";
   }
 
-  function note(id, text, bad) {
-    notes.set(id, { text, bad });
+  // note keeps an item's last result. A refusal also keeps the facts the
+  // write was made on, so the bar can say what has changed since.
+  function note(id, text, bad, before) {
+    notes.set(id, { text, bad, before });
   }
 
   // bar is an item's buttons and its last result. scope keeps the keys of
@@ -77,7 +83,10 @@ window.engine.control = function (ctx) {
       b.addEventListener("click", () => (spec.confirm ? open(f, op, key, scope) : direct(f, op, b, scope)));
       row.append(b);
     }
-    if (n) row.append(el("p", { class: "action-note" + (n.bad ? " bad" : ""), role: "status" }, n.text));
+    if (n) {
+      const what = n.before ? changed(n.before, f) : "";
+      row.append(el("p", { class: "action-note" + (n.bad ? " bad" : ""), role: "status" }, (n.text + " " + what).trim()));
+    }
     return row;
   }
 
@@ -86,19 +95,17 @@ window.engine.control = function (ctx) {
   async function settle(f, op, r) {
     const spec = OPS[op];
     if (r.status === 0 || r.status >= 500) return { done: false, retry: true, text: (r.error || "No answer.") + " Try again; the same request is resent." };
-    forms.delete(f.id + " " + op);
+    forms.delete(slot(f, op));
     if (r.ok) {
       note(f.id, spec.done, false);
       await ctx.refresh();
       return { done: true };
     }
     if (r.status === 409) {
+      note(f.id, "Not applied: " + (r.error || "the server refused it."), true, f);
       await ctx.refresh();
-      const what = changed(f, ctx.facts(f.id));
-      const text = ("Not applied: " + (r.error || "the server refused it.") + " " + what).trim();
-      note(f.id, text, true);
       ctx.render();
-      return { done: true, conflict: true, text };
+      return { done: true, conflict: true };
     }
     return { done: false, text: r.error || "The dashboard refused the write." };
   }
@@ -106,7 +113,7 @@ window.engine.control = function (ctx) {
   async function direct(f, op, button, scope) {
     const was = button.dataset.key;
     button.setAttribute("disabled", "");
-    const r = await formFor(f.id, op).send(OPS[op].path(f.id), {});
+    const r = await formFor(f, op).send(OPS[op].path(f.id), {});
     const out = await settle(f, op, r);
     if (!out.done) {
       note(f.id, out.text, true);
@@ -139,7 +146,9 @@ window.engine.control = function (ctx) {
     s.busy = true;
     s.ok.setAttribute("disabled", "");
     s.cancel.setAttribute("disabled", "");
-    const r = await formFor(s.f.id, s.op).send(OPS[s.op].path(s.f.id), fieldsFor(s.f, s.op, s.input));
+    // The text is fixed while the write is out: a resend must match it.
+    if (s.input) s.input.setAttribute("readonly", "");
+    const r = await formFor(s.f, s.op).send(OPS[s.op].path(s.f.id), fieldsFor(s.f, s.op, s.input));
     const out = await settle(s.f, s.op, r);
     s.busy = false;
     s.ok.removeAttribute("disabled");
@@ -148,13 +157,11 @@ window.engine.control = function (ctx) {
       close(true);
       return;
     }
-    // A resend must carry the same body as the first, so the text is fixed
-    // until the answer comes; a refusal leaves it editable.
-    if (s.input) {
-      if (out.retry) s.input.setAttribute("readonly", "");
-      else s.input.removeAttribute("readonly");
-    }
+    // A lost reply keeps the text fixed for the resend; a refusal frees it.
+    if (s.input && !out.retry) s.input.removeAttribute("readonly");
     say(out.text, true);
+    // Disabling the button dropped focus; put it back inside the sheet.
+    (s.input && !out.retry ? s.input : s.ok).focus();
   }
 
   // refocus puts focus on the first of the keys that exists, else on the
@@ -176,7 +183,7 @@ window.engine.control = function (ctx) {
     const s = sheet;
     if (!s || (s.busy && !applied)) return;
     sheet = null;
-    if (!applied) forms.delete(s.f.id + " " + s.op);
+    if (!applied) forms.delete(slot(s.f, s.op));
     $("sheet-back").hidden = true;
     $("sheet").replaceChildren();
     // The button may be gone: a stopped task offers Resume instead. Focus

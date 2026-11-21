@@ -53,6 +53,7 @@ async function page(hash, fx, body) {
     key: (el, key) => el.dispatchEvent(new Event("keydown", { bubbles: true, key })),
     sheetOpen: () => !$("sheet-back").hidden,
     sheetText: () => $("sheet").textContent,
+    refresh: async () => { p.doc.fire("visibilitychange"); await t.flush(); },
   };
   await t.flush();
   await body(t);
@@ -185,6 +186,26 @@ const scenarios = {
     });
   },
 
+  async "a lost Run reply is resent with its key, but not once the item has changed"() {
+    let calls = 0;
+    const fx = {
+      plan: planOf("planned", 4, ["run"], []),
+      answer: () => (++calls === 1 ? new TypeError("fetch failed") : ok()),
+    };
+    await page("#/plans/p24", fx, async (t) => {
+      await t.click(t.act("pane", "p24", "run"));
+      assert.ok(t.$("pane").textContent.includes("the dashboard did not answer"));
+      await t.click(t.act("pane", "p24", "run"));
+      assert.equal(fx.posts[1].body.key, fx.posts[0].body.key, "the same item, the same key");
+      // The run landed, was stopped, and is offered again at a newer version.
+      fx.plan = planOf("planned", 6, ["run"], []);
+      await t.refresh();
+      await t.click(t.act("pane", "p24", "run"));
+      assert.equal(fx.posts.length, 3);
+      assert.notEqual(fx.posts[2].body.key, fx.posts[0].body.key, "an old key would only replay the old result");
+    });
+  },
+
   async "retry confirms and sends the version"() {
     const fx = { plan: planOf("blocked", 4, ["stop"], [task("t32", "failed", ["retry", "complete-external"], { version: 11 })]), answer: ok };
     await page("#/plans/p24", fx, async (t) => {
@@ -262,6 +283,7 @@ const scenarios = {
       await t.click(t.$("sheet-ok"));
       assert.equal(t.sheetOpen(), true);
       assert.ok(t.sheetText().includes("the dashboard did not answer"));
+      assert.equal(t.p.doc.activeElement, t.$("sheet-ok"), "focus stays in the sheet after a failure");
       await t.click(t.$("sheet-ok"));
       assert.equal(fx.posts.length, 2);
       assert.equal(fx.posts[0].body.key, fx.posts[1].body.key);

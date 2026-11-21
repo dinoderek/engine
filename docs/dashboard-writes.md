@@ -65,6 +65,6 @@ An item read finds an unfinished task's attempt through `attempts`, because its 
 
 Approve, plan stop, task stop, retry and complete-external open a confirmation sheet first (`internal/ui/static/control.js`): it names the item, its state and the effect, and sends nothing until confirmed. Complete-external also asks for the pull request URL. Run and resume go straight through. The sheet sends, for approve, retry and complete-external, the version the page read when it opened, so an edit made meanwhile is the server's 409. Cancel and Escape wait while a confirmation is in flight.
 
-- A `409` closes the sheet, refreshes the plan view and item, and says what changed: the item's new state, or that someone else changed it. A `400` keeps the sheet and the typed URL. No answer, or a server error, keeps the sheet and resends the same request key with the text locked.
+- A `409` closes the sheet, refreshes the plan view and item, and says what changed: the item's new state, or that someone else changed it. A `400` keeps the sheet and the typed URL. No answer, or a server error, keeps the sheet and resends the same request key with the text locked; the page keeps a key only for the version of the item it was made on, so a changed item never replays an old result.
 - A result stays beside the item's buttons across refreshes.
 - On a phone the sheet rises from the bottom edge, within the viewport, with 44px targets; the plan table shows each task's actions on its own line.
