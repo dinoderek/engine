@@ -119,7 +119,6 @@ func TestDecide(t *testing.T) {
 		{"a live planner is left to work", view(with(plan("approved"), working())), nil},
 		{"an unknown planner is left alone", view(with(plan("approved"), Session{Unknown: true})), nil},
 		{"a planner waiting outside a hard stop is flagged", view(with(plan("approved"), waiting(StallWait))), []string{fmt.Sprintf("notice p1 stall/a1/%d", unix(-StallWait))}},
-		{"a planner that ended without tasks is flagged", view(with(plan("approved"), gone())), []string{fmt.Sprintf("notice p1 stall/a1/%d", spawned)}},
 		{"a planned plan's lint failure is a notice", withLint(view(plan("approved"), task(2, "todo"))), []string{"notice p1 lint/2"}},
 		{"a later plan's lint failure is a notice too", withLint(view(plan("planned"), task(2, "todo"))), []string{"notice p1 lint/2"}},
 		{"a plan that passes lint is planned", view(plan("approved"), task(2, "todo")), []string{"state p1 planned"}},

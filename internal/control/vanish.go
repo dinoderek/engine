@@ -13,7 +13,8 @@ const (
 	EndVanished = "vanished"
 	// EndEarlyDeath is a first death before the session claimed its task: the
 	// task goes back to todo, for the next pass to dispatch a new attempt. A
-	// second early death of the task ends failed, with Early set.
+	// second early death of the task ends failed, with Early set. A planner
+	// that wrote no task ends the same way (endPlanner).
 	EndEarlyDeath = "early-death"
 	// EndFailed marks the task failed; only the operator moves it to todo.
 	EndFailed = "failed"
@@ -106,9 +107,13 @@ func earlyDeaths(st *State, at Attempt) int {
 // a running task back in todo, and failed the second. Otherwise it ends
 // failed and so does the task, which leaves the queue. A window that died at
 // a usage limit (at.Limited) is always resumable: the limit paused the work.
+// A planner's attempt ends by endPlanner.
 func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	item := st.Items[at.Item]
 	at.State, at.Ended = "ended", s.now()
+	if item.Kind == "plan" && item.Attempt == at.ID && item.State == "approved" {
+		s.endPlanner(st, item, &at)
+	}
 	if item.Kind == "task" && item.Attempt == at.ID && item.State != "done" && item.State != "failed" {
 		at.Reason = EndFailed
 		resume := at.Limited || resumable(st, item, at)

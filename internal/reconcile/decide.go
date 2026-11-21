@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/dinoderek/engine/internal/control"
 )
 
 // Decide works out one pass for v's root, in order: cleanup of a done root,
@@ -41,10 +43,14 @@ func notice(t Item, key, text string) Action {
 }
 
 // planStep starts the planner, then lints its plan. Until the plan is
-// planned, it is the whole pass.
+// planned, it is the whole pass. A planner that died without writing a task
+// is ended, and the next pass starts a new one.
 func planStep(v View) ([]Action, bool) {
 	p := v.Root
 	planner := p.Session
+	if p.Current.State == "ended" {
+		planner = nil
+	}
 	switch {
 	case p.State == "planned" || p.State == "done":
 		return nil, false
@@ -61,19 +67,47 @@ func planStep(v View) ([]Action, bool) {
 		}
 		return nil, true
 	case len(v.Tasks) == 0 && planner != nil:
-		if !planner.Flagged(planner.Spawned) {
-			return stall(p, planner.Spawned, "the planner "+planner.Name+" ended without writing any task"), true
-		}
-		return nil, true
+		return []Action{plannerEnd(p)}, true
 	case len(v.Tasks) == 0:
-		if v.Fleet.LocalFree() < 1 {
-			return nil, true
-		}
-		return []Action{plannerDispatch(v)}, true
+		return plannerStart(v), true
 	case len(v.Lint) > 0:
 		return []Action{notice(p, fmt.Sprintf("lint/%d", p.Version), "Plan lint failed; no tasks were dispatched. Fix the cards and restart coordination.")}, true
 	}
 	return []Action{{Kind: SetState, Item: p.ID, State: "planned"}}, true
+}
+
+// plannerEnd ends the attempt of plan p's planner, whose window is gone.
+func plannerEnd(p Item) Action {
+	s := *p.Session
+	a := Action{Kind: EndAttempt, Item: p.ID, Attempt: p.Current.ID, Text: "the planner " + s.Name + " has died", Tail: s.PaneTail}
+	if s.DiedAtLimit {
+		a.Text = "the planner " + s.Name + " died at a usage limit"
+		a.AtLimit, a.ResetsAt = true, s.ResetsAt
+	}
+	return a
+}
+
+// plannerStart starts a planner on a plan with no task, unless the plan has
+// an open question of its own, its last planner died at a usage limit that
+// has not reset, or this host has no free slot.
+func plannerStart(v View) []Action {
+	if v.Root.Question > 0 || plannerLimited(v.Root.Current, v.Now) || v.Fleet.LocalFree() < 1 {
+		return nil
+	}
+	return []Action{plannerDispatch(v)}
+}
+
+// plannerLimited reports whether at, a planner's ended attempt, died at a
+// usage limit that still holds: until ResumeDelay after a known reset, or
+// for ProbeEvery after the death when the reset is unknown.
+func plannerLimited(at control.Attempt, now time.Time) bool {
+	if !at.Limited {
+		return false
+	}
+	if KnownReset(at.ResetsAt, at.Ended) {
+		return now.Before(time.Unix(at.ResetsAt, 0).Add(ResumeDelay))
+	}
+	return now.Before(at.Ended.Add(ProbeEvery))
 }
 
 // plannerDispatch starts the planner on this host, with the plan's harness
