@@ -219,12 +219,12 @@ window.engine.panel = function (ctx) {
   }
 
   function applyInert() {
-    for (const id of ["bar", "list", "pane", "sessions"]) $(id).inert = mobileOverlay();
+    for (const id of ["bar", "inbox", "list", "pane", "sessions"]) $(id).inert = mobileOverlay();
   }
 
   function restoreFocus() {
     const target = st.opener && document.querySelector('[data-key="' + CSS.escape(st.opener) + '"]');
-    (target || $(view.page === "sessions" ? "sessions" : "pane")).focus();
+    (target || $(view.page === "plans" ? "pane" : view.page)).focus();
   }
 
   // sync brings the panel in line with the page's view state: it opens,

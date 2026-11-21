@@ -164,7 +164,7 @@ const scenarios = {
       await t.flush();
       assert.equal(t.$("panel").hidden, false);
       assert.equal(t.$("sessions").hidden, false);
-      assert.equal(t.$("workspace").classList.contains("on-sessions"), true);
+      assert.equal(t.$("workspace").classList.contains("single"), true);
       assert.match(t.p.win.location.hash, /^#\/sessions\?panel=p24&tab=communications&update=12/);
       assert.equal(t.$("panel-title").textContent, "Title p24");
       assert.equal(t.$("update-12").classList.contains("anchored"), true);

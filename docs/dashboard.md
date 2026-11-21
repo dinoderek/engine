@@ -8,9 +8,9 @@
 
 `engine ui` serves a dashboard on `127.0.0.1:7332`; `--listen` takes another loopback address. It uses the CLI's server configuration and operator credential, never sent to the browser. Any local user reaching the port has operator rights; run it only on a single-user machine.
 
-Reads forward only `list`, `plan-view`, `attempts`, `get`, `updates` and `session-view`, for GET and HEAD to a loopback host name on any port, so an SSH tunnel works. It sends `Cache-Control: no-store`. When the control server fails, the page keeps its last data, marked stale. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only its scripts.
+Reads forward only `list`, `plan-view`, `attempts`, `get`, `updates`, `session-view` and `inbox`, for GET and HEAD to a loopback host name on any port, so an SSH tunnel works. It sends `Cache-Control: no-store`. When the control server fails, the page keeps its last data, marked stale. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only its scripts.
 
-The per-plan view lists unfinished prerequisites, including other plans' tasks. A todo task waiting to start has the plan's question as feedback. On both tabs, "Needs feedback" opens the question's thread at its update over the tab, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
+The per-plan view lists unfinished prerequisites, including other plans' tasks. A todo task waiting to start has the plan's question as feedback. On Plans and Sessions, "Needs feedback" opens the question's thread at its update over it, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
 
 Each task has one summary: done is done; failed and needs-human are blocked; an active attempt, or a running or in-review state, is in progress; an unfinished prerequisite or a held todo task, or one under the plan's open question (its read's `question`), is blocked; todo under an approved plan is ready; anything else is blocked. Coordination does not change it.
 

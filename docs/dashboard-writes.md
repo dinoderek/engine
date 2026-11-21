@@ -1,6 +1,6 @@
 # Dashboard writes
 
-> **Owns:** what `engine ui` accepts from a browser: `--host`, the Origin check, the write routes, request keys and the page's write helper. **Not here:** the reads, the stale marking and the session view (`dashboard.md`), the operations the writes become (`control-server.md`).
+> **Owns:** what `engine ui` accepts from a browser: `--host`, the Origin check, the write routes, request keys and the page's write helper; and the Inbox tab built on them. **Not here:** the reads, the stale marking and the session view (`dashboard.md`), the operations the writes become (`control-server.md`).
 
 ## Reaching it
 
@@ -33,3 +33,16 @@ The `Origin` must be `http` or `https` with no path and the same host and port a
 ## Request keys
 
 The server applies a key once: a resend with the same key and body returns the first result, and the same key with another body is `409`. The page's helper (`internal/ui/static/writes.js`) makes one key with `crypto.randomUUID()` when a form opens and resends it after no answer or a 5xx. A 2xx or 4xx ends the attempt and the next send makes a new key. The control server's status and reason pass through for `400`, `404` and `409`; a server or transport failure is `502`, with the server's message for a server error and no reason.
+
+## Inbox
+
+`GET /api/inbox` (`internal/ui/inbox.go`) adds no control operation. It reads `inbox` after a cursor, 200 updates a page until a short one, then `list` for titles, repositories and pull requests and `session-view` for each session's latest line. It goes through the snapshot cache like the read views: a failed read returns the last inbox marked stale. Cards list open questions, oldest first, then unacknowledged messages, oldest first, across repositories. A plan question a task's session asked takes that session's pull request and latest line. Only an absolute http or https pull request URL becomes a link; bodies are text.
+
+The Inbox tab is the first and the default page (`internal/ui/static/inbox.js`). A choice button resolves with that choice and the note; Answer sends the note alone; Reply and Say go to their routes; Acknowledge is offered on messages, because an acknowledged question stays open until resolved. A refresh keeps the cards on screen, so typing and focus stay.
+
+- A 409 keeps the typed text, shows the server's message and reloads. A card the server no longer lists stays, marked, until dismissed.
+- A note is a draft in `localStorage`, `engine.draft.<update>`, from the first keystroke until it is sent. A fresh read drops the drafts of cards it no longer lists.
+- The app badge, where the browser has one, counts open questions, not messages.
+- `/manifest.webmanifest` and its icons let a phone install the page; it starts on the Inbox.
+
+Below 800px every view is one column with no page-level horizontal scroll, and every control is at least 44px by 44px. A link inside a description or message is 44px tall and as wide as its text.

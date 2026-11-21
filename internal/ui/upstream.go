@@ -12,7 +12,7 @@ import (
 )
 
 // readOps is every control operation the dashboard may forward. All are reads.
-var readOps = []string{"list", "plan-view", "attempts", "get", "updates", "session-view"}
+var readOps = []string{"list", "plan-view", "attempts", "get", "updates", "session-view", "inbox"}
 
 // Caller is the control client boundary; control.Client satisfies it.
 type Caller interface {

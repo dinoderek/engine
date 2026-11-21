@@ -27,6 +27,7 @@ func TestDashboardAcceptance(t *testing.T) {
 	d := startDashboard(t, s)
 	t.Run("browse plans and tasks", func(t *testing.T) { acceptPlans(t, d, w) })
 	t.Run("read descriptions and communications", func(t *testing.T) { acceptDetails(t, d, w) })
+	t.Run("see what waits in the inbox", func(t *testing.T) { acceptInbox(t, d, w) })
 	t.Run("see sessions and feedback", func(t *testing.T) { acceptSessions(t, s, d, w) })
 	t.Run("survive host and control server outages", func(t *testing.T) { acceptOutages(t, s, d, w) })
 }

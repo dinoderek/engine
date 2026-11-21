@@ -196,8 +196,10 @@ function boot(staticDir, hash, fetchImpl, opts = {}) {
   const sandbox = Object.assign(win, {
     window: win, document: doc, fetch: fetchImpl, history: win.history, location: win.location,
     CSS: { escape: (s) => String(s).replace(/[^\w-]/g, (c) => "\\" + c) },
-    URLSearchParams, setTimeout, clearTimeout, console,
+    URLSearchParams, setTimeout, clearTimeout, console, crypto: globalThis.crypto,
   });
+  if (opts.localStorage) win.localStorage = opts.localStorage;
+  if (opts.navigator) win.navigator = opts.navigator;
   doc.defaultView = win;
   vm.createContext(sandbox);
   const scripts = doc.documentElement.querySelectorAll("script").map((s) => s.getAttribute("src"));

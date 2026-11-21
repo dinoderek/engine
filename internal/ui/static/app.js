@@ -11,24 +11,30 @@
   const IMPLIED = { done: "done", "in-progress": "running", ready: "todo" };
   const ID = /^[prt][0-9]+$/;
 
-  const view = { page: "plans", repo: "", state: "", q: "", plan: "", task: "", panel: "", tab: "description", update: 0 };
-  const fetched = { plans: null, plan: null, sessions: null };
+  const view = { page: "inbox", repo: "", state: "", q: "", plan: "", task: "", panel: "", tab: "description", update: 0 };
+  const fetched = { plans: null, plan: null, sessions: null, inbox: null };
   let pending = 0;
   let planPending = 0;
   let sessionsPending = 0;
+  let inboxPending = 0;
 
   const { el, label, load, keep, failed } = window.engine.dom;
   const $ = (id) => document.getElementById(id);
   const panel = window.engine.panel({
     $, view, writeHash, status: () => status(), repoName,
     href: (id, tab, update) => here({ id, tab, update }),
-    render: () => { renderPlans(); renderPane(); renderSessions(); },
+    render: () => { renderPlans(); renderPane(); renderSessions(); renderInbox(); },
   });
   const sessions = window.engine.sessions({
     $, view,
     panelHref: (id, tab, update) => sessionsLink({ id, tab, update }),
     planHref: (plan, task) => link(plan, task, null),
     noteOpener: (key) => panel.noteOpener(key),
+  });
+  const inbox = window.engine.inbox({
+    $, panelHref: (id, tab, update) => pageLink("inbox", { id, tab, update }),
+    noteOpener: (key) => panel.noteOpener(key),
+    refresh: () => refreshInbox(),
   });
 
   // addOpen writes an open panel into a hash's search part.
@@ -51,17 +57,19 @@
     return s ? "?" + s : "";
   }
 
-  // sessionsLink is the Sessions tab, with a panel open over it or none.
-  function sessionsLink(open = current()) {
+  // pageLink is the Inbox or Sessions tab, with a panel open over it or none.
+  function pageLink(page, open = current()) {
     const p = new URLSearchParams();
     addOpen(p, open);
     const s = p.toString();
-    return "#/sessions" + (s ? "?" + s : "");
+    return "#/" + page + (s ? "?" + s : "");
   }
+
+  const sessionsLink = (open) => pageLink("sessions", open);
 
   // here links to the page being shown, so the panel opens over it.
   function here(open) {
-    return view.page === "sessions" ? sessionsLink(open) : link(view.plan, view.task, open);
+    return view.page === "plans" ? link(view.plan, view.task, open) : pageLink(view.page, open);
   }
 
   function link(plan, task, open) {
@@ -75,8 +83,8 @@
     const [path, search] = location.hash.replace(/^#/, "").split("?");
     const parts = path.split("/").filter(Boolean);
     const p = new URLSearchParams(search || "");
-    view.page = parts[0] === "sessions" ? "sessions" : "plans";
-    // The Sessions tab leaves the Plans filters and selection as they were.
+    view.page = ["plans", "sessions"].includes(parts[0]) ? parts[0] : "inbox";
+    // The other tabs leave the Plans filters and selection as they were.
     if (view.page === "plans") {
       view.repo = p.get("repo") || "";
       view.state = p.get("state") || "";
@@ -115,7 +123,7 @@
 
   function status() {
     const node = $("status");
-    const shown = view.page === "sessions" ? [fetched.sessions] : [fetched.plans, fetched.plan];
+    const shown = { inbox: [fetched.inbox], sessions: [fetched.sessions], plans: [fetched.plans, fetched.plan] }[view.page];
     const envs = [...shown, ...panel.envs()].filter(Boolean);
     const stale = envs.find((e) => e.stale || e.failed);
     const times = envs.map((e) => e.fetched).filter(Boolean).sort();
@@ -271,23 +279,46 @@
     status();
   }
 
+  // renderInbox draws the Inbox tab; refreshInbox reloads it.
+  function renderInbox() {
+    inbox.render(fetched.inbox);
+  }
+
+  async function refreshInbox() {
+    const n = ++inboxPending;
+    let env;
+    try {
+      env = await load("/api/inbox");
+    } catch (err) {
+      env = failed(fetched.inbox, err);
+    }
+    if (n !== inboxPending) return;
+    fetched.inbox = env;
+    renderInbox();
+    panel.head();
+    status();
+  }
+
   // chrome shows the page the hash names and points each tab at the other
-  // page's last state, so switching tabs keeps filters and selection.
+  // pages' last state, so switching tabs keeps filters and selection.
   function chrome() {
-    const onSessions = view.page === "sessions";
-    $("list").hidden = $("pane").hidden = onSessions;
-    $("sessions").hidden = !onSessions;
-    $("workspace").classList.toggle("on-sessions", onSessions);
+    const onPlans = view.page === "plans";
+    $("list").hidden = $("pane").hidden = !onPlans;
+    $("sessions").hidden = view.page !== "sessions";
+    $("inbox").hidden = view.page !== "inbox";
+    $("workspace").classList.toggle("single", !onPlans);
+    $("tab-inbox").setAttribute("href", pageLink("inbox", null));
     $("tab-plans").setAttribute("href", link(view.plan, view.task, null));
     $("tab-sessions").setAttribute("href", sessionsLink(null));
-    for (const [id, on] of [["tab-plans", !onSessions], ["tab-sessions", onSessions]]) {
-      if (on) $(id).setAttribute("aria-current", "page");
-      else $(id).removeAttribute("aria-current");
+    for (const page of ["inbox", "plans", "sessions"]) {
+      if (page === view.page) $("tab-" + page).setAttribute("aria-current", "page");
+      else $("tab-" + page).removeAttribute("aria-current");
     }
   }
 
   function refresh() {
     if (document.visibilityState === "visible") {
+      refreshInbox();
       refreshSessions();
       if (view.page === "plans") {
         refreshPlans();
@@ -320,7 +351,9 @@
     renderPane();
     if (!fetched.plans) renderPlans();
     renderSessions();
+    renderInbox();
     panel.sync();
+    refreshInbox();
     refreshSessions();
     if (view.page === "plans") {
       refreshPlans();

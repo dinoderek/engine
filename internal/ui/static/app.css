@@ -93,9 +93,9 @@ tr.selected td { background: var(--select); }
 }
 .bar nav { display: flex; gap: 4px; }
 .sessions { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
-.sessions[hidden], .list[hidden], .pane[hidden] { display: none; }
-.plans.on-sessions { grid-template-columns: minmax(0, 1fr); }
-.plans.on-sessions.with-panel { grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); }
+.sessions[hidden], .inbox[hidden], .list[hidden], .pane[hidden] { display: none; }
+.plans.single { grid-template-columns: minmax(0, 1fr); }
+.plans.single.with-panel { grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); }
 .sessions-head { font-size: 15px; margin: 0 0 8px; }
 .sessions-head .need { color: var(--warn); background: var(--warn-bg); padding: 1px 8px; border-radius: 6px; font-size: 12px; font-weight: 500; }
 .sessions-head .muted { font-weight: 400; }
@@ -107,5 +107,44 @@ tr.needs-feedback td { background: var(--warn-bg); }
 .sessions a[aria-current] { background: var(--select); outline: 1px solid var(--accent); }
 .sessions a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (max-width: 800px) {
-  .plans.on-sessions, .plans.on-sessions.with-panel { grid-template-columns: 1fr; }
+  .plans.single, .plans.single.with-panel { grid-template-columns: 1fr; }
+}
+.inbox { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
+.inbox-head { font-size: 15px; margin: 0 0 8px; }
+.inbox:focus-visible, .card a:focus-visible, .card button:focus-visible, .note:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.card { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; }
+.card.question { border-left: 4px solid var(--warn); }
+.card-head { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.badge { padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; }
+.badge.question { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+.badge.class { color: var(--muted); }
+.card-title { font-weight: 600; }
+.card-body { white-space: pre-wrap; margin: 8px 0; }
+.card-links, .card-latest { margin: 4px 0; }
+.note { display: block; width: 100%; margin: 8px 0; padding: 8px; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+.card-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.card button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+.card button[hidden] { display: none; }
+.card button:disabled { opacity: .5; cursor: default; }
+.card button.choice { flex: 1 1 100%; text-align: left; }
+.card button.recommended { border-color: var(--accent); background: var(--select); }
+.rec { color: var(--accent); font-size: 12px; }
+.card-result { margin: 8px 0 0; }
+.card-result:empty { display: none; }
+.card-result.bad { color: var(--blocked); }
+@media (max-width: 800px) {
+  .plans { padding: 8px; gap: 8px; }
+  .bar { flex-wrap: wrap; gap: 4px 8px; padding: 6px 8px; }
+  .status { flex: 1 1 100%; margin-left: 0; }
+  /* Every control is a tap target of at least 44px; the size of a link
+     inside a description or message is its text, padded to that height. */
+  button, input, select, textarea { min-height: 44px; min-width: 44px; font-size: 16px; }
+  a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  .plan-list a { display: block; }
+  .markdown a { display: inline; min-height: 0; min-width: 0; padding: 15px 2px; }
+  .filters { gap: 8px; }
+  .filters label { flex: 1 1 140px; }
+  .filters select { flex: 1; min-width: 0; }
+  .panel button { padding: 8px 14px; }
 }
