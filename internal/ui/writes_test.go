@@ -7,7 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -355,5 +358,54 @@ func TestMainParsesHost(t *testing.T) {
 	stderr.Reset()
 	if code := Main([]string{"--host", "dev box"}, Env{Out: io.Discard, Err: &stderr, Connect: connect}); code != 2 || !strings.Contains(stderr.String(), "--host must be a host name") {
 		t.Fatalf("--host with a bad name = %d %q", code, stderr.String())
+	}
+}
+
+// A resolve is resent after its reply is lost, against a real control
+// service: the question is still readable, so the request is the same and the
+// server replays the first result; a new key for it gets the server's refusal.
+func TestAResentResolveReplaysAgainstTheRealServer(t *testing.T) {
+	if _, err := exec.LookPath("sqlite3"); err != nil {
+		t.Skip("sqlite3 is absent")
+	}
+	store, err := control.Open(filepath.Join(t.TempDir(), "control.db"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	token := control.Secret()
+	server := httptest.NewServer(control.Handler(control.Service{Store: store, Now: time.Now}, token, nil))
+	t.Cleanup(server.Close)
+	client := control.Client{URL: server.URL, Token: token}
+	call := func(r control.Request) control.Response {
+		t.Helper()
+		out, err := client.Call(context.Background(), r)
+		if err != nil {
+			t.Fatalf("%s: %v", r.Op, err)
+		}
+		return out
+	}
+	repo := call(control.Request{Op: "create", Item: control.Item{Kind: "repo", Title: "r", Slug: "o/r", Remote: "git@example.test:o/r.git"}})
+	plan := call(control.Request{Op: "create", Item: control.Item{Kind: "plan", Title: "p", Repo: repo.Item.ID}})
+	asked := call(control.Request{Op: "ask", ID: plan.Item.ID, Body: "Which?", Choices: []string{"keep", "drop"}}).Updates[0].ID
+
+	h := handler(newUpstream(client, time.Now, nil), "")
+	path := "/api/updates/" + strconv.Itoa(asked) + "/resolve"
+	a := attempt{"127.0.0.1:7332", "http://127.0.0.1:7332", "application/json"}
+	first, env := post(t, h, a, path, `{"key":"k1","choice":1,"note":"later"}`)
+	if first.StatusCode != 200 || env.Error != "" {
+		t.Fatalf("resolve = %d %+v", first.StatusCode, env)
+	}
+	resent, again := post(t, h, a, path, `{"key":"k1","choice":1,"note":"later"}`)
+	if resent.StatusCode != 200 || !reflect.DeepEqual(again.Data, env.Data) {
+		t.Fatalf("resend = %d %+v, want the first result %+v", resent.StatusCode, again, env)
+	}
+	if res, other := post(t, h, a, path, `{"key":"k2","choice":0}`); res.StatusCode != 409 || other.Error == "" {
+		t.Fatalf("another key = %d %+v, want the server's 409", res.StatusCode, other)
+	}
+	got := call(control.Request{Op: "updates", ID: plan.Item.ID})
+	last := got.Updates[len(got.Updates)-1]
+	if last.Kind != "resolved" || last.Body != "drop\nlater" || last.ReplyTo != asked {
+		t.Fatalf("the question was resolved with %+v, want the choice's text then the note, once", last)
 	}
 }

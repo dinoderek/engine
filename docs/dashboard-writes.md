@@ -4,7 +4,7 @@
 
 ## Reaching it
 
-`--listen` stays loopback. `--host <name>` also admits requests whose `Host` is that DNS name, on any port, so a proxy on the tailnet can pass the dashboard's traffic on; loopback names keep working. There is no identity check: reaching the port is operator access, as before, plus whoever reaches it over the tailnet. The operator credential never reaches the browser, and the CSP keeps `default-src 'self'`.
+`--listen` stays loopback. `--host <name>` also admits requests whose `Host` is that DNS name, on any port, so a proxy on the tailnet can pass the dashboard's traffic on; loopback names keep working. There is no identity check: reaching the port is operator access, for a local user and for whoever reaches it over the tailnet. The operator credential never reaches the browser, and the CSP keeps `default-src 'self'`.
 
 The process is stateless, so any number may run against one server. The proxy must pass the `Host` header through unchanged: the Origin check compares against it.
 
