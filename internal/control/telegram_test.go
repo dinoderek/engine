@@ -24,7 +24,7 @@ func TestTelegramMigrationAndDurableState(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 1, 1, 0, 0, 0, 123, time.UTC)
-	want := []TelegramDelivery{{Update: 10, Message: 99, Text: "quote ' ;\ntext", Settled: true}, {Update: 11}}
+	want := []TelegramDelivery{{Update: 10, Message: 99, Text: "quote ' ;\ntext", Status: "Answered: yes", Settled: true}, {Update: 11}}
 	if err = store.SaveTelegram(want, 42, at); err != nil {
 		t.Fatal(err)
 	}

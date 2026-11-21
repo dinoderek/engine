@@ -104,9 +104,7 @@ func (l *Loop) Pass(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	if err = l.settle(ctx, rows, open); err != nil {
-		return err
-	}
+	settleErr := l.settle(ctx, rows, open)
 	var infos []control.TelegramDelivery
 	for _, d := range rows {
 		if d.Settled || d.Message != 0 {
@@ -124,20 +122,20 @@ func (l *Loop) Pass(ctx context.Context, now time.Time) error {
 			continue
 		}
 		if err = l.sendQuestion(ctx, u, d); err != nil {
-			return err
+			return errors.Join(settleErr, err)
 		}
 	}
 	if len(infos) == 0 || now.Sub(lastDigest) < time.Minute {
-		return nil
+		return settleErr
 	}
 	message, err := l.send(ctx, digest(infos), keyboard{Rows: [][]button{}}, true)
 	if err != nil {
-		return err
+		return errors.Join(settleErr, err)
 	}
 	for i := range infos {
 		infos[i].Message = message
 	}
-	return l.Service.Store.SaveTelegram(infos, 0, now)
+	return errors.Join(settleErr, l.Service.Store.SaveTelegram(infos, 0, now))
 }
 
 func (l *Loop) send(ctx context.Context, text string, keys keyboard, silent bool) (int64, error) {
@@ -169,24 +167,28 @@ func (l *Loop) settle(ctx context.Context, rows []control.TelegramDelivery, open
 		}
 		groups[d.Message] = append(groups[d.Message], d)
 	}
+	var failures []error
 	for message, group := range groups {
-		if !changed[message] {
-			continue
-		}
-		if message != 0 {
-			text, err := l.settlementText(group)
-			if err != nil {
-				return err
-			}
-			if err = l.edit(ctx, message, text); err != nil {
-				return err
+		if changed[message] {
+			if err := l.settleGroup(ctx, message, group); err != nil {
+				failures = append(failures, err)
 			}
 		}
-		if err := l.Service.Store.SaveTelegram(group, 0, time.Time{}); err != nil {
+	}
+	return errors.Join(failures...)
+}
+
+func (l *Loop) settleGroup(ctx context.Context, message int64, group []control.TelegramDelivery) error {
+	if message != 0 {
+		text, err := l.settlementText(group)
+		if err != nil {
+			return err
+		}
+		if err = l.edit(ctx, message, text); err != nil {
 			return err
 		}
 	}
-	return nil
+	return l.Service.Store.SaveTelegram(group, 0, time.Time{})
 }
 
 func (l *Loop) answer(question control.Update) (string, error) {
@@ -284,13 +286,18 @@ func (l *Loop) tap(ctx context.Context, c Callback) error {
 		}
 		status = "Already answered"
 	}
-	if err = l.edit(ctx, delivery.Message, delivery.Text+"\n\n"+status); err != nil {
-		return err
-	}
-	delivery.Settled = true
+	delivery.Status = status
+	delivery.Settled = false
+	// Persist the presentation intent after the resolution, before a network
+	// edit. A failed edit must not hold up acknowledgement of this callback.
 	if err = l.Service.Store.SaveTelegram([]control.TelegramDelivery{*delivery}, 0, time.Time{}); err != nil {
 		return err
 	}
+	if err = l.edit(ctx, delivery.Message, delivery.Text+"\n\n"+status); err == nil {
+		delivery.Settled = true
+		err = l.Service.Store.SaveTelegram([]control.TelegramDelivery{*delivery}, 0, time.Time{})
+	}
+	l.log(err)
 	l.log(l.Bot.call(ctx, "answerCallbackQuery", map[string]any{"callback_query_id": c.ID, "text": status}, nil))
 	return nil
 }
@@ -325,6 +332,9 @@ func (l *Loop) sendQuestion(ctx context.Context, u control.Update, d control.Tel
 }
 
 func (l *Loop) settlementText(group []control.TelegramDelivery) (string, error) {
+	if group[0].Status != "" {
+		return group[0].Text + "\n\n" + group[0].Status, nil
+	}
 	// The immutable question remains readable after leaving the inbox.
 	out, err := l.Service.Execute(operator, control.Request{Op: "updates", After: group[0].Update - 1})
 	if err != nil {

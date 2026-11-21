@@ -66,4 +66,5 @@ Delivery is at least once: if Telegram accepted a send but its response or the
 local commit is lost, retrying can produce a duplicate alert. The Bot API has no
 send idempotency key. This narrow failure window affects notifications;
 question resolution remains exactly once through server request keys. Message
-edits can safely retry after an interrupted local commit.
+edits retry independently, so an uneditable old message cannot block later alerts
+or answers. Presentation intent persists before callback polling advances.

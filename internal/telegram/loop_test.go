@@ -366,8 +366,8 @@ func TestCallbackEditFailureReplaysFirstResolution(t *testing.T) {
 	pass(t, l, instant)
 	c := callback(q, 11, 99, "retry-callback")
 	f.failures["editMessageText"] = 1
-	if err := l.tap(context.Background(), c); err == nil {
-		t.Fatal("expected failed edit")
+	if err := l.tap(context.Background(), c); err != nil {
+		t.Fatal("presentation failure blocked resolved callback:", err)
 	}
 	tap(t, l, c)
 	updates := command(t, l.Service, control.Request{Op: "updates", ID: plan})
@@ -379,5 +379,78 @@ func TestCallbackEditFailureReplaysFirstResolution(t *testing.T) {
 	}
 	if count != 1 || !strings.Contains(f.calls["editMessageText"][1]["text"].(string), "Answered: yes") {
 		t.Fatal("callback replay changed resolution")
+	}
+}
+
+func TestPermanentEditFailureDoesNotBlockLaterDeliveries(t *testing.T) {
+	l, f, plan := testLoop(t)
+	q := ask(t, l, plan)
+	pass(t, l, instant)
+	command(t, l.Service, control.Request{Op: "resolve", ReplyTo: q.ID, Body: "first answer"})
+	f.failures["editMessageText"] = 1000
+	ask(t, l, plan)
+	command(t, l.Service, control.Request{Op: "say", ID: plan, Recipient: "operator", Body: "new digest"})
+	if err := l.Pass(context.Background(), instant); err == nil {
+		t.Fatal("failed edit was not reported")
+	}
+	if len(f.calls["sendMessage"]) != 3 {
+		t.Fatalf("old failed edit blocked later question/digest: %+v", f.calls)
+	}
+	path := filepath.Join(t.TempDir(), "restart.db")
+	if err := l.Service.Store.Backup(path); err != nil {
+		t.Fatal(err)
+	}
+	store, err := control.Open(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	l.Service.Store = store
+	ask(t, l, plan)
+	if err = l.Pass(context.Background(), instant); err == nil {
+		t.Fatal("failed edit disappeared")
+	}
+	if len(f.calls["sendMessage"]) != 4 {
+		t.Fatal("restart blocked later question")
+	}
+}
+
+func TestFailedCallbackEditsDoNotBlockLaterCallbacks(t *testing.T) {
+	l, f, plan := testLoop(t)
+	first := ask(t, l, plan)
+	second := ask(t, l, plan)
+	pass(t, l, instant)
+	f.failures["editMessageText"] = 1000
+	c1, c2 := callback(first, 11, 99, "first-callback"), callback(second, 12, 99, "second-callback")
+	f.updates = []Incoming{{ID: 700, Callback: &c1}, {ID: 701, Callback: &c2}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	acknowledgements := 0
+	f.onCall = func(method string, _ map[string]any) {
+		if method == "answerCallbackQuery" {
+			acknowledgements++
+			if acknowledgements == 2 {
+				cancel()
+			}
+		}
+	}
+	l.Run(ctx)
+	rows, offset, _, err := l.Service.Store.TelegramState()
+	if err != nil || offset != 702 || len(rows) != 2 {
+		t.Fatalf("state %+v %d %v", rows, offset, err)
+	}
+	for _, d := range rows {
+		if d.Settled || d.Status != "Answered: yes" {
+			t.Fatalf("lost presentation intent %+v", d)
+		}
+	}
+	if out := command(t, l.Service, control.Request{Op: "inbox"}); len(out.Updates) != 0 {
+		t.Fatal("later callback did not resolve")
+	}
+	f.failures["editMessageText"] = 0
+	pass(t, l, instant)
+	rows, _, _, err = l.Service.Store.TelegramState()
+	if err != nil || !rows[0].Settled || !rows[1].Settled {
+		t.Fatalf("presentation did not retry %+v %v", rows, err)
 	}
 }

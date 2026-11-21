@@ -44,6 +44,7 @@ commands:
   start --check [--harness <name>] [--host <name>]
                             launch a throwaway session to find prompts that would
                             stop an unattended one
+  setup telegram            pair a Telegram bot with the operator chat
   setup [--host <name>]     bring a host to this engine's commit, plugin and config,
                             or check this one; exits 1 while any item is open
   upgrade [--dry-run]       bring every host to the head of main: stop the server,

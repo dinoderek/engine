@@ -14,12 +14,13 @@ type TelegramDelivery struct {
 	Update  int    `json:"update_id"`
 	Message int64  `json:"message_id"`
 	Text    string `json:"text"`
+	Status  string `json:"status"`
 	Settled bool   `json:"settled"`
 }
 
 const telegramSchema = `CREATE TABLE IF NOT EXISTS telegram_deliveries (
  update_id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL DEFAULT 0,
- text TEXT NOT NULL DEFAULT '', settled INTEGER NOT NULL DEFAULT 0);
+ text TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '', settled INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS telegram_state (
  id INTEGER PRIMARY KEY CHECK(id=1), offset INTEGER NOT NULL DEFAULT 0,
  digest_at TEXT NOT NULL DEFAULT '');
@@ -32,7 +33,7 @@ func (s *Store) TelegramState() ([]TelegramDelivery, int64, time.Time, error) {
 	if s.lock == nil {
 		return nil, 0, time.Time{}, errors.New("store is closed")
 	}
-	out, err := s.sql("SELECT update_id,message_id,text,settled FROM telegram_deliveries ORDER BY update_id;")
+	out, err := s.sql("SELECT update_id,message_id,text,status,settled FROM telegram_deliveries ORDER BY update_id;")
 	if err != nil {
 		return nil, 0, time.Time{}, err
 	}
@@ -42,6 +43,7 @@ func (s *Store) TelegramState() ([]TelegramDelivery, int64, time.Time, error) {
 		Update  int   `json:"update_id"`
 		Message int64 `json:"message_id"`
 		Text    string
+		Status  string
 		Settled int
 	}
 	if len(strings.TrimSpace(string(out))) > 0 {
@@ -50,7 +52,7 @@ func (s *Store) TelegramState() ([]TelegramDelivery, int64, time.Time, error) {
 		}
 	}
 	for _, r := range rows {
-		deliveries = append(deliveries, TelegramDelivery{r.Update, r.Message, r.Text, r.Settled != 0})
+		deliveries = append(deliveries, TelegramDelivery{Update: r.Update, Message: r.Message, Text: r.Text, Status: r.Status, Settled: r.Settled != 0})
 	}
 	out, err = s.sql("SELECT offset,digest_at FROM telegram_state WHERE id=1;")
 	if err != nil {
@@ -86,7 +88,7 @@ func (s *Store) SaveTelegram(deliveries []TelegramDelivery, offset int64, digest
 	var sql strings.Builder
 	sql.WriteString("BEGIN IMMEDIATE;\n")
 	for _, d := range deliveries {
-		fmt.Fprintf(&sql, "INSERT INTO telegram_deliveries(update_id,message_id,text,settled) VALUES(%d,%d,%s,%t) ON CONFLICT(update_id) DO UPDATE SET message_id=excluded.message_id,text=excluded.text,settled=excluded.settled;\n", d.Update, d.Message, literal(d.Text), d.Settled)
+		fmt.Fprintf(&sql, "INSERT INTO telegram_deliveries(update_id,message_id,text,status,settled) VALUES(%d,%d,%s,%s,%t) ON CONFLICT(update_id) DO UPDATE SET message_id=excluded.message_id,text=excluded.text,status=excluded.status,settled=excluded.settled;\n", d.Update, d.Message, literal(d.Text), literal(d.Status), d.Settled)
 	}
 	fmt.Fprintf(&sql, "UPDATE telegram_state SET offset=max(offset,%d)", offset)
 	if !digest.IsZero() {
