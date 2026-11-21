@@ -106,6 +106,12 @@ type Update struct {
 	Merge *MergeRequest `json:"merge,omitempty"`
 	// Left is what a cleaned update says the session could not remove.
 	Left string `json:"left,omitempty"`
+	// Choices are a question's answers to pick from; Recommended, when set,
+	// is the asker's pick, an index into Choices from 0; Class is its
+	// hard-stop class (HardStopClasses). Only a question carries them.
+	Choices     []string `json:"choices,omitempty"`
+	Recommended *int     `json:"recommended,omitempty"`
+	Class       string   `json:"class,omitempty"`
 }
 
 // QueueEntry is a task's place in its repository's merge queue, from its
@@ -169,6 +175,11 @@ type Request struct {
 	Merge *MergeRequest `json:"merge,omitempty"`
 	// Pane is how a pane-input post's prompt hook vouches for it.
 	Pane *PaneInput `json:"pane,omitempty"`
+	// Choices, Recommended and Class are an ask's (Update); every other
+	// operation refuses them.
+	Choices     []string `json:"choices,omitempty"`
+	Recommended *int     `json:"recommended,omitempty"`
+	Class       string   `json:"class,omitempty"`
 }
 
 // Response contains one operation's result. Credentials are only returned at dispatch.
@@ -213,7 +224,8 @@ func (s *State) id(prefix string) string {
 
 func (s *State) update(a Actor, r Request, kind, body string, now time.Time) Update {
 	u := Update{ID: len(s.Updates) + 1, Item: r.ID, Author: a.Name, At: now.UTC(), Kind: kind, Body: body,
-		Recipient: r.Recipient, ReplyTo: r.ReplyTo, RequiresReply: r.RequiresReply}
+		Recipient: r.Recipient, ReplyTo: r.ReplyTo, RequiresReply: r.RequiresReply,
+		Choices: r.Choices, Recommended: r.Recommended, Class: r.Class}
 	if item, ok := s.Items[r.ID]; ok {
 		u.Snapshot = &item
 	}

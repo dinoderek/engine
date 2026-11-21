@@ -25,10 +25,11 @@ you decide (`SKILL.md`, "Decisions").
 11. **Repo rule:** a repo rule tells you to involve the operator, and no
     override on the card covers it.
 12. **Permission:** an unattended session's permission request was denied,
-    and no route without a new permission works (for example `cat` in place
-    of a denied Read).
+    and no route without a new permission works (such as `cat` for a denied
+    Read).
 
-The repo's `AGENTS.md` may add classes; they apply too.
+The repo's `AGENTS.md` may add classes; they apply under the closest class,
+else **Repo rule**.
 
 ## Safe defaults
 
@@ -37,16 +38,15 @@ it in the PR body; an engine server task also uses `engine tell`.
 
 ## Ask once
 
-Before asking, look for an answer the operator has already given (in the
-session, on the task, or on its plan). One that decides the **same root
-cause** covers you: the same failing gate on the default branch, the same
-broken tool or sign-in on the same host, the same product question. Follow it
-and cite it and its answer in the PR body. If that root cause already has an
-open question, wait on it and cite it instead of asking again.
+First look for an answer the operator already gave: in the session, on the
+task or on its plan. One that decides the **same root cause** covers you: the
+same failing gate on the default branch, the same broken tool or sign-in on
+the same host, the same product question. Follow it and cite it and its
+answer in the PR body. If that root cause already has an open question, wait
+on it and cite it.
 
-Never stretch an answer to a different question: a ruling on one red lane
-does not cover another lane, and a host's sign-in fix does not cover another
-host. If unsure, it does not cover you.
+Never stretch an answer to a different question: a ruling on one red lane,
+or one host's sign-in fix, covers no other. If unsure, it does not cover you.
 
 ## Asking
 
@@ -60,14 +60,16 @@ Give the class, the question, your recommended answer, and the evidence.
 - **A `gh` sign-in, or another host tool, is broken:** name the host (its
   logical name in `~/.config/engine/host`) and the failing output, such as
   `gh auth status`, and point the operator at `engine setup --host <name>`,
-  run from their machine: it checks the host and prints the fix. Never run
-  setup yourself.
+  run from their machine, which prints the fix. Never run setup yourself.
 - **Permission:** the tool, its exact input, why you need it, and the
-  permission rule that would allow it. The operator adds the rule in the
-  session and tells you to retry.
+  permission rule that would allow it, which the operator adds before you
+  retry.
 
-Then end your turn and wait. Only the operator's answer to the question
-counts; reading, acknowledgement, a conversational reply or an automated
-`continue` grants nothing. When it comes, follow it and carry on. An engine
-server task raises it with `engine ask`
-instead, on its task or plan as the `engine` skill says.
+Then end your turn and wait. Only the operator's answer counts; reading,
+acknowledgement, a conversational reply or an automated `continue` grants
+nothing. When it comes, follow it and carry on.
+
+An engine server task asks with `engine ask` instead, on its task or plan as
+the `engine` skill says. Always pass `--class`, the class in lower case; for
+a pick, pass each option as a `--choice`, yours marked with
+`--recommend <index from 0>`.
