@@ -84,13 +84,25 @@ func newRun(t *testing.T, url string) run {
 // say adds prompts to the run's fake transcript.
 func (r run) say(t *testing.T, prompts ...string) {
 	t.Helper()
+	for _, p := range prompts {
+		r.write(t, p)
+	}
+}
+
+// inject adds a turn the harness injected to the run's fake transcript.
+func (r run) inject(t *testing.T, text string) {
+	t.Helper()
+	r.write(t, map[string]string{"injected": text})
+}
+
+// write appends line to the run's fake transcript as JSON.
+func (r run) write(t *testing.T, line any) {
+	t.Helper()
 	f, err := os.OpenFile(r.transcript, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	must(t, err)
-	for _, p := range prompts {
-		line, _ := json.Marshal(p)
-		_, err = f.Write(append(line, '\n'))
-		must(t, err)
-	}
+	data, _ := json.Marshal(line)
+	_, err = f.Write(append(data, '\n'))
+	must(t, err)
 	must(t, f.Close())
 }
 
@@ -204,6 +216,35 @@ func TestAPostWaitsForTheTranscriptAndSaysWhenItNeverCame(t *testing.T) {
 	}
 	if want := start.Add(2*time.Second + 5*time.Second); !c.now.Equal(want) {
 		t.Errorf("clock at %s, want %s: the second post waits out its bound, and no longer", c.now, want)
+	}
+}
+
+func TestATurnTheHarnessInjectedIsPostedNowhere(t *testing.T) {
+	var srv server
+	r := newRun(t, srv.start(t))
+	c := &clock{now: start}
+	h := Hook{Dir: r.dir, Post: poster(c, time.Minute), Detach: func(string, int) error { return nil }}
+	handBack := "<agent-message from=\"a1\">\n[Subagent hand-back] Verdict: APPROVED\n</agent-message>"
+	must(t, h.Submitted(r.event(handBack)))
+	must(t, h.Submitted(r.event("Approved")))
+	r.inject(t, handBack)
+	r.inject(t, "Approved")
+	r.say(t, "Approved")
+	must(t, h.Post.Post(context.Background(), r.dir, 1))
+	must(t, h.Post.Post(context.Background(), r.dir, 2))
+	if len(srv.requests) != 1 || srv.requests[0].Body != "Approved" || !srv.requests[0].Pane.Transcript {
+		t.Fatalf("requests = %+v; want only the typed prompt, found, though an injected turn has its text too", srv.requests)
+	}
+	if !c.now.Equal(start) {
+		t.Errorf("clock at %s: a prompt the transcript holds is not waited for", c.now)
+	}
+	if _, err := os.Stat(pendingFile(r.dir, 1)); !errors.Is(err, os.ErrNotExist) {
+		t.Error("the injected turn is still queued")
+	}
+	log, err := os.ReadFile(filepath.Join(r.dir, OutcomeLog))
+	must(t, err)
+	if first, _, _ := strings.Cut(string(log), "\n"); !strings.Contains(first, `"seq":1`) || !strings.Contains(first, `"injected":true`) {
+		t.Errorf("outcome log %q; want the injected turn logged as injected", log)
 	}
 }
 
