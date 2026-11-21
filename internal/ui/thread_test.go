@@ -159,14 +159,14 @@ func TestAnchorExtendsTheWindow(t *testing.T) {
 }
 
 func TestItemDetailRendersDescription(t *testing.T) {
-	d := itemDetail(control.Item{ID: "t7", Kind: "task", Repo: "r1", Plan: "p2", Title: "T", State: "todo", Body: "## Outcome\n\n- a"})
+	d := itemDetail(control.Item{ID: "t7", Kind: "task", Repo: "r1", Plan: "p2", Title: "T", State: "todo", Body: "## Outcome\n\n- a"}, false)
 	if d.Plan != "p2" || d.DescriptionHTML != "<h4>Outcome</h4>\n<ul>\n<li>a</li>\n</ul>\n" {
 		t.Fatalf("detail = %+v", d)
 	}
-	if p := itemDetail(control.Item{ID: "p2", Kind: "plan", State: "planned", Status: "blocked"}); p.State != "blocked" {
+	if p := itemDetail(control.Item{ID: "p2", Kind: "plan", State: "planned", Status: "blocked"}, false); p.State != "blocked" {
 		t.Fatalf("plan detail state = %q, want its status", p.State)
 	}
-	b, _ := json.Marshal(itemDetail(control.Item{ID: "p2", Kind: "plan"}))
+	b, _ := json.Marshal(itemDetail(control.Item{ID: "p2", Kind: "plan"}, false))
 	if !strings.Contains(string(b), `"description_html":""`) {
 		t.Fatalf("no body encodes as %s, want an empty description list", b)
 	}

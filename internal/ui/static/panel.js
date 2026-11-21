@@ -4,7 +4,7 @@
 // file inserts the one and builds the other as text, and owns keyboard focus.
 window.engine = window.engine || {};
 window.engine.panel = function (ctx) {
-  const { el, label, load, failed } = window.engine.dom;
+  const { el, label, load, keep, failed } = window.engine.dom;
   const $ = ctx.$;
   const view = ctx.view;
   const TABS = ["description", "communications"];
@@ -41,7 +41,8 @@ window.engine.panel = function (ctx) {
     const d = st.item && st.item.data;
     $("panel-ref").textContent = st.shown + (d ? " · " + ctx.repoName(d.repo) : "");
     $("panel-title").textContent = d ? d.title : st.item ? "Unavailable" : "Loading…";
-    $("panel-state").textContent = d ? label(d.state) : "";
+    $("panel-state").textContent = d ? label(d.state) + (d.held ? " (held)" : "") : "";
+    keep(() => $("panel-actions").replaceChildren(d ? ctx.control.bar(ctx.control.fromItem(d), "panel") : ""));
     const down = [st.item, st.threadEnv].some((e) => e && e.stale);
     const gone = st.item && !st.item.data ? st.item.error : "";
     $("panel-banner").hidden = !down && !gone;
@@ -309,6 +310,8 @@ window.engine.panel = function (ctx) {
     sync,
     refresh,
     head: () => { if (st.shown) renderHead(); },
+    item: () => (st.item && st.item.data) || null,
+    reload: () => (st.shown ? fetchItem() : Promise.resolve()),
     envs: () => [st.item, st.threadEnv].filter(Boolean),
     noteOpener: (key) => {
       st.opener = key;

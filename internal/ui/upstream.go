@@ -182,7 +182,16 @@ func (u *upstream) item(ctx context.Context, id string) (Envelope, int) {
 		if got.Item == nil {
 			return nil, errors.New("the control server sent no item")
 		}
-		return itemDetail(*got.Item), nil
+		active := false
+		// Only a todo task's execution is not told by its state.
+		if got.Item.Kind == "task" && got.Item.State == "todo" && got.Item.Attempt != "" {
+			attempts, err := u.call(ctx, control.Request{Op: "attempts"})
+			if err != nil {
+				return nil, err
+			}
+			active = liveAttempt(attempts.Attempts, got.Item.Attempt)
+		}
+		return itemDetail(*got.Item, active), nil
 	})
 }
 

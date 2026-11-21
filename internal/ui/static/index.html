@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/app.css">
 <script src="/dom.js" defer></script>
 <script src="/writes.js" defer></script>
+<script src="/control.js" defer></script>
 <script src="/panel.js" defer></script>
 <script src="/sessions.js" defer></script>
 <script src="/inbox.js" defer></script>
@@ -51,6 +52,7 @@
     </div>
     <h2 id="panel-title" tabindex="-1"></h2>
     <div class="muted" id="panel-state"></div>
+    <div id="panel-actions"></div>
     <p class="banner" id="panel-banner" hidden></p>
     <div role="tablist" aria-label="Item views" id="tabs">
       <button type="button" role="tab" id="tab-description" aria-controls="view-description" aria-selected="true" tabindex="0">Description</button>
@@ -65,5 +67,8 @@
     </div>
   </aside>
 </main>
+<div class="sheet-back" id="sheet-back" hidden>
+  <div class="sheet" id="sheet" role="alertdialog" aria-modal="true" aria-labelledby="sheet-title" aria-describedby="sheet-effect"></div>
+</div>
 </body>
 </html>

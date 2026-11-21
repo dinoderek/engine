@@ -138,6 +138,7 @@ func TestRoutesServePageAndReads(t *testing.T) {
 		{"/dom.js", "text/javascript", "window.engine.dom"},
 		{"/writes.js", "text/javascript", "crypto.randomUUID"},
 		{"/panel.js", "text/javascript", "description_html"},
+		{"/control.js", "text/javascript", "window.engine.control"},
 		{"/api/plans?repo=r1&state=executing&q=rollout", "application/json", `"id":"p24"`},
 		{"/api/plans/p24", "application/json", `"in_progress":2`},
 	} {

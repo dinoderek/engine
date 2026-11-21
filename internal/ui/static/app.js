@@ -20,8 +20,9 @@
 
   const { el, label, load, keep, failed } = window.engine.dom;
   const $ = (id) => document.getElementById(id);
+  const control = window.engine.control({ $, refresh: () => afterWrite(), facts: (id) => factsFor(id), render: () => { renderPane(); panel.head(); } });
   const panel = window.engine.panel({
-    $, view, writeHash, status: () => status(), repoName,
+    $, view, writeHash, status: () => status(), repoName, control,
     href: (id, tab, update) => here({ id, tab, update }),
     render: () => { renderPlans(); renderPane(); renderSessions(); renderInbox(); },
   });
@@ -177,7 +178,7 @@
 
   function stateCell(t) {
     const text = GROUPS.find(([g]) => g === t.group)[1];
-    const extra = IMPLIED[t.group] === t.state ? "" : " · " + t.state;
+    const extra = (IMPLIED[t.group] === t.state ? "" : " · " + t.state) + (t.held ? " (held)" : "");
     return el("td", { "data-label": "State" }, el("span", { class: "group-" + t.group }, text), extra, t.feedback ? feedbackLink(t) : null);
   }
 
@@ -187,6 +188,29 @@
       return el("li", {}, el("a", { href: link(w.plan, w.id), "data-key": "dep-" + t.id + "-" + w.id }, name));
     });
     return el("td", { "data-label": "Waiting for" }, items.length ? el("ul", { class: "waiting" }, ...items) : "—");
+  }
+
+  function actionsCell(t) {
+    const bar = control.bar(control.fromTask(t), "pane");
+    return el("td", { "data-label": "Actions" }, bar || "—");
+  }
+
+  // factsFor is what the page holds about an item now: from the plan pane,
+  // else from the open panel.
+  function factsFor(id) {
+    const d = fetched.plan && fetched.plan.data;
+    if (d && d.plan.id === id) return control.fromPlan(d);
+    const row = d && d.tasks.find((t) => t.id === id);
+    if (row) return control.fromTask(row);
+    const item = panel.item();
+    return item && item.id === id ? control.fromItem(item) : null;
+  }
+
+  // afterWrite brings every view a write may have changed up to date.
+  function afterWrite() {
+    const reads = [refreshPlan(false), panel.reload()];
+    if (view.page === "plans") reads.push(refreshPlans());
+    return Promise.all(reads);
   }
 
   function renderPane() {
@@ -205,18 +229,19 @@
       const banner = env.stale ? el("p", { class: "banner" }, "Control server unavailable; showing the last successful view.") : null;
       const counts = el("div", { class: "counts", "aria-label": "Task summary" },
         ...GROUPS.map(([g, text]) => el("span", { class: "count group-" + g }, el("b", {}, String(d.counts[g.replace("-", "_")])), " " + text)));
-      const head = el("tr", {}, ...["Task", "State", "Host", "Waiting for"].map((h) => el("th", { scope: "col" }, h)));
+      const head = el("tr", {}, ...["Task", "State", "Host", "Waiting for", "Actions"].map((h) => el("th", { scope: "col" }, h)));
       const rows = d.tasks.map((t) =>
         el("tr", { id: "task-" + t.id, class: t.id === view.task ? "selected" : null },
           el("td", { "data-label": "Task" }, opener(t.id, t.title), el("div", { class: "muted" }, t.id)),
           stateCell(t),
           el("td", { "data-label": "Host" }, t.host || "—"),
-          waitingCell(t)));
+          waitingCell(t),
+          actionsCell(t)));
       const body = rows.length ? el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)) : el("p", { class: "empty" }, "This plan has no tasks yet.");
       pane.replaceChildren(banner || "",
         el("h2", {}, "Tasks · " + d.plan.id + " · " + label(d.plan.state), " ", opener(d.plan.id, "Plan details")),
         el("div", { class: "muted" }, d.plan.title + " · " + (d.plan.slug || d.plan.repo)),
-        counts, body);
+        control.bar(control.fromPlan(d), "pane") || "", counts, body);
     });
   }
 

@@ -21,6 +21,9 @@ type ItemDetail struct {
 	Title           string `json:"title"`
 	State           string `json:"state"`
 	DescriptionHTML string `json:"description_html"`
+	// Held is a todo task the operator stopped.
+	Held bool `json:"held,omitempty"`
+	Controls
 }
 
 // Message is one human-facing update. Its body is plain text.
@@ -61,8 +64,10 @@ type Thread struct {
 var messageKinds = []string{"say", "ask", "reply", "acknowledged", "resolved", "ruling", control.KindPaneAnswer, control.KindPaneMessage}
 
 // itemDetail shows a plan's status, as the plan list does, and a task's state.
-func itemDetail(it control.Item) ItemDetail {
-	return ItemDetail{ID: it.ID, Kind: it.Kind, Repo: it.Repo, Plan: it.Plan, Title: it.Title, State: cmp.Or(it.Status, it.State), DescriptionHTML: RenderMarkdown(it.Body)}
+// active is a task's live execution, which only its controls use.
+func itemDetail(it control.Item, active bool) ItemDetail {
+	return ItemDetail{ID: it.ID, Kind: it.Kind, Repo: it.Repo, Plan: it.Plan, Title: it.Title, State: cmp.Or(it.Status, it.State),
+		DescriptionHTML: RenderMarkdown(it.Body), Held: it.Held, Controls: itemControls(it, active)}
 }
 
 // threadWindow projects one item's updates, oldest first. It returns the

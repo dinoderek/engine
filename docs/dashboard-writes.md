@@ -1,6 +1,6 @@
 # Dashboard writes
 
-> **Owns:** what `engine ui` accepts from a browser: `--host`, the Origin check, the write routes, request keys and the page's write helper; and the Inbox tab built on them. **Not here:** the reads, the stale marking and the session view (`dashboard.md`), the operations the writes become (`control-server.md`).
+> **Owns:** what `engine ui` accepts from a browser: `--host`, the Origin check, the write routes, request keys and the page's write helper; the Inbox tab and plan and task control built on them. **Not here:** the reads, the stale marking and the session view (`dashboard.md`), the operations the writes become (`control-server.md`).
 
 ## Reaching it
 
@@ -46,3 +46,25 @@ The Inbox tab is the first and the default page (`internal/ui/static/inbox.js`).
 - `/manifest.webmanifest` and its icons let a phone install the page; it starts on the Inbox.
 
 Below 800px every view is one column with no page-level horizontal scroll, and every control is at least 44px by 44px. A link inside a description or message is 44px tall and as wide as its text.
+
+## Control
+
+The plan view and the item panel offer the writes an item's state allows. The process decides which (`internal/ui/control.go`) and sends them as `actions`, with the item's `version`, on the plan view (the plan and each task row) and on an item read; the page offers exactly those and never works out a state rule itself. The server still decides every write, and a refusal shows its message.
+
+| Action | Offered when |
+| --- | --- |
+| `approve` | the plan is in `prepare` |
+| `run` | the plan is approved, not done and not coordinating |
+| `stop` | the plan is coordinating |
+| `task-stop` | the task is `running`, `in-review` or `needs-human` with an unended attempt |
+| `resume` | the task is held |
+| `retry` | the task is `failed` |
+| `complete-external` | the task is `todo` or `failed` with no unended attempt |
+
+An item read finds a todo task's attempt through `attempts`; the other states say it themselves.
+
+Approve, plan stop, task stop, retry and complete-external open a confirmation sheet first (`internal/ui/static/control.js`): it names the item, its state and the effect, and sends nothing until confirmed. Complete-external also asks for the pull request URL. Run and resume go straight through. The sheet sends the version the page read when it opened, so an edit made meanwhile is the server's 409.
+
+- A `409` closes the sheet, refreshes the plan view and item, and says what changed: the item's new state, or that someone else changed it. A `400` keeps the sheet and the typed URL. No answer, or a server error, keeps the sheet and resends the same request key with the text locked.
+- A result stays beside the item's buttons across refreshes.
+- On a phone the sheet rises from the bottom edge, within the viewport, with 44px targets; the plan table shows each task's actions on its own line.
