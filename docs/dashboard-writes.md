@@ -61,9 +61,9 @@ The plan view and the item panel offer the writes an item's state allows. The pr
 | `retry` | the task is `failed` |
 | `complete-external` | the task is `todo` or `failed` with no unended attempt |
 
-An item read finds a todo task's attempt through `attempts`; the other states say it themselves.
+An item read finds an unfinished task's attempt through `attempts`, because its state does not say whether the attempt has ended.
 
-Approve, plan stop, task stop, retry and complete-external open a confirmation sheet first (`internal/ui/static/control.js`): it names the item, its state and the effect, and sends nothing until confirmed. Complete-external also asks for the pull request URL. Run and resume go straight through. The sheet sends the version the page read when it opened, so an edit made meanwhile is the server's 409.
+Approve, plan stop, task stop, retry and complete-external open a confirmation sheet first (`internal/ui/static/control.js`): it names the item, its state and the effect, and sends nothing until confirmed. Complete-external also asks for the pull request URL. Run and resume go straight through. The sheet sends, for approve, retry and complete-external, the version the page read when it opened, so an edit made meanwhile is the server's 409. Cancel and Escape wait while a confirmation is in flight.
 
 - A `409` closes the sheet, refreshes the plan view and item, and says what changed: the item's new state, or that someone else changed it. A `400` keeps the sheet and the typed URL. No answer, or a server error, keeps the sheet and resends the same request key with the text locked.
 - A result stays beside the item's buttons across refreshes.

@@ -183,8 +183,9 @@ func (u *upstream) item(ctx context.Context, id string) (Envelope, int) {
 			return nil, errors.New("the control server sent no item")
 		}
 		active := false
-		// Only a todo task's execution is not told by its state.
-		if got.Item.Kind == "task" && got.Item.State == "todo" && got.Item.Attempt != "" {
+		// A task's controls depend on whether its attempt has ended, which
+		// its state does not say.
+		if got.Item.Kind == "task" && got.Item.State != "done" && got.Item.Attempt != "" {
 			attempts, err := u.call(ctx, control.Request{Op: "attempts"})
 			if err != nil {
 				return nil, err

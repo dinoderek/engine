@@ -76,15 +76,19 @@ func TestLiveAttempt(t *testing.T) {
 	}
 }
 
-// The item read asks for attempts only for a todo task with one, and its
+// The item read asks for the attempts of an unfinished task that has one, and its
 // controls say whether an execution is live.
 func TestItemRouteOffersControls(t *testing.T) {
 	fc := newFakeControl(t)
 	items := map[string]control.Item{
-		"t1": {ID: "t1", Kind: "task", Repo: "r1", Plan: "p5", Title: "Failed", State: "failed", Version: 3, Attempt: "a40"},
+		"t1": {ID: "t1", Kind: "task", Repo: "r1", Plan: "p5", Title: "Failed", State: "failed", Version: 3, Attempt: "a39"},
 		"t2": {ID: "t2", Kind: "task", Repo: "r1", Plan: "p5", Title: "Held", State: "todo", Held: true, Version: 5, Attempt: "a39"},
 		"t3": {ID: "t3", Kind: "task", Repo: "r1", Plan: "p5", Title: "Starting", State: "todo", Version: 2, Attempt: "a40"},
 		"p5": {ID: "p5", Kind: "plan", Repo: "r1", Title: "Plan", State: "prepare", Version: 9},
+		"t4": {ID: "t4", Kind: "task", Repo: "r1", Plan: "p5", Title: "Running", State: "running", Version: 6, Attempt: "a41"},
+		"t7": {ID: "t7", Kind: "task", Repo: "r1", Plan: "p5", Title: "Lost", State: "running", Version: 6, Attempt: "a39"},
+		"t8": {ID: "t8", Kind: "task", Repo: "r1", Plan: "p5", Title: "Failing", State: "failed", Version: 8, Attempt: "a41"},
+		"t9": {ID: "t9", Kind: "task", Repo: "r1", Plan: "p5", Title: "Done", State: "done", Version: 8, Attempt: "a39"},
 	}
 	fc.reads = func(r control.Request) (control.Response, bool) {
 		it, ok := items[r.ID]
@@ -104,6 +108,10 @@ func TestItemRouteOffersControls(t *testing.T) {
 		{"t2", offer{5, []string{"resume", "complete-external"}, true}},
 		{"t3", offer{2, []string{}, false}},
 		{"p5", offer{9, []string{"approve"}, false}},
+		{"t4", offer{6, []string{"task-stop"}, false}},
+		{"t7", offer{6, []string{}, false}},
+		{"t8", offer{8, []string{"retry"}, false}},
+		{"t9", offer{8, []string{}, false}},
 	} {
 		id, want := c.id, c.want
 		res, body := d.get(t, "GET", "127.0.0.1:7332", "/api/items/"+id)
@@ -115,7 +123,8 @@ func TestItemRouteOffersControls(t *testing.T) {
 			t.Errorf("%s: version %d, actions %v, held %t; want %+v", id, env.Data.Version, env.Data.Actions, env.Data.Held, want)
 		}
 	}
-	if got := strings.Join(fc.calls(), ","); got != "get,get,attempts,get,attempts,get" {
-		t.Fatalf("calls = %s: attempts are read only for a todo task with an attempt", got)
+	want := "get,attempts,get,attempts,get,attempts,get,get,attempts,get,attempts,get,attempts,get"
+	if got := strings.Join(fc.calls(), ","); got != want {
+		t.Fatalf("calls = %s: attempts are read for each unfinished task that has one", got)
 	}
 }

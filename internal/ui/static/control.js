@@ -68,13 +68,13 @@ window.engine.control = function (ctx) {
   function bar(f, scope) {
     const n = notes.get(f.id);
     if (!f.actions.length && !n) return "";
-    const row = el("div", { class: "actions", role: "group", "aria-label": "Actions for " + f.id });
+    const row = el("div", { class: "actions", role: "group", tabindex: "-1", "data-key": "acts-" + scope + "-" + f.id, "aria-label": "Actions for " + f.id });
     for (const op of f.actions) {
       const spec = OPS[op];
       if (!spec) continue;
       const key = "act-" + scope + "-" + f.id + "-" + op;
       const b = el("button", { type: "button", class: "act" + (spec.danger ? " danger" : ""), "data-key": key }, spec.text);
-      b.addEventListener("click", () => (spec.confirm ? open(f, op, key) : direct(f, op, b)));
+      b.addEventListener("click", () => (spec.confirm ? open(f, op, key, scope) : direct(f, op, b)));
       row.append(b);
     }
     if (n) row.append(el("p", { class: "action-note" + (n.bad ? " bad" : ""), role: "status" }, n.text));
@@ -136,11 +136,12 @@ window.engine.control = function (ctx) {
     }
     s.busy = true;
     s.ok.setAttribute("disabled", "");
+    s.cancel.setAttribute("disabled", "");
     const r = await formFor(s.f.id, s.op).send(OPS[s.op].path(s.f.id), fieldsFor(s.f, s.op, s.input));
     const out = await settle(s.f, s.op, r);
     s.busy = false;
     s.ok.removeAttribute("disabled");
-    if (sheet !== s) return;
+    s.cancel.removeAttribute("disabled");
     if (out.done) {
       close(true);
       return;
@@ -151,19 +152,28 @@ window.engine.control = function (ctx) {
     say(out.text, true);
   }
 
+  // close ends the sheet; while a confirm is in flight it stays, so the
+  // answer, or the lack of one, is shown where it was asked.
   function close(applied) {
     const s = sheet;
-    if (!s) return;
+    if (!s || (s.busy && !applied)) return;
     sheet = null;
     if (!applied) forms.delete(s.f.id + " " + s.op);
     $("sheet-back").hidden = true;
     $("sheet").replaceChildren();
-    const back = document.querySelector('[data-key="' + CSS.escape(s.opener) + '"]');
-    if (back) back.focus();
+    // The button may be gone: a stopped task offers Resume instead. Focus
+    // then goes to the item's buttons, or to its link.
+    for (const key of [s.opener, "acts-" + s.scope + "-" + s.f.id, "open-" + s.f.id]) {
+      const back = document.querySelector('[data-key="' + CSS.escape(key) + '"]');
+      if (back) {
+        back.focus();
+        if (document.activeElement === back) return;
+      }
+    }
   }
 
   // open asks before sending: it names the item, its state and the effect.
-  function open(f, op, opener) {
+  function open(f, op, opener, scope) {
     const spec = OPS[op];
     const what = spec.text === "Stop" ? "Stop " + f.id : spec.text + " " + f.id;
     const input = spec.pr ? el("input", { type: "url", id: "sheet-pr", class: "sheet-input", placeholder: "https://github.com/owner/repo/pull/…", autocomplete: "off", "aria-label": "Pull request URL" }) : null;
@@ -172,7 +182,7 @@ window.engine.control = function (ctx) {
     const result = el("p", { class: "sheet-result", role: "status" });
     cancel.addEventListener("click", () => close(false));
     ok.addEventListener("click", confirm);
-    sheet = { f, op, opener, input, ok, result, busy: false };
+    sheet = { f, op, opener, scope, input, ok, cancel, result, busy: false };
     $("sheet").replaceChildren(
       el("h2", { id: "sheet-title" }, what + "?"),
       el("p", { class: "sheet-item" }, el("b", {}, f.id), " · " + f.title),

@@ -30,7 +30,7 @@ async function page(hash, fx, body) {
     if (init && init.method === "POST") {
       const posted = { path: u.pathname, body: JSON.parse(init.body) };
       fx.posts.push(posted);
-      const r = fx.answer(posted);
+      const r = await fx.answer(posted);
       if (r instanceof Error) throw r;
       return reply(r.status, r.body);
     }
@@ -121,6 +121,7 @@ const scenarios = {
       assert.equal(t.sheetOpen(), false);
       assert.deepEqual(names(t, "pane", "t30"), ["Resume"]);
       assert.ok(t.$("task-t30").textContent.includes("Stopped; the task is held."));
+      assert.equal(t.p.doc.activeElement.dataset.key, "acts-pane-t30", "the button is gone, so focus goes to the item's buttons");
     });
   },
 
@@ -241,6 +242,25 @@ const scenarios = {
       assert.equal(fx.posts.length, 2);
       assert.equal(fx.posts[0].body.key, fx.posts[1].body.key);
       assert.equal(t.sheetOpen(), false);
+    });
+  },
+
+  async "Cancel and Escape wait for a confirmation in flight, so its outcome is shown"() {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const fx = { plan: planOf("executing", 5, ["stop"], []), answer: async () => { await gate; return ok(); } };
+    await page("#/plans/p24", fx, async (t) => {
+      await t.click(t.act("pane", "p24", "stop"));
+      t.$("sheet-ok").click();
+      await t.flush();
+      assert.equal(t.$("sheet-cancel").hasAttribute("disabled"), true);
+      t.key(t.$("sheet-back"), "Escape");
+      t.$("sheet-back").click();
+      assert.equal(t.sheetOpen(), true, "the sheet stays while the write is out");
+      release();
+      await t.flush();
+      assert.equal(t.sheetOpen(), false);
+      assert.ok(t.$("pane").textContent.includes("Coordination stopped."));
     });
   },
 
