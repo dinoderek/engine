@@ -152,7 +152,11 @@ func TestRealStatusReportsADeadServerDirectory(t *testing.T) {
 			t.Skip("lsof is not installed")
 		}
 	}
-	got, err := d.tmuxCwdGone()
+	pid, _, err := tm.ServerPid()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.tmuxCwdGone(pid)
 	if err != nil || got == nil || got.Pid == 0 || !strings.Contains(got.Reason, "kill-server") {
 		t.Fatalf("a server in a removed directory: %+v, %v", got, err)
 	}

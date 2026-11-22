@@ -171,12 +171,16 @@ func report(out io.Writer, t target, opens []string) bool {
 // install or config to copy: it only checks. Each harness the host lists
 // adds its steps, in the registry's order. gh's sign-in comes next, then
 // the check, the path suggestion and the readiness probe; a local setup
-// ends with the watcher.
+// ends with the watcher. The server's host adds a check of its unit after
+// the suspend check.
 func (r *runner) steps(out io.Writer) []harness.Step {
 	steps := []harness.Step{{Name: "tools", Run: r.tools}, {Name: "engine", Run: r.enginePath}, {Name: "no suspend", Run: r.noSuspend}}
 	if r.t.remote() {
 		steps = []harness.Step{{Name: "tools", Run: r.tools}, {Name: "engine", Run: r.installEngine},
 			{Name: "config", Run: r.copyConfig}, {Name: "no suspend", Run: r.noSuspend}}
+	}
+	if r.runsServer() {
+		steps = append(steps, harness.Step{Name: "server unit", Run: r.serverUnit})
 	}
 	for _, a := range r.adapters {
 		own := a.Setup().Steps(stepTarget{r})

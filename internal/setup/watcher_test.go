@@ -163,7 +163,7 @@ func TestTheWatcherStepSkips(t *testing.T) {
 		{"with no server host", "10. watcher: ok (no other host records the server's services)", func(r *rig) {
 			r.home = callerHome(r.t)
 		}},
-		{"on the server's host", "10. watcher: ok (no other host records the server's services)", func(r *rig) {
+		{"on the server's host", "11. watcher: ok (no other host records the server's services)", func(r *rig) {
 			r.home = callerHomeWith(r.t, hostsTOML+"[host.mac.services]\nmanager = \"systemd\"\nserver = \"engine-server.service\"\n")
 		}},
 		{"with no Telegram chat", "10. watcher: ok (Telegram is not paired on box", func(r *rig) { delete(r.box.files, "config.toml") }},
@@ -205,7 +205,7 @@ func TestTheWatcherStepOpens(t *testing.T) {
 	}
 	r = watcherRig(t)
 	r.home = callerHomeWith(t, hostsTOML+"[host.box.services]\nmanager = \"systemd\"\nserver = \"a.service\"\n[host.mac.services]\nmanager = \"systemd\"\nserver = \"b.service\"\n")
-	if mustRun(t, r, "") || !strings.Contains(r.out.String(), "10. watcher: OPEN (hosts box and mac each record a [services] table") {
+	if mustRun(t, r, "") || !strings.Contains(r.out.String(), "11. watcher: OPEN (hosts box and mac each record a [services] table") {
 		t.Errorf("two server hosts:\n%s", r.out.String())
 	}
 	r = watcherRig(t)
