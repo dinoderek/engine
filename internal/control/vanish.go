@@ -73,11 +73,12 @@ func claimedDeaths(st *State, at Attempt, since time.Time) int {
 }
 
 // uncounted reports whether ended attempt o neither counts toward DeathCap
-// nor resets the count: it never opened a window, it died at a usage limit
-// or in a host-wide loss, the operator moved it, or it ended vanished for
-// another reason, such as coordination stopped while it ran.
+// nor resets the count: it never opened a window, it died at a usage limit,
+// in a host-wide loss or while an upgrade ran, the operator moved it, or it
+// ended vanished for another reason, such as coordination stopped while it
+// ran.
 func uncounted(o Attempt) bool {
-	return o.Window == "" || o.Limited || o.HostLost || o.Reason == EndMoved || o.Reason == EndVanished && !o.Crashed
+	return o.Window == "" || o.Limited || o.HostLost || o.Upgraded || o.Reason == EndMoved || o.Reason == EndVanished && !o.Crashed
 }
 
 // Vanished reports whether item is an unfinished task whose current attempt
@@ -126,8 +127,8 @@ func earlyDeaths(st *State, at Attempt) int {
 
 // endDead ends at, whose window a host read confirmed gone. An unfinished
 // task's current attempt ends by endTask, a planner's by endPlanner. Only an
-// attempt that died early, died unclaimed in a host-wide loss, or crashed
-// keeps its pane log tail.
+// attempt that died early, died unclaimed in a host-wide loss, died while an
+// upgrade ran, or crashed keeps its pane log tail.
 func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	item := st.Items[at.Item]
 	at.State, at.Ended = "ended", s.now()
@@ -137,7 +138,7 @@ func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	if item.Kind == "task" && item.Attempt == at.ID && item.State != "done" && item.State != "failed" {
 		s.endTask(st, a, item, &at)
 	}
-	keepTail := at.Early || at.Crashed || at.HostLost && at.Reason == EndEarlyDeath
+	keepTail := at.Early || at.Crashed || at.Upgraded || at.HostLost && at.Reason == EndEarlyDeath
 	if !keepTail {
 		at.Tail = ""
 	}
@@ -154,9 +155,10 @@ func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 //
 //  1. it died at a usage limit (at.Limited), or coordination stopped after
 //     it was last seen live: vanished, uncounted;
-//  2. it went in a host-wide loss (at.HostLost): vanished if its session
-//     claimed the task, else an early death with Early unset, a running task
-//     back in todo; neither counts toward the cap or toward the two strikes;
+//  2. it went in a host-wide loss (at.HostLost), or died while an upgrade
+//     ran (at.Upgraded, set here): vanished if its session claimed the task,
+//     else an early death with Early unset, a running task back in todo;
+//     neither counts toward the cap or toward the two strikes;
 //  3. its session claimed the task: vanished, a crash, unless the
 //     DeathCap-1 counted deaths before it were crashes too; then failed;
 //  4. otherwise an early death the first time, with a running task back in
@@ -168,7 +170,7 @@ func (s Service) endTask(st *State, a Actor, item Item, at *Attempt) {
 	switch {
 	case at.Limited || stoppedSince(st, item, *at):
 		at.Reason = EndVanished
-	case at.HostLost:
+	case s.markUpgraded(st, at) || at.HostLost:
 		at.Reason = EndVanished
 		if !claimed(st, *at) {
 			at.Reason = EndEarlyDeath
@@ -187,6 +189,13 @@ func (s Service) endTask(st *State, a Actor, item Item, at *Attempt) {
 		at.Early, at.Reason = true, EndFailed
 		s.failTask(st, a, item)
 	}
+}
+
+// markUpgraded sets at.Upgraded when at died while an upgrade ran, and
+// reports it.
+func (s Service) markUpgraded(st *State, at *Attempt) bool {
+	at.Upgraded = duringUpgrade(st, *at, s.now())
+	return at.Upgraded
 }
 
 // backToTodo returns a running task to todo, for the next pass to dispatch

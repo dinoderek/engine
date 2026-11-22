@@ -2,6 +2,7 @@ package upgrade
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,6 +49,34 @@ func TestUpgradeRunsInOrder(t *testing.T) {
 	wantOutput(t, f, "engine upgrade: 2a08a0c (go1.27.3), the head of main",
 		"box   d8c1744  2a08a0c  0.9.0   set up", "lab   d8c1744  2a08a0c  0.9.0   set up", "mac   d8c1744  2a08a0c  0.9.0   set up",
 		"server: engine-server.service on box was backed up to", "every host is upgraded", "engine ui is not restarted")
+}
+
+// The upgrade marks its start on the server before its first change, and
+// its end after its last; a dry run marks nothing.
+func TestUpgradeMarksItsStartAndEndOnTheServer(t *testing.T) {
+	f := newFleet(t)
+	if _, err := f.run(true); err != nil || len(f.marks) != 0 {
+		t.Fatalf("a dry run: %v, marks %q", err, f.marks)
+	}
+	if _, err := f.run(false); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"start after 0", fmt.Sprintf("end after %d", len(f.log))}; !slices.Equal(f.marks, want) {
+		t.Errorf("marks %q; want %q", f.marks, want)
+	}
+}
+
+// A server that takes no mark, as one older than the marks, leaves a note
+// and the upgrade runs, closed.
+func TestUpgradeRunsWhenTheServerTakesNoMark(t *testing.T) {
+	f := newFleet(t)
+	f.markFail = true
+	closed, err := f.run(false)
+	if err != nil || !closed {
+		t.Fatalf("Run = %v, %v:\n%s", closed, err, f.out.String())
+	}
+	wantOutput(t, f, "note: the server did not record the upgrade's start: unknown operation",
+		"note: the server did not record the upgrade's end: unknown operation", "every host is upgraded")
 }
 
 // The target is read once, and every setup runs the new ~/.local/bin/engine,
@@ -103,17 +132,12 @@ func TestUpgradeRefusesBeforeChangingAnything(t *testing.T) {
 		setup func(f *fakeFleet)
 		want  string
 	}{
-		{"a running task", func(f *fakeFleet) { f.tasks = []Task{{"t1", "done"}, {"t4", "running"}} }, "1 task(s) are running, in review or waiting on the operator: t4 (running)"},
-		{"a task in review", func(f *fakeFleet) { f.tasks = []Task{{"t5", "in-review"}} }, "t5 (in-review)"},
-		{"a task waiting on the operator", func(f *fakeFleet) {
-			f.tasks = []Task{{"t9", "needs-human"}, {"t6", "running"}}
-		}, "2 task(s) are running, in review or waiting on the operator: t6 (running), t9 (needs-human)"},
 		{"no services table", func(f *fakeFleet) {
 			f.writeConfig("hosts.toml", strings.Replace(fleetTOML, "[host.box.services]\nmanager = \"systemd\"\nserver = \"engine-server.service\"\n", "", 1))
 		}, "host box, the server's host, records no [host.box.services] table"},
 		{"an unreachable server host", func(f *fakeFleet) { f.nodes["box"].down = true }, "cannot reach box, the server's host"},
 		{"an inactive unit", func(f *fakeFleet) { f.active = "inactive" }, "the server's unit engine-server.service on box is inactive, not active; start it first (ssh dev@box 'systemctl --user start engine-server.service')"},
-		{"a server that does not answer", func(f *fakeFleet) { f.up = false }, "could not list the server's tasks (unit engine-server.service is active): connection refused"},
+		{"a server that does not answer", func(f *fakeFleet) { f.up = false }, "the server does not answer (unit engine-server.service is active): connection refused"},
 		{"no server host", func(f *fakeFleet) { f.writeConfig("config.toml", "[server]\nurl = \"http://box:7331\"\n") }, "config.toml's [server] names no host"},
 		{"an unknown server host", func(f *fakeFleet) { f.writeConfig("config.toml", "[server]\nhost = \"gone\"\n") }, `config.toml's server host "gone" is not in hosts.toml`},
 		{"no hosts.toml", func(f *fakeFleet) { _ = os.Remove(filepath.Join(f.home, ".config", "engine", "hosts.toml")) }, "hosts.toml"},

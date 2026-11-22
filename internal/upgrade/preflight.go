@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/dinoderek/engine/internal/harness"
@@ -15,8 +14,9 @@ import (
 )
 
 // survey is the preflight, which changes nothing: the fleet from hosts.toml,
-// the server's host from config.toml, its unit answering is-active, no busy
-// task, and each host's engine as it is.
+// the server's host from config.toml, its unit answering is-active, the
+// server answering, and each host's engine as it is. Busy tasks refuse
+// nothing.
 func survey(d Deps) (*fleet, error) {
 	dir := hosts.ConfigDir(d.Home)
 	cfg, caller, err := hosts.Open(dir)
@@ -44,8 +44,8 @@ func survey(d Deps) (*fleet, error) {
 	if err := f.checkServer(); err != nil {
 		return nil, err
 	}
-	if err := f.checkTasks(); err != nil {
-		return nil, err
+	if err := f.d.Answers(); err != nil {
+		return nil, refuse("the server does not answer (unit %s is %s): %v", f.server.Services.Server, f.active, err)
 	}
 	for _, h := range f.hosts {
 		f.results[h.Name] = f.readBefore(h)
@@ -72,26 +72,6 @@ func (f *fleet) checkServer() error {
 		// The server must run under the unit the upgrade stops and starts.
 		start, _ := f.server.ServerShellLine(hosts.ServerStart)
 		return refuse("the server's unit %s on %s is %s, not active; start it first (%s)", f.server.Services.Server, f.server.Name, harness.OrNone(f.active), f.shell(f.server).OnHost(start, false))
-	}
-	return nil
-}
-
-// checkTasks refuses while any task is running, in review or waiting on the
-// operator, naming each.
-func (f *fleet) checkTasks() error {
-	tasks, err := f.d.Tasks()
-	if err != nil {
-		return refuse("could not list the server's tasks (unit %s is %s): %v", f.server.Services.Server, f.active, err)
-	}
-	var held []string
-	for _, t := range tasks {
-		if busy[t.State] {
-			held = append(held, t.ID+" ("+t.State+")")
-		}
-	}
-	if len(held) > 0 {
-		slices.Sort(held)
-		return refuse("%d task(s) are running, in review or waiting on the operator: %s; let them finish first", len(held), strings.Join(held, ", "))
 	}
 	return nil
 }
