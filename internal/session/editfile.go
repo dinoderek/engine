@@ -27,8 +27,9 @@ const editAttempts = 3
 // file alone. The file is replaced in one rename, keeping its mode (0600
 // when new); a symlinked file is replaced at its target.
 //
-// The edit holds the lock <path>.lock (fileLock), which Claude Code takes on
-// its own state file and every engine writer takes, so neither drops the
+// The edit holds the lock <path>.lock (fileLock), named after path as given
+// and not a symlink's target, as Claude Code names the lock it takes on its
+// own state file; every engine writer takes it too, so neither drops the
 // other's change; a lock held past its wait fails with ErrLockHeld. A tool
 // that writes without it is caught by check, called just before the rename:
 // when it says the file changed since the read, the edit starts again, a few

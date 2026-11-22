@@ -51,8 +51,9 @@ func (l fileLock) acquire() error {
 			return fmt.Errorf("lock %s: %w", l.dir, err)
 		}
 		// Two writers taking the same stale lock over at once can both end
-		// up holding it, as with proper-lockfile itself: this follows only a
-		// dead holder, and the stamp check still catches the lost write.
+		// up holding it, as with proper-lockfile itself. That needs a dead
+		// holder's lock, and the stamp check narrows, but does not close,
+		// the chance that one of their writes is lost.
 		if info, err := os.Lstat(l.dir); err == nil && l.now().Sub(info.ModTime()) > lockStale && os.Remove(l.dir) == nil {
 			continue
 		}
