@@ -121,14 +121,11 @@ placement's alone.
 ## Moving a task
 
 A moved task (`control-server.md`) resumes on its old host from the kept
-worktree, uncommitted work too, elsewhere from `origin`'s branch. It waits
-until a pass's `release --moved` (`coordinator.md`) of its old run, window
-open or gone, succeeds, and while the old host is unread, unless the
-operator moved it blind. Until a blind move's old run is released, each
-kickoff warns that the old session may still push: before each push, the
-new session fetches and asks the operator if `origin`'s branch has commits
-it lacks. Releasing work `origin` lacks tells the operator, unless the move
-stayed there.
+worktree, uncommitted work too, elsewhere from `origin`'s branch. For when
+it is dispatched, load `coordinator.md`. Until a blind move's old run is
+released, each kickoff warns that the old session may still push: before
+each push, the new session fetches and asks the operator if `origin`'s
+branch has commits it lacks.
 
 ## Seeing and reaching sessions
 
