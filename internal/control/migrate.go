@@ -37,12 +37,16 @@ func (s *Store) migrate() error {
 	if err != nil {
 		return err
 	}
-	before := flatten(st)
-	for _, l := range locks {
-		before["lock/"+l.Repo] = "legacy"
+	work := st.clone()
+	retire(&work, locks, time.Now().UTC())
+	changes, err := diff(&st, &work)
+	if err != nil {
+		return err
 	}
-	retire(&st, locks, time.Now().UTC())
-	return s.commit(before, flatten(st), migratePlanStates+telegramSchema+fmt.Sprintf("PRAGMA user_version=%d;\n", schemaVersion))
+	for _, l := range locks {
+		changes = append(changes, change{key: "lock/" + l.Repo, del: true})
+	}
+	return s.write(changes, migratePlanStates+telegramSchema+fmt.Sprintf("PRAGMA user_version=%d;\n", schemaVersion))
 }
 
 func retire(st *State, locks []legacyLock, now time.Time) {
