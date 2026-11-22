@@ -156,6 +156,10 @@ func (s *Store) Transaction(fn func(*State) error) error {
 		return err
 	}
 	if err = s.write(changes, ""); err != nil {
+		// A write can fail after SQLite committed it; disk then decides.
+		if disk, _, lerr := s.load(); lerr == nil {
+			s.state = disk
+		}
 		return err
 	}
 	s.state.install(changes, patch)

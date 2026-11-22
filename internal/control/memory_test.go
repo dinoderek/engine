@@ -116,9 +116,7 @@ func TestFailedCommitLeavesMemoryAndDiskUnchanged(t *testing.T) {
 	durable(t, s.Store)
 }
 
-func TestUnencodableRecordFailsBeforeAnyWrite(t *testing.T) {
-	s := service(t)
-	sent := counted(s.Store)
+func TestUnencodableAndUndecodableRecordsAreRefused(t *testing.T) {
 	d := &differ{}
 	d.put("item/x", func() {})
 	if d.err == nil {
@@ -127,8 +125,34 @@ func TestUnencodableRecordFailsBeforeAnyWrite(t *testing.T) {
 	if _, err := decode([]change{{key: "item/x", data: "invalid"}}); err == nil {
 		t.Fatal("an undecodable record was accepted")
 	}
-	if len(*sent) != 0 {
-		t.Fatalf("wrote %q", *sent)
+}
+
+// TestCommitReportedFailedAfterSQLiteTookIt covers a write whose outcome is
+// unknown: memory follows the disk, so a restart changes nothing.
+func TestCommitReportedFailedAfterSQLiteTookIt(t *testing.T) {
+	s := service(t)
+	_, plan := repoPlan(t, s)
+	lost := true
+	s.Store.run = func(ctx context.Context, path, sql string) ([]byte, error) {
+		out, err := SQLite(ctx, path, sql)
+		if lost && strings.Contains(sql, "INSERT INTO records") {
+			return nil, errors.New("killed after the commit")
+		}
+		return out, err
+	}
+	if _, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "kept", Key: "k"}); err == nil {
+		t.Fatal("the lost reply was reported as success")
+	}
+	lost = false
+	durable(t, s.Store)
+	st, _ := s.Store.Snapshot()
+	if st.Updates[len(st.Updates)-1].Body != "kept" {
+		t.Fatal("memory missed the record SQLite took")
+	}
+	// The retry under the same key is answered from the receipt.
+	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "kept", Key: "k"})
+	if again, _ := s.Store.Snapshot(); len(again.Updates) != len(st.Updates) {
+		t.Fatal("the retry wrote the comment twice")
 	}
 }
 
