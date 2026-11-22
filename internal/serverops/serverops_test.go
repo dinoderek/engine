@@ -292,3 +292,16 @@ func TestBadArgumentsAndConfig(t *testing.T) {
 		t.Errorf("no server host: exit %d, %q", code, errOut)
 	}
 }
+
+func TestJSONReportsAConfigItCannotUse(t *testing.T) {
+	r := newRig(t, "mac")
+	r.home = t.TempDir()
+	code, out, errOut := r.main("restart", "--json")
+	var got report
+	if err := json.Unmarshal([]byte(out), &got); err != nil || code != 1 || errOut != "" {
+		t.Fatalf("exit %d, %v, stderr %q:\n%s", code, err, errOut, out)
+	}
+	if got.Op != "restart" || got.OK || len(got.Checks) != 1 || got.Checks[0].Name != "locate" || got.Checks[0].OK {
+		t.Errorf("report %+v", got)
+	}
+}

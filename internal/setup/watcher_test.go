@@ -132,6 +132,13 @@ func TestTheWatcherStepIsIdempotent(t *testing.T) {
 	if token, _ := r.agentFiles(t); !strings.HasPrefix(token, "123456:ZZ") || len(r.local.mutations) != 2 || !strings.HasPrefix(r.local.mutations[0], "launchctl bootout") {
 		t.Errorf("token %q, mutations %q", token, r.local.mutations)
 	}
+	// A new engine changes the agent's build, which reloads it.
+	r.local.mutations = nil
+	r.info.Revision = strings.Repeat("c", 40)
+	mustRun(t, r, "")
+	if _, plist := r.agentFiles(t); !strings.Contains(plist, "<key>ENGINE_WATCH_BUILD</key>\n\t\t<string>"+r.info.String()+"</string>") || len(r.local.mutations) != 2 {
+		t.Errorf("a new build did not reload: %q\n%s", r.local.mutations, plist)
+	}
 	r.local.mutations = nil
 	path := filepath.Join(r.home, ".config", "engine", "watch-telegram-token")
 	if err := os.Chmod(path, 0o644); err != nil {

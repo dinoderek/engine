@@ -50,9 +50,9 @@ bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 
 **Services.** The optional `services` table names the control server's
 `systemctl --user` unit on its host. Another manager, one key without the other, or a unit that is not
-a `.service` name is refused at load. At most one host records it: that
+a `.service` name is refused at load. Only one host may record it: that
 host is where `engine server status|restart` and the watcher reach the
-server.
+server, and each of them refuses a config where several do.
 
 Each harness runs through its pinned `bin`, never a `PATH` lookup. For launch lines and tiers, load `launch-lines.md`.
 

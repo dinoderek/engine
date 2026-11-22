@@ -87,7 +87,7 @@ launchd agent `com.github.dinoderek.engine.watch`, once another host records
 the server's `services` and Telegram is paired there. Setup copies that
 host's chat into the agent's arguments and its bot token to
 `~/.config/engine/watch-telegram-token` (mode 600), and never prints it.
-Rerun setup after re-pairing.
+Rerun setup after re-pairing or updating engine, which reloads the agent.
 
 Every minute the watcher makes one authenticated call through the operator's
 client, bounded at 30 seconds, so a listener whose commands hang counts as

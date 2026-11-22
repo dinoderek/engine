@@ -3,6 +3,7 @@ package watch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,7 +207,7 @@ func TestRunPassesUntilTheContextEnds(t *testing.T) {
 		}
 		return true
 	})
-	if waits != 3 || len(logged) != 2 {
+	if waits != 3 || len(logged) != 5 {
 		t.Errorf("waits %d, logged %q", waits, logged)
 	}
 }
@@ -219,5 +220,38 @@ func TestSleepEndsWithTheContext(t *testing.T) {
 	}
 	if !sleep(context.Background(), 0) {
 		t.Error("a zero sleep did not finish")
+	}
+}
+
+func TestEachFailedCallIsLoggedWithWhy(t *testing.T) {
+	r := newRig(t)
+	var logged []string
+	r.w.Logf = func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
+	r.up = false
+	r.passes(t, 2)
+	r.up = true
+	r.passes(t, 1)
+	want := "engine watch: the server did not answer: context deadline exceeded"
+	if len(logged) != 2 || logged[0] != want {
+		t.Errorf("logged %q, want two of %q", logged, want)
+	}
+}
+
+// An outage that follows an unsent recovery keeps the first outage's time,
+// and the recovery that finally goes out says so.
+func TestAnOutageAfterAnUnsentRecoveryKeepsItsSince(t *testing.T) {
+	r := newRig(t)
+	r.up = false
+	r.passes(t, 2)
+	r.up, r.sendErr = true, errors.New("telegram request failed")
+	_ = r.pass(t)
+	r.up = false
+	_ = r.pass(t)
+	_ = r.pass(t)
+	r.up, r.sendErr = true, nil
+	r.passes(t, 1)
+	want := "Engine server on devbox answers again; it was not answering since 2026-11-22 17:02 UTC."
+	if len(r.sent) != 2 || r.sent[1] != want {
+		t.Errorf("sent %q, want the recovery %q", r.sent, want)
 	}
 }

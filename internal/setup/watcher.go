@@ -137,7 +137,8 @@ func (r *runner) loadAgent(server, plistPath string, changed bool) (harness.Outc
 }
 
 // plist is the agent: engine watch for chat, started at login and kept
-// running, at most one start a minute.
+// running, at most one start a minute. It names the build that set it up,
+// so a new engine changes it and setup reloads the agent.
 func (r *runner) plist(chat int64) string {
 	args := []string{filepath.Join(r.d.Home, ".local", "bin", "engine"), "watch", "--chat", strconv.FormatInt(chat, 10)}
 	var b strings.Builder
@@ -160,6 +161,11 @@ func (r *runner) plist(chat int64) string {
 	<true/>
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>ENGINE_WATCH_BUILD</key>
+		<string>` + escape(r.d.Info.String()) + `</string>
+	</dict>
 	<key>StandardErrorPath</key>
 	<string>` + escape(filepath.Join(r.d.Home, watchLog)) + `</string>
 </dict>

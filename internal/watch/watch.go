@@ -82,7 +82,11 @@ func (w *Watcher) Pass(ctx context.Context) error {
 	case down == nil:
 		st = State{}
 	default:
-		if st.Failures == 0 {
+		if w.Logf != nil {
+			w.Logf("engine watch: the server did not answer: %v", down)
+		}
+		// Since stays the first outage's while its recovery is unsent.
+		if st.Failures == 0 && !st.Alerted {
 			st.Since = w.Now()
 		}
 		st.Failures++

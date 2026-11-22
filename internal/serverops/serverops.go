@@ -85,15 +85,18 @@ func Main(args []string, d Deps, out, errOut io.Writer) int {
 		fmt.Fprint(errOut, Usage)
 		return 2
 	}
+	var r report
 	s, err := locate(d.Home, d.Exec)
-	if err != nil {
+	switch {
+	case err != nil && !asJSON:
 		fmt.Fprintf(errOut, "engine server %s: %v\n", rest[0], err)
 		return 1
-	}
-	var r report
-	if rest[0] == "status" {
+	case err != nil:
+		r = report{Op: rest[0]}
+		r.add("locate", false, err.Error())
+	case rest[0] == "status":
 		r = status(s, d)
-	} else {
+	default:
 		r = restart(s, d)
 	}
 	if asJSON {
