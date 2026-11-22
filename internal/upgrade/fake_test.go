@@ -81,9 +81,12 @@ type fakeFleet struct {
 	// active is is-active's answer; up is whether the server answers.
 	active string
 	up     bool
-	// downTries is how many task lists fail after a start before it answers.
+	// downTries is how many calls fail after a start before it answers.
 	downTries int
-	tasks     []Task
+	// marks are the upgrade's marks the server took, each with how many
+	// changes came before it; markFail fails them.
+	marks    []string
+	markFail bool
 	// plugin fails, by command.
 	pluginFail map[string]bool
 	heads      int // reads of main's head
@@ -126,7 +129,7 @@ func (f *fakeFleet) record(format string, args ...any) {
 func (f *fakeFleet) deps() Deps {
 	return Deps{
 		Home: f.home, Exec: f.exec, GH: f.gh, Harnesses: harness.NewAdapters(f.adapter),
-		Tasks: f.listTasks, Now: func() time.Time { return time.Date(2026, 11, 10, 19, 0, 0, 0, time.UTC) },
+		Answers: f.answers, Mark: f.mark, Now: func() time.Time { return time.Date(2026, 11, 10, 19, 0, 0, 0, time.UTC) },
 		Sleep: func(time.Duration) { f.sleeps++ }, Context: f.ctx,
 	}
 }
@@ -136,15 +139,30 @@ func (f *fakeFleet) run(dryRun bool) (bool, error) {
 	return Run(dryRun, f.deps(), &f.out)
 }
 
-func (f *fakeFleet) listTasks() ([]Task, error) {
+func (f *fakeFleet) answers() error {
 	if !f.up {
-		return nil, errors.New("connection refused")
+		return errors.New("connection refused")
 	}
 	if f.downTries > 0 {
 		f.downTries--
-		return nil, errors.New("connection refused")
+		return errors.New("connection refused")
 	}
-	return f.tasks, nil
+	return nil
+}
+
+func (f *fakeFleet) mark(end bool) error {
+	if f.markFail {
+		return errors.New("unknown operation")
+	}
+	if err := f.answers(); err != nil {
+		return err
+	}
+	what := "start"
+	if end {
+		what = "end"
+	}
+	f.marks = append(f.marks, fmt.Sprintf("%s after %d", what, len(f.log)))
+	return nil
 }
 
 func (f *fakeFleet) gh(_ string, _ []string, _ string, args ...string) (string, error) {
