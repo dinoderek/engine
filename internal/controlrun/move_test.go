@@ -191,3 +191,23 @@ func TestAStrayOnAHostGoneFromHostsTomlHoldsNothing(t *testing.T) {
 		t.Error("an unreachable host's stray is not unknown")
 	}
 }
+
+// The blind move's warning stays in every kickoff until its old window is
+// released, though a session started since has died; a plain move's note
+// is only for the dispatch right after it.
+func TestABlindMovesWarningOutlivesALaterDeath(t *testing.T) {
+	st := control.State{Attempts: map[string]control.Attempt{
+		"a2": {ID: "a2", Item: "t3", Host: "devbox", Reason: control.EndMoved, MovedBlind: true},
+		"a4": {ID: "a4", Item: "t3", Host: "mac", Reason: control.EndVanished, Limited: true},
+	}}
+	next := control.Attempt{ID: "a6", Item: "t3"}
+	if text := movedKickoff(st, next); !strings.Contains(text, "off host devbox") || !strings.Contains(text, "engine ask") || strings.Contains(text, "moved this task here") {
+		t.Errorf("after a death since the blind move: %q", text)
+	}
+	at := st.Attempts["a2"]
+	at.MoveReleased = true
+	st.Attempts["a2"] = at
+	if text := movedKickoff(st, next); text != "" {
+		t.Errorf("once the old window was released: %q", text)
+	}
+}

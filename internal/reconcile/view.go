@@ -187,7 +187,7 @@ func (t Item) taken() bool { return t.claimed() || t.state() == "failed" }
 // moveHeld reports whether a task the operator moved waits before its next
 // dispatch: for a window a moved attempt left, which is released first, or
 // for the old host to answer, unless the operator moved it while that host
-// could not be read.
+// could not be read, or the host is gone from hosts.toml.
 func (v View) moveHeld(t Item) bool {
 	if len(t.Strays) > 0 {
 		return true
@@ -196,8 +196,9 @@ func (v View) moveHeld(t Item) bool {
 	if at.Reason != control.EndMoved || at.MovedBlind || at.MoveReleased {
 		return false
 	}
+	// A host gone from hosts.toml has nothing left to release.
 	h, ok := v.Fleet.Host(at.Host)
-	return !ok || h.Unreachable != "" || h.Status.RunsError != ""
+	return ok && (h.Unreachable != "" || h.Status.RunsError != "")
 }
 
 // Wakeable reports whether a pointer at new updates may be typed into the

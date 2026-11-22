@@ -157,6 +157,22 @@ func TestAReleasedMoveWaitsForNothingAndADoneTasksStrayIsNotPushed(t *testing.T)
 	}
 }
 
+// A move off a host since gone from hosts.toml waits for nothing; a failed
+// task's stray is pushed and reported, as its work may be retried.
+func TestAMoveOffAGoneHostWaitsForNothingAndAFailedTasksStrayIsPushed(t *testing.T) {
+	v := moveView(moved(2, "running", "mac", ""))
+	v.Fleet.Hosts = v.Fleet.Hosts[1:]
+	if got := shows(Decide(v)); got != "dispatch t2 mac claude true" {
+		t.Errorf("off a host gone from hosts.toml: %q", got)
+	}
+	failed := task(2, "failed")
+	failed.Strays = []Stray{{Attempt: control.Attempt{ID: "a2", Item: "t2", Host: "devbox", Reason: control.EndMoved}, Session: Session{Name: "demo-2", Host: "devbox"}}}
+	acts := Decide(moveView(failed, task(3, "running")))
+	if len(acts) == 0 || acts[0].Kind != Release || !acts[0].Moved || acts[0].Stopped {
+		t.Errorf("a failed task's stray: %+v", acts)
+	}
+}
+
 func statusWithRunsError() (s hostops.Status) {
 	s.RunsError = "permission denied"
 	return s

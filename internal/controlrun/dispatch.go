@@ -167,24 +167,30 @@ func kickoff(item control.Item, at control.Attempt, reviewer string, resume bool
 }
 
 // movedKickoff is what the kickoff adds when at follows the operator's move:
-// the attempt just before it ended moved. After a move off a host that could
-// not be read, the old session may still push to the task's branch, so the
-// new one checks origin's branch before each push and asks the operator
-// once it holds commits the new one lacks, rather than merging or
-// overwriting them.
+// the attempt just before it ended moved. While an earlier blind move's
+// window is not yet released, its old session may still push to the task's
+// branch, so the new one checks origin's branch before each push and asks
+// the operator once it holds commits the new one lacks, rather than merging
+// or overwriting them.
 func movedKickoff(st control.State, at control.Attempt) string {
-	var prev control.Attempt
+	var prev, blind control.Attempt
 	for _, o := range st.Attempts {
-		if o.Item == at.Item && control.Number(o.ID) < control.Number(at.ID) && control.Number(o.ID) > control.Number(prev.ID) {
+		if o.Item != at.Item || control.Number(o.ID) >= control.Number(at.ID) {
+			continue
+		}
+		if control.Number(o.ID) > control.Number(prev.ID) {
 			prev = o
 		}
+		if o.Reason == control.EndMoved && o.MovedBlind && !o.MoveReleased {
+			blind = o
+		}
 	}
-	if prev.Reason != control.EndMoved {
-		return ""
+	text := ""
+	if prev.Reason == control.EndMoved {
+		text = " The operator moved this task here from host " + prev.Host + "."
 	}
-	text := " The operator moved this task here from host " + prev.Host + "."
-	if prev.MovedBlind {
-		text += " That host could not be reached, so its old session may still be running and pushing to the task's branch. " +
+	if blind.ID != "" {
+		text += " The operator moved it off host " + blind.Host + " while that host could not be reached, so its old session may still be running and pushing to the task's branch. " +
 			"Before each push, fetch: if origin's branch has commits your branch lacks, do not merge, rebase over or overwrite them; " +
 			"ask the operator (engine ask, class drift) what to keep."
 	}
