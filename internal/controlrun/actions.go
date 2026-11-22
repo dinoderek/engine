@@ -63,6 +63,9 @@ func (c *Coordinator) endAttempt(a reconcile.Action) error {
 		return c.notice(a.Item, "early/"+at.ID, a.Text+" before it claimed the task; the task is dispatched again once"+tails([]control.Attempt{at}))
 	case at.Early:
 		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(st, at)))
+	case at.Crashed:
+		return c.notice(a.Item, "failed/"+at.ID, fmt.Sprintf("%s after claiming the task, %d such deaths in a row; the task failed%s",
+			a.Text, control.DeathCap, tails(lastCrashes(st, at))))
 	}
 	return c.notice(a.Item, "failed/"+at.ID, a.Text)
 }
@@ -98,9 +101,21 @@ func limitWhen(at control.Attempt) string {
 // earlyAttempts are the attempts of at's task that died before claiming it,
 // oldest first, at the newest.
 func earlyAttempts(st control.State, at control.Attempt) []control.Attempt {
+	return attemptsOf(st, at, func(o control.Attempt) bool { return o.Early })
+}
+
+// lastCrashes are the last two crashes of at's item, at the newest: the
+// deaths the cap counted last.
+func lastCrashes(st control.State, at control.Attempt) []control.Attempt {
+	out := attemptsOf(st, at, func(o control.Attempt) bool { return o.Crashed })
+	return out[max(0, len(out)-2):]
+}
+
+// attemptsOf are the attempts of at's item that keep, oldest first.
+func attemptsOf(st control.State, at control.Attempt, keep func(control.Attempt) bool) []control.Attempt {
 	var out []control.Attempt
 	for _, o := range st.Attempts {
-		if o.Item == at.Item && o.Early {
+		if o.Item == at.Item && keep(o) {
 			out = append(out, o)
 		}
 	}

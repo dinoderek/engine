@@ -1,6 +1,9 @@
 package control
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // ClaimWait is how long a started session has to claim its task: write to
 // the server, or stay live. A window that dies sooner without either ended
@@ -23,18 +26,14 @@ const (
 	EndStopped = "stopped"
 )
 
-// resumable reports whether task item still has work to resume after its
-// attempt at's window was confirmed gone: its coordination was stopped after
-// the window was last seen live, as when a host reboots while the operator
-// has a plan stopped; or the window was seen live, the task has a PR or an
-// open operator question, and the attempt was not itself the resume of a
-// vanished one. So a session that crashes on launch, or every resume of
-// one, is not dispatched again and again.
-func resumable(st *State, item Item, at Attempt) bool {
-	work := item.PR != "" || OwnQuestion(st, item.ID) > 0
-	if work && !at.LiveAt.IsZero() && !resumedVanished(st, at) {
-		return true
-	}
+// DeathCap is how many claimed deaths in a row fail a task, or stop the
+// coordination of a plan whose planner wrote tasks.
+const DeathCap = 3
+
+// stoppedSince reports whether coordination of item's plan stopped after
+// attempt at was last seen live, or after it started when never seen live,
+// as when a host reboots while the operator has a plan stopped.
+func stoppedSince(st *State, item Item, at Attempt) bool {
 	stopped := Root(st, item).StoppedAt
 	last := at.Started
 	if at.LiveAt.After(last) {
@@ -43,18 +42,38 @@ func resumable(st *State, item Item, at Attempt) bool {
 	return !stopped.IsZero() && !stopped.Before(last)
 }
 
-// resumedVanished reports whether the attempt of at's task that ran just
-// before at ended vanished. Attempt numbers are allocated in order. An
-// attempt that never opened a window, such as a dispatch the operator ended
-// unlaunched, ran nothing, so at is not its resume.
-func resumedVanished(st *State, at Attempt) bool {
-	var prev Attempt
+// claimedDeaths counts the claimed deaths that ran in a row just before at,
+// among the attempts of its item started at or after since. Newest first, an
+// uncounted attempt is skipped; any other ending, such as an early death, a
+// session's own release after its work was done, or the operator's stop or
+// retry, ends the run.
+func claimedDeaths(st *State, at Attempt, since time.Time) int {
+	var earlier []Attempt
 	for _, o := range st.Attempts {
-		if o.Item == at.Item && o.Window != "" && Number(o.ID) < Number(at.ID) && Number(o.ID) > Number(prev.ID) {
-			prev = o
+		if o.Item == at.Item && Number(o.ID) < Number(at.ID) && !o.Started.Before(since) {
+			earlier = append(earlier, o)
 		}
 	}
-	return prev.Reason == EndVanished
+	slices.SortFunc(earlier, func(x, y Attempt) int { return Number(y.ID) - Number(x.ID) })
+	n := 0
+	for _, o := range earlier {
+		switch {
+		case o.Crashed && o.Reason == EndVanished:
+			n++
+		case uncounted(o):
+		default:
+			return n
+		}
+	}
+	return n
+}
+
+// uncounted reports whether ended attempt o neither counts toward DeathCap
+// nor resets the count: it never opened a window, it died at a usage limit,
+// or it ended vanished for another reason, such as coordination stopped
+// while it ran.
+func uncounted(o Attempt) bool {
+	return o.Window == "" || o.Limited || o.Reason == EndVanished && !o.Crashed
 }
 
 // Vanished reports whether item is an unfinished task whose current attempt
@@ -101,13 +120,8 @@ func earlyDeaths(st *State, at Attempt) int {
 }
 
 // endDead ends at, whose window a host read confirmed gone. An unfinished
-// task's current attempt ends vanished when the task is resumable, leaving
-// its state alone, and its merge queue entry stays queued. A window that died
-// before its session claimed the task ends early-death the first time, with
-// a running task back in todo, and failed the second. Otherwise it ends
-// failed and so does the task, which leaves the queue. A window that died at
-// a usage limit (at.Limited) is always resumable: the limit paused the work.
-// A planner's attempt ends by endPlanner.
+// task's current attempt ends by endTask, a planner's by endPlanner. Only an
+// attempt that died early or crashed keeps its pane log tail.
 func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	item := st.Items[at.Item]
 	at.State, at.Ended = "ended", s.now()
@@ -115,28 +129,9 @@ func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 		s.endPlanner(st, item, &at)
 	}
 	if item.Kind == "task" && item.Attempt == at.ID && item.State != "done" && item.State != "failed" {
-		at.Reason = EndFailed
-		resume := at.Limited || resumable(st, item, at)
-		early := !resume && !claimed(st, at)
-		switch {
-		case resume:
-			at.Reason = EndVanished
-		case early && earlyDeaths(st, at) == 0:
-			at.Reason = EndEarlyDeath
-			if item.State == "running" {
-				item.State = "todo"
-				item.Version++
-				st.Items[item.ID] = item
-			}
-		default:
-			withdraw(st, a, item, "its session failed", s.now())
-			item.State = "failed"
-			item.Version++
-			st.Items[item.ID] = item
-		}
-		at.Early = early
+		s.endTask(st, a, item, &at)
 	}
-	if !at.Early {
+	if !at.Early && !at.Crashed {
 		at.Tail = ""
 	}
 	st.Attempts[at.ID] = at
@@ -145,6 +140,50 @@ func (s Service) endDead(st *State, a Actor, at Attempt, body string) Attempt {
 	}
 	st.update(a, Request{ID: at.Item}, "execution-ended", body, s.now())
 	return at
+}
+
+// endTask sets how at, the current attempt of unfinished task item, ends,
+// by the first rule that applies:
+//
+//  1. it died at a usage limit (at.Limited), or coordination stopped after
+//     it was last seen live: vanished, uncounted;
+//  2. its session claimed the task: vanished, a crash, unless the
+//     DeathCap-1 counted deaths before it were crashes too; then failed;
+//  3. otherwise an early death the first time, with a running task back in
+//     todo, and failed the second.
+//
+// A vanished task keeps its state and its merge queue entry, and is
+// dispatched again as a resume; a failed one leaves the queue.
+func (s Service) endTask(st *State, a Actor, item Item, at *Attempt) {
+	switch {
+	case at.Limited || stoppedSince(st, item, *at):
+		at.Reason = EndVanished
+	case claimed(st, *at):
+		at.Crashed, at.Reason = true, EndVanished
+		if claimedDeaths(st, *at, time.Time{}) >= DeathCap-1 {
+			at.Reason = EndFailed
+			s.failTask(st, a, item)
+		}
+	case earlyDeaths(st, *at) == 0:
+		at.Early, at.Reason = true, EndEarlyDeath
+		if item.State == "running" {
+			item.State = "todo"
+			item.Version++
+			st.Items[item.ID] = item
+		}
+	default:
+		at.Early, at.Reason = true, EndFailed
+		s.failTask(st, a, item)
+	}
+}
+
+// failTask fails item after its session's death, withdrawing it from the
+// merge queue.
+func (s Service) failTask(st *State, a Actor, item Item) {
+	withdraw(st, a, item, "its session failed", s.now())
+	item.State = "failed"
+	item.Version++
+	st.Items[item.ID] = item
 }
 
 // endUnlaunched ends a dispatching attempt that its host confirmed never

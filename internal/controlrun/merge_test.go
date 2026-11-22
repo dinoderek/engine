@@ -248,10 +248,11 @@ func TestAVanishedHeadMergesWithoutItsSession(t *testing.T) {
 	}
 }
 
-func TestADeadExecutionFailsAndLeavesTheQueue(t *testing.T) {
+func TestADeadExecutionAtTheCapFailsAndLeavesTheQueue(t *testing.T) {
 	c, m, task, _ := requested(t, reply(hostops.CodePendingChecks, "running"))
 	m.status.Windows[0].Alive = false
 	st, _ := c.Service.Store.Snapshot()
+	crashedBefore(t, c, st.Attempts[st.Items[task.ID].Attempt])
 	if err := c.ConfirmEnded(st.Items[task.ID].Attempt); err != nil {
 		t.Fatal(err)
 	}

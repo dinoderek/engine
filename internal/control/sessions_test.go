@@ -224,7 +224,7 @@ func TestSessionViewKeepsAVanishedAttemptUntilItsResume(t *testing.T) {
 	seenLive(t, s, out.Attempt.ID)
 	call(t, s, otherWorker, Request{Op: "say", ID: failed.ID, Body: "started"})
 	call(t, s, op, Request{Op: "attempt-reconcile", ID: out.Attempt.ID, Body: "host rebooted"})
-	call(t, s, op, Request{Op: "attempt-reconcile", ID: other.Attempt.ID, Body: "crashed"})
+	crashOut(t, s, failed.ID)
 	rows := sessionRows(t, s)
 	row, ok := rows[task.ID]
 	if !ok || row.Observed != "exited" || row.Feedback == nil || row.Feedback.Update != question.ID {
