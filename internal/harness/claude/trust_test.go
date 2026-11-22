@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -235,7 +236,7 @@ func TestTrustFolderRetriesWhenTheFileChanges(t *testing.T) {
 	if err := os.WriteFile(config, []byte(`{"a": 1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := trustFolder(config, dir, writerFor(t, editAttempts-1)); err != nil {
+	if err := trustFolder(config, []string{dir}, writerFor(t, editAttempts-1)); err != nil {
 		t.Fatal(err)
 	}
 	if !trusted(t, config, dir) {
@@ -250,7 +251,7 @@ func TestTrustFolderGivesUpOnABusyFile(t *testing.T) {
 	if err := os.WriteFile(config, []byte(orig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err := trustFolder(config, dir, writerFor(t, editAttempts))
+	err := trustFolder(config, []string{dir}, writerFor(t, editAttempts))
 	if err == nil || !strings.Contains(err.Error(), "kept changing") {
 		t.Errorf("err = %v", err)
 	}
@@ -262,24 +263,49 @@ func TestTrustFolderGivesUpOnABusyFile(t *testing.T) {
 	}
 }
 
-// A session's trust covers its worktree and the plugin directory its launch
-// adds, whose add-directory dialog would otherwise stop the session before
-// it starts.
-func TestLauncherTrustsTheWorktreeAndThePluginDir(t *testing.T) {
+// A session's trust covers its worktree, its clone, whose key Claude Code
+// checks first for any of the clone's worktrees, and the plugin directory its
+// launch adds, whose add-directory dialog would otherwise stop the session
+// before it starts.
+func TestLauncherTrustsTheWorktreeItsCloneAndThePluginDir(t *testing.T) {
 	home := t.TempDir()
 	cfg := filepath.Join(home, "cfg")
 	if err := os.Mkdir(cfg, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	getenv := func(k string) string { return map[string]string{"CLAUDE_CONFIG_DIR": cfg}[k] }
-	dir := t.TempDir()
-	if err := New(harness.Env{Home: home, Getenv: getenv}).Session("r-7").Trust(dir, filepath.Dir(dir), false); err != nil {
+	dir, clone := t.TempDir(), t.TempDir()
+	if err := New(harness.Env{Home: home, Getenv: getenv}).Session("r-7").Trust(dir, clone, false); err != nil {
 		t.Fatal(err)
 	}
 	config := Config(getenv, home)
-	for _, d := range []string{dir, PluginDir(getenv, home)} {
+	for _, d := range []string{dir, clone, PluginDir(getenv, home)} {
 		if !trusted(t, config, d) {
 			t.Errorf("%s not trusted:\n%s", d, readFile(config))
+		}
+	}
+}
+
+// Spawns on one host trust their worktrees at the same time; every entry
+// stays.
+func TestConcurrentTrustKeepsEveryFolder(t *testing.T) {
+	config := filepath.Join(t.TempDir(), ".claude.json")
+	dirs := make([]string, 8)
+	for i := range dirs {
+		dirs[i] = t.TempDir()
+	}
+	var wg sync.WaitGroup
+	for _, d := range dirs {
+		wg.Go(func() {
+			if err := TrustFolder(config, d); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	for _, d := range dirs {
+		if !trusted(t, config, d) {
+			t.Errorf("%s lost:\n%s", d, readFile(config))
 		}
 	}
 }

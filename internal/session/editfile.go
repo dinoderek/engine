@@ -25,12 +25,24 @@ const editAttempts = 3
 // EditFile rewrites the file at path with edit, which gets the file's bytes
 // (nil when it is missing) and returns the new bytes, or nil to leave the
 // file alone. The file is replaced in one rename, keeping its mode (0600
-// when new); a symlinked file is replaced at its target. Tools that share
-// the file write it without a lock engine could take, so when check, called
-// just before the rename, says the file changed since the read, the edit
-// starts again, a few times at most, then fails with ErrKeptChanging. A nil
-// check is FileStamp; tests replace it to play a concurrent writer.
+// when new); a symlinked file is replaced at its target.
+//
+// The edit holds the lock <path>.lock (fileLock), which Claude Code takes on
+// its own state file and every engine writer takes, so neither drops the
+// other's change; a lock held past its wait fails with ErrLockHeld. A tool
+// that writes without it is caught by check, called just before the rename:
+// when it says the file changed since the read, the edit starts again, a few
+// times at most, then fails with ErrKeptChanging. A nil check is FileStamp;
+// tests replace it to play a concurrent writer.
 func EditFile(path string, check func(string) (Stamp, error), edit func(data []byte) ([]byte, error)) error {
+	return editFile(lockFor(path), path, check, edit)
+}
+
+func editFile(lock fileLock, path string, check func(string) (Stamp, error), edit func(data []byte) ([]byte, error)) (err error) {
+	if err := lock.acquire(); err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, lock.release()) }()
 	if check == nil {
 		check = stamp
 	}

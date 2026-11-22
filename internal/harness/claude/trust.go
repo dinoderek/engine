@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/dinoderek/engine/internal/session"
 )
@@ -34,28 +35,32 @@ func PluginDir(getenv func(string) string, home string) string {
 	return filepath.Join(dir, "plugins", "cache", Marketplace)
 }
 
-// TrustFolder marks dir as trusted in the Claude Code state file at config,
-// so a session started there skips the workspace trust dialog, which would
+// TrustFolder marks dirs as trusted in the Claude Code state file at config,
+// so a session started in one skips the workspace trust dialog, which would
 // otherwise stop an unattended launch (its default answer exits). It sets
-// projects[<dir>].hasTrustDialogAccepted, as Claude Code itself does, for dir
-// and for its resolved path when that differs. Every other value is kept as
-// written (keys are re-sorted and the file re-indented). Claude Code rewrites
-// the file too, so the edit retries as session.EditFile says. A file that is
-// not a JSON object is left alone and reported.
-func TrustFolder(config, dir string) error { return trustFolder(config, dir, nil) }
+// projects[<dir>].hasTrustDialogAccepted, as Claude Code itself does, for
+// each dir and for its resolved path when that differs, in one edit. Every
+// other value is kept as written (keys are re-sorted and the file
+// re-indented). The edit holds Claude Code's own lock on the file and
+// retries as session.EditFile says. A file that is not a JSON object is left
+// alone and reported.
+func TrustFolder(config string, dirs ...string) error { return trustFolder(config, dirs, nil) }
 
 // trustFolder is TrustFolder with the file's stamp read by check, which tests
 // replace to play a concurrent writer.
-func trustFolder(config, dir string, check func(string) (session.Stamp, error)) error {
-	keys := session.TrustKeys(dir)
+func trustFolder(config string, dirs []string, check func(string) (session.Stamp, error)) error {
+	var keys []string
+	for _, d := range dirs {
+		keys = append(keys, session.TrustKeys(d)...)
+	}
 	err := session.EditFile(config, check, func(data []byte) ([]byte, error) {
 		if data == nil {
 			data = []byte("{}")
 		}
 		return trust(data, keys)
 	})
-	if errors.Is(err, session.ErrKeptChanging) {
-		return fmt.Errorf("%w; trust %s by hand", err, dir)
+	if errors.Is(err, session.ErrKeptChanging) || errors.Is(err, session.ErrLockHeld) {
+		return fmt.Errorf("%w; trust %s by hand", err, strings.Join(dirs, " and "))
 	}
 	return err
 }
