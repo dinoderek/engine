@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -8,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // change is one record a transaction wrote or deleted.
@@ -175,35 +177,32 @@ func (s *State) drop(kind, id string) {
 // for the migration; a version 2 database has none.
 func (s *Store) load() (State, []legacyLock, error) {
 	st := emptyState()
-	out, err := s.sql("SELECT key,data FROM records ORDER BY key;")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	rows, err := s.readers.QueryContext(ctx, "SELECT key,data FROM records ORDER BY key")
 	if err != nil {
 		return st, nil, err
 	}
-	if len(strings.TrimSpace(string(out))) == 0 {
-		return st, nil, nil
-	}
-	var rows []struct {
-		Key  string
-		Data string
-	}
-	if err = json.Unmarshal(out, &rows); err != nil {
-		return st, nil, err
-	}
+	defer func() { _ = rows.Close() }()
 	var locks []legacyLock
-	for _, row := range rows {
-		if strings.HasPrefix(row.Key, "lock/") {
+	for rows.Next() {
+		var key, data string
+		if err = rows.Scan(&key, &data); err != nil {
+			return st, nil, err
+		}
+		if strings.HasPrefix(key, "lock/") {
 			var l legacyLock
-			if err = json.Unmarshal([]byte(row.Data), &l); err != nil {
-				return st, nil, fmt.Errorf("control record %s: %w", row.Key, err)
+			if err = json.Unmarshal([]byte(data), &l); err != nil {
+				return st, nil, fmt.Errorf("control record %s: %w", key, err)
 			}
 			locks = append(locks, l)
 			continue
 		}
-		if err = loadRecord(&st, row.Key, []byte(row.Data)); err != nil {
-			return st, nil, fmt.Errorf("control record %s: %w", row.Key, err)
+		if err = loadRecord(&st, key, []byte(data)); err != nil {
+			return st, nil, fmt.Errorf("control record %s: %w", key, err)
 		}
 	}
-	return st, locks, nil
+	return st, locks, rows.Err()
 }
 
 func loadRecord(s *State, key string, b []byte) error {

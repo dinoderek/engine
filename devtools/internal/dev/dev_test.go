@@ -126,7 +126,17 @@ func TestDoctor(t *testing.T) {
 
 	tool.LookPath = func(name string) (string, error) { return "/bin/" + name, nil }
 	stdout.Reset()
-	want(t, tool.Doctor(), 0, stdout, "doctor: ready")
+	want(t, tool.Doctor(), 0, stdout, "doctor: ready", "ok   sqlite3 (Codex reader tests)")
+
+	tool.LookPath = func(name string) (string, error) {
+		if name == "sqlite3" || name == "brew" {
+			return "", errors.New("missing")
+		}
+		return "/bin/" + name, nil
+	}
+	stdout.Reset()
+	want(t, tool.Doctor(), 1, stdout, "FAIL sqlite3 (Codex reader tests)", "install sqlite3")
+	tool.LookPath = func(name string) (string, error) { return "/bin/" + name, nil }
 
 	tool.GoVersion = "go1.26.0"
 	stdout.Reset()

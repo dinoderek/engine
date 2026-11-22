@@ -1,10 +1,9 @@
 package control
 
 import (
-	"context"
+	"database/sql"
 	"errors"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -21,17 +20,31 @@ func durable(t *testing.T, s *Store) {
 	}
 }
 
-// counted records the SQL the store sends from now on.
-func counted(s *Store) *[]string {
-	var sent []string
-	s.run = func(ctx context.Context, path, sql string) ([]byte, error) {
-		sent = append(sent, sql)
-		return SQLite(ctx, path, sql)
+// counted audits record writes at SQLite's boundary, inside the transaction.
+func counted(s *Store) *[]int {
+	_, err := s.writer.Exec(`CREATE TEMP TABLE audit (key TEXT);
+ CREATE TEMP TRIGGER audit_insert AFTER INSERT ON records BEGIN INSERT INTO audit VALUES(new.key); END;
+ CREATE TEMP TRIGGER audit_update AFTER UPDATE ON records BEGIN INSERT INTO audit VALUES(new.key); END;
+ CREATE TEMP TRIGGER audit_delete AFTER DELETE ON records BEGIN INSERT INTO audit VALUES(old.key); END;`)
+	if err != nil {
+		panic(err)
+	}
+	var sent []int
+	s.commit = func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRow("SELECT count(*) FROM audit").Scan(&n); err != nil {
+			return err
+		}
+		sent = append(sent, n)
+		if _, err := tx.Exec("DELETE FROM audit"); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 	return &sent
 }
 
-func TestReadsNeverQueryAndWritesSendOnlyChangedRecords(t *testing.T) {
+func TestReadsNeverCommitAndWritesSendOnlyChangedRecords(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "one"})
@@ -43,15 +56,12 @@ func TestReadsNeverQueryAndWritesSendOnlyChangedRecords(t *testing.T) {
 		call(t, s, op, r)
 	}
 	if len(*sent) != 0 {
-		t.Fatalf("reads ran SQL: %q", *sent)
+		t.Fatalf("reads ran SQL: %v", *sent)
 	}
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "two"})
-	if len(*sent) != 1 || strings.Contains((*sent)[0], "SELECT") {
-		t.Fatalf("a write sent %q", *sent)
-	}
 	// The comment is one update and its receipt; no other record is resent.
-	if n := strings.Count((*sent)[0], "INSERT INTO records"); n != 2 {
-		t.Fatalf("a comment wrote %d records: %s", n, (*sent)[0])
+	if len(*sent) != 1 || (*sent)[0] != 2 {
+		t.Fatalf("a comment wrote %v records", *sent)
 	}
 	durable(t, s.Store)
 }
@@ -95,7 +105,7 @@ func TestFailedCommitLeavesMemoryAndDiskUnchanged(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
 	before, _ := s.Store.Snapshot()
-	s.Store.run = func(context.Context, string, string) ([]byte, error) { return nil, errors.New("disk full") }
+	s.Store.commit = func(*sql.Tx) error { return errors.New("disk full") }
 	if _, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "lost", Key: "k"}); err == nil {
 		t.Fatal("a failed commit succeeded")
 	}
@@ -108,7 +118,7 @@ func TestFailedCommitLeavesMemoryAndDiskUnchanged(t *testing.T) {
 	if !errors.Is(err, refused) {
 		t.Fatalf("got %v", err)
 	}
-	s.Store.run = SQLite
+	s.Store.commit = (*sql.Tx).Commit
 	after, _ := s.Store.Snapshot()
 	if fingerprint(before) != fingerprint(after) {
 		t.Fatal("a failed transaction changed memory")
@@ -133,12 +143,14 @@ func TestCommitReportedFailedAfterSQLiteTookIt(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
 	lost := true
-	s.Store.run = func(ctx context.Context, path, sql string) ([]byte, error) {
-		out, err := SQLite(ctx, path, sql)
-		if lost && strings.Contains(sql, "INSERT INTO records") {
-			return nil, errors.New("killed after the commit")
+	s.Store.commit = func(tx *sql.Tx) error {
+		if err := tx.Commit(); err != nil {
+			return err
 		}
-		return out, err
+		if lost {
+			return errors.New("killed after the commit")
+		}
+		return nil
 	}
 	if _, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "kept", Key: "k"}); err == nil {
 		t.Fatal("the lost reply was reported as success")
@@ -323,7 +335,7 @@ func TestEveryKindOfChangeIsDurable(t *testing.T) {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(path, nil)
+	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +358,7 @@ func TestUnchangedTransactionWritesNothing(t *testing.T) {
 		return nil
 	})
 	if err != nil || len(*sent) != 0 {
-		t.Fatalf("an unchanged transaction wrote %q (%v)", *sent, err)
+		t.Fatalf("an unchanged transaction wrote %v (%v)", *sent, err)
 	}
 }
 

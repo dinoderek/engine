@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,10 +18,7 @@ import (
 
 func environment(t *testing.T) (Env, control.Service) {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 absent")
-	}
-	st, err := control.Open(filepath.Join(t.TempDir(), "db"), nil)
+	st, err := control.Open(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}

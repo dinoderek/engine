@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -109,10 +108,7 @@ func (h *host) ControlSpawn(r hostops.ControlRequest) (hostops.Spawned, error) {
 
 func setup(t *testing.T) (*Coordinator, *host, control.Item, control.Item, control.Item) {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 absent")
-	}
-	store, err := control.Open(filepath.Join(t.TempDir(), "db"), nil)
+	store, err := control.Open(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}

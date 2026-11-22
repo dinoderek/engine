@@ -157,7 +157,7 @@ func reopen(t *testing.T, s Service) *Store {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(path, nil)
+	store, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

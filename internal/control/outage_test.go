@@ -63,7 +63,7 @@ func TestThePassAtSurvivesAStoreReopen(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(path, nil)
+	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

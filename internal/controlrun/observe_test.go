@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -83,10 +82,7 @@ type observerFixture struct {
 
 func newObserverFixture(t *testing.T, names ...string) *observerFixture {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 absent")
-	}
-	store, err := control.Open(filepath.Join(t.TempDir(), "db"), nil)
+	store, err := control.Open(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -367,10 +366,7 @@ func TestMainParsesHost(t *testing.T) {
 // service: the question is still readable, so the request is the same and the
 // server replays the first result; a new key for it gets the server's refusal.
 func TestAResentResolveReplaysAgainstTheRealServer(t *testing.T) {
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 is absent")
-	}
-	store, err := control.Open(filepath.Join(t.TempDir(), "control.db"), nil)
+	store, err := control.Open(filepath.Join(t.TempDir(), "control.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

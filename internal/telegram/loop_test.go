@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -71,11 +70,8 @@ func testLoop(t *testing.T) (*Loop, *botServer, string) {
 // unpairedLoop is a loop that has never passed: no delivery cursor yet.
 func unpairedLoop(t *testing.T) (*Loop, *botServer, string) {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 missing")
-	}
 	path := filepath.Join(t.TempDir(), "control.db")
-	store, err := control.Open(path, nil)
+	store, err := control.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +146,7 @@ func TestQuestionSendsOnceRetriesAndRestarts(t *testing.T) {
 	if err = l.Service.Store.Backup(path); err != nil {
 		t.Fatal(err)
 	}
-	store, err := control.Open(path, nil)
+	store, err := control.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +283,7 @@ func TestPendingSendAndDigestThrottleSurviveReopen(t *testing.T) {
 	if err := l.Service.Store.Backup(path); err != nil {
 		t.Fatal(err)
 	}
-	store, err := control.Open(path, nil)
+	store, err := control.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +337,7 @@ func TestRunPollsAndPersistsOffsetBeforeRestart(t *testing.T) {
 	if err = l.Service.Store.Backup(path); err != nil {
 		t.Fatal(err)
 	}
-	store, err := control.Open(path, nil)
+	store, err := control.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +415,7 @@ func TestPermanentEditFailureDoesNotBlockLaterDeliveries(t *testing.T) {
 	if err := l.Service.Store.Backup(path); err != nil {
 		t.Fatal(err)
 	}
-	store, err := control.Open(path, nil)
+	store, err := control.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

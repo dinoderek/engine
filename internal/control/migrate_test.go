@@ -13,6 +13,7 @@ import (
 // unanswered merge request from another and a plan in a derived state, and
 // reopens it.
 func TestMigrationRetiresLocksAndQueuesPendingRequests(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
 	for _, version := range []int{1, 2} {
 		t.Run(fmt.Sprint("from version ", version), func(t *testing.T) { migrateFrom(t, version) })
 	}
@@ -29,17 +30,14 @@ func migrateFrom(t *testing.T, version int) {
 	call(t, s, a, ready(holder.ID, good()))
 	// Version 1 had no queue: the requests were bare updates, and a lock row.
 	lock, _ := json.Marshal(map[string]any{"repo": repo.ID, "attempt": holding.Attempt.ID, "token": "secret", "acquired": "2026-11-07T09:00:00Z"})
-	sql := "BEGIN IMMEDIATE; DELETE FROM records WHERE key LIKE 'queue/%'; INSERT INTO records(key,data) VALUES(" +
-		literal("lock/"+repo.ID) + "," + literal(string(lock)) + "); UPDATE records SET data = json_set(data, '$.state', 'executing') WHERE key = " +
-		literal("item/"+plan.ID) + fmt.Sprintf("; PRAGMA user_version=%d; COMMIT;", version)
-	if _, err := s.Store.sql(sql); err != nil {
+	if err := s.Store.write([]change{{key: "lock/" + repo.ID, data: string(lock)}}, "DELETE FROM records WHERE key LIKE 'queue/%'; "+"UPDATE records SET data=json_set(data,'$.state','executing') WHERE key='item/"+plan.ID+"';"+fmt.Sprintf("PRAGMA user_version=%d;", version)); err != nil {
 		t.Fatal(err)
 	}
 	path := s.Store.path
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(path, nil)
+	store, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

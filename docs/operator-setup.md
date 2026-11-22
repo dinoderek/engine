@@ -33,7 +33,7 @@ For Telegram alerts and pairing, load `telegram.md`.
 ## Each host
 
 **The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
-`sqlite3` on a Codex host, to read the daemon's connection), and put
+`sqlite3` only on a Codex host, to read the daemon's connection), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
 name: `hosts-and-sessions.md`, "Hosts") and `~/.config/engine/hosts.toml` (the same on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
@@ -184,7 +184,7 @@ when you like:
   installs on the Mac, says so on Telegram (load `telegram.md`). From any
   host, `engine server status` shows its unit, API, database, disk and last 50
   log lines, and `engine server restart` restarts its unit; both take
-  `--json`.
+  `--json`. The database check is unknown without `sqlite3` on the server.
 
 A task with many `review` rulings had a weak card (`execution-protocol.md`,
 "Rulings and hard stops"): raise it at the next Prepare.
