@@ -18,7 +18,7 @@ const OutageGap = 5 * time.Minute
 type outage struct{ from, to time.Time }
 
 // startPass saves this pass's start before any host is read. A start more
-// than OutageGap after the saved one marks an outage, whose pass restarts
+// than OutageGap after the coordinator was last known to run marks an outage, whose pass restarts
 // every stall timer; the first pass ever, with nothing saved, marks none.
 func (c *Coordinator) startPass() error {
 	now := c.now()
@@ -33,8 +33,13 @@ func (c *Coordinator) startPass() error {
 	return nil
 }
 
-// endPass drops the outage once every session was offered its wake.
+// endPass saves the end of the pass, so a pass that ran longer than
+// OutageGap is not taken for an outage by the next, and drops the outage once
+// every session was offered its wake.
 func (c *Coordinator) endPass(err error) {
+	if saveErr := c.Service.Store.EndPass(c.now()); saveErr != nil {
+		c.log("save the end of the pass: %v", saveErr)
+	}
 	if err == nil && !c.keepOutage {
 		c.outage = nil
 	}

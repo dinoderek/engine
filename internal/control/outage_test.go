@@ -53,7 +53,7 @@ func TestAnOutageClearsTheStallTimersOfLiveAttemptsOnly(t *testing.T) {
 	}
 }
 
-func TestThePassStartSurvivesAStoreReopen(t *testing.T) {
+func TestThePassAtSurvivesAStoreReopen(t *testing.T) {
 	store := service(t).Store
 	path := store.path
 	at := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
@@ -69,7 +69,23 @@ func TestThePassStartSurvivesAStoreReopen(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
 	st, _ := reopened.Snapshot()
-	if !st.PassStart.Equal(at) {
-		t.Errorf("saved pass start %v after reopen, want %v", st.PassStart, at)
+	if !st.PassAt.Equal(at) {
+		t.Errorf("saved pass start %v after reopen, want %v", st.PassAt, at)
+	}
+}
+
+func TestEndPassMovesTheSavedTimeForwardOnly(t *testing.T) {
+	store := service(t).Store
+	t0 := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+	if _, _, err := store.StartPass(t0, 5*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	for _, at := range []time.Time{t0.Add(7 * time.Minute), t0.Add(time.Minute)} {
+		if err := store.EndPass(at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, outage, err := store.StartPass(t0.Add(8*time.Minute), 5*time.Minute); err != nil || outage {
+		t.Errorf("pass a minute after a long pass ended: outage %v, err %v; want none", outage, err)
 	}
 }

@@ -184,8 +184,8 @@ func flatten(s State) map[string]string {
 	records := map[string]string{}
 	put := func(key string, v any) { b, _ := json.Marshal(v); records[key] = string(b) }
 	put("next", s.Next)
-	if !s.PassStart.IsZero() {
-		put("pass", s.PassStart)
+	if !s.PassAt.IsZero() {
+		put("pass", s.PassAt)
 	}
 	for k, v := range s.Items {
 		put("item/"+k, v)
@@ -249,7 +249,7 @@ func loadRecord(s *State, key string, b []byte) error {
 	case "next":
 		return json.Unmarshal(b, &s.Next)
 	case "pass":
-		return json.Unmarshal(b, &s.PassStart)
+		return json.Unmarshal(b, &s.PassAt)
 	case "item":
 		var v Item
 		if err := json.Unmarshal(b, &v); err != nil {

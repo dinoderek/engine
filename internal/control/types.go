@@ -217,9 +217,10 @@ type State struct {
 	Auth     map[string]Actor      `json:"auth"`
 	Receipts map[string]receipt    `json:"receipts"`
 	Next     int                   `json:"next"`
-	// PassStart is when the newest coordinator pass started; zero before the
-	// first.
-	PassStart time.Time `json:"pass_start,omitzero"`
+	// PassAt is the last time the coordinator was known to run: the start of
+	// its newest pass, or the end of it once it finished; zero before the
+	// first pass.
+	PassAt time.Time `json:"pass_at,omitzero"`
 }
 
 func emptyState() State {

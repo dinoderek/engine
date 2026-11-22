@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
+	"github.com/dinoderek/engine/internal/hosts"
 	"github.com/dinoderek/engine/internal/reconcile"
+	"github.com/dinoderek/engine/internal/remote"
 	"github.com/dinoderek/engine/internal/session"
 )
 
@@ -184,5 +187,33 @@ func execute2(t *testing.T, c *Coordinator, attempt string, r control.Request) {
 	r.Key = control.Secret()
 	if _, err := c.Service.Execute(control.Actor{Name: attempt, Role: "worker", Attempt: attempt}, r); err != nil {
 		t.Fatal(r.Op, err)
+	}
+}
+
+// slowHost is a host whose status read takes d on the test's clock, as a
+// slow host call does inside a pass.
+type slowHost struct {
+	*host
+	r *outageRig
+	d time.Duration
+}
+
+func (s slowHost) Status() (hostops.Status, error) {
+	s.r.now = s.r.now.Add(s.d)
+	return s.host.Status()
+}
+
+func TestAPassThatRunsLongerThanTheGapIsNotAnOutage(t *testing.T) {
+	r := newOutageRig(t)
+	before := r.attempt(t)
+	r.c.Client = func(hosts.Host) remote.Client { return slowHost{r.h, r, OutageGap + time.Minute} }
+	r.after(t, time.Second)
+	r.c.Client = func(hosts.Host) remote.Client { return r.h }
+	r.after(t, time.Minute)
+	if len(r.wakes) != 0 {
+		t.Errorf("woke %q after a slow pass, want nobody: the server kept running", r.wakes)
+	}
+	if at := r.attempt(t); !at.IdleSince.Equal(before.IdleSince) {
+		t.Errorf("idle start %v, want %v kept", at.IdleSince, before.IdleSince)
 	}
 }
