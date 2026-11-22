@@ -96,6 +96,9 @@ func TestSetupInstallsTheWatcherOnTheMac(t *testing.T) {
 		t.Errorf("setup printed the token:\n%s", out)
 	}
 	token, plist := r.agentFiles(t)
+	if _, err := os.Stat(filepath.Join(r.home, ".local", "share", "engine")); err != nil {
+		t.Errorf("the log's directory: %v", err)
+	}
 	if token != watchToken+"\n" {
 		t.Errorf("token copy %q", token)
 	}

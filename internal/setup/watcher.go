@@ -71,6 +71,10 @@ func (r *runner) watcher() (harness.Outcome, error) {
 	}
 	tokenPath := filepath.Join(hosts.ConfigDir(r.d.Home), hosts.WatchTokenFile)
 	plistPath := filepath.Join(r.d.Home, "Library", "LaunchAgents", WatchLabel+".plist")
+	// launchd opens the log at spawn, before the watcher could make its directory.
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(r.d.Home, watchLog)), 0o700); err != nil {
+		return harness.Open("make the watcher's log directory: "+err.Error(), r.rerun()), nil
+	}
 	wroteToken, err := writeOwned(tokenPath, token+"\n", 0o600)
 	if err != nil {
 		return harness.Open("write the bot token copy: "+err.Error(), r.rerun()), nil

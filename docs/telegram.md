@@ -95,7 +95,9 @@ down. Two failures in a row send one audible message, "Engine server on
 `<host>` is not answering since `<time>`", followed by `engine server status`
 and `engine server restart`. More failures send nothing more; the first
 answer after that sends one "answers again" message. A message that fails to
-send is retried on the next call.
+send is retried on the next call. A failure more than two minutes after the
+last one starts a new streak, as after the Mac sleeps. An `engine upgrade`
+that keeps the server stopped for over a minute sends both messages too.
 
 It only sends, with no buttons: polling the bot would take the answers meant
 for the server's own questions. Its streak lives in

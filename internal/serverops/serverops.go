@@ -36,8 +36,9 @@ type Deps struct {
 	DBPath string
 }
 
-// answerTries and answerPause bound the wait for a restarted server to
-// answer: about half a minute.
+// answerTries and answerPause pace the wait for a restarted server to
+// answer: about half a minute for one that refuses at once, longer for one
+// whose calls run to the caller's own bound on each.
 const (
 	answerTries = 30
 	answerPause = time.Second

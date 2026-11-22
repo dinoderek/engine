@@ -26,13 +26,18 @@ const (
 // a restart of the watcher neither forgets a failure nor repeats an alert.
 const StateFile = ".local/share/engine/watch.json"
 
-// State is the watcher's streak: failures in a row, when the first of them
-// happened, and whether the down message was sent.
+// State is the watcher's streak: failures in a row, when the first and the
+// last of them happened, and whether the down message was sent.
 type State struct {
 	Failures int       `json:"failures"`
 	Since    time.Time `json:"since,omitzero"`
+	Last     time.Time `json:"last,omitzero"`
 	Alerted  bool      `json:"alerted"`
 }
+
+// stale is how old a lone failure may be and still count toward a streak:
+// past it, as after the Mac slept, the next failure starts afresh.
+const stale = 2 * Interval
 
 // Watcher is one server's watcher. Tests replace Probe, Send and Now.
 type Watcher struct {
@@ -85,11 +90,16 @@ func (w *Watcher) Pass(ctx context.Context) error {
 		if w.Logf != nil {
 			w.Logf("engine watch: the server did not answer: %v", down)
 		}
+		now := w.Now()
+		if !st.Alerted && now.Sub(st.Last) > stale {
+			st.Failures = 0
+		}
 		// Since stays the first outage's while its recovery is unsent.
 		if st.Failures == 0 && !st.Alerted {
-			st.Since = w.Now()
+			st.Since = now
 		}
 		st.Failures++
+		st.Last = now
 		if st.Failures >= Strikes && !st.Alerted {
 			sendErr = w.Send(ctx, DownMessage(w.Host, st.Since))
 			st.Alerted = sendErr == nil

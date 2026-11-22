@@ -255,3 +255,20 @@ func TestAnOutageAfterAnUnsentRecoveryKeepsItsSince(t *testing.T) {
 		t.Errorf("sent %q, want the recovery %q", r.sent, want)
 	}
 }
+
+// A failure saved before the Mac slept does not pair with the first one after
+// it wakes.
+func TestAStaleFailureStartsAFreshStreak(t *testing.T) {
+	r := newRig(t)
+	r.up = false
+	r.passes(t, 1)
+	r.now = r.now.Add(8 * time.Hour)
+	r.passes(t, 1)
+	if len(r.sent) != 0 {
+		t.Fatalf("a stale failure counted: %q", r.sent)
+	}
+	r.passes(t, 1)
+	if len(r.sent) != 1 || !strings.Contains(r.sent[0], "since 2026-11-23 01:03 UTC") {
+		t.Errorf("sent %q", r.sent)
+	}
+}
