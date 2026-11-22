@@ -40,6 +40,7 @@ func TestTheVanishRule(t *testing.T) {
 		{name: "an early death ends the run", at: claimedAt, before: []prior{crash, {reason: EndEarlyDeath, early: true}, crash}, reason: EndVanished, state: "running", crashed: true},
 		{name: "limit, stopped and unopened attempts neither count nor reset", at: claimedAt,
 			before: []prior{crash, {reason: EndVanished, limited: true}, {reason: EndVanished}, {reason: EndVanished, unopened: true}, crash}, reason: EndFailed, state: "failed", crashed: true},
+		{name: "the operator's move neither counts nor resets", at: claimedAt, before: []prior{crash, {reason: EndMoved}, crash}, reason: EndFailed, state: "failed", crashed: true},
 		{name: "a death at a limit is uncounted", at: Attempt{Started: start, LiveAt: live, Limited: true}, before: []prior{crash, crash}, reason: EndVanished, state: "running"},
 		{name: "coordination stopped after it was last seen live", plan: Item{StoppedAt: live}, at: claimedAt, before: []prior{crash, crash}, reason: EndVanished, state: "running"},
 		{name: "stopped before it was ever seen live", plan: Item{StoppedAt: start.Add(time.Minute)}, at: Attempt{Started: start}, reason: EndVanished, state: "running"},

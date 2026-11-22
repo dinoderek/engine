@@ -27,6 +27,7 @@ func Decide(v View) []Action {
 	acts = append(acts, dead...)
 	v.Fleet = v.Fleet.dyingAtLimit(v, dead)
 	acts = append(acts, releaseStopped(v)...)
+	acts = append(acts, releaseMoved(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, reaps(v)...)
 	acts = append(acts, limitNotes(v)...)
@@ -188,6 +189,21 @@ func releaseStopped(v View) []Action {
 	for _, t := range v.Tasks {
 		if s := t.Session; s != nil && t.Stopped && (s.Live || s.DeadWindow) {
 			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: *s, Stopped: true, Text: "the operator stopped its task"})
+		}
+	}
+	return acts
+}
+
+// releaseMoved releases each window a moved attempt left on a host that
+// answered, pushing its branch first and keeping the worktree and branch.
+// It repeats each pass until a read shows the window gone, so the task's
+// next dispatch waits for it (moveHeld).
+func releaseMoved(v View) []Action {
+	var acts []Action
+	for _, t := range v.Tasks {
+		for _, s := range t.Strays {
+			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: s.Attempt.ID, Session: s.Session, Moved: true,
+				Text: "the operator moved its task"})
 		}
 	}
 	return acts

@@ -19,6 +19,12 @@ import (
 
 func environment(t *testing.T) (Env, control.Service) {
 	t.Helper()
+	return environmentWith(t, nil)
+}
+
+// environmentWith is environment, its server reading the fleet from hosts.
+func environmentWith(t *testing.T, hosts func() control.HostStatus) (Env, control.Service) {
+	t.Helper()
 	if _, err := exec.LookPath("sqlite3"); err != nil {
 		t.Skip("sqlite3 absent")
 	}
@@ -27,7 +33,7 @@ func environment(t *testing.T) (Env, control.Service) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	svc := control.Service{Store: st}
+	svc := control.Service{Store: st, Hosts: hosts}
 	token := control.Secret()
 	server := httptest.NewServer(control.Handler(svc, token, t.Logf))
 	t.Cleanup(server.Close)

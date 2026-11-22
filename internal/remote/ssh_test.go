@@ -46,7 +46,7 @@ func (f *sshFake) ssh(address string) SSH {
 	return SSH{Name: "devbox", Address: address, Exec: f.exec}
 }
 
-const envelope = `"protocol":10,"engine":"v1","host":"devbox"`
+const envelope = `"protocol":11,"engine":"v1","host":"devbox"`
 
 // line is the remote command of the n'th call.
 func (f *sshFake) line(n int) string { return f.calls[n].args[len(f.calls[n].args)-1] }
@@ -90,6 +90,7 @@ func TestSSHStatusCollectRelease(t *testing.T) {
 		{stdout: `{"name":"r-7","window_closed":true,"worktree_kept":false,` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":false,"worktree_kept":true,` + envelope + "}"},
 		{stdout: `{"name":"r-7","window_closed":true,"repo_released":true,"worktree_kept":false,` + envelope + "}"},
+		{stdout: `{"name":"r-7","window_closed":true,"worktree_kept":true,"pushed":false,"unpushed":"uncommitted changes in /wt",` + envelope + "}"},
 	}}
 	c := f.ssh("me@box")
 	st, err := c.Status()
@@ -110,9 +111,12 @@ func TestSSHStatusCollectRelease(t *testing.T) {
 	if rel, err = c.Release("r-7", hostops.RunDone, "abc123"); err != nil || !rel.RepoReleased {
 		t.Errorf("done release %+v, %v", rel, err)
 	}
+	if rel, err = c.Release("r-7", hostops.RunMoved, ""); err != nil || rel.Unpushed != "uncommitted changes in /wt" {
+		t.Errorf("moved release %+v, %v", rel, err)
+	}
 	want := []string{`'engine' 'host' 'status' '--json'`, `'engine' 'host' 'collect' '--json' '--run-id' 'r-7-1'`,
 		`'engine' 'host' 'release' '--json' '--name' 'r-7'`, `'engine' 'host' 'release' '--json' '--name' 'r-7' '--failed'`,
-		`'engine' 'host' 'release' '--json' '--name' 'r-7' '--done' '--head' 'abc123'`}
+		`'engine' 'host' 'release' '--json' '--name' 'r-7' '--done' '--head' 'abc123'`, `'engine' 'host' 'release' '--json' '--name' 'r-7' '--moved'`}
 	for i, w := range want {
 		if f.line(i) != w {
 			t.Errorf("call %d: %s, want %s", i, f.line(i), w)
@@ -125,7 +129,7 @@ func TestSSHStatusCollectRelease(t *testing.T) {
 func TestSSHRefusesAProtocol2Status(t *testing.T) {
 	f := &sshFake{replies: []reply{{stdout: `{"protocol":2,"engine":"v0","host":"devbox","slots":2,"free_slots":2,"windows":[],"runs":[]}`}}}
 	st, err := f.ssh("me@box").Status()
-	if err == nil || !strings.Contains(err.Error(), "speaks protocol 2 (engine v0), this engine speaks 10; run: engine setup --host devbox") || st.Slots != 0 {
+	if err == nil || !strings.Contains(err.Error(), "speaks protocol 2 (engine v0), this engine speaks 11; run: engine setup --host devbox") || st.Slots != 0 {
 		t.Errorf("got %+v, %v", st, err)
 	}
 }
@@ -141,8 +145,8 @@ func TestSSHMapsRemoteFailures(t *testing.T) {
 			"the window r-7 exists", true},
 		{"failure", reply{stdout: `{"error":"tmux is down","refused":false,` + envelope + "}", code: 1}, "host devbox: tmux is down", false},
 		{"exit 1 without an error", reply{stdout: `{"slots":1,` + envelope + "}", code: 1}, "exited 1 with no error", false},
-		{"protocol mismatch", reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`}, "speaks protocol 2 (engine v9), this engine speaks 10; run: engine setup --host devbox", false},
-		{"a host one build behind, which lacks release --stopped", reply{stdout: `{"protocol":9,"engine":"v9","host":"devbox"}`}, "speaks protocol 9 (engine v9), this engine speaks 10; run: engine setup --host devbox", false},
+		{"protocol mismatch", reply{stdout: `{"protocol":2,"engine":"v9","host":"devbox"}`}, "speaks protocol 2 (engine v9), this engine speaks 11; run: engine setup --host devbox", false},
+		{"a host one build behind, which lacks release --moved", reply{stdout: `{"protocol":10,"engine":"v9","host":"devbox"}`}, "speaks protocol 10 (engine v9), this engine speaks 11; run: engine setup --host devbox", false},
 		{"protocol mismatch on a failure", reply{stdout: `{"error":"x","refused":true,"protocol":2,"engine":"v9","host":"devbox"}`, code: 1}, "speaks protocol 2", false},
 		{"no protocol", reply{stdout: `{"clone":"/c"}`}, "speaks protocol 0", false},
 		{"engine missing", reply{stderr: "sh: engine: command not found\n", code: 127}, "did not reply (sh: engine: command not found); is engine current there? run: engine setup --host devbox", false},

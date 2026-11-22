@@ -67,6 +67,7 @@ func record(st control.State, item control.Item) reconcile.Item {
 // attempt has no session to observe.
 func withSession(st control.State, item control.Item, fleet reconcile.Fleet) reconcile.Item {
 	t := record(st, item)
+	t.Strays = strays(st, item, fleet)
 	at, ok := st.Attempts[item.Attempt]
 	if !ok || t.Vanished {
 		return t
@@ -84,6 +85,23 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 	sess.StuckNoted = at.StuckFor == sess.ResetsAt && sess.ResetsAt > 0
 	t.Session = &sess
 	return t
+}
+
+// strays are the windows item's attempts that ended moved still have on
+// hosts that answered, live or dead, oldest first.
+func strays(st control.State, item control.Item, fleet reconcile.Fleet) []reconcile.Stray {
+	var out []reconcile.Stray
+	for _, at := range st.Attempts {
+		if at.Item != item.ID || at.Reason != control.EndMoved || at.Window == "" {
+			continue
+		}
+		s := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))
+		if !s.Unknown && (s.Live || s.DeadWindow) {
+			out = append(out, reconcile.Stray{Attempt: at, Session: s})
+		}
+	}
+	slices.SortFunc(out, func(a, b reconcile.Stray) int { return control.Number(a.Attempt.ID) - control.Number(b.Attempt.ID) })
+	return out
 }
 
 // observe is what the fleet shows of an attempt's session, on the host that

@@ -28,8 +28,9 @@ type host struct {
 	released  []string
 	outcomes  []hostops.Outcome
 	heads     []string
-	// note is what each release replies with in its note.
-	note string
+	// note is what each release replies with in its note, and unpushed
+	// what a moved one says origin lacks.
+	note, unpushed string
 	// refuse, when set, is the reason the host refuses a new dispatch.
 	refuse string
 	// unresolved makes a dispatch fail with no reply and no effect, with
@@ -64,7 +65,7 @@ func (h *host) Release(name string, outcome hostops.Outcome, mergedHead string) 
 			break
 		}
 	}
-	return hostops.Released{Name: name, Note: h.note}, nil
+	return hostops.Released{Name: name, Note: h.note, Unpushed: h.unpushed}, nil
 }
 func (h *host) Status() (hostops.Status, error) {
 	if h.outage {

@@ -2,6 +2,7 @@ package hostops
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"strings"
@@ -24,6 +25,10 @@ const (
 	// RunStopped is a run the operator stopped: its task is held, and the
 	// worktree stays for the resume.
 	RunStopped Outcome = "stopped"
+	// RunMoved is a run the operator moved to another host or harness: its
+	// branch is pushed to origin before the window closes, and the worktree
+	// and branch stay for a resume on this host.
+	RunMoved Outcome = "moved"
 	// RunDone is a done task's run: the repo's own `worktree release` runs
 	// first.
 	RunDone Outcome = "done"
@@ -40,6 +45,11 @@ type Released struct {
 	WorktreeKept bool   `json:"worktree_kept"`
 	// BranchDeleted is true when a done task's local branch was deleted.
 	BranchDeleted bool `json:"branch_deleted,omitempty"`
+	// Pushed is true when a moved run's branch was pushed to origin;
+	// Unpushed says what a moved run left that origin lacks: commits a push
+	// failed to send, or uncommitted changes in the worktree.
+	Pushed   bool   `json:"pushed,omitempty"`
+	Unpushed string `json:"unpushed,omitempty"`
 	// Note says what went wrong without failing the release: the repo's
 	// `worktree release` failing or timing out, why a worktree was kept when
 	// the run had not failed, why a done task's branch was kept or not
@@ -51,7 +61,8 @@ type Released struct {
 // Release closes the session's window if it is still open, deletes what each
 // harness adapter wrote for this session alone, and removes the worktree of
 // its newest run, unless the run failed, when it is kept for the operator, or
-// was stopped, when it is kept for the resume. For a done task's run, the
+// was stopped or moved, when it is kept for the resume. A moved run's branch
+// is pushed to origin first, while the window is still open. For a done task's run, the
 // repo's own `dev worktree release <branch>` runs first, from engine's clone,
 // when the repo provides it, best effort under TeardownLimit. Engine's
 // removal is git's plain `worktree remove` of a worktree still on disk, which
@@ -68,6 +79,9 @@ func Release(d Deps, name string, outcome Outcome, mergedHead string) (Released,
 		return Released{}, err
 	}
 	r := Released{Name: name}
+	if outcome == RunMoved {
+		r.push(d, name)
+	}
 	windows, err := d.Tmux.Windows()
 	if err != nil {
 		return Released{}, err
@@ -115,7 +129,7 @@ func (r *Released) releaseWorktree(d Deps, rec session.Record, outcome Outcome) 
 		return
 	}
 	r.Worktree, r.WorktreeKept = rec.Worktree, true
-	if outcome == RunFailed || outcome == RunStopped {
+	if outcome == RunFailed || outcome == RunStopped || outcome == RunMoved {
 		return
 	}
 	if err := removeWorktree(d, rec); err != nil {
@@ -123,6 +137,36 @@ func (r *Released) releaseWorktree(d Deps, rec session.Record, outcome Outcome) 
 		return
 	}
 	r.WorktreeKept = false
+}
+
+// push pushes the branch of the session's newest run to origin, without
+// force, so a resume elsewhere starts from its commits, and records in r
+// what origin still lacks: the commits a failed push left, and uncommitted
+// changes in the worktree.
+func (r *Released) push(d Deps, name string) {
+	run, ok, _ := session.LatestRun(d.Home, name)
+	rec := run.Record
+	if !ok || rec.Branch == "" {
+		r.Unpushed = "no run of " + name + " records its branch, so nothing was pushed"
+		return
+	}
+	var left []string
+	clone, err := cloneOf(d, rec)
+	if err == nil {
+		ref := "refs/heads/" + rec.Branch
+		_, err = d.Run(clone, []string{"GIT_TERMINAL_PROMPT=0"}, "git", "push", "--quiet", "origin", ref+":"+ref)
+	}
+	if err != nil {
+		left = append(left, fmt.Sprintf("the commits on %s that origin lacks, as the push failed: %v", rec.Branch, err))
+	}
+	r.Pushed = err == nil
+	if _, err := os.Stat(rec.Worktree); rec.Worktree != "" && err == nil {
+		status, err := d.Run(rec.Worktree, nil, "git", "status", "--porcelain")
+		if err != nil || strings.TrimSpace(status) != "" {
+			left = append(left, "uncommitted changes in "+rec.Worktree)
+		}
+	}
+	r.Unpushed = strings.Join(left, "; ")
 }
 
 // note adds err, if any, to the reply's note.
