@@ -82,8 +82,12 @@ type Window struct {
 	Background bool `json:"background,omitempty"`
 	// ResetsAt is the usage limit reset, in epoch seconds, or zero if unknown.
 	ResetsAt int64 `json:"resets_at,omitempty"`
+	// LastActivity is when a live window's session last showed activity, in
+	// epoch seconds: the newer of its harness transcript's and its pane
+	// log's modification times. Zero is unknown, never quiet.
+	LastActivity int64 `json:"last_activity,omitempty"`
 	// Screen is the last ScreenLines lines of a window whose session is not
-	// working.
+	// working, or is working but has been quiet for QuietWait.
 	Screen string `json:"screen,omitempty"`
 	// Denial is the newest entry of a waiting session's permissions.jsonl,
 	// when that entry is a denial.
@@ -148,23 +152,7 @@ func ReadStatus(d Deps) (Status, error) {
 		s.TmuxCwdError = cwdErr.Error()
 	}
 	for _, w := range windows {
-		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
-		if code, ok := codes[w.ID]; ok && w.Dead {
-			out.ExitCode = &code
-		}
-		if r, ok := runs[w.Name]; ok {
-			out.Harness = r.Record.Harness
-			if st, ok := states[w.Name]; ok && out.Alive {
-				out.State, out.WaitingFor, out.Dialog, out.Background, out.ResetsAt = st.State, st.WaitingFor, st.Dialog, st.Background, st.ResetsAt
-			}
-			if out.State == session.StateWaiting {
-				out.Denial = LastDenial(filepath.Join(r.Dir, session.PermissionLog))
-			}
-		}
-		if out.State != session.StateWorking {
-			// A window can close between the list and the capture.
-			out.Screen, _ = d.Tmux.Capture(w.ID, ScreenLines)
-		}
+		out := d.window(w, runs, states, codes)
 		s.Windows = append(s.Windows, out)
 	}
 	live, heavy := session.SlotsHeld(windows, runs)
@@ -172,6 +160,33 @@ func ReadStatus(d Deps) (Status, error) {
 	s.FreeHeavySlots = min(max(s.HeavySlots-heavy, 0), s.FreeSlots)
 	s.Runs = d.listRuns(adapters, runs, s.Windows)
 	return s, nil
+}
+
+// window is tmux's window w as status reports it: its exit code if dead, the
+// state and last activity of its newest run's session, and its screen unless
+// the session is working and has shown activity within QuietWait.
+func (d Deps) window(w session.WindowInfo, runs map[string]session.Run, states map[string]harness.State, codes map[string]int) Window {
+	out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
+	if code, ok := codes[w.ID]; ok && w.Dead {
+		out.ExitCode = &code
+	}
+	if r, ok := runs[w.Name]; ok {
+		out.Harness = r.Record.Harness
+		if st, ok := states[w.Name]; ok && out.Alive {
+			out.State, out.WaitingFor, out.Dialog, out.Background, out.ResetsAt = st.State, st.WaitingFor, st.Dialog, st.Background, st.ResetsAt
+		}
+		if out.State == session.StateWaiting {
+			out.Denial = LastDenial(filepath.Join(r.Dir, session.PermissionLog))
+		}
+		if out.Alive {
+			out.LastActivity = lastActivity(r)
+		}
+	}
+	if out.State != session.StateWorking || quiet(out.LastActivity, d.clock()) {
+		// A window can close between the list and the capture.
+		out.Screen, _ = d.Tmux.Capture(w.ID, ScreenLines)
+	}
+	return out
 }
 
 // listRuns is the newest run of each session name, sorted by name. A run

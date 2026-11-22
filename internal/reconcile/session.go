@@ -27,6 +27,9 @@ const (
 	// CleanupCap is how long after its merge a session still in a turn,
 	// with no cleanup reported, runs before the operator is told.
 	CleanupCap = 30 * time.Minute
+	// QuietWait is how long a working session may show no transcript or
+	// pane log activity before it is reported as hung.
+	QuietWait = hostops.QuietWait
 )
 
 // Session is the newest run of a task, or of a plan's planner, on any host.
@@ -56,6 +59,12 @@ type Session struct {
 	LimitedSince time.Time
 	FarNoted     bool
 	StuckNoted   bool
+	// Working is true when its window's state, from status, is working in a
+	// turn: not limited, waiting or only in a background job. LastActivity
+	// is when its window last showed activity (hostops.Window), zero when
+	// the host does not know.
+	Working      bool
+	LastActivity time.Time
 	// Waiting is true when its window's state, from status, is waiting.
 	Waiting bool
 	// Dialog is true when its window's state is waiting at a dialog that
@@ -112,6 +121,12 @@ func (s Session) Waited(now time.Time, d time.Duration) bool {
 // AtDialog reports whether the live session is held at a dialog.
 func (s Session) AtDialog() bool {
 	return s.Live && !s.Unknown && !s.Limited && s.Dialog
+}
+
+// Quiet reports whether the session is working in a turn and has shown no
+// activity for d by now. Unknown activity is never quiet.
+func (s Session) Quiet(now time.Time, d time.Duration) bool {
+	return s.Live && !s.Unknown && !s.Limited && s.Working && !s.Background && !s.LastActivity.IsZero() && now.Sub(s.LastActivity) >= d
 }
 
 // Idle reports whether the session takes typed input without cutting into
