@@ -25,6 +25,7 @@ type Worktree struct {
 	NewBranch bool
 	Adopted   bool
 	Head      string
+	StaleLock bool // StaleLock says an index.lock no running process held was removed before adoption.
 }
 
 // runMark is the git config entry, branch.<branch>.engineRun, that names the
@@ -81,6 +82,10 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool, run string) (W
 	}
 	defer unlock()
 	own := r.ownBranch(clone, branch, run)
+	stale, err := r.clearStaleLock(clone, branch, resume || own)
+	if err != nil {
+		return Worktree{}, err
+	}
 	adopt, existing, err := r.prepareBranch(clone, branch, resume, own)
 	if err != nil {
 		return Worktree{}, err
@@ -90,7 +95,7 @@ func (r Repos) CreateWorktree(clone Clone, task int, resume bool, run string) (W
 		if err != nil {
 			return Worktree{}, fmt.Errorf("read the head of %s: %w", existing, err)
 		}
-		return Worktree{Path: existing, Branch: branch, Adopted: true, Head: strings.TrimSpace(head)}, r.mark(clone, branch, run)
+		return Worktree{Path: existing, Branch: branch, Adopted: true, Head: strings.TrimSpace(head), StaleLock: stale}, r.mark(clone, branch, run)
 	}
 	tip := ""
 	if own && adopt {
@@ -199,31 +204,6 @@ func (r Repos) RemoveWorktree(clone Clone, wt Worktree) error {
 		return fmt.Errorf("delete the branch %s: %w", wt.Branch, err)
 	}
 	return nil
-}
-
-// keptBranch is what restoreBranch puts back: a branch's tip and its run
-// mark, which deleting the branch deletes too.
-type keptBranch struct{ tip, run string }
-
-// keep reads branch's tip and mark.
-func (r Repos) keep(clone Clone, branch string) keptBranch {
-	tip, _ := r.git(clone.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
-	run, _ := r.git(clone.Path, "config", "--get", "branch."+branch+"."+runMark)
-	return keptBranch{tip: strings.TrimSpace(tip), run: strings.TrimSpace(run)}
-}
-
-// restoreBranch puts back, at its tip and with its mark, a branch the repo's
-// own release deleted although this call only adopted it: its commits may
-// exist nowhere else, and the mark keeps it the task's own. A branch with no
-// tip, or one still there, needs nothing.
-func (r Repos) restoreBranch(clone Clone, branch string, kept keptBranch) error {
-	if kept.tip == "" || r.exists(clone.Path, "refs/heads/"+branch) {
-		return nil
-	}
-	if _, err := r.git(clone.Path, "branch", branch, kept.tip); err != nil {
-		return fmt.Errorf("restore branch %s at %s, which the repo's worktree release deleted: %w", branch, kept.tip, err)
-	}
-	return r.mark(clone, branch, kept.run)
 }
 
 // checkAtOrigin fails when a resumed worktree is not at origin's tip of its
