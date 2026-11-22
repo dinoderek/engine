@@ -184,8 +184,12 @@ func adoptedKickoff(kickoff string, wt session.Worktree) string {
 	if !wt.Adopted || wt.Head == "" {
 		return kickoff
 	}
-	return kickoff + " The task's branch " + wt.Branch + " is at " + wt.Head + ", where an earlier attempt left it: resume from that commit, " +
+	out := kickoff + " The task's branch " + wt.Branch + " is at " + wt.Head + ", where an earlier attempt left it: resume from that commit, " +
 		"and keep any change it left uncommitted in the worktree."
+	if wt.StaleLock {
+		out += " A stale .git/index.lock, which no running process held, was removed before resuming."
+	}
+	return out
 }
 
 // undo is what one Spawn created before its window opened, so a failure
