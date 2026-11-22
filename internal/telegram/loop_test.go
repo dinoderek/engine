@@ -24,6 +24,12 @@ type botServer struct {
 	onCall   func(string, map[string]any)
 }
 
+func (f *botServer) setFailures(method string, count int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failures[method] = count
+}
+
 func fakeBot(t *testing.T) (Bot, *botServer) {
 	t.Helper()
 	f := &botServer{calls: map[string][]map[string]any{}, failures: map[string]int{}, next: 10}
@@ -132,7 +138,7 @@ func tap(t *testing.T, l *Loop, c Callback) {
 func TestQuestionSendsOnceRetriesAndRestarts(t *testing.T) {
 	l, f, plan := testLoop(t)
 	q := ask(t, l, plan)
-	f.failures["sendMessage"] = 1
+	f.setFailures("sendMessage", 1)
 	if err := l.Pass(context.Background(), instant); err == nil {
 		t.Fatal("failed send succeeded")
 	}
@@ -260,7 +266,7 @@ func TestExternalResolutionAndAlreadyAnsweredTap(t *testing.T) {
 func TestPendingQuestionSettledBeforeRetryIsNotSent(t *testing.T) {
 	l, f, plan := testLoop(t)
 	q := ask(t, l, plan)
-	f.failures["sendMessage"] = 1
+	f.setFailures("sendMessage", 1)
 	_ = l.Pass(context.Background(), instant)
 	command(t, l.Service, control.Request{Op: "resolve", ReplyTo: q.ID, Body: "settled"})
 	pass(t, l, instant)
@@ -275,7 +281,7 @@ func TestPendingSendAndDigestThrottleSurviveReopen(t *testing.T) {
 	pass(t, l, instant)
 	command(t, l.Service, control.Request{Op: "say", ID: plan, Recipient: "operator", Body: "pending digest"})
 	q := ask(t, l, plan)
-	f.failures["sendMessage"] = 1
+	f.setFailures("sendMessage", 1)
 	if err := l.Pass(context.Background(), instant.Add(time.Second)); err == nil {
 		t.Fatal("expected failed send")
 	}
@@ -361,7 +367,7 @@ func TestEditFailureRetriesSettlementWithoutResending(t *testing.T) {
 	q := ask(t, l, plan)
 	pass(t, l, instant)
 	command(t, l.Service, control.Request{Op: "resolve", ReplyTo: q.ID, Body: "answer"})
-	f.failures["editMessageText"] = 1
+	f.setFailures("editMessageText", 1)
 	if err := l.Pass(context.Background(), instant); err == nil {
 		t.Fatal("expected failed edit")
 	}
@@ -380,7 +386,7 @@ func TestCallbackEditFailureReplaysFirstResolution(t *testing.T) {
 	q := ask(t, l, plan)
 	pass(t, l, instant)
 	c := callback(q, 11, 99, "retry-callback")
-	f.failures["editMessageText"] = 1
+	f.setFailures("editMessageText", 1)
 	if err := l.tap(context.Background(), c); err != nil {
 		t.Fatal("presentation failure blocked resolved callback:", err)
 	}
@@ -402,7 +408,7 @@ func TestPermanentEditFailureDoesNotBlockLaterDeliveries(t *testing.T) {
 	q := ask(t, l, plan)
 	pass(t, l, instant)
 	command(t, l.Service, control.Request{Op: "resolve", ReplyTo: q.ID, Body: "first answer"})
-	f.failures["editMessageText"] = 1000
+	f.setFailures("editMessageText", 1000)
 	ask(t, l, plan)
 	command(t, l.Service, control.Request{Op: "say", ID: plan, Recipient: "operator", Body: "new digest"})
 	if err := l.Pass(context.Background(), instant); err == nil {
@@ -435,7 +441,7 @@ func TestFailedCallbackEditsDoNotBlockLaterCallbacks(t *testing.T) {
 	first := ask(t, l, plan)
 	second := ask(t, l, plan)
 	pass(t, l, instant)
-	f.failures["editMessageText"] = 1000
+	f.setFailures("editMessageText", 1000)
 	c1, c2 := callback(first, 11, 99, "first-callback"), callback(second, 12, 99, "second-callback")
 	f.updates = []Incoming{{ID: 700, Callback: &c1}, {ID: 701, Callback: &c2}}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -462,7 +468,7 @@ func TestFailedCallbackEditsDoNotBlockLaterCallbacks(t *testing.T) {
 	if out := command(t, l.Service, control.Request{Op: "inbox"}); len(out.Updates) != 0 {
 		t.Fatal("later callback did not resolve")
 	}
-	f.failures["editMessageText"] = 0
+	f.setFailures("editMessageText", 0)
 	pass(t, l, instant)
 	rows, _, _, err = deliveries(l.Service.Store)
 	if err != nil || !rows[0].Settled || !rows[1].Settled {
