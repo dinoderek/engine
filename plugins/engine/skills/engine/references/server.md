@@ -81,8 +81,8 @@ Follow the `build` skill, hands-off, with these changes replacing its merge step
 - **Step 11.** On `merged`, above.
 
 A server outage blocks the merge request: keep your work and wait. Never
-bypass gates or the queue. A command retries for 90 seconds by itself; one
-that still failed printed its request key, so rerun it with `--request-key <key>`.
+bypass gates or the queue. A command retries for 90 seconds by itself; a write that
+still failed names its request key, so rerun it with `--request-key <key>`.
 
 ## Rulings
 
