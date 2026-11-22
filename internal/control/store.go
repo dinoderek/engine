@@ -30,12 +30,17 @@ func SQLite(ctx context.Context, path, sql string) ([]byte, error) {
 }
 
 // Store allows one server process per database, and serializes its transactions.
-// The OS releases its process lock on a crash.
+// The OS releases its process lock on a crash. As the database's only owner
+// it reads the records once, at open: state is then the authority, and
+// SQLite its durable copy.
 type Store struct {
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	path string
 	lock *os.File
 	run  SQLRunner
+	// state never leaves the store: callers get clones, and a commit
+	// installs records decoded from what it wrote.
+	state State
 }
 
 // Open creates a private database and refuses a database already owned by a server.
@@ -62,7 +67,10 @@ func Open(path string, run SQLRunner) (*Store, error) {
 		return nil, fmt.Errorf("database already owned: %w", err)
 	}
 	s := &Store{path: path, lock: f, run: run}
-	if err = s.initialize(); err != nil {
+	if err = s.initialize(); err == nil {
+		s.state, _, err = s.load()
+	}
+	if err != nil {
 		_ = s.Close()
 		return nil, err
 	}
@@ -125,45 +133,49 @@ func (s *Store) Close() error {
 	return err
 }
 
-// Transaction commits all changed records together; an error leaves history unchanged.
+// Transaction commits all changed records together; an error leaves history
+// unchanged, in memory and on disk. fn works on a copy of the state.
 func (s *Store) Transaction(fn func(*State) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.lock == nil {
 		return errors.New("store is closed")
 	}
-	state, _, err := s.load()
+	work := s.state.clone()
+	if err := fn(&work); err != nil {
+		return err
+	}
+	changes, err := diff(&s.state, &work)
+	if err != nil || len(changes) == 0 {
+		return err
+	}
+	// Decoding before the write keeps a record SQLite took from failing to
+	// reach memory.
+	patch, err := decode(changes)
 	if err != nil {
 		return err
 	}
-	before := flatten(state)
-	if err = fn(&state); err != nil {
+	if err = s.write(changes, ""); err != nil {
+		// A write can fail after SQLite committed it; disk then decides.
+		if disk, _, lerr := s.load(); lerr == nil {
+			s.state = disk
+		}
 		return err
 	}
-	return s.commit(before, flatten(state), "")
+	s.state.install(changes, patch)
+	return nil
 }
 
-// commit writes the records that changed from before to after, plus tail,
-// in one SQLite transaction; nothing when nothing changed.
-func (s *Store) commit(before, after map[string]string, tail string) error {
+// write sends changes, then tail, to SQLite in one transaction.
+func (s *Store) write(changes []change, tail string) error {
 	var sql strings.Builder
 	sql.WriteString("BEGIN IMMEDIATE;\n")
-	changed := tail != ""
-	for key, data := range after {
-		if before[key] == data {
+	for _, c := range changes {
+		if c.del {
+			fmt.Fprintf(&sql, "DELETE FROM records WHERE key=%s;\n", literal(c.key))
 			continue
 		}
-		changed = true
-		fmt.Fprintf(&sql, "INSERT INTO records(key,data) VALUES(%s,%s) ON CONFLICT(key) DO UPDATE SET data=excluded.data;\n", literal(key), literal(data))
-	}
-	for key := range before {
-		if _, ok := after[key]; !ok {
-			changed = true
-			fmt.Fprintf(&sql, "DELETE FROM records WHERE key=%s;\n", literal(key))
-		}
-	}
-	if !changed {
-		return nil
+		fmt.Fprintf(&sql, "INSERT INTO records(key,data) VALUES(%s,%s) ON CONFLICT(key) DO UPDATE SET data=excluded.data;\n", literal(c.key), literal(c.data))
 	}
 	sql.WriteString(tail)
 	sql.WriteString("COMMIT;\n")
@@ -171,121 +183,27 @@ func (s *Store) commit(before, after map[string]string, tail string) error {
 	return err
 }
 
-// Snapshot returns a detached consistent view.
+// Snapshot returns a detached consistent view, without reading SQLite.
+// Snapshots run beside each other, and wait only for a commit.
 func (s *Store) Snapshot() (State, error) {
-	var st State
-	err := s.Transaction(func(v *State) error { st = *v; return nil })
-	return st, err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.lock == nil {
+		return State{}, errors.New("store is closed")
+	}
+	return s.state.clone(), nil
+}
+
+// View runs fn on a snapshot and commits nothing.
+func (s *Store) View(fn func(*State) error) error {
+	st, err := s.Snapshot()
+	if err != nil {
+		return err
+	}
+	return fn(&st)
 }
 
 func literal(s string) string { return "CAST(X'" + hex.EncodeToString([]byte(s)) + "' AS TEXT)" }
-
-func flatten(s State) map[string]string {
-	records := map[string]string{}
-	put := func(key string, v any) { b, _ := json.Marshal(v); records[key] = string(b) }
-	put("next", s.Next)
-	for k, v := range s.Items {
-		put("item/"+k, v)
-	}
-	for k, v := range s.Attempts {
-		put("attempt/"+k, v)
-	}
-	for _, v := range s.Updates {
-		put(fmt.Sprintf("update/%012d", v.ID), v)
-	}
-	for k, v := range s.Queue {
-		put("queue/"+k, v)
-	}
-	for k, v := range s.Auth {
-		put("auth/"+k, v)
-	}
-	for k, v := range s.Receipts {
-		put("receipt/"+k, v)
-	}
-	return records
-}
-
-// load reads every record. Version 1's lock records are returned apart,
-// for the migration; a version 2 database has none.
-func (s *Store) load() (State, []legacyLock, error) {
-	st := emptyState()
-	out, err := s.sql("SELECT key,data FROM records ORDER BY key;")
-	if err != nil {
-		return st, nil, err
-	}
-	if len(strings.TrimSpace(string(out))) == 0 {
-		return st, nil, nil
-	}
-	var rows []struct {
-		Key  string
-		Data string
-	}
-	if err = json.Unmarshal(out, &rows); err != nil {
-		return st, nil, err
-	}
-	var locks []legacyLock
-	for _, row := range rows {
-		if strings.HasPrefix(row.Key, "lock/") {
-			var l legacyLock
-			if err = json.Unmarshal([]byte(row.Data), &l); err != nil {
-				return st, nil, fmt.Errorf("control record %s: %w", row.Key, err)
-			}
-			locks = append(locks, l)
-			continue
-		}
-		if err = loadRecord(&st, row.Key, []byte(row.Data)); err != nil {
-			return st, nil, fmt.Errorf("control record %s: %w", row.Key, err)
-		}
-	}
-	return st, locks, nil
-}
-
-func loadRecord(s *State, key string, b []byte) error {
-	kind, id, _ := strings.Cut(key, "/")
-	switch kind {
-	case "next":
-		return json.Unmarshal(b, &s.Next)
-	case "item":
-		var v Item
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Items[id] = v
-	case "attempt":
-		var v Attempt
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Attempts[id] = v
-	case "update":
-		var v Update
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Updates = append(s.Updates, v)
-	case "queue":
-		var v QueueEntry
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Queue[id] = v
-	case "auth":
-		var v Actor
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Auth[id] = v
-	case "receipt":
-		var v receipt
-		if err := json.Unmarshal(b, &v); err != nil {
-			return err
-		}
-		s.Receipts[id] = v
-	default:
-		return fmt.Errorf("unknown record kind %q", kind)
-	}
-	return nil
-}
 
 // Backup takes a transactionally consistent SQLite copy; it never overwrites a file.
 func (s *Store) Backup(path string) error {

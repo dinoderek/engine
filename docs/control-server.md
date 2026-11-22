@@ -40,7 +40,7 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 Every write has a request key; reusing one for another command fails. The CLI retries uncertain delivery once with the same key. Version conflicts require reading the current record. An edit invalidates a placement decision before any execution is reserved or launched.
 
-SQLite runs locally through its CLI; one server owns a database. Each transaction updates current records, history and its request receipt together. An older database migrates on open; an unknown schema version is rejected.
+SQLite runs locally through its CLI; one server owns a database. It reads the records once, at open, and holds them in memory: a read never queries SQLite, reads run beside each other, and a commit writes only the records it changed. Never write to a running server's database. Each transaction updates current records, history and its request receipt together. An older database migrates on open; an unknown schema version is rejected.
 
 The operator credential is an owner-only regular file. Every dispatch creates a separate execution credential, scoped to that plan or task; workers cannot approve, start coordination or read the operator inbox. Ending an attempt revokes its credential. Credentials are hashed for lookup; dispatch receipts retain the token privately for interrupted dispatch recovery.
 
