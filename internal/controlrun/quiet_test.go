@@ -1,6 +1,7 @@
 package controlrun
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,8 @@ func quietNotices(t *testing.T, c *Coordinator, id string) []string {
 // one more. The clock is fake, and passes follow each other within OutageGap.
 func TestAQuietWorkingSessionIsToldOncePerQuietStretch(t *testing.T) {
 	c, h, _, _, task := setup(t)
+	var logged []string
+	c.Logf = func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
 	for range 3 {
 		pass(t, c)
 	}
@@ -65,6 +68,13 @@ func TestAQuietWorkingSessionIsToldOncePerQuietStretch(t *testing.T) {
 	advance(reconcile.QuietWait + time.Minute)
 	if n := quietNotices(t, c, task.ID); len(n) != 2 {
 		t.Fatalf("notices after new activity and another hour: %q", n)
+	}
+	// The later passes decide to send nothing; none sends a notice that the
+	// server refuses.
+	for _, l := range logged {
+		if strings.Contains(l, "notice") || strings.Contains(l, "request key") {
+			t.Errorf("a pass logged %q", l)
+		}
 	}
 	st, _ := c.Service.Store.Snapshot()
 	if st.Items[task.ID].State != "running" || st.Attempts[st.Items[task.ID].Attempt].State != "running" {

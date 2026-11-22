@@ -31,6 +31,8 @@ func TestQuietSessions(t *testing.T) {
 	unknownActivity.LastActivity = time.Time{}
 	unknownState := quietWorking(2 * QuietWait)
 	unknownState.Working = false
+	flagged := quietWorking(2 * QuietWait)
+	flagged.StallNoted = flagged.LastActivity
 	unknownHost := quietWorking(2 * QuietWait)
 	unknownHost.Unknown = true
 	for _, tc := range []struct {
@@ -47,6 +49,7 @@ func TestQuietSessions(t *testing.T) {
 		{"only a background job", with(task(2, "running"), bg), ""},
 		{"unknown activity", with(task(2, "running"), unknownActivity), ""},
 		{"unknown state", with(task(2, "running"), unknownState), ""},
+		{"already told for this last activity", with(task(2, "running"), flagged), ""},
 		{"unknown host", with(task(2, "running"), unknownHost), ""},
 		{"a done task", with(task(2, "done"), quietWorking(QuietWait)), ""},
 		{"a stopped task", func() Item { x := with(task(2, "running"), quietWorking(QuietWait)); x.Stopped = true; return x }(), ""},
@@ -73,7 +76,7 @@ func TestQuietNoticeText(t *testing.T) {
 		t.Fatalf("actions %v", acts)
 	}
 	a := acts[0]
-	if a.Kind != Notice || a.Attempt != "a2" || a.Item != "t2" || !a.Stalled.IsZero() {
+	if a.Kind != Notice || a.Attempt != "a2" || a.Item != "t2" || !a.Stalled.Equal(t0.Add(-90*time.Minute)) {
 		t.Errorf("action %+v", a)
 	}
 	for _, want := range []string{"demo-2", "t2", "devbox", "1h30m0s", "line one\nline two", "engine attach t2", "engine tell t2", "engine task stop t2", "engine task move t2", "Nothing was stopped"} {
@@ -83,8 +86,8 @@ func TestQuietNoticeText(t *testing.T) {
 	}
 }
 
-// Quiet is told again for a later stretch: new activity changes the key,
-// and the same stretch keeps it across passes.
+// Quiet is told again for a later stretch: new activity changes the key and
+// the mark, so a session flagged for the old activity is flagged for the new.
 func TestQuietKeyFollowsTheLastActivity(t *testing.T) {
 	key := func(last time.Time, now time.Time) string {
 		s := quietWorking(0)

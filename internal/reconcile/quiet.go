@@ -21,15 +21,17 @@ func quiets(v View) []Action {
 }
 
 // quiet is t's notice that its working session has gone quiet, or nothing.
-// Its key holds the attempt and the last activity, so one stretch of quiet
-// is told once, and the next one, after new activity, is told again.
+// The attempt keeps the last activity it was flagged for, as it keeps a
+// stall's start, so one stretch of quiet is decided once however its text
+// ages, and the next one, after new activity, is told again. The key holds
+// the attempt and the last activity too.
 func quiet(v View, t Item) []Action {
 	s := t.Session
-	if s == nil || !s.Quiet(v.Now, QuietWait) {
+	if s == nil || !s.Quiet(v.Now, QuietWait) || s.Flagged(s.LastActivity) {
 		return nil
 	}
 	a := notice(t, fmt.Sprintf("quiet/%s/%d", t.Current.ID, s.LastActivity.Unix()), quietText(t, *s, v.Now))
-	a.Attempt = t.Current.ID
+	a.Attempt, a.Stalled = t.Current.ID, s.LastActivity
 	return []Action{a}
 }
 
