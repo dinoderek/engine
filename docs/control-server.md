@@ -38,7 +38,7 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 `POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors carry an HTTP status and sometimes a stable `reason`; storage details stay in server logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`; the CLI never retries it.
 
-Every write has a request key; reusing one for another command fails. The CLI retries uncertain delivery once with the same key. Version conflicts require reading the current record. An edit invalidates a placement decision before any execution is reserved or launched.
+Every write has a request key; reusing one for another command fails. A call retries uncertain delivery once with the same key. A session's command (one with `ENGINE_ATTEMPT_ID`) also retries connect errors, timeouts and 5xx for 90 seconds, under that key, waiting 1 s doubling to 15 s plus up to 20% jitter, and its first retry prints one stderr line naming the key; a 4xx never retries, and a longer outage ends in the error. `ENGINE_RETRY_FOR` (a Go duration, `0` for none) sets the window for any command; the operator's own default is none, and a bad value is a usage error. The prompt hook and the dashboard keep their own behaviour. Version conflicts require reading the current record. An edit invalidates a placement decision before any execution is reserved or launched.
 
 SQLite runs locally through its CLI; one server owns a database. Each transaction updates current records, history and its request receipt together. An older database migrates on open; an unknown schema version is rejected.
 

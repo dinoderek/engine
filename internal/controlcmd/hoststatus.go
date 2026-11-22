@@ -25,6 +25,11 @@ func hostMain(args []string, e Env) int {
 		fmt.Fprint(e.Err, hostUsage)
 		return 2
 	}
+	call, err := newCaller(e)
+	if err != nil {
+		fmt.Fprintf(e.Err, "engine host status: %v\n", err)
+		return 2
+	}
 	client, err := makeClient(e)
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine host status:", err)
@@ -34,7 +39,7 @@ func hostMain(args []string, e Env) int {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	out, err := client.Call(ctx, control.Request{Op: "host-status"})
+	out, err := call(ctx, client, control.Request{Op: "host-status"})
 	if err == nil && out.Fleet == nil {
 		err = fmt.Errorf("the server sent no fleet")
 	}
