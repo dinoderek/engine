@@ -18,7 +18,7 @@ func touch(t *testing.T, path string, mod time.Time) {
 	}
 }
 
-func TestLastActivityIsTheNewerOfTheTranscriptAndThePaneLog(t *testing.T) {
+func TestLastActivityIsTheTranscriptsElseThePaneLogs(t *testing.T) {
 	now := fixedNow()
 	for _, tc := range []struct {
 		name       string
@@ -27,8 +27,8 @@ func TestLastActivityIsTheNewerOfTheTranscriptAndThePaneLog(t *testing.T) {
 		state      bool
 		want       time.Time
 	}{
-		{"a newer transcript", ptr(now.Add(-time.Minute)), ptr(now.Add(-time.Hour)), true, now.Add(-time.Minute)},
-		{"a newer pane log", ptr(now.Add(-2 * time.Hour)), ptr(now.Add(-time.Minute)), true, now.Add(-time.Minute)},
+		{"a transcript wins over a fresher pane log, which a live turn keeps fresh", ptr(now.Add(-2 * time.Hour)), ptr(now.Add(-time.Second)), true, now.Add(-2 * time.Hour)},
+		{"a transcript wins over an older pane log", ptr(now.Add(-time.Minute)), ptr(now.Add(-time.Hour)), true, now.Add(-time.Minute)},
 		{"a missing transcript uses the pane log", nil, ptr(now.Add(-time.Hour)), true, now.Add(-time.Hour)},
 		{"a state naming no transcript uses the pane log", nil, ptr(now.Add(-3 * time.Hour)), false, now.Add(-3 * time.Hour)},
 		{"a missing pane log uses the transcript", ptr(now.Add(-time.Hour)), nil, true, now.Add(-time.Hour)},

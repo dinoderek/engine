@@ -27,8 +27,8 @@ const (
 	// CleanupCap is how long after its merge a session still in a turn,
 	// with no cleanup reported, runs before the operator is told.
 	CleanupCap = 30 * time.Minute
-	// QuietWait is how long a working session may show no transcript or
-	// pane log activity before it is reported as hung.
+	// QuietWait is how long a working session may show no activity before
+	// it is reported as hung.
 	QuietWait = hostops.QuietWait
 )
 

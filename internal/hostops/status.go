@@ -83,8 +83,8 @@ type Window struct {
 	// ResetsAt is the usage limit reset, in epoch seconds, or zero if unknown.
 	ResetsAt int64 `json:"resets_at,omitempty"`
 	// LastActivity is when a live window's session last showed activity, in
-	// epoch seconds: the newer of its harness transcript's and its pane
-	// log's modification times. Zero is unknown, never quiet.
+	// epoch seconds: its harness transcript's modification time, else its
+	// pane log's. Zero is unknown, never quiet.
 	LastActivity int64 `json:"last_activity,omitempty"`
 	// Screen is the last ScreenLines lines of a window whose session is not
 	// working, or is working but has been quiet for QuietWait.

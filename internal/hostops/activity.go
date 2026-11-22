@@ -14,24 +14,23 @@ import (
 const QuietWait = time.Hour
 
 // lastActivity is when the run's session last showed activity, in epoch
-// seconds: the newer of its transcript's and its pane log's modification
-// times. The transcript is the path the harness's hook events named, which
-// the state file keeps; a missing one leaves the pane log. Zero is unknown.
+// seconds: its harness transcript's modification time, else its pane log's.
+// The transcript is the path the harness's hook events named, which the state
+// file keeps. The pane log is only the fallback, for a run that names no
+// transcript or whose file is missing: while a turn runs the harness redraws
+// its spinner and clock, so a live pane log is always fresh. Zero is unknown.
 func lastActivity(r session.Run) int64 {
-	paths := []string{filepath.Join(r.Dir, session.PaneLog)}
+	paths := []string{}
 	if st, ok := session.ReadHarnessState(r.Dir); ok && st.Transcript != "" {
 		paths = append(paths, st.Transcript)
 	}
-	var newest time.Time
+	paths = append(paths, filepath.Join(r.Dir, session.PaneLog))
 	for _, p := range paths {
-		if info, err := os.Stat(p); err == nil && info.ModTime().After(newest) {
-			newest = info.ModTime()
+		if info, err := os.Stat(p); err == nil {
+			return info.ModTime().Unix()
 		}
 	}
-	if newest.IsZero() {
-		return 0
-	}
-	return newest.Unix()
+	return 0
 }
 
 // clock is the host's clock: Now, or the wall clock when it is nil.
