@@ -18,10 +18,10 @@ command; placement skips the host. Engine never kills a server with sessions.
 **Creation.** A per-server lock, `tmux-<socket>.lock` in
 `~/.local/share/engine`, serialises window creation.
 
-**Scope.** On a systemd host, a session starts in
-`systemd-run --user --scope`, so a server it starts outlives the starter's
-unit, such as the engine server's. If that fails, tmux starts plainly and the
-spawn warns; host status reports a server inside a service as `tmux_unit`.
+**Scope.** A starter inside a systemd service, such as the engine server,
+starts a session in `systemd-run --user --scope`, so its server outlives the
+service. Elsewhere, and if that fails, tmux starts plainly; host status
+reports a server inside a service as `tmux_unit`.
 
 tmux survives a closed terminal, not a sleeping host: macOS holds off sleep
 per window on power; a Linux host must not suspend.

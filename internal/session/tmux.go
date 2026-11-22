@@ -103,7 +103,8 @@ type Tmux struct {
 
 // New returns the Tmux for this host: the default server, run from the home
 // directory so that a server it starts never lives in a worktree, started in
-// its own scope on a systemd host, and caffeinate on macOS.
+// its own scope when this process runs inside a systemd service, and
+// caffeinate on macOS.
 func New() *Tmux {
 	home, _ := os.UserHomeDir()
 	t := &Tmux{Run: ExecIn(home), Bin: "tmux", Home: home, Scope: defaultScope()}

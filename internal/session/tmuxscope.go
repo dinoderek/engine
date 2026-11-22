@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
+	"strings"
 )
 
 // ScopeCommand runs a command in its own transient systemd scope under the
@@ -16,19 +18,32 @@ var ScopeCommand = []string{"systemd-run", "--user", "--scope", "--quiet", "--co
 // systemdDir exists exactly when systemd is the host's init (sd_booted).
 const systemdDir = "/run/systemd/system"
 
-// hostScope is the scope command for a host: ScopeCommand on a Linux host
-// booted with systemd, none anywhere else.
-func hostScope(goos string, stat func(string) (os.FileInfo, error)) []string {
+// hostScope is the scope command for this process: ScopeCommand on a Linux
+// host booted with systemd when this process runs inside a systemd service,
+// whose stop would kill a tmux server it starts. Anywhere else, such as an
+// SSH login's session scope, none: a scope under the user's manager would
+// die with that manager when the last login ends on a host without linger,
+// which a plain start survives. A cgroup that cannot be read is none.
+func hostScope(goos string, stat func(string) (os.FileInfo, error), cgroup func() (string, error)) []string {
 	if goos != "linux" {
 		return nil
 	}
 	if info, err := stat(systemdDir); err != nil || !info.IsDir() {
 		return nil
 	}
+	if self, err := cgroup(); err != nil || ServiceUnit(self) == "" {
+		return nil
+	}
 	return ScopeCommand
 }
 
-func defaultScope() []string { return hostScope(runtime.GOOS, os.Stat) }
+func defaultScope() []string { return hostScope(runtime.GOOS, os.Stat, ownCgroup) }
+
+// ownCgroup is this process's /proc/self/cgroup.
+func ownCgroup() (string, error) {
+	data, err := os.ReadFile("/proc/self/cgroup")
+	return string(data), err
+}
 
 // newSession runs args, a tmux new-session, inside t.Scope when it is set,
 // so the server it may start has a scope of its own. A scoped start that
@@ -55,4 +70,39 @@ func (t *Tmux) newSession(args ...string) (out string, scopeErr, err error) {
 		return "", scopeErr, fmt.Errorf("%w (in its own scope first: %w)", err, scopeErr)
 	}
 	return out, scopeErr, nil
+}
+
+// ServiceUnit is the systemd service whose cgroup holds a process, read from
+// its /proc/<pid>/cgroup: the unified hierarchy's line (`0::`), else the
+// systemd one of a legacy host (`name=systemd`). The innermost unit on the
+// path decides: a service is returned, a scope is none. A process outside
+// systemd's hierarchy is in none.
+func ServiceUnit(cgroup string) string {
+	path, ok := "", false
+	for _, line := range strings.Split(cgroup, "\n") {
+		f := strings.SplitN(strings.TrimSpace(line), ":", 3)
+		if len(f) != 3 {
+			continue
+		}
+		if f[0] == "0" && f[1] == "" {
+			path, ok = f[2], true
+			break
+		}
+		if f[1] == "name=systemd" {
+			path, ok = f[2], true
+		}
+	}
+	if !ok {
+		return ""
+	}
+	parts := strings.Split(path, "/")
+	for _, p := range slices.Backward(parts) {
+		switch {
+		case strings.HasSuffix(p, ".service"):
+			return p
+		case strings.HasSuffix(p, ".scope"):
+			return ""
+		}
+	}
+	return ""
 }

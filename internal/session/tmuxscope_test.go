@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -130,19 +131,57 @@ func TestHostScope(t *testing.T) {
 			return info, err
 		}
 	}
+	in := func(cgroup string, err error) func() (string, error) {
+		return func() (string, error) { return cgroup, err }
+	}
+	service := in("0::/user.slice/user-1000.slice/user@1000.service/app.slice/engine-server.service\n", nil)
 	for _, tc := range []struct {
-		name string
-		goos string
-		stat func(string) (os.FileInfo, error)
-		want []string
+		name   string
+		goos   string
+		stat   func(string) (os.FileInfo, error)
+		cgroup func() (string, error)
+		want   []string
 	}{
-		{"linux booted with systemd", "linux", stat(dirInfo{}, nil), ScopeCommand},
-		{"linux without systemd", "linux", stat(nil, os.ErrNotExist), nil},
-		{"a file, not systemd's directory", "linux", stat(fileInfo{}, nil), nil},
-		{"macOS", "darwin", stat(dirInfo{}, nil), nil},
+		{"inside a service on systemd", "linux", stat(dirInfo{}, nil), service, ScopeCommand},
+		{"an SSH login's session scope", "linux", stat(dirInfo{}, nil), in("0::/user.slice/user-1000.slice/session-579.scope\n", nil), nil},
+		{"a tmux pane's scope", "linux", stat(dirInfo{}, nil), in("0::/user.slice/user-1000.slice/user@1000.service/app.slice/tmux-spawn-1.scope\n", nil), nil},
+		{"an unreadable cgroup", "linux", stat(dirInfo{}, nil), in("", errors.New("no /proc")), nil},
+		{"linux without systemd", "linux", stat(nil, os.ErrNotExist), service, nil},
+		{"a file, not systemd's directory", "linux", stat(fileInfo{}, nil), service, nil},
+		{"macOS", "darwin", stat(dirInfo{}, nil), service, nil},
 	} {
-		if got := hostScope(tc.goos, tc.stat); !reflect.DeepEqual(got, tc.want) {
+		if got := hostScope(tc.goos, tc.stat, tc.cgroup); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: %v", tc.name, got)
+		}
+	}
+}
+
+// New decides the scope for this process.
+func TestNewTakesThisProcesssScope(t *testing.T) {
+	if got, want := New().Scope, hostScope(runtime.GOOS, os.Stat, ownCgroup); !reflect.DeepEqual(got, want) {
+		t.Errorf("New().Scope %v, want %v", got, want)
+	}
+	if runtime.GOOS == "linux" {
+		if _, err := ownCgroup(); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestServiceUnit(t *testing.T) {
+	for _, tc := range []struct{ name, cgroup, want string }{
+		{"inside the server's unit", "0::/user.slice/user-1000.slice/user@1000.service/app.slice/engine-server.service\n", "engine-server.service"},
+		{"a scope of its own", "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p42-i43.scope\n", ""},
+		{"a login session", "0::/user.slice/user-1000.slice/session-579.scope\n", ""},
+		{"a service's delegated subgroup", "0::/system.slice/ci.service/payload\n", "ci.service"},
+		{"a legacy host", "12:pids:/user.slice\n1:name=systemd:/system.slice/engine.service\n", "engine.service"},
+		{"the unified line wins", "1:name=systemd:/system.slice/old.service\n0::/user.slice/session-2.scope\n", ""},
+		{"outside systemd", "0::/\n", ""},
+		{"no usable line", "garbage\n", ""},
+		{"nothing", "", ""},
+	} {
+		if got := ServiceUnit(tc.cgroup); got != tc.want {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
 		}
 	}
 }

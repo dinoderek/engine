@@ -10,24 +10,6 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-func TestServiceUnit(t *testing.T) {
-	for _, tc := range []struct{ name, cgroup, want string }{
-		{"inside the server's unit", "0::/user.slice/user-1000.slice/user@1000.service/app.slice/engine-server.service\n", "engine-server.service"},
-		{"a scope of its own", "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p42-i43.scope\n", ""},
-		{"a login session", "0::/user.slice/user-1000.slice/session-579.scope\n", ""},
-		{"a service's delegated subgroup", "0::/system.slice/ci.service/payload\n", "ci.service"},
-		{"a legacy host", "12:pids:/user.slice\n1:name=systemd:/system.slice/engine.service\n", "engine.service"},
-		{"the unified line wins", "1:name=systemd:/system.slice/old.service\n0::/user.slice/session-2.scope\n", ""},
-		{"outside systemd", "0::/\n", ""},
-		{"no usable line", "garbage\n", ""},
-		{"nothing", "", ""},
-	} {
-		if got := serviceUnit(tc.cgroup); got != tc.want {
-			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
-		}
-	}
-}
-
 // cgroupRunner answers cat with cgroup, and readlink with dir.
 func cgroupRunner(cgroup, dir string, err error) func(string, ...string) (string, error) {
 	return func(name string, args ...string) (string, error) {
@@ -125,7 +107,7 @@ func TestRealTmuxUnitReadsAProcessCgroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := serviceUnit(string(data)); (got == nil) != (want == "") || (got != nil && got.Unit != want) {
+	if want := session.ServiceUnit(string(data)); (got == nil) != (want == "") || (got != nil && got.Unit != want) {
 		t.Errorf("read %+v, want the unit %q", got, want)
 	}
 }
