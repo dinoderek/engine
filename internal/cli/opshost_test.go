@@ -112,7 +112,7 @@ func shellWords(line string) []string {
 }
 
 // exec is the host's own CLIs: Claude Code's, and what reads the tmux
-// server's directory.
+// server's directory and cgroup.
 func (h *opsHost) exec(name string, args ...string) (string, error) {
 	line := strings.Join(args, " ")
 	switch {
@@ -124,6 +124,8 @@ func (h *opsHost) exec(name string, args ...string) (string, error) {
 		return fmt.Sprintf("p%d\nfcwd\nn%s\n", h.tmux.pid, h.tmux.cwd), nil
 	case name == "readlink":
 		return h.tmux.cwd + "\n", nil
+	case name == "cat" && line == fmt.Sprintf("/proc/%d/cgroup", h.tmux.pid):
+		return "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1-i2.scope\n", nil
 	}
 	h.f.t.Errorf("%s: ran %s %s", h.name, name, line)
 	return "", errors.New("not in this fleet")
