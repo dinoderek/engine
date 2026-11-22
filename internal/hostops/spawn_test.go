@@ -287,7 +287,7 @@ func TestSpawnWarnsOfAStartWithoutAScope(t *testing.T) {
 	h.clone(t)
 	tm := &tmuxFake{scopeErr: errors.New("Failed to connect to user scope bus")}
 	got, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, tm, nil), request())
-	want := "the session tmux server started without its own systemd scope, so stopping the unit that started it ends every window: Failed to connect to user scope bus"
+	want := "the tmux session engine was created without its own systemd scope, so a tmux server it started dies with the unit that started it: Failed to connect to user scope bus"
 	if err != nil || got.Window != "@9" || got.Warning != want {
 		t.Errorf("reply %+v, %v; want the warning %q", got, err, want)
 	}

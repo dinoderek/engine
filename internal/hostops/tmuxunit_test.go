@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/dinoderek/engine/internal/session"
 )
 
 func TestServiceUnit(t *testing.T) {
@@ -105,8 +107,8 @@ func TestStatusSaysWhenTheServerCannotBeAsked(t *testing.T) {
 	}
 }
 
-// The real check on this process: a test runs in no service of engine's, so
-// whatever it reads, it reads without an error.
+// The real check on this process: cat reads its cgroup, and the unit found
+// is the one the file names.
 func TestRealTmuxUnitReadsAProcessCgroup(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("reads /proc")
@@ -114,11 +116,16 @@ func TestRealTmuxUnitReadsAProcessCgroup(t *testing.T) {
 	if _, err := os.Stat("/proc/self/cgroup"); err != nil {
 		t.Skip("no /proc/self/cgroup")
 	}
-	d := Deps{Tmux: (&tmuxFake{}).tmux(), Exec: func(name string, args ...string) (string, error) {
-		data, err := os.ReadFile(args[0])
-		return string(data), err
-	}}
-	if _, err := d.tmuxUnit("linux", os.Getpid()); err != nil {
-		t.Error(err)
+	data, err := os.ReadFile("/proc/self/cgroup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := Deps{Tmux: (&tmuxFake{}).tmux(), Exec: session.Exec}
+	got, err := d.tmuxUnit("linux", os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := serviceUnit(string(data)); (got == nil) != (want == "") || (got != nil && got.Unit != want) {
+		t.Errorf("read %+v, want the unit %q", got, want)
 	}
 }

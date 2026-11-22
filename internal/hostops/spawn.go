@@ -172,7 +172,7 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 		warnings = append(warnings, "the host may sleep while the session runs: "+opened.AwakeErr.Error())
 	}
 	if opened.ScopeErr != nil {
-		warnings = append(warnings, "the session tmux server started without its own systemd scope, so stopping the unit that started it ends every window: "+opened.ScopeErr.Error())
+		warnings = append(warnings, "the tmux session "+session.Name+" was created without its own systemd scope, so a tmux server it started dies with the unit that started it: "+opened.ScopeErr.Error())
 	}
 	if joinWarning != "" {
 		warnings = append(warnings, joinWarning)

@@ -140,9 +140,9 @@ type Opened struct {
 	// AwakeErr is why tmux refused to start the keep-awake job. The window
 	// is open regardless. A job that fails later is not reported.
 	AwakeErr error
-	// ScopeErr is why the tmux server this call started has no scope of its
-	// own: stopping the unit that started it ends every window. The window
-	// is open regardless.
+	// ScopeErr is why this call created the session without a scope of its
+	// own: a tmux server it started then dies with the unit that started
+	// it. The window is open regardless.
 	ScopeErr error
 }
 
