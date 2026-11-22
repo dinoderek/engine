@@ -22,6 +22,20 @@ func dashboardOrigin(raw string) bool {
 		u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && !strings.Contains(raw, "#")
 }
 
+// TelegramTokenFile holds the bot token on the server's host, and
+// WatchTokenFile the watcher's copy of it; both live in ConfigDir.
+const (
+	TelegramTokenFile = "telegram-token"
+	WatchTokenFile    = "watch-telegram-token"
+)
+
+// ParseTelegram reads the [telegram] table of a config.toml's text, such as
+// another host's.
+func ParseTelegram(src string) (Telegram, error) {
+	_, tg, err := parseOperatorConfig(src)
+	return tg, err
+}
+
 // ReadTelegram leaves an absent configuration disabled.
 func ReadTelegram(dir string) (Telegram, error) {
 	path := filepath.Join(dir, "config.toml")

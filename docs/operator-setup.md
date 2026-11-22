@@ -54,7 +54,7 @@ config, and ends with `engine start --check --host <name>`, a suggested
 fresh readiness probe of every repo engine has cloned there
 (`readiness.md`). It builds engine with that commit's go.mod
 `toolchain`, read from GitHub. Setup changes only engine's own files
-(`~/.config/engine/`, `~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, Codex's plugin in your Codex home (through `codex plugin` only,
+(`~/.config/engine/`, `~/.local/bin/engine`, `~/.local/share/engine/`, and on the Mac the watcher's agent in `~/Library/LaunchAgents/`), Claude's plugin, Codex's plugin in your Codex home (through `codex plugin` only,
 never another file in `~/.codex`), and Codex's plugin and daemon in engine's own
 Codex home. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one
 exact command, and it exits 1 while any item is open. It refuses a build that is
@@ -180,6 +180,11 @@ when you like:
 - `engine task stop <task>` ends a session and holds the task in `todo`,
   keeping its worktree and branch (`control-server.md`).
 - `engine ui`: the same reads in a browser (`dashboard.md`).
+- **A server that does not answer:** the watcher, which `engine setup`
+  installs on the Mac, says so on Telegram (load `telegram.md`). From any
+  host, `engine server status` shows its unit, API, database, disk and last 50
+  log lines, and `engine server restart` restarts its unit; both take
+  `--json`.
 
 A task with many `review` rulings had a weak card (`execution-protocol.md`,
 "Rulings and hard stops"): raise it at the next Prepare.
@@ -188,4 +193,4 @@ A task with many `review` rulings had a weak card (`execution-protocol.md`,
 raised, a merge it never made, a state that is wrong), file an issue on
 `dinoderek/engine` with the evidence: the task's `engine updates`, the state
 `engine ps` showed and when, and what you did instead. Work around it only
-through `engine` commands; never restart `engine serve` to clear it.
+through `engine` commands; never restart a server that answers to clear it.

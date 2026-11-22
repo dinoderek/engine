@@ -11,7 +11,7 @@ import (
 )
 
 // TokenFile is read only on the server's host and by local Telegram setup.
-const TokenFile = "telegram-token"
+const TokenFile = hosts.TelegramTokenFile
 
 // Configured starts nothing unless both chat and token are present. Invalid
 // credentials fail closed and are logged without affecting the server.
