@@ -28,6 +28,7 @@ func Decide(v View) []Action {
 	v.Fleet = v.Fleet.dyingAtLimit(v, dead)
 	acts = append(acts, releaseStopped(v)...)
 	acts = append(acts, releaseMoved(v)...)
+	acts = append(acts, moveWaits(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, reaps(v)...)
 	acts = append(acts, limitNotes(v)...)
@@ -189,6 +190,20 @@ func releaseStopped(v View) []Action {
 	for _, t := range v.Tasks {
 		if s := t.Session; s != nil && t.Stopped && (s.Live || s.DeadWindow) {
 			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: *s, Stopped: true, Text: "the operator stopped its task"})
+		}
+	}
+	return acts
+}
+
+// moveWaits tells the operator, once per move, that a moved task waits for
+// its old host, which could not be read, to release its old session.
+func moveWaits(v View) []Action {
+	var acts []Action
+	for _, t := range v.Tasks {
+		if t.open() && len(t.Strays) == 0 && t.Current.Reason == control.EndMoved && v.moveHeld(t) {
+			acts = append(acts, notice(t, "move-wait/"+t.Current.ID, fmt.Sprintf(
+				"%s waits for host %s, which could not be read, to release its old session before it resumes elsewhere. "+
+					"`engine task move %s --yes` sends it on without waiting; the old session may then still push.", t.ID, t.Current.Host, t.ID)))
 		}
 	}
 	return acts

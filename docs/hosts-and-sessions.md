@@ -114,6 +114,8 @@ Spawn refuses a missing host file, `hosts.toml` or host entry, an unknown or
 unrunnable harness, or an existing window; slots, capabilities and caps are
 placement's alone.
 
+**Preflight:** `engine start --check` runs `gh auth status`, then a hands-off light-tier session exercising the skill, `gh`, `engine` and `/tmp`; it exits 1 if gh failed or the session was denied, stalled or skipped a step.
+
 ## Moving a task
 
 A moved task (`control-server.md`) resumes on its old host from the kept
@@ -125,8 +127,6 @@ old session may still push: before each push, the new session fetches and
 asks the operator when `origin`'s branch has commits it lacks. A release
 leaving work `origin` lacks tells the operator, unless the move stayed on
 that host.
-
-**Preflight:** `engine start --check` runs `gh auth status`, then a hands-off light-tier session exercising the skill, `gh`, `engine` and `/tmp`; it exits 1 if gh failed or the session was denied, stalled or skipped a step.
 
 ## Seeing and reaching sessions
 

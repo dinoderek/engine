@@ -230,6 +230,7 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 		if err := c.movedLeft(a, reply); err != nil {
 			return err
 		}
+		return c.Service.MovedReleased(a.Attempt)
 	}
 	if a.Key != "" {
 		if err := c.notice(a.Item, a.Key, a.Text); err != nil {

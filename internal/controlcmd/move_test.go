@@ -88,6 +88,10 @@ func TestTaskMoveOffAnUnreachableHostWarnsAndNeedsConfirming(t *testing.T) {
 	if code := Main([]string{"task", "move", task, "--request-key", "asked"}, terminal); code != 0 || !strings.Contains(terminal.Out.(*bytes.Buffer).String(), `"moved_blind": true`) {
 		t.Fatalf("a confirmed move exited %d: %s %s", code, errOut, terminal.Out)
 	}
+	// Repeating it under the key, unconfirmed this time, prints the first result.
+	if again := command(t, e, "task", "move", task, "--request-key", "asked"); !again.Attempt.MovedBlind || again.Attempt.Reason != control.EndMoved {
+		t.Fatalf("the repeat: %+v, %+v", again.Item, again.Attempt)
+	}
 	if out := command(t, e, "task", "move", task, "--yes"); !out.Attempt.MovedBlind {
 		t.Fatalf("--yes on a moved task: %+v", out.Attempt)
 	}

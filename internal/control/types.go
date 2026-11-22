@@ -103,6 +103,9 @@ type Attempt struct {
 	MoveHost    string `json:"move_host,omitempty"`
 	MoveHarness string `json:"move_harness,omitempty"`
 	MovedBlind  bool   `json:"moved_blind,omitempty"`
+	// MoveReleased is set once the coordinator released a moved attempt's
+	// window: nothing of it is left to release.
+	MoveReleased bool `json:"move_released,omitempty"`
 }
 
 // MoveRequest is a task move's destination. Confirm is the operator's

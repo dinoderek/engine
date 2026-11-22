@@ -1,6 +1,7 @@
 package reconcile
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -82,11 +83,13 @@ func TestAMovedTasksOldWindowIsReleasedBeforeItsNextDispatch(t *testing.T) {
 func TestAMovedTaskWaitsForItsOldHostUnlessMovedBlind(t *testing.T) {
 	v := moveView(moved(2, "running", "mac", ""))
 	v.Fleet.Hosts[0] = HostLoad{Name: "devbox", Unreachable: "ssh: exit 255"}
-	if got := shows(Decide(v)); got != "" {
-		t.Errorf("with devbox unreachable: %q", got)
+	// The operator is told, once per move (the key), how to send it on.
+	acts := Decide(v)
+	if got := shows(acts); got != "notice t2 move-wait/a2" || !strings.Contains(acts[0].Text, "engine task move t2 --yes") {
+		t.Errorf("with devbox unreachable: %q, %+v", got, acts)
 	}
 	v.Fleet.Hosts[0] = HostLoad{Name: "devbox", Harnesses: []string{"claude"}, Status: statusWithRunsError()}
-	if got := shows(Decide(v)); got != "" {
+	if got := shows(Decide(v)); got != "notice t2 move-wait/a2" {
 		t.Errorf("with devbox's runs unreadable: %q", got)
 	}
 	blind := moved(2, "running", "mac", "")
@@ -106,6 +109,29 @@ func TestAStrayWindowIsReleasedAfterTheTaskMoved(t *testing.T) {
 	now.Strays = []Stray{{Attempt: control.Attempt{ID: "a2", Item: "t2", Host: "devbox", Reason: control.EndMoved, MovedBlind: true}, Session: old}}
 	if got := shows(Decide(moveView(now))); got != "release t2 a2" {
 		t.Errorf("actions %q", got)
+	}
+}
+
+// Once the plan is done, a window a move left is still released, and
+// coordination goes on while one may be left on a host that cannot be read.
+func TestADonePlanReleasesWhatAMoveLeftBeforeItStops(t *testing.T) {
+	stray := task(2, "done")
+	stray.Strays = []Stray{{Attempt: control.Attempt{ID: "a2", Item: "t2", Host: "devbox", Reason: control.EndMoved, MovedBlind: true},
+		Session: Session{Name: "demo-2", Host: "devbox", Live: true, WindowID: "@1"}}}
+	v := moveView(stray)
+	v.Root = plan("done")
+	if got := shows(Decide(v)); got != "release t2 a2" {
+		t.Errorf("with a stray window: %q", got)
+	}
+	unread := task(2, "done")
+	unread.StrayUnknown = true
+	v.Tasks = []Item{unread}
+	if got := shows(Decide(v)); got != "" {
+		t.Errorf("with a stray's host unread: %q", got)
+	}
+	v.Tasks = []Item{task(2, "done")}
+	if got := shows(Decide(v)); got != "stop p1" {
+		t.Errorf("with nothing left: %q", got)
 	}
 }
 

@@ -57,6 +57,34 @@ func (s Service) moveTask(st *State, a Actor, r Request) (Response, error) {
 	return Response{Item: &item, Attempt: &at}, nil
 }
 
+// MovedReleased records that the coordinator released moved attempt id's
+// window, so no pass looks for it again. It is idempotent.
+func (s Service) MovedReleased(id string) error {
+	return s.Store.Transaction(func(st *State) error {
+		at, ok := st.Attempts[id]
+		if !ok || at.Reason != EndMoved {
+			return problem(409, "execution %s did not end moved", id)
+		}
+		if !at.MoveReleased {
+			at.MoveReleased = true
+			st.Attempts[id] = at
+		}
+		return nil
+	})
+}
+
+// digested is r as its request key's receipt compares it: a move's
+// confirmation is left out, so repeating a confirmed move under its key,
+// confirmed again or not, returns the first result.
+func digested(r Request) Request {
+	if r.Move != nil && r.Move.Confirm {
+		m := *r.Move
+		m.Confirm = false
+		r.Move = &m
+	}
+	return r
+}
+
 // fleet is the coordinator's latest pass over the hosts, or none.
 func (s Service) fleet() HostStatus {
 	if s.Hosts == nil {

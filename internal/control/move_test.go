@@ -121,6 +121,34 @@ func TestMovingAMovedTaskChangesItsDestination(t *testing.T) {
 	call(t, s, op, Request{Op: "claim", ID: task.ID, Version: second.Item.Version, Body: "devbox", State: "codex"})
 }
 
+// A move confirmed at a terminal, repeated under its key without the
+// confirmation, or the other way round, returns the first result.
+func TestARepeatedMoveIgnoresItsConfirmation(t *testing.T) {
+	s, task, _, _ := movable(t)
+	first := call(t, s, op, Request{Op: "task-move", ID: task.ID, Key: "k", Move: &MoveRequest{Host: "spare", Confirm: true}})
+	again := call(t, s, op, Request{Op: "task-move", ID: task.ID, Key: "k", Move: &MoveRequest{Host: "spare"}})
+	if again.Item.Version != first.Item.Version || !again.Attempt.Ended.Equal(first.Attempt.Ended) {
+		t.Fatalf("the repeat moved again: %+v", again.Item)
+	}
+	reject(t, s, op, Request{Op: "task-move", ID: task.ID, Key: "k", Move: &MoveRequest{Host: "mac"}}, 409)
+}
+
+func TestMovedReleasedMarksOnlyAMovedAttempt(t *testing.T) {
+	s, task, _, at := movable(t)
+	if err := s.MovedReleased(at.ID); err == nil {
+		t.Fatal("a running attempt was marked released")
+	}
+	call(t, s, op, Request{Op: "task-move", ID: task.ID, Move: &MoveRequest{}})
+	for range 2 {
+		if err := s.MovedReleased(at.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := mustSnapshot(t, s).Attempts[at.ID]; !got.MoveReleased || got.Reason != EndMoved {
+		t.Fatalf("marked attempt %+v", got)
+	}
+}
+
 func TestMoveRefusesWhatItCannotMove(t *testing.T) {
 	s := service(t)
 	s.Hosts = readFleet

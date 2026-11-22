@@ -58,6 +58,32 @@ func TestAMoveReleasesTheOldWindowThenResumesWhereItWasSent(t *testing.T) {
 	}
 }
 
+// A moved attempt's window that went by itself is never confused with a
+// later session's on the same host, though tmux may give it the same id.
+func TestAMovedAttemptNeverClaimsALaterSessionsWindow(t *testing.T) {
+	c, h, _, _, task := setup(t)
+	pass(t, c)
+	pass(t, c)
+	claim(t, c, task)
+	c.Service.Hosts = readHosts(c, "devbox")
+	execute(t, c.Service, control.Request{Op: "task-move", ID: task.ID, Move: &control.MoveRequest{Host: "devbox"}})
+	h.status.Windows = nil // the old session exited and its window closed
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason == control.EndMoved || at.Window != "@1" {
+		t.Fatalf("not dispatched again in a window reusing the id: %+v", at)
+	}
+	// Only the dispatch's own release of the ended attempt's leftovers ran,
+	// before the new window opened.
+	released := len(h.released)
+	for range 3 {
+		pass(t, c)
+	}
+	if slices.Contains(h.outcomes, hostops.RunMoved) || len(h.released) != released {
+		t.Fatalf("the later session's window was released: %v with %v", h.released, h.outcomes)
+	}
+}
+
 // twoHosts adds host mac beside setup's devbox, each with its own fake.
 func twoHosts(c *Coordinator, devbox *host) *host {
 	mac := &host{status: hostops.Status{FreeSlots: 1, FreeHeavySlots: 1}, launches: map[string]hostops.ControlRequest{}}

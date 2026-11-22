@@ -64,8 +64,11 @@ type Item struct {
 	Cleaned *control.Update
 	// Strays are the windows the task's attempts that ended moved still
 	// have on hosts that answered, oldest first: each is released, pushing
-	// its branch first, and the task waits for them.
-	Strays []Stray
+	// its branch first, and the task waits for them. StrayUnknown is set
+	// when such an attempt, not yet released, is on a host that could not be
+	// read, so its window may still be there.
+	Strays       []Stray
+	StrayUnknown bool
 }
 
 // Stray is a moved attempt's window, as its host shows it.
