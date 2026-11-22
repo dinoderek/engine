@@ -15,6 +15,7 @@ func TestDeathDuringUnresolvedQuestionParksTheTaskUntilAnswered(t *testing.T) {
 	pass(t, c)
 	pass(t, c)
 	pass(t, c) // the coordinator sees the session live
+	claim(t, c, task)
 	execute(t, c.Service, control.Request{Op: "ask", ID: task.ID, Body: "Need an operator decision"})
 	st, _ := c.Service.Store.Snapshot()
 	first := st.Items[task.ID].Attempt
@@ -109,24 +110,13 @@ func TestQuotaMarkersAreIndependentForEachReset(t *testing.T) {
 
 func TestRetriedTaskDispatchesAsAResume(t *testing.T) {
 	c, h, _, _, task := setup(t)
-	pass(t, c)
-	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
-	first := st.Attempts[st.Items[task.ID].Attempt]
+	first := endFirstAttempt(t, c, h, task, false)
 	if h.launches[first.RunID].Spawn.Resume {
 		t.Fatal("a first attempt dispatched as a resume")
 	}
-	claim(t, c, task)
-	h.status.Windows[0].Alive = false
-	if err := c.ConfirmEnded(first.ID); err != nil {
-		t.Fatal(err)
-	}
-	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
-	execute(t, c.Service, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "todo"})
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ := c.Service.Store.Snapshot()
 	retry := st.Attempts[st.Items[task.ID].Attempt]
 	if retry.ID == first.ID {
 		t.Fatal("the retried task was not dispatched again")
@@ -177,7 +167,7 @@ func TestRebootWhileThePlanIsStoppedLeavesTheTaskResumable(t *testing.T) {
 	}
 }
 
-func TestDeathAfterCoordinationRestartedStillFails(t *testing.T) {
+func TestDeathAfterCoordinationRestartedCounts(t *testing.T) {
 	c, h, _, plan, task := setup(t)
 	now := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
 	c.Service.Now = func() time.Time { return now }
@@ -192,8 +182,8 @@ func TestDeathAfterCoordinationRestartedStillFails(t *testing.T) {
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
 	at := st.Attempts[st.Items[task.ID].Attempt]
-	if at.Reason != control.EndFailed || st.Items[task.ID].State != "failed" || h.calls != 1 {
-		t.Fatalf("a session that died after coordination restarted did not fail: %+v %s", at, st.Items[task.ID].State)
+	if at.Reason != control.EndVanished || !at.Crashed || st.Items[task.ID].State != "running" || h.calls != 1 {
+		t.Fatalf("a session that died after coordination restarted was not a counted death: %+v %s", at, st.Items[task.ID].State)
 	}
 }
 
