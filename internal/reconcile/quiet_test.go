@@ -26,7 +26,7 @@ func TestQuietSessions(t *testing.T) {
 	idle := quietWorking(2 * QuietWait)
 	idle.Working, idle.Waiting = false, true
 	bg := quietWorking(2 * QuietWait)
-	bg.Background = true
+	bg.Working, bg.Background = false, true
 	unknownActivity := quietWorking(0)
 	unknownActivity.LastActivity = time.Time{}
 	unknownState := quietWorking(2 * QuietWait)
@@ -51,6 +51,7 @@ func TestQuietSessions(t *testing.T) {
 		{"unknown state", with(task(2, "running"), unknownState), ""},
 		{"already told for this last activity", with(task(2, "running"), flagged), ""},
 		{"unknown host", with(task(2, "running"), unknownHost), ""},
+		{"a task that has not claimed", with(task(2, "todo"), quietWorking(QuietWait)), ""},
 		{"a done task", with(task(2, "done"), quietWorking(QuietWait)), ""},
 		{"a stopped task", func() Item { x := with(task(2, "running"), quietWorking(QuietWait)); x.Stopped = true; return x }(), ""},
 	} {
@@ -116,5 +117,21 @@ func TestAQuietPlannerIsTold(t *testing.T) {
 	acts := Decide(view(p))
 	if len(acts) != 1 || acts[0].Kind != Notice || !strings.HasPrefix(acts[0].Key, "quiet/a1/") || !strings.Contains(acts[0].Text, "engine plan stop p1") || strings.Contains(acts[0].Text, "task move") {
 		t.Errorf("actions %v", acts)
+	}
+}
+
+// A working session that has not claimed its task, quiet for hours, is
+// reported by the claim stall alone, whose mark shares the attempt's field:
+// the stall is decided once and no quiet notice follows it.
+func TestAnUnclaimedQuietSessionIsLeftToTheClaimStall(t *testing.T) {
+	s := quietWorking(2 * QuietWait)
+	s.Spawned = t0.Add(-3 * time.Hour)
+	tk := with(task(2, "todo"), s)
+	if got := shows(Decide(view(plan("planned"), tk))); !strings.Contains(got, "notice t2 stall/a2/") || strings.Contains(got, "quiet/") {
+		t.Fatalf("first pass: %q", got)
+	}
+	tk.Session.StallNoted = s.Spawned
+	if got := shows(Decide(view(plan("planned"), tk))); strings.Contains(got, "notice") {
+		t.Errorf("a later pass: %q", got)
 	}
 }

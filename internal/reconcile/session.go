@@ -81,7 +81,8 @@ type Session struct {
 	// waiting, or working only in a background job.
 	WaitingSince time.Time
 	IdleSince    time.Time
-	// StallNoted is the start, or the wait, the coordinator last flagged.
+	// StallNoted is the start, the wait or the last activity the coordinator
+	// last flagged.
 	StallNoted time.Time
 	// Screen is the window's last lines, when its host sent them: it does
 	// for a window whose session is not working.
@@ -106,8 +107,8 @@ type Session struct {
 	Branch   string
 }
 
-// Flagged reports whether at, the session's start or the start of its
-// wait, is the one the coordinator last flagged. Marks keep whole seconds.
+// Flagged reports whether at, the session's start, the start of its wait or
+// its last activity, is the one the coordinator last flagged. Marks keep whole seconds.
 // Equality, not order, so hosts' clocks need not agree.
 func (s Session) Flagged(at time.Time) bool {
 	return s.StallNoted.Truncate(time.Second).Equal(at.Truncate(time.Second))
@@ -126,7 +127,7 @@ func (s Session) AtDialog() bool {
 // Quiet reports whether the session is working in a turn and has shown no
 // activity for d by now. Unknown activity is never quiet.
 func (s Session) Quiet(now time.Time, d time.Duration) bool {
-	return s.Live && !s.Unknown && !s.Limited && s.Working && !s.Background && !s.LastActivity.IsZero() && now.Sub(s.LastActivity) >= d
+	return s.Live && !s.Unknown && !s.Limited && s.Working && !s.LastActivity.IsZero() && now.Sub(s.LastActivity) >= d
 }
 
 // Idle reports whether the session takes typed input without cutting into

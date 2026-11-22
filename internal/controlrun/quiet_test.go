@@ -134,3 +134,30 @@ func TestAWindowsActivityIsTheSessions(t *testing.T) {
 		t.Errorf("a dead window: %+v", dead)
 	}
 }
+
+// A running task whose session has not written to the server is held, so
+// the claim stall never applies to it; its quiet session is told once, and no
+// pass sends a notice the server refuses.
+func TestARunningUnclaimedQuietSessionIsToldOnce(t *testing.T) {
+	c, h, _, _, task := setup(t)
+	var logged []string
+	c.Logf = func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
+	for range 3 {
+		pass(t, c)
+	}
+	now := c.Service.Now()
+	c.Service.Now = func() time.Time { return now }
+	h.status.Windows[0].State, h.status.Windows[0].LastActivity = session.StateWorking, now.Unix()
+	for range 30 {
+		now = now.Add(4 * time.Minute)
+		pass(t, c)
+	}
+	if n := quietNotices(t, c, task.ID); len(n) != 1 {
+		t.Errorf("quiet notices: %q, want one", n)
+	}
+	for _, l := range logged {
+		if strings.Contains(l, "notice") || strings.Contains(l, "request key") {
+			t.Errorf("a pass logged %q", l)
+		}
+	}
+}

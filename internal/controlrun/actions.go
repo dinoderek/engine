@@ -136,7 +136,8 @@ func tails(attempts []control.Attempt) string {
 }
 
 // mark sends a notice, then records on its attempt what it flagged: the
-// stall's start or wait, or the limit reset it alerted.
+// stall's start or wait, the last activity of a quiet session, or the limit
+// reset it alerted.
 func (c *Coordinator) mark(a reconcile.Action) error {
 	if err := c.notice(a.Item, a.Key, a.Text); err != nil || a.Attempt == "" {
 		return err

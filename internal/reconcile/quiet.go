@@ -6,14 +6,16 @@ import (
 	"time"
 )
 
-// quiets flags each task session (planners are flagged in planStep) that is working in a turn but has shown no
-// activity for QuietWait, once per attempt and last activity time. A session
-// that is idle, limited, held at a dialog, only in a background job or of
+// quiets flags each claimed task session (planners are flagged in planStep)
+// that is working in a turn but has shown no activity for QuietWait, once
+// per attempt and last activity time. A session that has not claimed its
+// task is left to the claim stall, which keeps its mark in the same field.
+// One that is idle, limited, held at a dialog, only in a background job or of
 // unknown activity is never flagged.
 func quiets(v View) []Action {
 	var acts []Action
 	for _, t := range v.Tasks {
-		if t.open() && !t.Stopped {
+		if t.open() && !t.Stopped && t.claimed() {
 			acts = append(acts, quiet(v, t)...)
 		}
 	}
