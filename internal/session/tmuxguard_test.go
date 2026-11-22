@@ -135,6 +135,35 @@ func TestServerPid(t *testing.T) {
 	}
 }
 
+func TestServerStart(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		out     string
+		err     error
+		start   int64
+		running bool
+		fails   bool
+	}{
+		{"a server", "1700000000\n", nil, 1700000000, true, false},
+		{"no server", "", fail(1, "no server running"), 0, false, false},
+		{"no socket", "", fail(1, "error connecting to /tmp/tmux-1/default (No such file or directory)"), 0, false, false},
+		{"a socket tmux may not use", "", fail(1, "error connecting to /tmp/tmux-1/default (Permission denied)"), 0, false, true},
+		{"tmux cannot run", "", errors.New("tmux: not found"), 0, false, true},
+		{"garbage", "none\n", nil, 0, false, true},
+		{"a zero start", "0\n", nil, 0, false, true},
+	} {
+		tm, f := newFake(t)
+		f.answer("display-message", tc.out, tc.err)
+		start, running, err := tm.ServerStart()
+		if start != tc.start || running != tc.running || (err != nil) != tc.fails {
+			t.Errorf("%s: start %d running %v err %v", tc.name, start, running, err)
+		}
+		if !strings.Contains(f.dump(), "#{start_time}") {
+			t.Errorf("%s: asked tmux %q", tc.name, f.dump())
+		}
+	}
+}
+
 func TestLockPathIsPerServer(t *testing.T) {
 	tm := &Tmux{Home: "/h"}
 	if got := tm.lockPath(); got != "/h/.local/share/engine/tmux-default.lock" {

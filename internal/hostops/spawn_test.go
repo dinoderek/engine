@@ -278,6 +278,14 @@ func TestAdoptedKickoff(t *testing.T) {
 	if got := adoptedKickoff("go", adopted); !strings.HasPrefix(got, "go The task's branch task/r-7 is at abc123") {
 		t.Errorf("kickoff %q", got)
 	}
+	if got := adoptedKickoff("go", adopted); strings.Contains(got, "index.lock") {
+		t.Errorf("a worktree with no stale lock notes one: %q", got)
+	}
+	stale := adopted
+	stale.StaleLock = true
+	if got := adoptedKickoff("go", stale); !strings.HasSuffix(got, "was removed before resuming.") || !strings.Contains(got, ".git/index.lock") {
+		t.Errorf("the kickoff does not note the removed stale lock: %q", got)
+	}
 }
 
 // A session started without a scope of its own still runs, and the reply

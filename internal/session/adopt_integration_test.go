@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,5 +205,58 @@ func TestRemoveWorktreeKeepsAnAdoptedBranchTheReposReleaseDeleted(t *testing.T) 
 	next, err := r.CreateWorktree(clone, 5, false, "r-5-a3")
 	if err != nil || !next.Adopted || next.Head != commit {
 		t.Errorf("the next attempt: %+v, %v; want the branch adopted at %s", next, err, commit)
+	}
+}
+
+// lockOf is the index.lock of the worktree at path, which git names.
+func lockOf(t *testing.T, path string) string {
+	t.Helper()
+	lock := mustGit(t, path, "rev-parse", "--git-path", "index.lock")
+	if !filepath.IsAbs(lock) {
+		lock = filepath.Join(path, lock)
+	}
+	return lock
+}
+
+func TestCreateWorktreeRemovesAStaleIndexLockOnAdopt(t *testing.T) {
+	r, clone, first, commit := ownFixture(t)
+	mustGit(t, clone.Path, "worktree", "remove", first.Path)
+	// The lock is at the worktree's git dir; a reboot left it, and no process has it open.
+	wt, err := r.CreateWorktree(clone, 5, false, "r-5-a2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock := lockOf(t, wt.Path)
+	if err := os.WriteFile(lock, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	again, err := r.CreateWorktree(clone, 5, true, "r-5-a3")
+	if err != nil {
+		t.Fatalf("adopt past a stale lock: %v", err)
+	}
+	if _, err := os.Stat(lock); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the stale lock %s is still there: %v", lock, err)
+	}
+	if !again.Adopted || !again.StaleLock || again.Head != commit {
+		t.Errorf("worktree = %+v, want adopted at %s with its stale lock noted", again, commit)
+	}
+}
+
+func TestCreateWorktreeKeepsALockAProcessHoldsAndReportsIt(t *testing.T) {
+	r, clone, first, _ := ownFixture(t)
+	lock := lockOf(t, first.Path)
+	// This process holds the lock open, as a running git would.
+	held, err := os.OpenFile(lock, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = held.Close() })
+	_, err = r.CreateWorktree(clone, 5, true, "r-5-a2")
+	var takenErr *BranchTakenError
+	if !errors.As(err, &takenErr) || !strings.Contains(err.Error(), "held by a running process") {
+		t.Fatalf("a held lock: err = %v, want a refusal that names it", err)
+	}
+	if _, err := os.Stat(lock); err != nil {
+		t.Errorf("a held lock was removed: %v", err)
 	}
 }

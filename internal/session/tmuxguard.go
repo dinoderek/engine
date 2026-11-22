@@ -106,7 +106,20 @@ func noServer(stderr string) bool {
 
 // ServerPid is the pid of the tmux server, and false when no server runs.
 func (t *Tmux) ServerPid() (int, bool, error) {
-	out, err := t.tmux("display-message", "-p", "#{pid}")
+	n, running, err := t.serverNumber("#{pid}", "pid")
+	return int(n), running, err
+}
+
+// ServerStart is when the tmux server started, in epoch seconds, and false
+// when no server runs. A restarted server has a new one.
+func (t *Tmux) ServerStart() (int64, bool, error) {
+	return t.serverNumber("#{start_time}", "start time")
+}
+
+// serverNumber is the number tmux prints for format, and false when no
+// server runs.
+func (t *Tmux) serverNumber(format, what string) (int64, bool, error) {
+	out, err := t.tmux("display-message", "-p", format)
 	var exit *ExitError
 	if errors.As(err, &exit) && noServer(exit.Stderr) {
 		return 0, false, nil
@@ -114,9 +127,9 @@ func (t *Tmux) ServerPid() (int, bool, error) {
 	if err != nil {
 		return 0, false, err
 	}
-	var pid int
-	if _, err := fmt.Sscanf(strings.TrimSpace(out), "%d", &pid); err != nil || pid <= 0 {
-		return 0, false, fmt.Errorf("tmux printed %q for the server pid", strings.TrimSpace(out))
+	var n int64
+	if _, err := fmt.Sscanf(strings.TrimSpace(out), "%d", &n); err != nil || n <= 0 {
+		return 0, false, fmt.Errorf("tmux printed %q for the server %s", strings.TrimSpace(out), what)
 	}
-	return pid, true, nil
+	return n, true, nil
 }
