@@ -32,7 +32,7 @@ and leave the server running.
    file and restart the server. To pair a replacement chat, remove the chat
    setting first and repeat setup.
 
-The token stays on the server's host. Question text and informational operator
+Only the server and the Mac's watcher hold the token. Question text and operator
 messages go to Telegram, so choose a bot and private chat you control.
 
 ## Alerts and answers

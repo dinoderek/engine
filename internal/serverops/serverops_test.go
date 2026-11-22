@@ -263,7 +263,7 @@ func TestRestartFailures(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil || code != 1 || got.OK || r.calls != answerTries {
 		t.Fatalf("exit %d, calls %d, %v:\n%s", code, r.calls, err, out)
 	}
-	if c := got.Checks[1]; c.Name != "api" || !strings.Contains(c.Detail, "no answer within 30s: connection refused") {
+	if c := got.Checks[1]; c.Name != "api" || !strings.Contains(c.Detail, "no answer after 30 attempts: connection refused") {
 		t.Errorf("api check %+v", c)
 	}
 	r = newRig(t, "mac")

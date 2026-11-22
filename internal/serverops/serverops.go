@@ -186,6 +186,6 @@ func restart(s server, d Deps) report {
 			return r
 		}
 	}
-	r.add("api", false, fmt.Sprintf("no answer within %s: %v; read its log with engine server status", answerTries*answerPause, last))
+	r.add("api", false, fmt.Sprintf("no answer after %d attempts: %v; read its log with engine server status", answerTries, last))
 	return r
 }
