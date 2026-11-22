@@ -11,23 +11,22 @@ host (`engine setup --host <name>` copies it); each host's own name is in
 `~/.config/engine/host`.
 
 **Names and addresses.** A host's name is its `[host.<name>]` key, never a
-hostname or IP. Its `address` goes to `ssh` as is and is never posted.
+hostname or IP. Its `address` goes to `ssh` as is, never posted.
 
 **Slots.** `(ram_gb - reserve_gb) / gb_per_session`, rounded down, is a
 host's concurrent sessions; `max_sessions` replaces it. Only a live window
-with a run recorded under its name takes a slot.
+with a run under its name takes a slot.
 
-**Heavy sessions.** A task is heavy when its card requires one of the
-top-level `heavy_capabilities`. A host's `max_heavy_sessions` caps them below
-its slots.
+**Heavy sessions.** A task is heavy when its card requires a top-level
+`heavy_capabilities` entry; a host's `max_heavy_sessions` caps heavy sessions
+below its slots.
 
-**Capabilities** are declared per host and named by a card's `requires`. The
-one list is `hosts.Capabilities` in `internal/hosts/hosts.go`.
+**Capabilities** are declared per host and named by a card's `requires`
+(`hosts.Capabilities`, `internal/hosts/hosts.go`).
 
 ```toml
 default_harness = "claude"
 harness_ratio = { claude = 4, codex = 1 }
-quota_threshold = { five_hour = 90, seven_day = 95 }
 gb_per_session = 8
 reserve_gb = 8
 heavy_capabilities = ["ios", "vm"]
@@ -36,8 +35,8 @@ heavy_capabilities = ["ios", "vm"]
 address = "<user>@<tailscale name>"
 harnesses = ["claude", "codex"]
 ram_gb = 48
-reserve_gb = 16         # also the operator's workstation
-max_heavy_sessions = 2  # at most 2 of its 4 sessions heavy
+reserve_gb = 16
+max_heavy_sessions = 2
 capabilities = ["macos", "ios", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 
@@ -48,18 +47,13 @@ ram_gb = 32
 capabilities = ["linux", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 
-[host.devbox.services]
-manager = "systemd"
-server = "engine-server.service"
 ```
 
-**Services.** The optional `services` table says how a host runs the control
-server, a `systemctl --user` unit; `config.toml`'s `[server] host` says which
-host runs it. Another manager, one key without the other, and a unit that is
-not a `.service` name are refused at load.
+**Services.** The optional `services` table names the control server's
+`systemctl --user` unit on its host. Another manager, one key without the other, or a unit that is not
+a `.service` name is refused at load.
 
-Each harness runs through its pinned `bin`, never whichever binary is first
-on `PATH`. For launch lines and tiers, load `launch-lines.md`.
+Each harness runs through its pinned `bin`, never a `PATH` lookup. For launch lines and tiers, load `launch-lines.md`.
 
 ## Placement
 
@@ -69,7 +63,7 @@ every capability the card requires, a tmux server whose working directory
 exists (`tmux.md`), a passed readiness probe for its repo (`readiness.md`),
 and no usage limit holding that host × harness (`session-signals.md`, "Death
 at a limit").
-Among those, the host with the most free slots wins, then the fewest
+Among those, the host with most free slots wins, then the fewest
 capabilities, then the lowest name.
 
 For an unpinned card, `harness_ratio` scores each positive-weight harness by
@@ -83,14 +77,14 @@ those that used `quota_threshold` percent of any window, by default
 a window past its reset, or absent, is empty.
 
 An unplaced task stays ready; the operator is notified once if no host could
-take it even with every slot free. The planner starts at `deep` on the plan's
+take it with every slot free. The planner starts at `deep` on the plan's
 harness, else `default_harness`.
 
 ## Attempts and naming
 
 An attempt is the session registry: the server's record of a task's or plan's
 session (host, harness, run ID, tmux window, state; `engine attempt list`).
-`engine ps`, `engine attach` and the dashboard resolve a session through it.
+`engine ps`, `engine attach` and the dashboard resolve through it.
 
 A session is named `<repo>-<task>` in its tmux window, run ID and branch; the
 harness apps title it `t<n> · <title>` (`p<n>` for a planner).
@@ -101,13 +95,12 @@ The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
 
 1. creates the worktree on `task/<repo>-<task>`, with the repo's
    `worktree create` when it has one, else `git worktree add`, and marks the
-   branch with its run in git config (`branch.<branch>.engineRun`). A
-   re-dispatch adopts a branch a run of the same task marked, whether or not
-   that run opened a window: as it is, with any worktree on it, its
-   unpushed commits and uncommitted changes, fast-forwarded to `origin`'s tip
-   when clean and behind it, and refused when the two diverged or `origin` is
-   ahead of uncommitted changes; the kickoff names its head. A resume of an
-   unmarked branch reopens `origin`'s at its tip;
+   branch with its run (`branch.<branch>.engineRun`). A re-dispatch adopts a
+   branch a run of the same task marked, whether or not that run opened a
+   window: as it is, with its unpushed commits and uncommitted changes,
+   fast-forwarded to `origin`'s tip when clean and behind it, and refused when
+   the two diverged or `origin` is ahead of uncommitted changes; the kickoff
+   names its head. A resume of an unmarked branch reopens `origin`'s at its tip;
 2. trusts the worktree, and any directory the launch adds, for its harness, and opens the window `<repo>-<task>`
    in the session `engine`;
 3. runs the launch line at the task's tier with the adapter's flags and the
@@ -122,9 +115,7 @@ Spawn refuses a missing host file, `hosts.toml` or host entry, an unknown or
 unrunnable harness, or an existing window; slots, capabilities and caps are
 placement's alone.
 
-**Preflight:** `engine start --check` runs `gh auth status`, then a hands-off
-light-tier session that exercises the skill, `gh`, `engine` and `/tmp`; it
-exits 1 when gh failed or the session was denied, stalled or skipped a step.
+**Preflight:** `engine start --check` runs `gh auth status`, then a hands-off light-tier session exercising the skill, `gh`, `engine` and `/tmp`; it exits 1 if gh failed or the session was denied, stalled or skipped a step.
 
 ## Seeing and reaching sessions
 
@@ -134,10 +125,3 @@ exits 1 when gh failed or the session was denied, stalled or skipped a step.
 | Terminal | `engine ps` lists tasks with their attempts; `engine attach <task-id>` runs `tmux attach` on the host, over `ssh -t` if remote; `engine host status --all` shows the fleet. |
 | Phone | An SSH app over Tailscale: `tmux attach -t engine`, `Ctrl-b w`. |
 | Apps | Claude apps and claude.ai/code through Remote Control; Codex apps when the session joined the daemon. |
-
-## Lifecycle
-
-- **Questions:** `engine ask` sets `needs-human`; resolution from any surface
-  wakes the session to read its updates.
-- **Crash:** a dead window leaves the task `running`; the coordinator fails
-  it or resumes it, keeping the worktree.
