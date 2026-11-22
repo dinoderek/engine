@@ -26,10 +26,7 @@
    Existing violations live in the shrink-only baselines
    (`scripts/*-baseline.tsv`, all empty); a `//nolint` counts as one.
 4. **Hard stops.** Stop and ask the operator for:
-   - the protocol's classes: product, data, security, contract, gates,
-     outward or costly, drift, objectives, review, environment, repo rule,
-     permission
-     (defined in `plugins/engine/skills/build/references/hard-stops.md`);
+   - the protocol's hard-stop classes (`plugins/engine/skills/build/references/hard-stops.md`);
    - **loosening a gate:** a lower threshold, a baseline row, a `//nolint`, a
      linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,
      `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`;
@@ -90,8 +87,7 @@ Read these at each session start:
 - **One place per fact.** Cite a registry that is the source
   (`scripts/lanes.tsv`, `scripts/import-rules.tsv`, `scripts/doc-budgets.tsv`,
   `go.mod`); never restate it.
-- **Budgets.** Every doc has a word budget in `scripts/doc-budgets.tsv`;
-  this file plus the always-load docs share the `always-load` set's budget. Over budget:
+- **Budgets.** Set in `scripts/doc-budgets.tsv`; this file and the always-load docs share its `always-load` set. Over budget:
   split behind a load trigger, or cut what fails the bar.
 - **Keep the docs true.** A change to layout, layers, tests, gates or
   versions updates its owning doc in the same PR. A new persistent doc gets

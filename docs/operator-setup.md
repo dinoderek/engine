@@ -5,23 +5,21 @@
 ## GitHub access
 
 Each host needs `gh` access to engine and its target repositories, Git
-authentication and commit identity.
-Engine uses that configuration for GitHub calls, clones, pushes and PRs.
-Check access with `gh api user` and `gh repo view <owner/repo>`.
+authentication and commit identity, which engine uses for GitHub calls,
+clones, pushes and PRs. Check with `gh api user` and `gh repo view <owner/repo>`.
 
-On a Mac, keep gh's token in gh's own config file, not the login keychain.
-After a reboot the `engine` tmux server starts over ssh, and it cannot read the
-keychain, so every gh call in its sessions fails with a 401 (`engine start
---check` passes from a Terminal until the next reboot). In a Terminal, after
-`gh auth login -h github.com`, run
+On a Mac, keep gh's token out of the login keychain: the `engine` tmux server
+starts over ssh after a reboot and cannot read it, so every gh call in its
+sessions fails with a 401 (`engine start --check` passes from a Terminal until
+the next reboot). In a Terminal, after `gh auth login -h github.com`, run
 
 ```
 gh auth token | gh auth login -h github.com --with-token --insecure-storage
 ```
 
 which keeps the token in plaintext in `~/.config/gh/hosts.yml`. Setup's `gh
-auth` step runs `gh auth status` on the host (over ssh for `--host`) and stays
-open while gh fails there or, on macOS, keeps its token in the keychain.
+auth` step stays open while gh fails on the host or, on macOS, keeps its token
+in the keychain.
 
 ## Notifications
 
@@ -37,8 +35,7 @@ For Telegram alerts and pairing, load `telegram.md`.
 **The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
 `sqlite3` on a Codex host, to read the daemon's connection), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
-name, one line, as attempts and every surface show it: `hosts-and-sessions.md`, "Hosts") and
-`~/.config/engine/hosts.toml` (the same file on every host). Install engine
+name: `hosts-and-sessions.md`, "Hosts") and `~/.config/engine/hosts.toml` (the same on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
 Claude plugin for yourself with `claude plugin marketplace add dinoderek/engine` and
 `claude plugin install engine@engine --scope user`. Sign in to Claude Code
@@ -55,38 +52,37 @@ to rerun. It brings the host to the Mac's pushed engine commit, plugin and
 config, and ends with `engine start --check --host <name>`, a suggested
 `path` for any mise, asdf or nvm shims the host's `path` leaves out, and a
 fresh readiness probe of every repo engine has cloned there
-(`readiness.md`). The engine is built
-with `GOTOOLCHAIN` set to the `toolchain` line of go.mod at that commit, read
-from GitHub. Setup changes only engine's own files (`~/.config/engine/`,
-`~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, Codex's
-plugin in your Codex home (through `codex plugin` only, never another file in
-`~/.codex`), and Codex's plugin and daemon in engine's own Codex home. For
-anything else (`~/.bashrc`, `sudo`, `/login`) it prints one exact command, and
-it exits 1 while any item is open. It refuses a build that is dirty or not on GitHub, and a name that is not
-a machine in `hosts.toml`. With no `--host` it checks this host. A host gets
-only the steps of the harnesses it lists.
+(`readiness.md`). It builds engine with that commit's go.mod
+`toolchain`, read from GitHub. Setup changes only engine's own files
+(`~/.config/engine/`, `~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, Codex's plugin in your Codex home (through `codex plugin` only,
+never another file in `~/.codex`), and Codex's plugin and daemon in engine's own
+Codex home. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one
+exact command, and it exits 1 while any item is open. It refuses a build that is
+dirty or not on GitHub, and a name that is not a machine in `hosts.toml`. With
+no `--host` it checks this host. A host gets only the steps of the harnesses it
+lists.
 
 **Codex, on a host that lists it.** The Mac too. Setup checks that the pinned Codex runs and is signed in, then builds engine's own
 Codex home. Starting engine's
 daemon turns on remote control, which opens a connection to OpenAI's service for
 the ChatGPT and Codex apps. Signing in is yours: setup prints `codex login`, or,
-on another host, `ssh -t <address> codex login --device-auth`. After a reboot, rerun setup
-to start engine's daemon. Setup records the daemon it starts; a running
-daemon it did not record leaves setup open, since it may hold a session's
-environment: finish its sessions, run the stop command setup prints, and
-rerun setup. Setup reports the operator's own remote-control errors and
-ignored config keys, and fixes none.
+on another host, `ssh -t <address> codex login --device-auth`. After a reboot rerun
+setup to start engine's daemon. Setup records the daemon it starts; one it did
+not start leaves setup open, since it may hold a session's
+environment: finish its sessions, run the stop command setup prints, and rerun
+setup. Setup reports the operator's own remote-control errors and ignored config
+keys, and fixes none.
 
 **Claude's one-time prompts.** Nobody is there to answer them in an engine
 window. When the preflight finds one, run `claude --permission-mode auto
 --remote-control` once by hand on that host, in a folder you trust, and
-answer every prompt, such as enabling Remote Control or the auto mode notice.
-Run `engine setup` again after updating Claude Code, the plugin or `engine`.
+answer every prompt.
+Rerun `engine setup` after updating Claude Code, the plugin or `engine`.
 
 **The plugin in a target repo.** A repo enables the `engine` plugin in its
 `.claude/settings.json`, as this repo does. Update the user's copy with
-`claude plugin update engine@engine --scope user`: without `--scope`, in a
-checkout that enables the plugin, it updates the project's copy instead.
+`claude plugin update engine@engine --scope user`; without `--scope`, in a
+checkout that enables it, the project's copy updates instead.
 
 **SSH, the route to any session:**
 
@@ -138,8 +134,7 @@ and changes nothing.
 
 It refuses, changing nothing, while a task is `running`, `in-review` or
 `needs-human`, or when the server's host records no `services` table, does
-not answer, or its unit is not active. A host that is unreachable or stays
-open does not stop the others: run the commands the report lists, then rerun
+not answer, or its unit is not active. A host that is unreachable or stays open stops no others: run the commands the report lists, then rerun
 it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
 it by hand, in the same order: stop and back up the server
 (`control-server.md`, "Start"), install the engine and your plugins, run
@@ -160,10 +155,9 @@ Restart=on-failure
 WantedBy=default.target
 ```
 
-A user unit reads no shell rc file. Its `PATH` must find `tmux`, `ssh`,
-`gh`, `git` and the harness CLIs, and ssh to the other hosts must work
-without an interactive agent: a key the unit can use, or `SSH_AUTH_SOCK` set
-in the unit. Then run `systemctl --user daemon-reload`,
+A user unit reads no shell rc file, so its `PATH` must find `tmux`, `ssh`,
+`gh`, `git` and the harness CLIs, and ssh to other hosts must work without an
+interactive agent (a usable key, or `SSH_AUTH_SOCK` in the unit). Then run `systemctl --user daemon-reload`,
 `systemctl --user enable --now engine-server.service` and
 `loginctl enable-linger <user>`, so the unit outlives your login, and record
 it in the host's `hosts.toml` entry as `[host.<name>.services]` with
@@ -171,12 +165,11 @@ it in the host's `hosts.toml` entry as `[host.<name>.services]` with
 
 ## Watching a run
 
-Once you approve a plan and run `engine run <plan>`, the coordinator inside
-`engine serve` runs it to `done`; nobody else watches it. Check in when you
-like:
+After `engine run <plan>`, the coordinator runs the plan to `done`; check in
+when you like:
 
-- `engine ps`: each task's state and attempt; `engine attempt list <task>`
-  gives its host and window, and `engine attach` opens it.
+- `engine ps` shows each task's state and attempt; `engine attach` opens its
+  window.
 - `engine inbox --operator`: hard stops, notices and rulings digests. Answer a
   question with `engine reply <sequence> <text>`, settle it with
   `engine resolve` (which also restores the task's state), or answer a
@@ -184,9 +177,8 @@ like:
   waiting task in it).
 - `engine updates <plan>` and `engine updates <task>`, from your read cursor
   (`--after <sequence>`).
-- `engine task stop <task>`: ends a running task's session, keeps its
-  worktree and branch and holds it in `todo`; edit its card, then
-  `engine task resume <task>` (`control-server.md`).
+- `engine task stop <task>` ends a session and holds the task in `todo`,
+  keeping its worktree and branch (`control-server.md`).
 - `engine ui`: the same reads in a browser (`dashboard.md`).
 
 A task with many `review` rulings had a weak card (`execution-protocol.md`,
