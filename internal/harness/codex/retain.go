@@ -32,18 +32,22 @@ func keptDir(home string) string { return home + "/plugins/.engine-kept" }
 // and put the older versions back.
 func installedMark(home string) string { return home + "/plugins/.engine-installed" }
 
+// putBack is the shell that puts each version copied aside ($k) that the
+// cache ($d) lacks back into it, then removes the copy.
+const putBack = `if [ -d "$k" ]; then mkdir -p "$d" && for v in "$k"/*; do [ -e "$v" ] || continue; [ -e "$d/${v##*/}" ] || cp -Rp "$v" "$d/" || exit 1; done; rm -rf "$k"; fi`
+
 // keepCommand copies every version of the plugin in home aside, before an
-// add removes them.
+// add removes them. A copy an earlier setup left aside, cut off before its
+// restore, goes back first: it may hold the only copy of a version.
 func keepCommand(home string) string {
-	return `k=` + keptDir(home) + `; d=` + pluginCache(home) +
-		`; rm -rf "$k" && if [ -d "$d" ]; then mkdir -p "$k" && cp -Rp "$d"/. "$k"/; fi`
+	return `k=` + keptDir(home) + `; d=` + pluginCache(home) + `; ` + putBack +
+		` && if [ -d "$d" ]; then mkdir -p "$k" && cp -Rp "$d"/. "$k"/; fi`
 }
 
 // restoreCommand puts back each version copied aside that the add removed,
 // and records when.
 func restoreCommand(home string) string {
-	return `k=` + keptDir(home) + `; d=` + pluginCache(home) +
-		`; if [ -d "$k" ]; then mkdir -p "$d" && for v in "$k"/*; do [ -e "$v" ] || continue; [ -e "$d/${v##*/}" ] || cp -Rp "$v" "$d/" || exit 1; done; rm -rf "$k"; fi` +
+	return `k=` + keptDir(home) + `; d=` + pluginCache(home) + `; ` + putBack +
 		` && mkdir -p ` + home + `/plugins && date +%s > ` + installedMark(home)
 }
 

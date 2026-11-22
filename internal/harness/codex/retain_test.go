@@ -169,6 +169,16 @@ func TestTheRetentionScriptsOnARealShell(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(home, "plugins", ".engine-installed")); err != nil || strings.TrimSpace(string(b)) == "" {
 		t.Errorf("the install record reads %q, %v", b, err)
 	}
+	// A copy an earlier setup left aside goes back before the next keep.
+	leftover := filepath.Join(home, "plugins", ".engine-kept", "0.6.0")
+	if err := os.MkdirAll(leftover, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(keepCommand(word))
+	if got := versions(); !slices.Equal(got, []string{"0.6.0", "0.7.0", "0.7.1"}) {
+		t.Fatalf("after a keep with a copy left aside the cache holds %q", got)
+	}
+	run(restoreCommand(word))
 	run(pruneCommand(word, "0.7.1"))
 	if got := versions(); !slices.Equal(got, []string{"0.7.1"}) {
 		t.Errorf("after the prune the cache holds %q", got)

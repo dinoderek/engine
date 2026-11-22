@@ -68,7 +68,9 @@ func TestDuringUpgrade(t *testing.T) {
 	}{
 		{"no upgrade ever ran", UpgradeRecord{}, start, start, end, false},
 		{"seen live during it, gone during it", ran, start.Add(-time.Hour), start.Add(time.Minute), start.Add(2 * time.Minute), true},
-		{"seen live before it, read gone after its end", ran, start.Add(-time.Hour), start.Add(-time.Minute), end.Add(time.Minute), true},
+		{"seen live just before it, read gone after its end", ran, start.Add(-time.Hour), start.Add(-time.Minute), end.Add(time.Minute), true},
+		{"seen live the lead before it", ran, start.Add(-time.Hour), start.Add(-UpgradeLead), end.Add(time.Minute), true},
+		{"seen live long before it, on a host offline since", ran, start.Add(-48 * time.Hour), start.Add(-24 * time.Hour), end.Add(time.Minute), false},
 		{"never seen live, started before its end", ran, start.Add(time.Minute), time.Time{}, end.Add(time.Minute), true},
 		{"gone before it started", ran, start.Add(-time.Hour), start.Add(-2 * time.Minute), start.Add(-time.Minute), false},
 		{"seen live after its end", ran, start.Add(-time.Hour), end.Add(time.Second), end.Add(time.Minute), false},

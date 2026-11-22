@@ -59,3 +59,26 @@ func TestADeathDuringAnUpgradeResumesUncountedWithABugNotice(t *testing.T) {
 		t.Fatalf("the later death's notices: %q", got)
 	}
 }
+
+// A host-wide loss during an upgrade sends the host's one notice, and each
+// attempt it ended its own engine-bug notice; both resume uncounted.
+func TestAHostWideLossDuringAnUpgradeAlsoReportsEachDeathAsABug(t *testing.T) {
+	c, h, claimed, unclaimed := twoRunning(t)
+	execute(t, c.Service, control.Request{Op: "upgrade", State: control.UpgradeStart})
+	before, _ := c.Service.Store.Snapshot()
+	h.status.Windows, h.status.TmuxStart = nil, 2000
+	pass(t, c)
+	st, _ := c.Service.Store.Snapshot()
+	if got := hostNotices(c); len(got) != 1 || got[0] != "devbox's tmux restarted; 2 tasks will resume" {
+		t.Fatalf("host notices: %q", got)
+	}
+	for _, task := range []control.Item{claimed, unclaimed} {
+		at := st.Attempts[before.Items[task.ID].Attempt]
+		if !at.HostLost || !at.Upgraded || at.Crashed || at.Early {
+			t.Errorf("%s ended %+v; want lost with its host, during the upgrade, uncounted", task.ID, at)
+		}
+		if got := taskNotices(c, task); len(got) != 1 || !strings.Contains(got[0], "engine bug") {
+			t.Errorf("%s's notices: %q", task.ID, got)
+		}
+	}
+}
