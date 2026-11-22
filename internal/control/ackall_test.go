@@ -29,6 +29,8 @@ func TestAckAllAcknowledgesOnlyMessagesInScopeAndReplaysOnce(t *testing.T) {
 	elsewhere := tell(otherPlan.ID, "other notice")
 	loose := tell("", "fleet notice")
 	later := tell(plan.ID, "later notice")
+	settled := tell(plan.ID, "settled notice")
+	call(t, s, op, Request{Op: "resolve", ReplyTo: settled, Body: "handled"})
 
 	scoped := Request{Op: "ack-all", Item: Item{Repo: repo.ID}, Before: later, Key: "bulk-1"}
 	out := call(t, s, op, scoped)
@@ -55,6 +57,11 @@ func TestAckAllAcknowledgesOnlyMessagesInScopeAndReplaysOnce(t *testing.T) {
 	reject(t, s, op, Request{Op: "ack-all", Key: "bulk-1"}, 409)
 
 	call(t, s, op, Request{Op: "ack-all"})
+	for _, u := range call(t, s, op, Request{Op: "updates", After: settled}).Updates {
+		if u.Kind == "acknowledged" && u.ReplyTo == settled {
+			t.Fatal("acknowledged a message the inbox no longer lists")
+		}
+	}
 	if got := inboxIDs(t, s); !slices.Equal(got, []int{question}) {
 		t.Fatalf("inbox after acknowledging everything %v, want only the question", got)
 	}
