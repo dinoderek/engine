@@ -103,6 +103,32 @@ func TestStateHookPrefersTheEnvironmentRun(t *testing.T) {
 	}
 }
 
+// The state file keeps the transcript path the hook events name, the status
+// op's source of a session's activity; an event that names none keeps the
+// last one, and a new path replaces it.
+func TestStateHookKeepsTheTranscriptPath(t *testing.T) {
+	h := newHookHome(t)
+	event := func(name, transcript string) string {
+		e := eventAt(name, h.codex)
+		if transcript == "" {
+			return e
+		}
+		return strings.Replace(e, "{", `{"transcript_path":"`+transcript+`",`, 1)
+	}
+	for _, tc := range []struct{ event, transcript, want string }{
+		{"UserPromptSubmit", "/t/one.jsonl", "/t/one.jsonl"},
+		{"Stop", "", "/t/one.jsonl"},
+		{"UserPromptSubmit", "/t/two.jsonl", "/t/two.jsonl"},
+	} {
+		if code, _, stderr := h.run([]string{"hook", "state", "--harness", "codex"}, event(tc.event, tc.transcript), nil); code != 0 {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+		if got, ok := session.ReadHarnessState(h.codexRun); !ok || got.Transcript != tc.want || got.Event != tc.event {
+			t.Errorf("after %s naming %q: state %+v (read %v), want transcript %q", tc.event, tc.transcript, got, ok, tc.want)
+		}
+	}
+}
+
 // review is the logged decision on a request left to the harness's review.
 var review = harness.LeaveToReview.Decision()
 
