@@ -120,9 +120,9 @@ placement's alone.
 
 A moved task (`control-server.md`) resumes on its old host from the kept
 worktree, uncommitted work included, and elsewhere from `origin`'s branch.
-It waits while a host read shows its old window, which each pass releases
-with `release --moved` (`coordinator.md`), or while the old host is unread,
-unless the operator moved it blind. A blind move's kickoff warns that the
+It waits until a pass's `release --moved` (`coordinator.md`) of its old
+run, window open or gone, succeeds, and while the old host is unread, unless
+the operator moved it blind. A blind move's kickoff warns that the
 old session may still push: before each push, the new session fetches and
 asks the operator when `origin`'s branch has commits it lacks. A release
 leaving work `origin` lacks tells the operator, unless the move stayed on

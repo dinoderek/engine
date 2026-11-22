@@ -36,7 +36,8 @@ func (s Service) moveTask(st *State, a Actor, r Request) (Response, error) {
 	if r.Move.Host != "" && !fleet.At.IsZero() && !slices.ContainsFunc(fleet.Hosts, func(h HostRow) bool { return h.Name == r.Move.Host }) {
 		return Response{}, problem(400, "host %s is not in hosts.toml", r.Move.Host)
 	}
-	read := fleet.read(at.Host)
+	// A released window has no session left to warn about.
+	read := fleet.read(at.Host) || at.MoveReleased
 	if !read && !r.Move.Confirm {
 		return Response{}, &Problem{Status: 409, Reason: ReasonMoveUnconfirmed, Message: fmt.Sprintf(
 			"host %s was not reachable at the last check: task %s's session there may still be running and pushing to its branch, "+
@@ -93,10 +94,10 @@ func (s Service) fleet() HostStatus {
 	return s.Hosts()
 }
 
-// read reports whether the latest pass read host.
+// read reports whether the latest pass read host, its run records included.
 func (f HostStatus) read(host string) bool {
 	i := slices.IndexFunc(f.Hosts, func(h HostRow) bool { return h.Name == host })
-	return !f.At.IsZero() && i >= 0 && f.Hosts[i].Unreachable == ""
+	return !f.At.IsZero() && i >= 0 && f.Hosts[i].Unreachable == "" && f.Hosts[i].RunsError == ""
 }
 
 // moveText says where moved attempt at sends its task, and what happens to

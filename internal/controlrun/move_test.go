@@ -58,8 +58,9 @@ func TestAMoveReleasesTheOldWindowThenResumesWhereItWasSent(t *testing.T) {
 	}
 }
 
-// A moved attempt's window that went by itself is never confused with a
-// later session's on the same host, though tmux may give it the same id.
+// A moved attempt whose window went by itself is still released, so its
+// branch is pushed, and is then never confused with a later session's
+// window on the same host, though tmux may give that the same id.
 func TestAMovedAttemptNeverClaimsALaterSessionsWindow(t *testing.T) {
 	c, h, _, _, task := setup(t)
 	pass(t, c)
@@ -68,6 +69,10 @@ func TestAMovedAttemptNeverClaimsALaterSessionsWindow(t *testing.T) {
 	c.Service.Hosts = readHosts(c, "devbox")
 	execute(t, c.Service, control.Request{Op: "task-move", ID: task.ID, Move: &control.MoveRequest{Host: "devbox"}})
 	h.status.Windows = nil // the old session exited and its window closed
+	pass(t, c)
+	if !slices.Equal(h.outcomes, []hostops.Outcome{hostops.RunMoved}) {
+		t.Fatalf("the gone window's run was released %v", h.outcomes)
+	}
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
 	if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason == control.EndMoved || at.Window != "@1" {
@@ -79,7 +84,7 @@ func TestAMovedAttemptNeverClaimsALaterSessionsWindow(t *testing.T) {
 	for range 3 {
 		pass(t, c)
 	}
-	if slices.Contains(h.outcomes, hostops.RunMoved) || len(h.released) != released {
+	if len(h.released) != released || slices.Contains(h.outcomes[1:], hostops.RunMoved) {
 		t.Fatalf("the later session's window was released: %v with %v", h.released, h.outcomes)
 	}
 }
@@ -142,5 +147,32 @@ func TestABlindMoveStartsElsewhereAndReleasesTheOldWindowOnReturn(t *testing.T) 
 	pass(t, c)
 	if len(devbox.released) != 1 || len(operatorNotices(t, c, task.ID)) != 1 {
 		t.Errorf("the gone window was released again: %v", devbox.released)
+	}
+}
+
+// A blind move off a host that rebooted: when it answers again with no
+// window, the old run is still released, pushing its branch, and the
+// operator told what origin lacks.
+func TestABlindMoveOffARebootedHostStillPushesOnReturn(t *testing.T) {
+	c, devbox, _, _, task := setup(t)
+	mac := twoHosts(c, devbox)
+	pass(t, c)
+	pass(t, c)
+	claim(t, c, task)
+	devbox.outage = true
+	pass(t, c)
+	c.Service.Hosts = readHosts(c, "mac")
+	execute(t, c.Service, control.Request{Op: "task-move", ID: task.ID, Move: &control.MoveRequest{Confirm: true}})
+	pass(t, c)
+	if len(mac.launches) != 1 {
+		t.Fatalf("the blind move did not start on mac: %d launches", len(mac.launches))
+	}
+	devbox.outage, devbox.status.Windows, devbox.unpushed = false, nil, "2 commits on task/demo-3"
+	pass(t, c)
+	if !slices.Equal(devbox.outcomes, []hostops.Outcome{hostops.RunMoved}) {
+		t.Fatalf("devbox released %v with %v", devbox.released, devbox.outcomes)
+	}
+	if notices := operatorNotices(t, c, task.ID); len(notices) != 1 || !strings.Contains(notices[0].Body, "Origin lacks 2 commits") {
+		t.Fatalf("notices %+v", notices)
 	}
 }

@@ -87,11 +87,12 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 	return t
 }
 
-// strays are the windows item's attempts that ended moved, and were not yet
-// released, still have on hosts that answered, live or dead, oldest first.
-// A window is the attempt's only while its host's newest run of that name
-// is the attempt's own: a later session there may reuse the window's tmux
-// id. unknown is set when such an attempt's host could not be read.
+// strays are item's attempts that ended moved, and were not yet released,
+// whose run is still their host's newest of its name on a host that
+// answered, oldest first: their window, live, dead or already gone, is
+// released, pushing the branch. Only such a run's window is the attempt's,
+// as a later session there may reuse its tmux id. unknown is set when such
+// an attempt's host could not be read.
 func strays(st control.State, item control.Item, fleet reconcile.Fleet) (out []reconcile.Stray, unknown bool) {
 	for _, at := range st.Attempts {
 		if at.Item != item.ID || at.Reason != control.EndMoved || at.Window == "" || at.MoveReleased {
@@ -101,7 +102,7 @@ func strays(st control.State, item control.Item, fleet reconcile.Fleet) (out []r
 		switch {
 		case s.Unknown:
 			unknown = true
-		case (s.Live || s.DeadWindow) && newestRun(fleet, at, s.Name):
+		case newestRun(fleet, at, s.Name):
 			out = append(out, reconcile.Stray{Attempt: at, Session: s})
 		}
 	}

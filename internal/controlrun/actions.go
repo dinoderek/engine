@@ -263,7 +263,7 @@ func (c *Coordinator) movedLeft(a reconcile.Action, reply hostops.Released) erro
 		return nil
 	}
 	return c.notice(a.Item, "moved-left/"+a.Attempt, fmt.Sprintf(
-		"The moved task's old session %s on host %s was released, keeping its worktree there. Origin lacks %s; a resume on another host starts without it.",
+		"The moved task's old session %s on host %s was released, keeping its worktree there. Origin lacks %s; a resume on another host starts without them.",
 		a.Session.Name, a.Session.Host, reply.Unpushed))
 }
 

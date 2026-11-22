@@ -14,6 +14,9 @@ type HostStatus struct {
 type HostRow struct {
 	Name        string `json:"name"`
 	Unreachable string `json:"unreachable,omitempty"`
+	// RunsError says why the host's run records could not be read: its
+	// sessions are unknown.
+	RunsError string `json:"runs_error,omitempty"`
 	// Slots are how many sessions the host runs at once and how many more
 	// it can start, with the heavy ones counted apart.
 	Slots          int `json:"slots"`

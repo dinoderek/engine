@@ -210,15 +210,16 @@ func moveWaits(v View) []Action {
 }
 
 // releaseMoved releases each window a moved attempt left on a host that
-// answered, pushing its branch first and keeping the worktree and branch.
-// It repeats each pass until a read shows the window gone, so the task's
-// next dispatch waits for it (moveHeld).
+// answered, pushing its branch first and keeping the worktree and branch. It
+// repeats each pass until the release succeeds, so the task's next dispatch
+// waits for it (moveHeld). A finished task's is only closed, as Stopped: its
+// branch is not pushed again.
 func releaseMoved(v View) []Action {
 	var acts []Action
 	for _, t := range v.Tasks {
 		for _, s := range t.Strays {
 			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: s.Attempt.ID, Session: s.Session, Moved: true,
-				Text: "the operator moved its task"})
+				Stopped: t.State == "done" || t.State == "failed", Text: "the operator moved its task"})
 		}
 	}
 	return acts

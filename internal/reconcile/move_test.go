@@ -135,6 +135,23 @@ func TestADonePlanReleasesWhatAMoveLeftBeforeItStops(t *testing.T) {
 	}
 }
 
+// A move whose old window was released waits for nothing, even with the old
+// host unread; a finished task's stray is only closed, not pushed again.
+func TestAReleasedMoveWaitsForNothingAndADoneTasksStrayIsNotPushed(t *testing.T) {
+	v := moveView(moved(2, "running", "mac", ""))
+	v.Tasks[0].Current.MoveReleased = true
+	v.Fleet.Hosts[0] = HostLoad{Name: "devbox", Unreachable: "ssh: exit 255"}
+	if got := shows(Decide(v)); got != "dispatch t2 mac claude true" {
+		t.Errorf("a released move: %q", got)
+	}
+	done := task(2, "done")
+	done.Strays = []Stray{{Attempt: control.Attempt{ID: "a2", Item: "t2", Host: "devbox", Reason: control.EndMoved}, Session: Session{Name: "demo-2", Host: "devbox"}}}
+	acts := Decide(moveView(done, task(3, "running")))
+	if len(acts) == 0 || acts[0].Kind != Release || !acts[0].Moved || !acts[0].Stopped {
+		t.Errorf("a done task's stray: %+v", acts)
+	}
+}
+
 func statusWithRunsError() (s hostops.Status) {
 	s.RunsError = "permission denied"
 	return s

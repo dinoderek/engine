@@ -133,6 +133,22 @@ func TestARepeatedMoveIgnoresItsConfirmation(t *testing.T) {
 	reject(t, s, op, Request{Op: "task-move", ID: task.ID, Key: "k", Move: &MoveRequest{Host: "mac"}}, 409)
 }
 
+// A host whose run records could not be read is unread, so a move off it
+// needs confirming; once the old window was released, a move again does not.
+func TestMoveConfirmationFollowsWhatTheOldHostCanStillDo(t *testing.T) {
+	s := service(t)
+	task, _, at := running(t, s)
+	s.Hosts = func() HostStatus { f := readFleet(); f.Hosts[0].RunsError = "permission denied"; return f }
+	reject(t, s, op, Request{Op: "task-move", ID: task.ID, Move: &MoveRequest{}}, 409)
+	call(t, s, op, Request{Op: "task-move", ID: task.ID, Move: &MoveRequest{Confirm: true}})
+	if err := s.MovedReleased(at.ID); err != nil {
+		t.Fatal(err)
+	}
+	if out := call(t, s, op, Request{Op: "task-move", ID: task.ID, Move: &MoveRequest{Host: "spare"}}); out.Attempt.MovedBlind {
+		t.Fatalf("a released move is blind: %+v", out.Attempt)
+	}
+}
+
 func TestMovedReleasedMarksOnlyAMovedAttempt(t *testing.T) {
 	s, task, _, at := movable(t)
 	if err := s.MovedReleased(at.ID); err == nil {

@@ -148,7 +148,8 @@ type Action struct {
 	Done bool
 	// Stopped is a Release of a stopped task's session: the host keeps its
 	// worktree and branch. Moved is a Release of a moved attempt's: the
-	// host pushes its branch first, and keeps both.
+	// host pushes its branch first, and keeps both, unless Stopped is set
+	// too.
 	Stopped bool
 	Moved   bool
 	// Head is the head commit a done task's PR merged at.
@@ -192,7 +193,7 @@ func (v View) moveHeld(t Item) bool {
 		return true
 	}
 	at := t.Current
-	if at.Reason != control.EndMoved || at.MovedBlind {
+	if at.Reason != control.EndMoved || at.MovedBlind || at.MoveReleased {
 		return false
 	}
 	h, ok := v.Fleet.Host(at.Host)
