@@ -108,8 +108,11 @@ func (h Host) Runs(harness string) bool { return slices.Contains(h.Harnesses, ha
 type Config struct {
 	DefaultHarness string
 	HarnessRatio   map[string]int
-	GBPerSession   int
-	ReserveGB      int
+	// QuotaThresholds is the percent of each usage window at which a
+	// harness is near full, by window name.
+	QuotaThresholds map[string]int
+	GBPerSession    int
+	ReserveGB       int
 	// HeavyCapabilities make a task heavy when its card requires one.
 	HeavyCapabilities []string
 	Harnesses         map[string]Harness

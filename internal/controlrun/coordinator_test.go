@@ -316,3 +316,15 @@ func TestCoordinatorCancellationAndObservation(t *testing.T) {
 		t.Fatal("unreadable records treated as dead")
 	}
 }
+
+// The fleet carries the configured quota thresholds and each host's quota
+// readings, so placement can prefer a harness with room.
+func TestFleetCarriesQuota(t *testing.T) {
+	c, h, _, _, _ := setup(t)
+	c.Config.QuotaThresholds = map[string]int{"seven_day": 95}
+	h.status.Quota = map[string]session.Quota{"claude": {Harness: "claude", ObservedAt: 1, Windows: map[string]session.QuotaWindow{"seven_day": {Used: 97, ResetsAt: 2}}}}
+	f := c.fleet(c.Config, c.Host)
+	if f.QuotaThresholds["seven_day"] != 95 || f.Hosts[0].Status.Quota["claude"].Windows["seven_day"].Used != 97 {
+		t.Fatalf("fleet %+v", f)
+	}
+}

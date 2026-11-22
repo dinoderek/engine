@@ -132,6 +132,7 @@ func decode(root *node) (*Config, *Error) {
 	hosts := r.table("host", true)
 	v.children(hosts, "host", func(name string, n *node) { c.Hosts[name] = v.host(c, name, n) })
 	c.HarnessRatio = v.ratio(c, r)
+	c.QuotaThresholds = v.thresholds(r)
 	r.finish()
 	if hosts != nil && len(hosts.order) == 0 {
 		v.fail(hosts.pos, "top level: no [host.<name>] is defined")

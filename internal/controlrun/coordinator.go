@@ -161,7 +161,7 @@ func (c *Coordinator) decide(id string, fleet reconcile.Fleet) (control.State, r
 
 // fleet reads every host's status, one call per host, all at once.
 func (c *Coordinator) fleet(cfg *hosts.Config, local hosts.Host) reconcile.Fleet {
-	f := reconcile.Fleet{Local: local.Name, DefaultHarness: cfg.DefaultHarness, HarnessRatio: cfg.HarnessRatio, Caps: map[string]int{}, Heavy: cfg.HeavyCapabilities}
+	f := reconcile.Fleet{Local: local.Name, DefaultHarness: cfg.DefaultHarness, HarnessRatio: cfg.HarnessRatio, QuotaThresholds: cfg.QuotaThresholds, Caps: map[string]int{}, Heavy: cfg.HeavyCapabilities}
 	for name, h := range cfg.Harnesses {
 		f.Caps[name] = h.MaxSessions
 	}
