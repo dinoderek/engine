@@ -205,7 +205,8 @@ func (s Service) endUnlaunched(st *State, a Actor, at Attempt, body string) Atte
 
 // EndDead ends attempt id after the coordinator saw its window gone on a
 // host it read, with the tail of its pane log. The tail is kept only when
-// the session died before claiming its task. It is idempotent and returns
+// the session died before claiming its task, or crashed after claiming it.
+// It is idempotent and returns
 // the ended attempt.
 func (s Service) EndDead(id, body, tail string) (Attempt, error) {
 	return s.end(id, body, func(at *Attempt) { at.Tail = tail })

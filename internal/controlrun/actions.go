@@ -40,7 +40,8 @@ func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Con
 
 // endAttempt ends a dead session's attempt and tells the operator how: a
 // vanished task resumes, a session that died before claiming its task is
-// dispatched again once, and any other death fails the task.
+// dispatched again once, and a second early death, or the crash that makes
+// control.DeathCap in a row, fails the task.
 func (c *Coordinator) endAttempt(a reconcile.Action) error {
 	if a.AtLimit {
 		return c.endAtLimit(a)
