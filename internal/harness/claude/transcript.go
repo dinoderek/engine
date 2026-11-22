@@ -14,8 +14,10 @@ import (
 
 // Prompts are the prompts in a Claude Code transcript: its user records
 // that are not tool results, whose content is the submitted text or its
-// text blocks. A meta record, or one whose origin is not a person, such as
-// a subagent's hand-back or a task notification, is injected.
+// text blocks, and its queued commands, which the harness delivers between
+// turns. A meta record, or one whose origin is not a person, such as a
+// subagent's hand-back or a task notification, is injected; a hand-back's
+// text is its agent-message, without the frame the harness wraps it in.
 func (hooks) Prompts(transcript string) ([]harness.Prompt, error) {
 	f, err := os.Open(transcript)
 	if err != nil {
@@ -26,7 +28,7 @@ func (hooks) Prompts(transcript string) ([]harness.Prompt, error) {
 	r := bufio.NewReader(f)
 	for {
 		line, err := r.ReadBytes('\n')
-		if p, ok := userPrompt(line); ok {
+		if p, ok := prompt(line); ok {
 			prompts = append(prompts, p)
 		}
 		if errors.Is(err, io.EOF) {
@@ -42,28 +44,61 @@ func (hooks) Prompts(transcript string) ([]harness.Prompt, error) {
 // with no origin predates the field and is a person's too.
 const humanOrigin = "human"
 
-// userPrompt is the prompt a transcript line records, if it records one.
-func userPrompt(line []byte) (harness.Prompt, bool) {
-	if !bytes.Contains(line, []byte(`"user"`)) {
+// origin is who a transcript record says submitted its turn.
+type origin struct {
+	Kind string `json:"kind"`
+}
+
+func (o origin) human() bool { return o.Kind == "" || o.Kind == humanOrigin }
+
+// record is the part of a transcript line a prompt is read from.
+type record struct {
+	Type    string `json:"type"`
+	Meta    bool   `json:"isMeta"`
+	Origin  origin `json:"origin"`
+	Message struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	} `json:"message"`
+	Attachment struct {
+		Type   string `json:"type"`
+		Prompt string `json:"prompt"`
+		Origin origin `json:"origin"`
+	} `json:"attachment"`
+}
+
+// prompt is the prompt a transcript line records, if it records one.
+func prompt(line []byte) (harness.Prompt, bool) {
+	if !bytes.Contains(line, []byte(`"user"`)) && !bytes.Contains(line, []byte(`"queued_command"`)) {
 		return harness.Prompt{}, false
 	}
-	var rec struct {
-		Type   string `json:"type"`
-		Meta   bool   `json:"isMeta"`
-		Origin struct {
-			Kind string `json:"kind"`
-		} `json:"origin"`
-		Message struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		} `json:"message"`
+	var rec record
+	if json.Unmarshal(line, &rec) != nil {
+		return harness.Prompt{}, false
 	}
-	if json.Unmarshal(line, &rec) != nil || rec.Type != "user" || rec.Message.Role != "user" {
+	switch {
+	case rec.Type == "attachment" && rec.Attachment.Type == "queued_command" && rec.Attachment.Prompt != "":
+		return harness.Prompt{Text: rec.Attachment.Prompt, Injected: !rec.Attachment.Origin.human()}, true
+	case rec.Type != "user" || rec.Message.Role != "user":
 		return harness.Prompt{}, false
 	}
 	text, ok := promptText(rec.Message.Content)
-	injected := rec.Meta || (rec.Origin.Kind != "" && rec.Origin.Kind != humanOrigin)
+	injected := rec.Meta || !rec.Origin.human()
+	if injected {
+		text = agentMessage(text)
+	}
 	return harness.Prompt{Text: text, Injected: injected}, ok
+}
+
+// agentMessage is the agent-message element of a peer's turn, which the
+// harness frames with notes of its own, or text when it holds none.
+func agentMessage(text string) string {
+	const open, end = "<agent-message", "</agent-message>"
+	i, j := strings.Index(text, open), strings.LastIndex(text, end)
+	if i < 0 || j < i {
+		return text
+	}
+	return text[i : j+len(end)]
 }
 
 // promptText is the text of a user record's content: a string, or its text
