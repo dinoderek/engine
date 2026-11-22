@@ -1,6 +1,7 @@
 package hostops
 
 import (
+	"cmp"
 	"errors"
 	"os"
 	"path/filepath"
@@ -113,6 +114,9 @@ type tmuxFake struct {
 	screens map[string]string
 	// serverPid is the tmux server's pid; empty means no server answers.
 	serverPid string
+	// startTime is when the server started, in epoch seconds; empty
+	// answers 1000 while a server runs.
+	startTime string
 	fail      error // every list-windows fails
 	openErr   error // new-session and new-window fail
 	// awakeErr fails the keep-awake job, which the fake's Tmux then starts.
@@ -147,6 +151,9 @@ func (f *tmuxFake) run(_ string, args ...string) (string, error) {
 	case "display-message":
 		if f.serverPid == "" {
 			return "", &session.ExitError{Command: "tmux display-message", Code: 1, Stderr: "no server running on /tmp/tmux-1/default"}
+		}
+		if strings.Contains(line, "start_time") {
+			return cmp.Or(f.startTime, "1000") + "\n", nil
 		}
 		return f.serverPid + "\n", nil
 	case "split-window":

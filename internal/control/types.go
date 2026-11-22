@@ -90,6 +90,11 @@ type Attempt struct {
 	// died with the run's limit marker set. ResetsAt is then that limit's
 	// reset, or zero when unknown, and the attempt ended vanished.
 	Limited bool `json:"limited,omitempty"`
+	// HostLost is set when the session's window went in a host-wide loss:
+	// its host's tmux server was lost, with every window last seen live
+	// (SawTmux). Its death is no crash and no early death: it neither counts
+	// toward DeathCap nor resets it.
+	HostLost bool `json:"host_lost,omitempty"`
 	// PaneKey is the public key, in hex, of the run's pane key, which its
 	// prompt hook signs the operator's pane input with.
 	PaneKey string `json:"pane_key,omitempty"`
@@ -218,11 +223,13 @@ type State struct {
 	Queue    map[string]QueueEntry `json:"queue"`
 	Auth     map[string]Actor      `json:"auth"`
 	Receipts map[string]receipt    `json:"receipts"`
-	Next     int                   `json:"next"`
+	// Hosts are what the coordinator saved of each host, by name.
+	Hosts map[string]HostRecord `json:"hosts"`
+	Next  int                   `json:"next"`
 }
 
 func emptyState() State {
-	return State{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Queue: map[string]QueueEntry{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Next: 1}
+	return State{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Queue: map[string]QueueEntry{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Hosts: map[string]HostRecord{}, Next: 1}
 }
 
 func (s *State) id(prefix string) string {

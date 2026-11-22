@@ -1,6 +1,7 @@
 package hostops
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -71,6 +72,43 @@ func TestStatus(t *testing.T) {
 		t.Errorf("status\n got %+v\nwant %+v", got, want)
 	}
 	tm.readOnly(t)
+}
+
+// status reports when the session tmux server started, and that it knows;
+// with no server it knows nothing, and the caller reads that as no start
+// time, never as a zero one.
+func TestStatusReportsTheTmuxServersStartTime(t *testing.T) {
+	h := newHome(t, "mac")
+	for _, tc := range []struct {
+		name      string
+		tm        *tmuxFake
+		start     int64
+		known     bool
+		wantKnown string
+	}{
+		{"a server", &tmuxFake{windows: []string{"@1 %1 0 r-1"}, serverPid: "42", startTime: "1700000000"}, 1700000000, true, "true"},
+		{"no server", &tmuxFake{}, 0, false, "false"},
+	} {
+		got, err := ReadStatus(Deps{Tmux: tc.tm.tmux(), Home: h.dir, Exec: agentsFake("[]", nil)})
+		if err != nil || got.TmuxStart != tc.start || got.TmuxKnown != tc.known {
+			t.Errorf("%s: start %d known %v, %v", tc.name, got.TmuxStart, got.TmuxKnown, err)
+		}
+		out, _ := json.Marshal(got)
+		if !strings.Contains(string(out), `"tmux_known":`+tc.wantKnown) {
+			t.Errorf("%s: wire form %s", tc.name, out)
+		}
+		tc.tm.readOnly(t)
+	}
+}
+
+// A tmux that cannot say when it started leaves nothing known: the op fails
+// rather than report a host with no server.
+func TestStatusFailsWhenTmuxCannotSayWhenItStarted(t *testing.T) {
+	h := newHome(t, "mac")
+	tm := &tmuxFake{windows: []string{"@1 %1 0 r-1"}, serverPid: "42", startTime: "garbage"}
+	if got, err := ReadStatus(Deps{Tmux: tm.tmux(), Home: h.dir, Exec: agentsFake("[]", nil)}); err == nil || !strings.Contains(err.Error(), "start time") {
+		t.Errorf("%+v, %v", got, err)
+	}
 }
 
 func TestStatusWithoutClaudeAgents(t *testing.T) {

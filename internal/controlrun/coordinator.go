@@ -179,6 +179,7 @@ func (c *Coordinator) fleet(cfg *hosts.Config, local hosts.Host) reconcile.Fleet
 		})
 	}
 	wg.Wait()
+	c.sawTmux(f)
 	return f
 }
 

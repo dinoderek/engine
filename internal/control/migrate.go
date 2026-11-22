@@ -10,10 +10,11 @@ import (
 // prepare, approved, planned and done for a plan. Versions 1 and 2 held
 // repository merge locks; version 3 holds the merge queue instead. Version
 // 4 adds a question's choices, recommendation and class; a version 3
-// database needs no rewrite. Version 5 adds Telegram delivery and poll state;
-// an older server refuses the newer database
-// rather than drop those fields.
-const schemaVersion = 5
+// database needs no rewrite. Version 5 adds Telegram delivery and poll state.
+// Version 6 adds each host's saved tmux start time and an attempt's host-wide
+// loss mark; a version 5 database needs no rewrite. An older server refuses
+// the newer database rather than drop those fields.
+const schemaVersion = 6
 
 // legacyLock is the part of a version 1 lock record the migration reads.
 type legacyLock struct {
