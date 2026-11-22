@@ -101,6 +101,8 @@ type box struct {
 	// fails.
 	agentLoaded, bootstrapFail bool
 
+	unit unitState // what the server's unit, linger and tmux are
+
 	mutations []string
 	commands  []string
 	stdin     []string
@@ -132,6 +134,9 @@ func (b *box) mutate(cmd string) { b.mutations = append(b.mutations, cmd) }
 func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 	b.commands = append(b.commands, cmd)
 	if code, ok := b.watcherAnswer(cmd, out, errOut); ok {
+		return code
+	}
+	if code, ok := b.unit.answer(cmd, out, errOut); ok {
 		return code
 	}
 	say := func(format string, args ...any) int { fmt.Fprintf(out, format, args...); return 0 }
