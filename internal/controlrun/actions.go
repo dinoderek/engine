@@ -41,13 +41,18 @@ func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Con
 // endAttempt ends a dead session's attempt and tells the operator how: a
 // vanished task resumes, a session that died before claiming its task is
 // dispatched again once, and a second early death, or the crash that makes
-// control.DeathCap in a row, fails the task. A death in a host-wide loss says
-// nothing more: its host's notice did.
+// control.DeathCap in a row, fails the task. A death while an upgrade ran is
+// reported as an engine bug, with its tail. Any other death in a host-wide
+// loss says nothing more: its host's notice did.
 func (c *Coordinator) endAttempt(a reconcile.Action) error {
 	if a.AtLimit {
 		return c.endAtLimit(a)
 	}
 	at, err := c.Service.EndDead(a.Attempt, a.Text, a.Tail)
+	if err == nil && at.Upgraded {
+		return c.notice(a.Item, "upgrade-death/"+at.ID, a.Text+" while engine upgrade ran. No session should die from an upgrade, so this is an engine bug: "+
+			"report it, with the tail below. The death counts toward no limit, and the work resumes"+tails([]control.Attempt{at}))
+	}
 	if err != nil || at.HostLost {
 		// A host-wide loss told the operator once for the host.
 		return err

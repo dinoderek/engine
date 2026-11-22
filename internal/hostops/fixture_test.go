@@ -121,13 +121,20 @@ type tmuxFake struct {
 	openErr   error // new-session and new-window fail
 	// awakeErr fails the keep-awake job, which the fake's Tmux then starts.
 	awakeErr error
+	// scopeErr refuses the scoped start of the session, which the fake's
+	// Tmux then tries first.
+	scopeErr error
 	// opening runs as the window opens.
 	opening func()
 	command string
 	calls   []string
 }
 
-func (f *tmuxFake) run(_ string, args ...string) (string, error) {
+func (f *tmuxFake) run(name string, args ...string) (string, error) {
+	if name == session.ScopeCommand[0] {
+		f.calls = append(f.calls, name+" "+strings.Join(args, " "))
+		return "", f.scopeErr
+	}
 	if args[0] == "-L" { // a private server's socket
 		args = args[2:]
 	}
@@ -188,6 +195,9 @@ func (f *tmuxFake) tmux() *session.Tmux {
 	t := &session.Tmux{Run: f.run, Bin: "tmux"}
 	if f.awakeErr != nil {
 		t.Awake = "caffeinate"
+	}
+	if f.scopeErr != nil {
+		t.Scope = session.ScopeCommand
 	}
 	return t
 }

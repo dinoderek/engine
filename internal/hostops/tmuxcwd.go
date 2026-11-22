@@ -23,14 +23,10 @@ type TmuxCwdGone struct {
 // the directory has been removed.
 const deletedSuffix = " (deleted)"
 
-// tmuxCwdGone looks at the tmux server's working directory. No server, or
-// one whose directory exists, is nil. A directory that cannot be read is an
+// tmuxCwdGone looks at the working directory of the tmux server pid. One
+// whose directory exists is nil. A directory that cannot be read is an
 // error: the check is then unknown, not passed.
-func (d Deps) tmuxCwdGone() (*TmuxCwdGone, error) {
-	pid, running, err := d.Tmux.ServerPid()
-	if err != nil || !running {
-		return nil, err
-	}
+func (d Deps) tmuxCwdGone(pid int) (*TmuxCwdGone, error) {
 	dir, err := d.serverCwd(runtime.GOOS, pid)
 	if err != nil {
 		return nil, err
@@ -41,13 +37,17 @@ func (d Deps) tmuxCwdGone() (*TmuxCwdGone, error) {
 			return nil, nil
 		}
 	}
-	restart := "tmux kill-server"
-	if d.Tmux.Socket != "" {
-		restart = "tmux -L " + d.Tmux.Socket + " kill-server"
-	}
 	return &TmuxCwdGone{Pid: pid, Dir: dir, Reason: fmt.Sprintf(
 		"tmux server %d runs in %s, which no longer exists, so new windows fail; once its sessions are finished, restart it with `%s` (engine never kills a server that holds sessions)",
-		pid, dir, restart)}, nil
+		pid, dir, d.killServer())}, nil
+}
+
+// killServer is the command that stops the tmux server engine uses.
+func (d Deps) killServer() string {
+	if d.Tmux.Socket != "" {
+		return "tmux -L " + d.Tmux.Socket + " kill-server"
+	}
+	return "tmux kill-server"
 }
 
 // serverCwd reads a process's working directory: /proc on Linux, lsof on

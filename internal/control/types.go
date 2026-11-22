@@ -98,6 +98,11 @@ type Attempt struct {
 	// (SawTmux). Its death is no crash and no early death: it neither counts
 	// toward DeathCap nor resets it.
 	HostLost bool `json:"host_lost,omitempty"`
+	// Upgraded is set when the session's window died while `engine upgrade`
+	// ran (duringUpgrade), which should never happen: an engine bug. Its
+	// death neither counts toward DeathCap nor resets it, and its Tail is
+	// kept for the operator's notice.
+	Upgraded bool `json:"upgraded,omitempty"`
 	// PaneKey is the public key, in hex, of the run's pane key, which its
 	// prompt hook signs the operator's pane input with.
 	PaneKey string `json:"pane_key,omitempty"`
@@ -233,6 +238,8 @@ type State struct {
 	// its newest pass, or the end of it once it finished; zero before the
 	// first pass.
 	PassAt time.Time `json:"pass_at,omitzero"`
+	// Upgrade is the newest `engine upgrade` run's start and end.
+	Upgrade UpgradeRecord `json:"upgrade,omitzero"`
 }
 
 func emptyState() State {

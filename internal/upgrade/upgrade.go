@@ -6,11 +6,16 @@
 // records for the server's host.
 //
 // The run, in order: a preflight and the target, which change nothing; the
-// server's stop and backup, with the binary the server ran; the caller's
-// engine and plugins; setup on the server's host with the new binary; the
-// server's start; then setup on every other host. The start runs on every
-// exit once the stop has been tried. A host that cannot be reached, or whose
-// setup stays open, does not stop the others.
+// upgrade's start, marked on the server; the server's stop and backup, with
+// the binary the server ran; the caller's engine and plugins; setup on the
+// server's host with the new binary; the server's start; setup on every
+// other host; then the upgrade's end, marked on the server. The start runs on
+// every exit once the stop has been tried. A host that cannot be reached, or
+// whose setup stays open, does not stop the others.
+//
+// It runs with tasks busy: the server's stop kills no session, a host still
+// on the old protocol is read as unknown, never dead, and the coordinator
+// takes a session that dies between the marks for an engine bug.
 package upgrade
 
 import (
@@ -27,9 +32,6 @@ import (
 	"github.com/dinoderek/engine/internal/setup"
 )
 
-// Task is one of the server's tasks, as the preflight reads it.
-type Task struct{ ID, State string }
-
 // Deps are the outside world. Tests replace each one.
 type Deps struct {
 	Home string
@@ -40,9 +42,10 @@ type Deps struct {
 	// Harnesses are the adapters; the caller's plugin update runs those its
 	// host lists.
 	Harnesses harness.Adapters
-	// Tasks lists the server's tasks. An error is a server that does not
-	// answer.
-	Tasks func() ([]Task, error)
+	// Answers calls the server; an error is a server that does not answer.
+	Answers func() error
+	// Mark records the upgrade's start (end false) or its end on the server.
+	Mark func(end bool) error
 	// Now stamps the backup's file name; Sleep paces the wait for the
 	// server to answer after its start.
 	Now   func() time.Time
@@ -51,10 +54,6 @@ type Deps struct {
 	// runs, except the server's start.
 	Context context.Context
 }
-
-// busy are the task states that refuse an upgrade: a session runs, a PR
-// waits on the merge queue, or the operator is asked.
-var busy = map[string]bool{"running": true, "in-review": true, "needs-human": true}
 
 // answerTries and answerPause bound the wait for the server to answer after
 // its start: about half a minute.
@@ -90,8 +89,24 @@ func Run(dryRun bool, d Deps, out io.Writer) (bool, error) {
 		f.printPlan(out)
 		return true, nil
 	}
+	f.mark(out, false)
 	f.execute(out)
+	f.mark(out, true)
 	return f.report(out), nil
+}
+
+// mark records the upgrade's start or end on the server. A mark the server
+// does not take is a note, not an open item: without it, a session that
+// dies during the upgrade counts as an ordinary death, and an unended
+// upgrade ends by itself an hour after its start.
+func (f *fleet) mark(out io.Writer, end bool) {
+	what := "start"
+	if end {
+		what = "end"
+	}
+	if err := f.d.Mark(end); err != nil {
+		fmt.Fprintf(out, "   note: the server did not record the upgrade's %s: %v\n", what, err)
+	}
 }
 
 // fleet is one upgrade: the hosts, what the preflight found, and what each
