@@ -102,6 +102,8 @@ func (p *paneServer) read(args []string) (string, error) {
 		return "", &session.ExitError{Command: "tmux has-session", Code: 1, Stderr: "can't find session: engine"}
 	case args[0] == "display-message" && args[len(args)-1] == "#{pid}":
 		return fmt.Sprintf("%d\n", p.pid), nil
+	case args[0] == "display-message" && args[len(args)-1] == "#{start_time}":
+		return "1000\n", nil
 	case args[0] == "display-message":
 		return "0\n", nil
 	case args[0] == "capture-pane":

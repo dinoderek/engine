@@ -58,4 +58,4 @@ Messages addressed to the operator appear in the cross-repository inbox. Informa
 
 ## Host status
 
-`host-status`, an operator-only read, returns the fleet as the latest coordinator pass read it: per `hosts.toml` host, reachability, slots, windows with attempts, quota and readiness. It is held in memory, starts empty and never contacts a host, so it ages while no plan is coordinating. `engine host status --all [--json]` prints it.
+`host-status`, an operator-only read, returns the fleet as the latest coordinator pass read it: per `hosts.toml` host, reachability, slots, windows with attempts, quota and readiness. It is held in memory, starts empty and never contacts a host, so it ages while no plan is coordinating. `engine host status --all [--json]` prints it. Unlike it, each host's last tmux start time is a stored record (`session-signals.md`, "Host-wide loss").

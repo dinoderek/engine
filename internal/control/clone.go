@@ -14,6 +14,7 @@ func (s State) clone() State {
 		Updates:  cloneUpdates(s.Updates),
 		Queue:    maps.Clone(s.Queue),
 		Auth:     maps.Clone(s.Auth),
+		Hosts:    maps.Clone(s.Hosts),
 		Receipts: make(map[string]receipt, len(s.Receipts)),
 		Next:     s.Next,
 		PassAt:   s.PassAt,

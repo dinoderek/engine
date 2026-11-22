@@ -108,3 +108,39 @@ func TestAPlannerThatWroteTasksAndDiedWhileStoppedIsUncounted(t *testing.T) {
 		t.Fatalf("a death after coordination stopped counted: %+v", at)
 	}
 }
+
+// A planner lost in a host-wide loss counts toward neither the early-death
+// strikes nor the crash cap, with or without a task.
+func TestAPlannerLostInAHostWideLossCountsNothing(t *testing.T) {
+	s := ticking(service(t))
+	_, plan := coordinatedPlan(t, s)
+	lose := func() Attempt {
+		current := *call(t, s, op, Request{Op: "get", ID: plan.ID}).Item
+		_, out := dispatch(t, s, current)
+		launched(t, s, out.Attempt.ID)
+		seenLive(t, s, out.Attempt.ID)
+		if n, err := s.SawTmux("devbox", TmuxRead{}, windows()); err != nil || n != 1 {
+			t.Fatalf("the loss marked %d, %v", n, err)
+		}
+		at, err := s.EndDead(out.Attempt.ID, "gone", "tail")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	for i := range DeathCap + 1 {
+		if at := lose(); at.Reason != EndEarlyDeath || at.Early || !at.HostLost || at.Tail != "tail" {
+			t.Fatalf("loss %d of a planner with no task: %+v", i+1, at)
+		}
+	}
+	current := *call(t, s, op, Request{Op: "get", ID: plan.ID}).Item
+	if !current.Coordinating {
+		t.Fatal("host-wide losses stopped coordination")
+	}
+	newTask(t, s, plan.Repo, plan.ID)
+	for i := range DeathCap + 1 {
+		if at := lose(); at.Reason != EndVanished || at.Crashed {
+			t.Fatalf("loss %d of a planner that wrote a task: %+v", i+1, at)
+		}
+	}
+}

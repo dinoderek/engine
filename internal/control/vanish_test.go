@@ -13,6 +13,7 @@ type prior struct {
 	reason           string
 	crashed, limited bool
 	early, unopened  bool
+	hostLost         bool
 }
 
 func TestTheVanishRule(t *testing.T) {
@@ -47,6 +48,11 @@ func TestTheVanishRule(t *testing.T) {
 		{name: "stopped, then seen live after the restart", plan: Item{StoppedAt: live.Add(-time.Minute)}, at: claimedAt, reason: EndVanished, state: "running", crashed: true},
 		{name: "an unclaimed death is early, PR or not", task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: start.Add(time.Minute)}, reason: EndEarlyDeath, state: "todo"},
 		{name: "a second unclaimed death fails", at: Attempt{Started: start}, before: []prior{{reason: EndEarlyDeath, early: true}}, reason: EndFailed, state: "failed"},
+		{name: "a claimed death in a host-wide loss resumes, uncounted", at: Attempt{Started: start, LiveAt: live, HostLost: true}, before: []prior{crash, crash}, reason: EndVanished, state: "running"},
+		{name: "an unclaimed death in a host-wide loss is an uncounted early death", at: Attempt{Started: start, HostLost: true}, before: []prior{{reason: EndEarlyDeath, early: true}}, reason: EndEarlyDeath, state: "todo"},
+		{name: "host-wide losses neither count nor reset the cap", at: claimedAt,
+			before: []prior{crash, {reason: EndVanished, hostLost: true}, {reason: EndEarlyDeath, hostLost: true}, crash}, reason: EndFailed, state: "failed", crashed: true},
+		{name: "an earlier host-wide early death is no strike", at: Attempt{Started: start}, before: []prior{{reason: EndEarlyDeath, hostLost: true}}, reason: EndEarlyDeath, state: "todo"},
 		{name: "an unclaimed death after crashes is still the first", at: Attempt{Started: start}, before: []prior{crash, crash}, reason: EndEarlyDeath, state: "todo"},
 	}
 	for _, c := range cases {
@@ -59,7 +65,7 @@ func TestTheVanishRule(t *testing.T) {
 			}
 			s := Service{Now: func() time.Time { return live.Add(time.Hour) }}
 			at := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
-			if at.Reason != c.reason || at.Crashed != c.crashed || st.Items["t2"].State != c.state {
+			if at.Reason != c.reason || at.Crashed != c.crashed || at.Early && c.at.HostLost || st.Items["t2"].State != c.state {
 				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, st.Items["t2"].State, c.reason, c.crashed, c.state)
 			}
 		})
@@ -80,7 +86,7 @@ func vanishState(task, plan Item, before []prior) State {
 			window = ""
 		}
 		st.Attempts[id] = Attempt{ID: id, Item: "t2", State: "ended", Window: window, Reason: p.reason,
-			Crashed: p.crashed, Limited: p.limited, Early: p.early}
+			Crashed: p.crashed, Limited: p.limited, Early: p.early, HostLost: p.hostLost}
 	}
 	st.Attempts["a50"] = Attempt{ID: "a50", Item: "t8", State: "ended", Window: "@1", Reason: EndFailed}
 	return st
