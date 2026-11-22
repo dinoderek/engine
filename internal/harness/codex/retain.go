@@ -15,8 +15,8 @@ import (
 // version it started with, so setup keeps the old versions in engine's Codex
 // home, which the sessions that join engine's daemon use: it copies them
 // aside before the add and puts them back after, and records when it did.
-// Every later setup removes them once no window of session `engine` on the
-// host started before then.
+// Every later setup removes them once no pane of session `engine` on the
+// host has run its process since before then.
 
 // pluginCache is where Codex keeps engine's plugin in the Codex home whose
 // shell word is home: plugins/cache/<marketplace>/<plugin>.
@@ -51,10 +51,14 @@ func restoreCommand(home string) string {
 		` && mkdir -p ` + home + `/plugins && date +%s > ` + installedMark(home)
 }
 
-// windowStartsCommand prints when each window of session engine started,
-// one Unix time a line, none when no tmux server runs; it exits 3 when
-// tmux is missing, and nothing can be told.
-var windowStartsCommand = `command -v tmux >/dev/null 2>&1 || exit 3; tmux list-windows -t =` + session.Name + ` -F '#{window_created}' 2>/dev/null; exit 0`
+// windowAgesCommand prints the host's clock in Unix seconds, then, one a
+// line, how long each pane of session engine has run its process, as ps's
+// [[dd-]hh:]mm:ss elapsed time (tmux keeps no window start time), or
+// "unknown" for a pane whose process ps cannot read. It prints only the
+// clock when no tmux server runs, and exits 3 when tmux is missing, and
+// nothing can be told.
+var windowAgesCommand = `command -v tmux >/dev/null 2>&1 || exit 3; date +%s; for p in $(tmux list-panes -s -t =` + session.Name +
+	` -F '#{pane_pid}' 2>/dev/null); do ps -o etime= -p "$p" 2>/dev/null || echo unknown; done; exit 0`
 
 // pruneCommand removes every version of the plugin in home but current, and
 // the record of the install that kept them.
@@ -64,13 +68,21 @@ func pruneCommand(home, current string) string {
 }
 
 // keptSince reports whether a window that started at or before since may
-// still read a version kept then: tmux is missing, or such a window lives.
+// still read a version kept then, from windowAgesCommand's reply: tmux is
+// missing, a pane's age cannot be read, or a pane started that early.
+// Anything it cannot read keeps the versions.
 func keptSince(res harness.Result, since int64) bool {
-	if res.Code == 3 {
+	lines := res.Lines()
+	if res.Code != 0 || len(lines) == 0 {
 		return true
 	}
-	for _, line := range res.Lines() {
-		if t, err := strconv.ParseInt(strings.TrimSpace(line), 10, 64); err == nil && t <= since {
+	now, err := strconv.ParseInt(strings.TrimSpace(lines[0]), 10, 64)
+	if err != nil {
+		return true
+	}
+	for _, line := range lines[1:] {
+		age, err := parseElapsed(line)
+		if err != nil || now-int64(age) <= since {
 			return true
 		}
 	}
@@ -92,7 +104,7 @@ func (r *setupRun) prune(h pluginHome, current string) error {
 	if perr != nil {
 		since = 1<<63 - 1 // an unreadable record keeps everything
 	}
-	windows, err := r.t.Sh(windowStartsCommand, "")
+	windows, err := r.t.Sh(windowAgesCommand, "")
 	if err != nil || keptSince(windows, since) {
 		return err
 	}

@@ -17,7 +17,8 @@ type pluginDisk struct {
 	cache  map[string][]string
 	kept   map[string][]string
 	marked map[string]int64
-	// windows are when session engine's windows started; noTmux leaves
+	// windows are when session engine's panes started, which the fake
+	// prints as ps's elapsed times; noTmux leaves
 	// tmux off the PATH; now is the host's clock.
 	windows []int64
 	noTmux  bool
@@ -59,12 +60,14 @@ func cond2(ok bool, yes, no []string) []string {
 
 // retain answers the retention commands, which only engine's home takes.
 func (c *codexState) retain(b *box, cmd string, out, errOut io.Writer) (int, bool) {
-	if cmd == windowStartsCommand {
+	if cmd == windowAgesCommand {
 		if c.disk.noTmux {
 			return 3, true
 		}
+		fmt.Fprintln(out, c.disk.now)
 		for _, w := range c.disk.windows {
-			fmt.Fprintln(out, w)
+			age := c.disk.now - w
+			fmt.Fprintf(out, "%02d:%02d:%02d\n", age/3600, age/60%60, age%60)
 		}
 		return 0, true
 	}

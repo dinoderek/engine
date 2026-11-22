@@ -76,14 +76,17 @@ func (r *setupRun) installPlugin(h pluginHome) (harness.Outcome, error) {
 	case installed && atLeast(have, r.t.Plugin()):
 		return harness.Passed(have), r.prune(h, have)
 	case h.home == "":
-		return r.addPlugin(h, have)
+		out, _, err := r.addPlugin(h, have)
+		return out, err
 	}
 	if res, err := r.t.Sh(keepCommand(h.home), ""); err != nil || res.Code != 0 {
 		return r.shOpen(h, "could not keep the plugin's versions", keepCommand(h.home), res, err)
 	}
 	// The versions go back whether the add worked or not; a failed add is
 	// the open item to report first.
-	out, err := r.addPlugin(h, have)
+	// The prune keeps the version the add confirmed: Codex lists one version
+	// with several on disk.
+	out, after, err := r.addPlugin(h, have)
 	res, rerr := r.t.Sh(restoreCommand(h.home), "")
 	switch {
 	case err != nil || out.State == harness.StepOpen:
@@ -91,36 +94,32 @@ func (r *setupRun) installPlugin(h pluginHome) (harness.Outcome, error) {
 	case rerr != nil || res.Code != 0:
 		return r.shOpen(h, "could not put back the plugin's earlier versions", restoreCommand(h.home), res, rerr)
 	}
-	after, _, err := r.plugin(h)
-	if err != nil {
-		return harness.Outcome{}, err
-	}
 	return out, r.prune(h, after)
 }
 
 // addPlugin runs Codex's commands that add the plugin to the home, and
-// checks the version they leave.
-func (r *setupRun) addPlugin(h pluginHome, have string) (harness.Outcome, error) {
+// checks the version they leave, which it returns.
+func (r *setupRun) addPlugin(h pluginHome, have string) (harness.Outcome, string, error) {
 	// Adding the marketplace again is harmless, so no check for it comes first.
 	for _, args := range []string{"plugin marketplace add " + harness.PluginRepo, "plugin marketplace upgrade engine", "plugin add " + harness.PluginID} {
 		res, err := r.t.Sh(h.cmd(args), "")
 		if err != nil {
-			return harness.Outcome{}, err
+			return harness.Outcome{}, "", err
 		}
 		if res.Code != 0 {
-			return harness.Open("codex "+args+" failed in "+h.name+": "+res.Why(), r.t.OnHost(h.cmd(args), false)), nil
+			return harness.Open("codex "+args+" failed in "+h.name+": "+res.Why(), r.t.OnHost(h.cmd(args), false)), "", nil
 		}
 	}
 	after, found, err := r.plugin(h)
 	switch {
 	case err != nil:
-		return harness.Outcome{}, err
+		return harness.Outcome{}, "", err
 	case !found:
-		return harness.Open(harness.PluginID+" is not enabled in "+h.name+" after the install", r.t.Rerun()), nil
+		return harness.Open(harness.PluginID+" is not enabled in "+h.name+" after the install", r.t.Rerun()), "", nil
 	case !atLeast(after, r.t.Plugin()):
-		return harness.Open(fmt.Sprintf("the marketplace gives Codex plugin %s in %s, older than this host's %s; merge the plugin change first", after, h.name, r.t.Plugin()), r.t.Rerun()), nil
+		return harness.Open(fmt.Sprintf("the marketplace gives Codex plugin %s in %s, older than this host's %s; merge the plugin change first", after, h.name, r.t.Plugin()), r.t.Rerun()), "", nil
 	}
-	return harness.Changed(fmt.Sprintf("%s, was %s", after, harness.OrNone(have))), nil
+	return harness.Changed(fmt.Sprintf("%s, was %s", after, harness.OrNone(have))), after, nil
 }
 
 // shOpen is a shell command in the home that failed: an error, or an open

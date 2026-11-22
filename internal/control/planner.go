@@ -9,9 +9,9 @@ package control
 // start a new planner; the second such death since the plan's coordination
 // last started ends failed. A planner lost in a host-wide loss (at.HostLost),
 // or dead while an upgrade ran (at.Upgraded), ends vanished, or early-death
-// with Early unset when it wrote no task: neither counts. A failed planner stops coordination, so a
-// planner that keeps dying never loops; the operator's next run starts the
-// counts again.
+// with Early unset when it wrote no task: neither counts. A failed planner
+// stops coordination, so a planner that keeps dying never loops; the
+// operator's next run starts the counts again.
 func (s Service) endPlanner(st *State, plan Item, at *Attempt) {
 	at.Reason = EndVanished
 	switch {

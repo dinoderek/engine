@@ -1,10 +1,12 @@
 package codex
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -18,7 +20,7 @@ import (
 func TestAnUpdateKeepsThePreviousVersionUntilOlderWindowsAreGone(t *testing.T) {
 	codex := settledCodex(boxHome)
 	codex.plugin = "0.7.0"
-	codex.disk.now, codex.disk.windows = 200, []int64{100, 250}
+	codex.disk.now, codex.disk.windows = 200, []int64{100}
 	r := newCodexRig(t, codex)
 	if !mustRun(t, r) || !strings.Contains(r.out.String(), "10. codex plugin: changed (0.7.1, was 0.7.0)") {
 		t.Fatalf("the update:\n%s", r.out.String())
@@ -30,7 +32,9 @@ func TestAnUpdateKeepsThePreviousVersionUntilOlderWindowsAreGone(t *testing.T) {
 		t.Errorf("the copy set aside was left: %q", codex.disk.kept)
 	}
 
-	// A window from before the update still lives: a rerun keeps it.
+	// A window from before the update still lives, beside one started
+	// after it: a rerun keeps the old version.
+	codex.disk.now, codex.disk.windows = 300, []int64{100, 250}
 	mustRun(t, r)
 	if got := codex.versions(boxEngineH); len(got) != 2 {
 		t.Fatalf("a rerun with an older window live left %q", got)
@@ -108,15 +112,52 @@ func TestKeptSince(t *testing.T) {
 		res  harness.Result
 		kept bool
 	}{
-		{"no tmux server", harness.Result{}, false},
-		{"only newer windows", harness.Result{Out: "201\n300\n"}, false},
-		{"a window from the same second", harness.Result{Out: "300\n200\n"}, true},
-		{"an older window", harness.Result{Out: "99\n"}, true},
+		{"no tmux server", harness.Result{Out: "1000\n"}, false},
+		{"only panes started after", harness.Result{Out: "1000\n13:19\n05:00\n"}, false},
+		{"a pane started that second", harness.Result{Out: "1000\n13:20\n"}, true},
+		{"a pane started days before", harness.Result{Out: "1000\n2-01:00:00\n"}, true},
+		{"a pane whose process ps cannot read", harness.Result{Out: "1000\nunknown\n"}, true},
+		{"an unreadable age", harness.Result{Out: "1000\n??\n"}, true},
+		{"no clock", harness.Result{Out: "\n"}, true},
 		{"tmux missing", harness.Result{Code: 3}, true},
 	} {
 		if got := keptSince(c.res, 200); got != c.kept {
 			t.Errorf("%s: kept %v, want %v", c.name, got, c.kept)
 		}
+	}
+}
+
+// The window ages, read from a real tmux on a private server: a pane
+// started before the install keeps the versions, and none started after
+// it does.
+func TestWindowAgesOnARealTmux(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh is absent")
+	}
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux is absent")
+	}
+	sock := fmt.Sprintf("engine-retain-%d", os.Getpid())
+	t.Cleanup(func() { _ = exec.Command("tmux", "-L", sock, "kill-server").Run() })
+	if out, err := exec.Command("tmux", "-L", sock, "new-session", "-d", "-s", "engine", "sleep 60").CombinedOutput(); err != nil {
+		t.Fatalf("tmux: %v\n%s", err, out)
+	}
+	cmd := strings.ReplaceAll(windowAgesCommand, "tmux list-panes", "tmux -L "+sock+" list-panes")
+	out, err := exec.Command(sh, "-c", cmd).Output()
+	if err != nil {
+		t.Fatalf("%s: %v", cmd, err)
+	}
+	res := harness.Result{Out: string(out)}
+	if lines := res.Lines(); len(lines) != 2 {
+		t.Fatalf("the reply %q has no age for the one pane", out)
+	}
+	now, _ := strconv.ParseInt(res.Lines()[0], 10, 64)
+	if !keptSince(res, now+1) {
+		t.Errorf("a pane started before an install a second from now did not keep: %q", out)
+	}
+	if keptSince(res, now-3600) {
+		t.Errorf("a pane started after an install an hour ago kept: %q", out)
 	}
 }
 

@@ -8,9 +8,11 @@ import "time"
 const UpgradeMax = time.Hour
 
 // UpgradeLead is how long before an upgrade's start a window last seen live
-// may still have died during it: the last pass before the server's stop may
-// have read its host that long before. A window last seen live earlier, as
-// on a host offline before the upgrade, died before it, or cannot be told.
+// may still have died during it, the last pass before the server's stop
+// having read its host that long before; and how long after its end a read
+// may still first find the death, a host set up last being read once its
+// setup is done. A death outside, as on a host offline across the upgrade,
+// is no upgrade's.
 const UpgradeLead = 10 * time.Minute
 
 // UpgradeRecord is the newest `engine upgrade` run, as it marked its start
@@ -49,17 +51,17 @@ func (s Service) upgrade(st *State, a Actor, r Request) (Response, error) {
 // duringUpgrade reports whether at, whose window a read at now confirmed
 // gone, may have died while an upgrade ran: it was last seen live, or
 // started, between UpgradeLead before the upgrade's start and its end, and
-// confirmed gone after its start. A death on a host that could not be read
-// during the upgrade, as a host on the old protocol is not, is confirmed
-// only later; it still counts as during.
+// confirmed gone between its start and UpgradeLead after its end. A death on
+// a host that could not be read during the upgrade, as a host on the old
+// protocol is not, is confirmed only later; it still counts as during.
 func duringUpgrade(st *State, at Attempt, now time.Time) bool {
 	u := st.Upgrade
-	if u.Start.IsZero() || now.Before(u.Start) {
-		return false
-	}
 	end := u.End
 	if end.IsZero() {
 		end = u.Start.Add(UpgradeMax)
+	}
+	if u.Start.IsZero() || now.Before(u.Start) || now.After(end.Add(UpgradeLead)) {
+		return false
 	}
 	last := at.Started
 	if at.LiveAt.After(last) {
