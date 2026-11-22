@@ -31,7 +31,7 @@ For Telegram alerts and pairing, load `telegram.md`.
 ## Each host
 
 **The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
-`sqlite3` only on a Codex host, to read the daemon's connection), and put
+`sqlite3` only for Codex hosts), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
 name: `hosts-and-sessions.md`, "Hosts") and `~/.config/engine/hosts.toml` (the same on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
