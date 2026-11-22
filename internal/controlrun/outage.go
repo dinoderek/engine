@@ -10,11 +10,12 @@ import (
 	"github.com/dinoderek/engine/internal/reconcile"
 )
 
-// OutageGap is how long a pass may start after the one before it without
-// the server counting as unavailable in between.
+// OutageGap is how long a pass may start after the coordinator was last
+// known to run without the server counting as unavailable in between.
 const OutageGap = 5 * time.Minute
 
-// outage is a gap between two pass starts longer than OutageGap.
+// outage is a gap longer than OutageGap between the coordinator last known
+// to run and the start of a pass.
 type outage struct{ from, to time.Time }
 
 // startPass saves this pass's start before any host is read. A start more
