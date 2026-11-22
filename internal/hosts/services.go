@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -33,6 +34,7 @@ type ServerOp string
 const (
 	ServerStart    ServerOp = "start"
 	ServerStop     ServerOp = "stop"
+	ServerRestart  ServerOp = "restart"
 	ServerIsActive ServerOp = "is-active"
 )
 
@@ -41,7 +43,7 @@ const (
 // or over ssh (ServerShellLine).
 func (h Host) ServerCommand(op ServerOp) ([]string, error) {
 	switch op {
-	case ServerStart, ServerStop, ServerIsActive:
+	case ServerStart, ServerStop, ServerRestart, ServerIsActive:
 	default:
 		return nil, fmt.Errorf("unknown server operation %q", op)
 	}
@@ -89,4 +91,29 @@ func (v *validator) hostServices(r *reader, h *Host) {
 	case serverAt != nil:
 		h.Services = Services{Manager: manager, Server: server}
 	}
+}
+
+// ErrNoServerHost is ServerHost's error when no host records services.
+var ErrNoServerHost = errors.New("no host in hosts.toml records a [host.<name>.services] table, so there is no server host to reach")
+
+// ServerHost is the one host that records how it runs the control server.
+// None, or more than one, is an error that says so.
+func (c *Config) ServerHost() (Host, error) {
+	var found []Host
+	for _, name := range c.HostNames() {
+		if h := c.Hosts[name]; h.Services.Recorded() {
+			found = append(found, h)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return Host{}, ErrNoServerHost
+	case 1:
+		return found[0], nil
+	}
+	names := make([]string, len(found))
+	for i, h := range found {
+		names[i] = h.Name
+	}
+	return Host{}, fmt.Errorf("hosts %s each record a [services] table; only the server's host may", strings.Join(names, " and "))
 }

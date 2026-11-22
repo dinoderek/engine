@@ -68,12 +68,16 @@ type Attempt struct {
 	// spell at a usage limit.
 	LimitedSince time.Time `json:"limited_since,omitzero"`
 	Seen         int       `json:"seen,omitempty"`
-	FarFor       int64     `json:"far_for,omitempty"`
-	StuckFor     int64     `json:"stuck_for,omitempty"`
+	// WokenFor is the start, in Unix nanoseconds, of the server outage the
+	// session was last woken for.
+	WokenFor int64 `json:"woken_for,omitempty"`
+	FarFor   int64 `json:"far_for,omitempty"`
+	StuckFor int64 `json:"stuck_for,omitempty"`
 	// LiveAt is the last coordinator pass that saw the attempt's window live.
 	LiveAt time.Time `json:"live_at,omitzero"`
 	// Reason is why the attempt ended: EndVanished, EndEarlyDeath or
-	// EndFailed for a dead window, EndStopped for the operator's stop.
+	// EndFailed for a dead window, EndStopped for the operator's stop, and
+	// empty for a session released once its work was done.
 	Reason string `json:"reason,omitempty"`
 	// Early is set when the session died before claiming its task, or a
 	// planner's before writing any task, whether that ended the attempt
@@ -81,6 +85,10 @@ type Attempt struct {
 	// host showed one.
 	Early bool   `json:"early,omitempty"`
 	Tail  string `json:"tail,omitempty"`
+	// Crashed is set when a session that claimed its item, or a planner that
+	// wrote tasks, died alone: a death that counts toward DeathCap, whether
+	// it ended the attempt vanished or failed. Its Tail is kept.
+	Crashed bool `json:"crashed,omitempty"`
 	// Limited is set when the session ended at a usage limit: its window
 	// died with the run's limit marker set. ResetsAt is then that limit's
 	// reset, or zero when unknown, and the attempt ended vanished.
@@ -214,6 +222,10 @@ type State struct {
 	Auth     map[string]Actor      `json:"auth"`
 	Receipts map[string]receipt    `json:"receipts"`
 	Next     int                   `json:"next"`
+	// PassAt is the last time the coordinator was known to run: the start of
+	// its newest pass, or the end of it once it finished; zero before the
+	// first pass.
+	PassAt time.Time `json:"pass_at,omitzero"`
 }
 
 func emptyState() State {

@@ -37,7 +37,12 @@ func TestIncompleteConfigDoesNotStartLoop(t *testing.T) {
 				}
 			}
 			if tc.token != "" {
-				if err := os.WriteFile(filepath.Join(dir, TokenFile), []byte(tc.token), tc.mode); err != nil {
+				path := filepath.Join(dir, TokenFile)
+				if err := os.WriteFile(path, []byte(tc.token), tc.mode); err != nil {
+					t.Fatal(err)
+				}
+				// The umask may narrow WriteFile's mode; the case needs it exact.
+				if err := os.Chmod(path, tc.mode); err != nil {
 					t.Fatal(err)
 				}
 			}

@@ -1,6 +1,7 @@
 package controlrun
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -79,14 +80,42 @@ func TestAnEarlyDeathWithoutAPaneLogSaysSo(t *testing.T) {
 	}
 }
 
-func TestASessionThatClaimedItsTaskFailsOnItsFirstDeath(t *testing.T) {
+func TestASessionThatClaimedItsTaskResumesAfterItsDeathsUntilTheCap(t *testing.T) {
 	c, h, _, _, task := setup(t)
-	pass(t, c)
-	pass(t, c)
-	claim(t, c, task)
-	ended := dieEarly(t, c, h, task, "ignored")
+	h.status.FreeSlots = control.DeathCap // the fake host takes a slot per launch and never gives it back
+	var deaths []control.Attempt
+	for i := range control.DeathCap {
+		pass(t, c)
+		pass(t, c)
+		claim(t, c, task)
+		deaths = append(deaths, dieEarly(t, c, h, task, fmt.Sprintf("crash %d", i+1)))
+	}
 	st, _ := c.Service.Store.Snapshot()
-	if ended.Reason != control.EndFailed || ended.Early || ended.Tail != "" || st.Items[task.ID].State != "failed" {
-		t.Fatalf("a claimed session's death: %+v, task %s", ended, st.Items[task.ID].State)
+	for i, at := range deaths[:control.DeathCap-1] {
+		if at.Reason != control.EndVanished || !at.Crashed || i > 0 && at.ID == deaths[i-1].ID {
+			t.Fatalf("claimed death %d did not resume: %+v", i+1, at)
+		}
+		if i > 0 && !h.launches[at.RunID].Spawn.Resume {
+			t.Errorf("claimed death %d's attempt was not a resume", i+1)
+		}
+	}
+	last := deaths[control.DeathCap-1]
+	if last.Reason != control.EndFailed || st.Items[task.ID].State != "failed" {
+		t.Fatalf("the cap's death: %+v, task %s", last, st.Items[task.ID].State)
+	}
+	notices := taskNotices(c, task)
+	if !strings.Contains(notices[0], "dispatched again as a resume") {
+		t.Errorf("the first claimed death's notice: %s", notices[0])
+	}
+	failing := notices[len(notices)-1]
+	wants := []string{fmt.Sprintf("%d such deaths in a row; the task failed", control.DeathCap),
+		"Pane log tail of " + deaths[1].ID + ":\ncrash 2", "Pane log tail of " + last.ID + ":\ncrash 3"}
+	for _, want := range wants {
+		if !strings.Contains(failing, want) {
+			t.Errorf("the failing notice lacks %q: %s", want, failing)
+		}
+	}
+	if strings.Contains(failing, "crash 1") {
+		t.Errorf("the failing notice carries more than the last two tails: %s", failing)
 	}
 }

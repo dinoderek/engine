@@ -1,6 +1,7 @@
 package control
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -39,6 +40,84 @@ func dies(t *testing.T, s Service, id, tail string) Attempt {
 	return at
 }
 
+// longLived records that attempt id's window was seen live for the claim
+// wait, so its session claimed its task.
+func longLived(t *testing.T, s Service, id string) {
+	t.Helper()
+	if err := s.Store.Transaction(func(st *State) error {
+		at := st.Attempts[id]
+		at.LiveAt = at.Started.Add(ClaimWait)
+		st.Attempts[id] = at
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// crashOut ends task id's current attempt dead after its session claimed
+// the task, then dispatches and ends each resume the same way, until
+// DeathCap deaths in a row. The current attempt must be live. It returns
+// the deaths, oldest first.
+func crashOut(t *testing.T, s Service, id string) []Attempt {
+	t.Helper()
+	var out []Attempt
+	for i := range DeathCap {
+		item := *call(t, s, op, Request{Op: "get", ID: id}).Item
+		if i > 0 {
+			_, resumed := dispatch(t, s, item)
+			launched(t, s, resumed.Attempt.ID)
+			item = *resumed.Item
+		}
+		longLived(t, s, item.Attempt)
+		out = append(out, dies(t, s, item.Attempt, fmt.Sprintf("crash %d", i+1)))
+	}
+	return out
+}
+
+func TestClaimedDeathsResumeUntilTheCapFailsTheTask(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	_, out := dispatch(t, s, task)
+	launched(t, s, out.Attempt.ID)
+	deaths := crashOut(t, s, task.ID)
+	for i, at := range deaths[:DeathCap-1] {
+		if at.Reason != EndVanished || !at.Crashed || at.Early || at.Tail != fmt.Sprintf("crash %d", i+1) {
+			t.Fatalf("claimed death %d did not resume: %+v", i+1, at)
+		}
+	}
+	last := deaths[DeathCap-1]
+	current := call(t, s, op, Request{Op: "get", ID: task.ID}).Item
+	if last.Reason != EndFailed || !last.Crashed || last.Tail == "" || current.State != "failed" {
+		t.Fatalf("the cap's death: %+v, task %s", last, current.State)
+	}
+	reject(t, s, op, Request{Op: "claim", ID: task.ID, Body: "devbox", State: "claude"}, 409)
+}
+
+func TestTheOperatorsStopBetweenDeathsResetsTheCount(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	approve(t, s, plan)
+	_, out := dispatch(t, s, task)
+	launched(t, s, out.Attempt.ID)
+	longLived(t, s, out.Attempt.ID)
+	dies(t, s, out.Attempt.ID, "before the stop")
+	current := *call(t, s, op, Request{Op: "get", ID: task.ID}).Item
+	_, resumed := dispatch(t, s, current)
+	launched(t, s, resumed.Attempt.ID)
+	call(t, s, op, Request{Op: "task-stop", ID: task.ID})
+	call(t, s, op, Request{Op: "task-resume", ID: task.ID})
+	current = *call(t, s, op, Request{Op: "get", ID: task.ID}).Item
+	_, resumed = dispatch(t, s, current)
+	launched(t, s, resumed.Attempt.ID)
+	deaths := crashOut(t, s, task.ID)
+	if deaths[DeathCap-2].Reason != EndVanished || deaths[DeathCap-1].Reason != EndFailed {
+		t.Fatalf("the death before the stop counted: %+v", deaths)
+	}
+}
+
 func TestAFirstEarlyDeathReturnsTheTaskToTodoAndASecondFailsIt(t *testing.T) {
 	s := service(t)
 	repo, plan := repoPlan(t, s)
@@ -74,8 +153,8 @@ func TestAnEarlyDeathAfterAnUnrelatedVanishCountsAsTheFirst(t *testing.T) {
 	launched(t, s, first.Attempt.ID)
 	question := call(t, s, a, Request{Op: "ask", ID: task.ID, Body: "Which API?"}).Updates[0]
 	seenLive(t, s, first.Attempt.ID)
-	if at := dies(t, s, first.Attempt.ID, "ignored"); at.Reason != EndVanished || at.Early || at.Tail != "" {
-		t.Fatalf("a claimed session's death was not an ordinary vanish: %+v", at)
+	if at := dies(t, s, first.Attempt.ID, "kept"); at.Reason != EndVanished || at.Early || !at.Crashed || at.Tail != "kept" {
+		t.Fatalf("a claimed session's death was not a counted vanish: %+v", at)
 	}
 	call(t, s, op, Request{Op: "resolve", ReplyTo: question.ID, Body: "The second one."})
 	current := call(t, s, op, Request{Op: "get", ID: task.ID}).Item

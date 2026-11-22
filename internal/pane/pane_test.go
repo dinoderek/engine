@@ -367,3 +367,28 @@ func TestAPostWithNoCredentialFails(t *testing.T) {
 		t.Errorf("a prompt the run can never post stayed queued: %v", err)
 	}
 }
+
+// A server that is down must not hold a prompt's hook: its synchronous path
+// makes one call and returns, never waiting out a retry window of its own, or
+// of a command's.
+func TestThePromptHooksSynchronousPostIsBoundedWithTheServerDown(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL
+	srv.Close() // nothing listens now
+	r := newRun(t, url)
+	c := &clock{now: start}
+	waits := 0
+	p := poster(c, time.Hour)
+	p.RetryFor = time.Hour
+	p.Sleep = func(d time.Duration) { waits++; c.Sleep(d) }
+	h := Hook{Dir: r.dir, Post: p}
+	if err := h.Submitted(r.event("Approved")); err == nil {
+		t.Error("a post to a dead server reported success")
+	}
+	if waits != 0 || !c.now.Equal(start) {
+		t.Errorf("the hook waited %d times, to %s; want none, the post is one call", waits, c.now)
+	}
+	if _, err := os.Stat(pendingFile(r.dir, 1)); err != nil {
+		t.Errorf("the unposted prompt left the queue: %v", err)
+	}
+}
