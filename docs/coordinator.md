@@ -18,7 +18,7 @@ The host serializes dispatches by run ID and returns an existing run on replay. 
 
 A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`, "Vanish" and "Early death").
 
-A task the operator moved (`hosts-and-sessions.md`) waits until a pass's `release --moved` of its old run, window open or gone, succeeds, and while the old host is unread, unless it was moved blind; a wait on an unread host tells the operator once. Releasing work `origin` lacks tells the operator, unless the move stayed on that host. A blind move's old run is released when its host answers, a done plan's too.
+A task the operator moved (`control-server.md`) waits until a pass's `release --moved` of its old run, window open or gone, succeeds, and while the old host is unread, unless it was moved blind; a wait on an unread host tells the operator once. Releasing work `origin` lacks tells the operator, unless the move stayed on that host. A blind move's old run is released when its host answers, a done plan's too. Until then, each kickoff warns that the old session may still push: before each push, the new session fetches and asks the operator if `origin`'s branch has commits it lacks.
 
 Operator-only `engine attempt reconcile <id> <evidence>` applies the vanish and early-death rules once a successful host read shows a started attempt's window gone with its run recorded, or a `dispatching` attempt's with no window of its name and no run record (ending it vanished, its task back in `todo`). Otherwise, a planner's dispatch included, it refuses (`control-server.md`); unknown dispatch outcomes stay reserved. A spawn still in flight shows neither and may then open an orphan window, which blocks the next dispatch until removed.
 

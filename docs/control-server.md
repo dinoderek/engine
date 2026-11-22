@@ -18,7 +18,7 @@ engine serve
 
 A host whose `hosts.toml` entry records `services` starts through its systemd unit, never a second tmux server; a failed start exits 1, naming its `journalctl --user -u`.
 
-`--foreground` runs it in place. For other networks, use an SSH tunnel or TLS proxy and set `[server] url` instead of `host`, and use `--foreground`. Without config.toml, the CLI uses `http://devbox:7331`; `ENGINE_SERVER_URL` overrides both. The CLI reads its credential from `~/.config/engine/server-token` or `ENGINE_SERVER_TOKEN_FILE`; workers get the advertised URL.
+`--foreground` runs it in place: for other networks, use it behind an SSH tunnel or TLS proxy, setting `[server] url` instead of `host`. Without config.toml, the CLI uses `http://devbox:7331`; `ENGINE_SERVER_URL` overrides both. The CLI reads its credential from `~/.config/engine/server-token` or `ENGINE_SERVER_TOKEN_FILE`; workers get the advertised URL.
 
 For backup, stop the server, run `engine serve --backup <new-path>`, restart it, and copy the backup off-machine. Restore with the server stopped, keeping the operator credential. Backups hold credentials, are private and never overwrite a file. Test restores in an isolated database.
 
@@ -30,9 +30,9 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 `engine lint <plan-id>` checks a plan's tasks before approval, changing nothing, from one snapshot including outside dependencies.
 
-**Stopping a task.** Operator-only `engine task stop <task>` ends a running task's execution without failing it: in one transaction it holds the task, ends its attempt `stopped` (revoking its credential and leaving the merge queue) and sets the task `todo`. Placement and `claim` skip a held task. The coordinator then closes the window, keeping the worktree and branch. `engine task resume <task>` lifts the hold; the next dispatch resumes the kept branch (`hosts-and-sessions.md`). Stopping with no running execution or a dispatch in flight, or resuming one not held, is a 409.
+**Stopping a task.** Operator-only `engine task stop <task>` ends a running task's execution without failing it: in one transaction it holds the task, ends its attempt `stopped` (leaving the merge queue) and sets the task `todo`. Placement and `claim` skip a held task. The coordinator then closes the window, keeping the worktree and branch. `engine task resume <task>` lifts the hold; the next dispatch resumes the kept branch (`hosts-and-sessions.md`). Stopping with no running execution or a dispatch in flight, or resuming one not held, is a 409.
 
-**Moving a task.** Operator-only `engine task move <task> [--host <h>] [--harness <h>]` ends a running task's attempt `moved`, keeping the task's state and queue place; its resume goes to that host (else any but the old one) and harness. Off a host the latest pass did not read, it is a 409 with reason `move-unconfirmed`, warning that the old session may still push, until confirmed by `--yes` or at a terminal. For the release and resume, load `hosts-and-sessions.md`.
+**Moving a task.** Operator-only `engine task move <task> [--host <h>] [--harness <h>]` ends a running task's attempt `moved`, keeping its state and queue place, and sends its resume to that host (else off the old one) and harness. Off a host the latest pass did not read, it is a 409 (`move-unconfirmed`: the old session may still push) until `--yes` or a terminal confirms. For its dispatch, load `coordinator.md`.
 
 **Completing outside engine.** `engine task complete-external <task-id> --version <n> --pr <url>` records work finished outside engine. Operator-only, for an inactive todo or failed task with no unresolved question, it records done and a PR URL in the task's repository, unverified, keeping prior attempts.
 

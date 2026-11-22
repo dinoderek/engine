@@ -123,14 +123,8 @@ placement's alone.
 
 **Preflight:** `engine start --check` runs `gh auth status`, then a hands-off light-tier session exercising the skill, `gh`, `engine` and `/tmp`; it exits 1 if gh failed or the session was denied, stalled or skipped a step.
 
-## Moving a task
-
-A moved task (`control-server.md`) resumes on its old host from the kept
-worktree, uncommitted work too, elsewhere from `origin`'s branch. For when
-it is dispatched, load `coordinator.md`. Until a blind move's old run is
-released, each kickoff warns that the old session may still push: before
-each push, the new session fetches and asks the operator if `origin`'s
-branch has commits it lacks.
+A moved task resumes on its old host from the kept worktree, uncommitted
+work too, and elsewhere from `origin`'s branch (`coordinator.md`).
 
 ## Seeing and reaching sessions
 
