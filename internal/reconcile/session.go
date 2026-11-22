@@ -85,7 +85,7 @@ type Session struct {
 	// last flagged.
 	StallNoted time.Time
 	// Screen is the window's last lines, when its host sent them: it does
-	// for a window whose session is not working.
+	// for a window whose session is not working, or is working but quiet.
 	Screen string
 	// PaneTail is the end of the session's pane log, which its host shows
 	// for a run whose window is gone or dead.
