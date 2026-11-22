@@ -128,19 +128,15 @@ this host, sets up the server's host and starts the server, then sets up
 every other host. The server starts again even when a step fails.
 `--dry-run` prints the steps and changes nothing.
 
-Busy tasks carry on; a session that dies while the upgrade runs is an
-engine bug (`session-signals.md`, "Upgrade"). A plugin version stays while
-a window started before the update may read it, except Codex's in your
-Codex home.
+Busy tasks carry on; a session that dies meanwhile is an engine bug
+(`session-signals.md`, "Upgrade"; old plugin versions: `harnesses.md`).
 
 It refuses, changing nothing, when the server's host records no `services`
 table, does not answer, or its unit is not active. A host that is
 unreachable or stays open stops no others: run the commands the report
-lists, then rerun it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
-it by hand, in the same order: stop and back up the server
-(`control-server.md`, "Start"), install the engine and your plugins, run
-`engine setup` here and `engine setup --host <name>` for each other host,
-then start the server.
+lists, then rerun it. Restart `engine ui` yourself. A Mac server host has no unit: upgrade
+it by hand, in the order above (to back up, `control-server.md`, "Start"),
+with `engine setup` and `engine setup --host <name>` for the setups.
 
 **The server's unit.** Write it once, by hand, on the server's host, as
 `~/.config/systemd/user/engine-server.service`. It runs `~/.local/bin/engine`,
