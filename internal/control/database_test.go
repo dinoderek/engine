@@ -103,6 +103,7 @@ func TestEveryRecordKindSurvivesReopen(t *testing.T) {
 	s := service(t).Store
 	err := s.Transaction(func(st *State) error {
 		st.Next = 10
+		st.Hosts["devbox"] = HostRecord{TmuxStart: 1234}
 		st.PassAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		st.Items["r1"] = Item{ID: "r1", Kind: "repo", Title: "repo"}
 		st.Attempts["a2"] = Attempt{ID: "a2", Item: "r1", State: "ended"}
