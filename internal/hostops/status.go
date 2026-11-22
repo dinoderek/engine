@@ -52,6 +52,12 @@ type Status struct {
 	// why the directory could not be read, when it could not.
 	TmuxCwdGone  *TmuxCwdGone `json:"tmux_cwd_gone,omitempty"`
 	TmuxCwdError string       `json:"tmux_cwd_error,omitempty"`
+	// TmuxUnit is set when the tmux server runs inside a systemd service,
+	// so stopping or restarting that service ends every window. It does not
+	// make the host unready. TmuxUnitError says why the server's cgroup could
+	// not be read, when it could not.
+	TmuxUnit      *TmuxUnit `json:"tmux_unit,omitempty"`
+	TmuxUnitError string    `json:"tmux_unit_error,omitempty"`
 	// TmuxStart is when the session tmux server started, in epoch seconds.
 	// TmuxKnown is false when no tmux server runs: a restarted server has a
 	// new start time, and a host with none running has no time to compare.
@@ -143,10 +149,7 @@ func ReadStatus(d Deps) (Status, error) {
 		s.RunsError = err.Error()
 	}
 	states := s.observe(adapters, host, windows, runs)
-	var cwdErr error
-	if s.TmuxCwdGone, cwdErr = d.tmuxCwdGone(); cwdErr != nil {
-		s.TmuxCwdError = cwdErr.Error()
-	}
+	s.readServer(d)
 	for _, w := range windows {
 		out := Window{Name: w.Name, ID: w.ID, Alive: !w.Dead}
 		if code, ok := codes[w.ID]; ok && w.Dead {

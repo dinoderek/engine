@@ -95,14 +95,19 @@ type Tmux struct {
 	// Home is the user's home directory. Open takes the per-host lock under
 	// it, in engine's data directory; empty takes none.
 	Home string
+	// Scope is the command that runs the start of the session in its own
+	// systemd scope (ScopeCommand), so the tmux server it starts outlives
+	// the unit of the process that started it. Empty starts tmux directly.
+	Scope []string
 }
 
 // New returns the Tmux for this host: the default server, run from the home
-// directory so that a server it starts never lives in a worktree, and
+// directory so that a server it starts never lives in a worktree, started in
+// its own scope when this process runs inside a systemd service, and
 // caffeinate on macOS.
 func New() *Tmux {
 	home, _ := os.UserHomeDir()
-	t := &Tmux{Run: ExecIn(home), Bin: "tmux", Home: home}
+	t := &Tmux{Run: ExecIn(home), Bin: "tmux", Home: home, Scope: defaultScope()}
 	if runtime.GOOS == "darwin" {
 		t.Awake = "/usr/bin/caffeinate"
 	}
@@ -136,6 +141,10 @@ type Opened struct {
 	// AwakeErr is why tmux refused to start the keep-awake job. The window
 	// is open regardless. A job that fails later is not reported.
 	AwakeErr error
+	// ScopeErr is why this call created the session without a scope of its
+	// own: a tmux server it started then dies with the unit that started
+	// it. The window is open regardless.
+	ScopeErr error
 }
 
 var (
@@ -144,6 +153,12 @@ var (
 )
 
 func (t *Tmux) tmux(args ...string) (string, error) {
+	return t.Run(t.Bin, t.args(args)...)
+}
+
+// args is a tmux command line after the binary: the socket, then args with
+// each trailing `;` escaped.
+func (t *Tmux) args(args []string) []string {
 	var full []string
 	if t.Socket != "" {
 		full = append(full, "-L", t.Socket)
@@ -151,7 +166,7 @@ func (t *Tmux) tmux(args ...string) (string, error) {
 	for _, a := range args {
 		full = append(full, escapeArg(a))
 	}
-	return t.Run(t.Bin, full...)
+	return full
 }
 
 // escapeArg keeps tmux from reading a trailing `;` as a command separator.
@@ -294,44 +309,48 @@ func (t *Tmux) open(w Window) (Opened, error) {
 			return Opened{}, err
 		}
 	}
-	info, err := t.create(w, len(windows) > 0)
+	opened, err := t.create(w, len(windows) > 0)
 	if err != nil {
 		return Opened{}, err
 	}
-	if err := t.configure(info, w); err != nil {
-		t.discard(info)
+	if err := t.configure(opened.WindowInfo, w); err != nil {
+		t.discard(opened.WindowInfo)
 		return Opened{}, err
 	}
-	return Opened{WindowInfo: info, AwakeErr: t.keepAwake(info.PaneID)}, nil
+	opened.AwakeErr = t.keepAwake(opened.PaneID)
+	return opened, nil
 }
 
 // create starts the window running holdCommand, creating the session with it
-// when the session does not exist yet (a session always has a window).
+// when the session does not exist yet (a session always has a window). Only
+// that start can start a tmux server, so only it runs in t.Scope.
 //
 // The session options come first: tmux fixes a pane's scrollback size when
 // the pane is created (only tmux 3.7 and later resize an existing pane), so a
 // pane made before history-limit is set would keep tmux's default.
-func (t *Tmux) create(w Window, sessionExists bool) (WindowInfo, error) {
+func (t *Tmux) create(w Window, sessionExists bool) (Opened, error) {
 	format := "#{window_id} #{pane_id}"
 	dir := formatEscape(w.Dir)
 	if !sessionExists {
-		out, err := t.tmux("new-session", "-d", "-P", "-F", format, "-s", Name, "-n", w.Name, "-c", dir, holdCommand)
+		out, scopeErr, err := t.newSession("new-session", "-d", "-P", "-F", format, "-s", Name, "-n", w.Name, "-c", dir, holdCommand)
 		if err == nil {
-			return t.replacePane(out, w)
+			info, err := t.replacePane(out, w)
+			return Opened{WindowInfo: info, ScopeErr: scopeErr}, err
 		}
 		// A concurrent start may have created the session first.
 		if again, herr := t.HasSession(); herr != nil || !again {
-			return WindowInfo{}, err
+			return Opened{}, err
 		}
 	}
 	if err := t.setSessionOptions(); err != nil {
-		return WindowInfo{}, err
+		return Opened{}, err
 	}
 	out, err := t.tmux("new-window", "-d", "-P", "-F", format, "-t", sessionTarget, "-n", w.Name, "-c", dir, holdCommand)
 	if err != nil {
-		return WindowInfo{}, err
+		return Opened{}, err
 	}
-	return parseIDs(out, w.Name)
+	info, err := parseIDs(out, w.Name)
+	return Opened{WindowInfo: info}, err
 }
 
 // replacePane is for the first window of a new session, whose pane predates
