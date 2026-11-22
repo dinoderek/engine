@@ -192,11 +192,16 @@ func TestTheWatcherStepOpens(t *testing.T) {
 	}
 	r = watcherRig(t)
 	r.box.down = true
-	if mustRun(t, r, "") || !strings.Contains(r.out.String(), "10. watcher: OPEN (cannot reach box to read its Telegram chat: ") {
+	if mustRun(t, r, "") || !strings.Contains(r.out.String(), "10. watcher: OPEN (cannot read the Telegram chat on box: ") {
 		t.Errorf("the server's host down:\n%s", r.out.String())
 	}
 	if _, err := os.Stat(filepath.Join(r.home, ".config", "engine", "watch-telegram-token")); err == nil {
 		t.Error("an unreachable server's host wrote the token copy")
+	}
+	r = watcherRig(t)
+	r.box.files["config.toml"] = "[telegram]\nchat = 'bad'\n"
+	if mustRun(t, r, "") || !strings.Contains(r.out.String(), "10. watcher: OPEN (cannot read the Telegram chat on box: its config.toml: ") {
+		t.Errorf("a config.toml that does not parse:\n%s", r.out.String())
 	}
 	r = watcherRig(t)
 	r.home = callerHomeWith(t, hostsTOML+"[host.box.services]\nmanager = \"systemd\"\nserver = \"a.service\"\n[host.mac.services]\nmanager = \"systemd\"\nserver = \"b.service\"\n")

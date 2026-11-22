@@ -65,7 +65,7 @@ func (r *runner) watcher() (harness.Outcome, error) {
 	chat, token, why, err := r.serverTelegram(server)
 	switch {
 	case err != nil:
-		return harness.Open("cannot reach "+server.Name+" to read its Telegram chat: "+err.Error(), r.rerun()), nil
+		return harness.Open("cannot read the Telegram chat on "+server.Name+": "+err.Error(), r.rerun()), nil
 	case why != "":
 		return harness.Passed(why), nil
 	}
@@ -88,15 +88,22 @@ func (r *runner) watcher() (harness.Outcome, error) {
 
 // serverTelegram reads the chat and bot token from the server's host. A
 // host that has not paired Telegram has nothing to copy, which why says; a
-// host that does not answer is the error.
+// host that does not answer, or a config.toml there that does not parse, is
+// the error.
 func (r *runner) serverTelegram(server hosts.Host) (chat int64, token, why string, err error) {
 	sh := NewShell(server.Name, server.Address, r.d.Exec)
 	config, err := sh.Sh(`cat "$HOME/.config/engine/config.toml"`, "")
 	if err != nil {
 		return 0, "", "", err
 	}
-	tg, perr := hosts.ParseTelegram(config.Out)
-	if config.Code != 0 || perr != nil || tg.Chat == 0 {
+	if config.Code != 0 {
+		return 0, "", "Telegram is not paired on " + server.Name + "; pair it there (telegram.md), then rerun setup", nil
+	}
+	tg, err := hosts.ParseTelegram(config.Out)
+	if err != nil {
+		return 0, "", "", fmt.Errorf("its config.toml: %w", err)
+	}
+	if tg.Chat == 0 {
 		return 0, "", "Telegram is not paired on " + server.Name + "; pair it there (telegram.md), then rerun setup", nil
 	}
 	res, err := sh.Sh(`cat "$HOME/.config/engine/`+hosts.TelegramTokenFile+`"`, "")

@@ -47,7 +47,7 @@ const dbPath = ".local/share/engine/server/control.db"
 const (
 	isActive   = "systemctl --user is-active engine-server.service"
 	restartCmd = "systemctl --user restart engine-server.service"
-	quickCheck = `timeout 30 sqlite3 -readonly "$HOME/.local/share/engine/server/control.db" 'PRAGMA quick_check;'`
+	quickCheck = `timeout 30 sqlite3 -init /dev/null -batch -readonly -cmd '.timeout 5000' "$HOME/.local/share/engine/server/control.db" 'PRAGMA quick_check;'`
 	dfCmd      = `df -Pk "$HOME/.local/share/engine/server"`
 	journal    = "journalctl --user -u engine-server.service -n 50 --no-pager"
 )
@@ -149,7 +149,7 @@ func TestStatusOfAHealthyServerFromAnotherHost(t *testing.T) {
 	}
 	for _, want := range []string{
 		"engine server status: devbox (dev@devbox), unit engine-server.service",
-		"unit: ok (active)", "api: ok (the server answers)", "database: ok (quick_check ok)",
+		"unit: ok (active)", "api: ok (the server answers)", "database: ok (the server reads it; quick_check runs only when the server does not answer)",
 		"disk: ok (98.7 GiB free of 457.0 GiB, 78% used)",
 		"last 1 log lines:\n  Nov 22 17:02:04 devbox engine[1]: engine server listening",
 	} {
@@ -157,7 +157,7 @@ func TestStatusOfAHealthyServerFromAnotherHost(t *testing.T) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}
 	}
-	want := []string{"dev@devbox " + isActive, "dev@devbox " + quickCheck, "dev@devbox " + dfCmd, "dev@devbox " + journal}
+	want := []string{"dev@devbox " + isActive, "dev@devbox " + dfCmd, "dev@devbox " + journal}
 	if !slices.Equal(r.host.ssh, want) || len(r.host.sh) != 0 {
 		t.Errorf("ssh %q, sh %q; want %q", r.host.ssh, r.host.sh, want)
 	}
@@ -198,6 +198,7 @@ func TestStatusReportsEachFailure(t *testing.T) {
 
 func TestStatusChecksThatCannotRun(t *testing.T) {
 	r := newRig(t, "mac")
+	r.answers = []error{errors.New("connection refused")}
 	r.host.replies[quickCheck] = answer{err: "sqlite3: command not found", code: 127}
 	r.host.replies[dfCmd] = answer{out: "df: unexpected\n"}
 	_, out, _ := r.main("status")
@@ -303,5 +304,16 @@ func TestJSONReportsAConfigItCannotUse(t *testing.T) {
 	}
 	if got.Op != "restart" || got.OK || len(got.Checks) != 1 || got.Checks[0].Name != "locate" || got.Checks[0].OK {
 		t.Errorf("report %+v", got)
+	}
+}
+
+// Only a server that does not answer gets the quick check, and a sound
+// database passes it.
+func TestStatusChecksTheDatabaseOfAServerThatDoesNotAnswer(t *testing.T) {
+	r := newRig(t, "mac")
+	r.answers = []error{errors.New("connection refused")}
+	code, out, _ := r.main("status")
+	if code != 1 || !strings.Contains(out, "database: ok (quick_check ok)") || !slices.Contains(r.host.ssh, "dev@devbox "+quickCheck) {
+		t.Errorf("exit %d, ssh %q:\n%s", code, r.host.ssh, out)
 	}
 }

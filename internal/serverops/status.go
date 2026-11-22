@@ -15,8 +15,13 @@ const LogLines = 50
 const minFreeKB = 1 << 20
 
 // dbTimeout bounds the database check, in seconds, so a locked database
-// cannot hang the status.
-const dbTimeout = 30
+// cannot hang the status; busyMS is how long it waits on the server's own
+// write lock. -init /dev/null skips the host's ~/.sqliterc, as the server
+// does.
+const (
+	dbTimeout = 30
+	busyMS    = 5000
+)
 
 // status runs every check, each whatever the others found, then reads the
 // log. A host that cannot be reached is the one failure, and nothing else
@@ -30,12 +35,16 @@ func status(s server, d Deps) report {
 	}
 	state := res.FirstLine()
 	r.add("unit", state == "active", state)
-	if err = d.Answers(); err != nil {
-		r.add("api", false, err.Error())
+	answered := d.Answers()
+	if answered != nil {
+		r.add("api", false, answered.Error())
+		r.add(databaseCheck(s, d.DBPath))
 	} else {
+		// A server that answers reads its database. The check's read lock
+		// could make one of its commits fail, so it runs only when needed.
 		r.add("api", true, "the server answers")
+		r.add("database", true, "the server reads it; quick_check runs only when the server does not answer")
 	}
-	r.add(databaseCheck(s, d.DBPath))
 	r.add(diskCheck(s, d.DBPath))
 	r.Log = unitLog(s)
 	return r
@@ -46,7 +55,7 @@ func dbOnHost(rel string) string { return `"$HOME/` + rel + `"` }
 
 // databaseCheck runs SQLite's quick check, read-only, on the database.
 func databaseCheck(s server, rel string) (string, bool, string) {
-	line := fmt.Sprintf("timeout %d sqlite3 -readonly %s 'PRAGMA quick_check;'", dbTimeout, dbOnHost(rel))
+	line := fmt.Sprintf("timeout %d sqlite3 -init /dev/null -batch -readonly -cmd '.timeout %d' %s 'PRAGMA quick_check;'", dbTimeout, busyMS, dbOnHost(rel))
 	res, err := s.sh.Sh(line, "")
 	switch {
 	case err != nil || res.Code != 0:
