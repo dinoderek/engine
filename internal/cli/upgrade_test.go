@@ -23,8 +23,9 @@ server = "engine-server.service"
 `
 
 // upgradeEnv is a Mac that runs the server under its unit, a server whose
-// tasks are tasks, and a gh that knows main's head. ran lists every command
-// line and program the run started.
+// tasks are tasks, or that refuses every call when tasks is nil, and a gh
+// that knows main's head. ran lists every command line and program the run
+// started.
 func upgradeEnv(t *testing.T, tasks []control.Item) (Env, *bytes.Buffer, *bytes.Buffer, *[]string) {
 	t.Helper()
 	env, out, errOut := setupEnv(t)
@@ -38,6 +39,10 @@ func upgradeEnv(t *testing.T, tasks []control.Item) (Env, *bytes.Buffer, *bytes.
 		var req control.Request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Op != "list" || req.State != "task" {
 			t.Errorf("unexpected request %+v, %v", req, err)
+		}
+		if tasks == nil {
+			http.Error(w, `{"error":"operator credential required"}`, http.StatusForbidden)
+			return
 		}
 		_ = json.NewEncoder(w).Encode(control.Response{Items: tasks})
 	}))
@@ -94,10 +99,11 @@ func TestUpgradeDryRunCommandLine(t *testing.T) {
 	}
 }
 
-// A busy task refuses with exit 1; bad flags exit 2 with the usage.
+// A server that refuses the preflight's call refuses with exit 1; bad flags
+// exit 2 with the usage.
 func TestUpgradeCommandLineRefusesAndRejectsFlags(t *testing.T) {
-	env, _, errOut, ran := upgradeEnv(t, []control.Item{{ID: "t7", Kind: "task", State: "running"}})
-	if code := Run([]string{"upgrade"}, env); code != 1 || !strings.Contains(errOut.String(), "engine upgrade: 1 task(s) are running") {
+	env, _, errOut, ran := upgradeEnv(t, nil)
+	if code := Run([]string{"upgrade"}, env); code != 1 || !strings.Contains(errOut.String(), "engine upgrade: the server does not answer") {
 		t.Fatalf("exit %d; err %s", code, errOut)
 	}
 	if len(*ran) != 1 {

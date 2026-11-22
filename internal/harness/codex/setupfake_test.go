@@ -117,6 +117,8 @@ type codexState struct {
 	etime   string
 	log     string
 	logFail bool
+	// The plugin's versions on disk (setupretain_test.go).
+	disk pluginDisk
 }
 
 func (c *codexState) engineHome() string { return c.home + "/.local/share/engine/codex" }
@@ -149,6 +151,9 @@ func (c *codexState) answer(b *box, cmd, stdin string, out, errOut io.Writer) (i
 	say := func(format string, args ...any) (int, bool) { fmt.Fprintf(out, format, args...); return 0, true }
 	fail := func(code int, msg string) (int, bool) { fmt.Fprint(errOut, msg); return code, true }
 	eh := c.engineHome()
+	if code, ok := c.retain(b, cmd, out, errOut); ok {
+		return code, true
+	}
 	switch {
 	case strings.HasPrefix(cmd, "printf '%s\\n%s\\n'"):
 		return say("%s\n%s\n", c.home, c.userHome)
@@ -259,6 +264,7 @@ func (c *codexState) operator(b *box, args string, out, errOut io.Writer) (int, 
 		}
 		if strings.HasPrefix(args, "plugin add") {
 			c.userPlugin = c.installed()
+			c.added(c.userHome, c.userPlugin)
 		}
 		return 0, true
 	case "app-server daemon version":
@@ -297,6 +303,7 @@ func (c *codexState) inEngine(b *box, args string, out, errOut io.Writer) (int, 
 		}
 		if strings.HasPrefix(args, "plugin add") {
 			c.plugin = c.installed()
+			c.added(c.engineHome(), c.plugin)
 		}
 		return 0, true
 	case "app-server daemon version":

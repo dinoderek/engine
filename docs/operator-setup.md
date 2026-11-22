@@ -126,15 +126,18 @@ then run `engine setup --host devbox`.
 ## Upgrading
 
 `engine upgrade`, from any host in `hosts.toml`, brings every host to the
-head of `main`. It stops the server's unit and backs up the database with
+head of `main`, mid-plan too. It stops the server's unit and backs up the database with
 the old binary, installs the new engine and your plugins on this host, sets
 up the server's host and starts the server, then sets up every other host.
 The server starts again even when a step fails. `--dry-run` prints the steps
 and changes nothing.
 
-It refuses, changing nothing, while a task is `running`, `in-review` or
-`needs-human`, or when the server's host records no `services` table, does
-not answer, or its unit is not active. A host that is unreachable or stays open stops no others: run the commands the report lists, then rerun
+Busy tasks carry on; a session that dies while it runs is an engine bug
+(`session-signals.md`, "Upgrade"). A plugin version stays while a window
+started before the update may read it, except Codex's in your Codex home.
+
+It refuses, changing nothing, when the server's host records no `services`
+table, does not answer, or its unit is not active. A host that is unreachable or stays open stops no others: run the commands the report lists, then rerun
 it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
 it by hand, in the same order: stop and back up the server
 (`control-server.md`, "Start"), install the engine and your plugins, run

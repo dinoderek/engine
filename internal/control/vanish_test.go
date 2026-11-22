@@ -14,6 +14,7 @@ type prior struct {
 	crashed, limited bool
 	early, unopened  bool
 	hostLost         bool
+	upgraded         bool
 }
 
 func TestTheVanishRule(t *testing.T) {
@@ -85,7 +86,7 @@ func vanishState(task, plan Item, before []prior) State {
 			window = ""
 		}
 		st.Attempts[id] = Attempt{ID: id, Item: "t2", State: "ended", Window: window, Reason: p.reason,
-			Crashed: p.crashed, Limited: p.limited, Early: p.early, HostLost: p.hostLost}
+			Crashed: p.crashed, Limited: p.limited, Early: p.early, HostLost: p.hostLost, Upgraded: p.upgraded}
 	}
 	st.Attempts["a50"] = Attempt{ID: "a50", Item: "t8", State: "ended", Window: "@1", Reason: EndFailed}
 	return st
