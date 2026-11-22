@@ -120,8 +120,16 @@ func TestEditFileReleasesTheLock(t *testing.T) {
 	}
 }
 
-func TestEditFileReportsALockItCannotMake(t *testing.T) {
+// A file in a missing folder is shared by nobody: an edit that leaves it
+// missing needs no lock, and one that would write it fails on the lock.
+func TestEditFileInAMissingFolder(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "none", "f")
+	if err := EditFile(path, nil, func([]byte) ([]byte, error) { return nil, nil }); err != nil {
+		t.Errorf("no-op: %v", err)
+	}
+	if err := EditFile(path, nil, func([]byte) ([]byte, error) { return nil, errors.New("bad") }); err == nil || !strings.HasSuffix(err.Error(), "/f: bad") {
+		t.Errorf("edit error: %v", err)
+	}
 	if err := EditFile(path, nil, appendLine("b")); err == nil || !strings.Contains(err.Error(), "lock "+path+".lock") {
 		t.Errorf("err = %v", err)
 	}

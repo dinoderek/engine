@@ -39,6 +39,13 @@ func EditFile(path string, check func(string) (Stamp, error), edit func(data []b
 }
 
 func editFile(lock fileLock, path string, check func(string) (Stamp, error), edit func(data []byte) ([]byte, error)) (err error) {
+	// With no folder for the file, nothing shares it, and an edit that
+	// leaves a missing file alone needs no lock.
+	if _, err := os.Stat(filepath.Dir(path)); errors.Is(err, fs.ErrNotExist) {
+		if out, err := edit(nil); err != nil || out == nil {
+			return wrapEdit(path, err)
+		}
+	}
 	if err := lock.acquire(); err != nil {
 		return err
 	}
@@ -62,7 +69,7 @@ func editFile(lock fileLock, path string, check func(string) (Stamp, error), edi
 		}
 		out, err := edit(data)
 		if err != nil {
-			return fmt.Errorf("%s: %w", path, err)
+			return wrapEdit(path, err)
 		}
 		if out == nil {
 			return nil
@@ -73,6 +80,14 @@ func editFile(lock fileLock, path string, check func(string) (Stamp, error), edi
 		}
 	}
 	return fmt.Errorf("%s %w", path, ErrKeptChanging)
+}
+
+// wrapEdit names path in an edit's error, and keeps nil.
+func wrapEdit(path string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", path, err)
 }
 
 // WriteFile replaces the file at path with data in one rename, so a reader
