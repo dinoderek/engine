@@ -3,6 +3,7 @@ package control
 import (
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func TestTelegramRecordsStayOutsideCommandRecords(t *testing.T) {
 		t.Fatalf("%+v %v", rows, err)
 	}
 	out, err := s.Store.sql("PRAGMA user_version;")
-	if err != nil || !strings.Contains(string(out), `"user_version":5`) {
+	if err != nil || !strings.Contains(string(out), `"user_version":`+strconv.Itoa(schemaVersion)) {
 		t.Fatalf("%s %v", out, err)
 	}
 }

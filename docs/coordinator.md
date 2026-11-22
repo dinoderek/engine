@@ -39,7 +39,7 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `control-spawn` | Syncs engine's clone, then runs `spawn` with the run's credentials. |
 | `sync-repo` | Creates or fetches engine's clone; returns the default branch. |
 | `spawn` | Starts a session; the kickoff arrives on stdin (`hosts-and-sessions.md`). |
-| `status` | Windows with their state and screen tail, recent runs, quota, free slots and signed-out harnesses (`telemetry.md`, `internal/hostops/status.go`). |
+| `status` | Windows with their state and screen tail, recent runs, quota, free slots, signed-out harnesses and when the session tmux server started (`telemetry.md`, `internal/hostops/status.go`). |
 | `collect` | Returns a run directory's index and file list; nothing is uploaded. |
 | `merge` | Merges a PR pinned to the reviewed head once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start counts. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. |
 | `ready` | Probes a repo's readiness (`readiness.md`). |
