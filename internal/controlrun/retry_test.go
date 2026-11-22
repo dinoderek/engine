@@ -2,6 +2,7 @@ package controlrun
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -13,13 +14,15 @@ import (
 
 // endFirstAttempt runs the task's first attempt until its session dies and
 // the task fails, leaves the task's window as alive says, as a window opened
-// again by hand would be, and returns the task to todo for a retry.
+// again by hand would be, and returns the task to todo for a retry. Earlier
+// claimed deaths, recorded before it, make its death the cap's.
 func endFirstAttempt(t *testing.T, c *Coordinator, h *host, task control.Item, alive bool) control.Attempt {
 	t.Helper()
 	pass(t, c)
 	pass(t, c)
 	st, _ := c.Service.Store.Snapshot()
 	first := st.Attempts[st.Items[task.ID].Attempt]
+	crashedBefore(t, c, first)
 	claim(t, c, task)
 	h.status.Windows[0].Alive = false
 	if err := c.ConfirmEnded(first.ID); err != nil {
@@ -33,6 +36,27 @@ func endFirstAttempt(t *testing.T, c *Coordinator, h *host, task control.Item, a
 	h.status.Windows[0].Alive = alive
 	execute(t, c.Service, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "todo"})
 	return first
+}
+
+// crashedBefore records DeathCap-1 claimed deaths of at's task, numbered
+// below at, on another host so that no release acts on them.
+func crashedBefore(t *testing.T, c *Coordinator, at control.Attempt) {
+	t.Helper()
+	if control.Number(at.ID) < control.DeathCap {
+		t.Fatalf("attempt %s leaves no room for earlier deaths", at.ID)
+	}
+	if err := c.Service.Store.Transaction(func(st *control.State) error {
+		for i := 1; i < control.DeathCap; i++ {
+			id := fmt.Sprintf("a%d", control.Number(at.ID)-control.DeathCap+i)
+			if _, taken := st.Attempts[id]; taken {
+				return fmt.Errorf("attempt %s exists", id)
+			}
+			st.Attempts[id] = control.Attempt{ID: id, Item: at.Item, Host: "elsewhere", State: "ended", Window: "@9", Reason: control.EndVanished, Crashed: true}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func refusedNotices(t *testing.T, c *Coordinator, task control.Item) int {

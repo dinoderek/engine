@@ -29,6 +29,9 @@ type Env struct {
 	// Server starts the control server's process; nil is the real tmux,
 	// ssh, binary and clock.
 	Server *ServerDeps
+	// Retry is the clock and sleep of a command's retry of an unreachable
+	// server; nil is the real ones.
+	Retry *Retry
 }
 
 const Usage = "engine serve\n" +
@@ -82,6 +85,11 @@ func Main(args []string, e Env) int {
 		fmt.Fprintf(e.Err, "engine: %v\n%s", err, Usage)
 		return 2
 	}
+	call, err := newCaller(e)
+	if err != nil {
+		fmt.Fprintf(e.Err, "engine: %v\n", err)
+		return 2
+	}
 	client, err := makeClient(e)
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine:", err)
@@ -91,7 +99,7 @@ func Main(args []string, e Env) int {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	out, err := client.Call(ctx, req)
+	out, err := call(ctx, client, req)
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine:", err)
 		return 1

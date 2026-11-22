@@ -22,8 +22,11 @@ func TestAStallAfterADenialIsAPermissionStop(t *testing.T) {
 	h.status.Windows[0].Denial = &hostops.Denial{At: now.Add(-time.Minute), Tool: "Bash",
 		Input: json.RawMessage(`{"command":"gh pr merge 9 -R owner/demo --squash --match-head-commit abc"}`), Decision: "denied by auto mode", Reason: "[Merge Without Review]"}
 	pass(t, c)
-	now = now.Add(11 * time.Minute)
-	pass(t, c)
+	// Passes follow each other within OutageGap, or the wait would restart.
+	for range 3 {
+		now = now.Add(4 * time.Minute)
+		pass(t, c)
+	}
 	st, _ := c.Service.Store.Snapshot()
 	var got []string
 	for _, u := range st.Updates {

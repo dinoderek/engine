@@ -34,6 +34,11 @@ func vanished(t Item, question int) Item {
 	return t
 }
 
+// crashed marks t's ended attempt as a claimed session's death.
+func crashed(t Item) Item { t.Current.Crashed = true; return t }
+
+func withPR(t Item) Item { t.PR = "https://github.com/o/r/pull/" + "9"; return t }
+
 func withFleet(v View, f Fleet) View { v.Fleet = f; return v }
 
 func withLint(v View) View { v.Lint = []string{"t2: no ## Tests section"}; return v }
@@ -133,6 +138,8 @@ func TestDecide(t *testing.T) {
 		// Failed and vanished attempts.
 		{"a held task's dead session ends its attempt", view(plan("planned"), with(task(2, "running"), gone())), []string{"end t2 a2"}},
 		{"a vanished attempt is dispatched again as a resume", view(plan("planned"), vanished(task(2, "running"), 0)), []string{"dispatch t2 devbox claude true"}},
+		{"a claimed death with no PR is dispatched again as a resume", view(plan("planned"), crashed(vanished(task(2, "running"), 0))), []string{"dispatch t2 devbox claude true"}},
+		{"a claimed death in review is dispatched again as a resume", view(plan("planned"), crashed(vanished(withPR(task(2, "in-review")), 0))), []string{"dispatch t2 devbox claude true"}},
 		{"an operator question parks a vanished task", view(plan("planned"), vanished(task(2, "running"), 7)), nil},
 
 		// Stalls and the claim wait.

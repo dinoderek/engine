@@ -74,8 +74,8 @@ const (
 	// SetState moves a plan to planned or done; control.PlanStatus derives
 	// the rest.
 	SetState Kind = "state"
-	// EndAttempt ends an attempt whose window died: failed, or vanished when
-	// the server finds the task resumable.
+	// EndAttempt ends an attempt whose window died: the server decides
+	// vanished, early-death or failed (control.Service.EndDead).
 	EndAttempt Kind = "end"
 	// Notice tells the operator once per key.
 	Notice Kind = "notice"

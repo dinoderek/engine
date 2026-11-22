@@ -45,7 +45,7 @@ rule or override it for the feature. For watching a run, load `operator-setup.md
 | Entity | States |
 | --- | --- |
 | Plan | `prepare` → `approved` (operator) → `planned` → `done`. Its status adds `blocked` while the operator is needed (a plan question, a task `needs-human` or `failed`) and `executing` once a task starts. |
-| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when the session dies. |
+| Task | `todo` → `running` → `in-review` (PR open) → `done` by merge. `needs-human` replaces `running` or `in-review` until the hard stop's last open question is resolved; `failed` when its sessions keep dying (`session-signals.md`). |
 
 "Ready" and plan status are computed (`control.PlanStatus`), never stored.
 You approve the plan; the planner, or the coordinator on passing lint, sets

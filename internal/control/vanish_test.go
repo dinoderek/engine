@@ -2,63 +2,90 @@ package control
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestResumableWhenWorkRemainsAfterTheWindowWentAway(t *testing.T) {
+// prior is an ended earlier attempt of task t2, for TestTheVanishRule.
+type prior struct {
+	reason           string
+	crashed, limited bool
+	early, unopened  bool
+}
+
+func TestTheVanishRule(t *testing.T) {
 	start := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
 	live := start.Add(time.Hour)
+	crash := prior{reason: EndVanished, crashed: true}
+	claimedAt := Attempt{Started: start, LiveAt: live}
 	cases := []struct {
-		name       string
-		task, plan Item
-		at         Attempt
-		question   bool
-		prev       string
-		want       bool
+		name          string
+		task, plan    Item
+		at            Attempt
+		before        []prior
+		question      bool
+		reason, state string
+		crashed       bool
 	}{
-		{name: "crash while coordinating", at: Attempt{Started: start, LiveAt: live}},
-		{name: "has a PR", task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "has a PR but was never seen live", task: Item{PR: "pr-url"}, at: Attempt{Started: start}},
-		{name: "open question but was never seen live", question: true, at: Attempt{Started: start}},
-		{name: "open operator question", question: true, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "plan stopped after last seen live", plan: Item{StoppedAt: live.Add(time.Minute)}, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "plan stopped as it was last seen live", plan: Item{StoppedAt: live}, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "stopped before it was dispatched", plan: Item{StoppedAt: start.Add(-time.Minute)}, at: Attempt{Started: start}},
-		{name: "stopped, then seen live after the restart", plan: Item{StoppedAt: live.Add(-time.Minute)}, at: Attempt{Started: start, LiveAt: live}},
-		{name: "resume of a vanished attempt", prev: EndVanished, task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}},
-		{name: "retry of a failed attempt", prev: EndFailed, task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "after an unlaunched attempt that ended vanished", prev: "unlaunched", task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "resume of a vanished attempt, then stopped", prev: EndVanished, plan: Item{StoppedAt: live}, at: Attempt{Started: start, LiveAt: live}, want: true},
-		{name: "stopped before it was ever seen live", plan: Item{StoppedAt: start.Add(time.Minute)}, at: Attempt{Started: start}, want: true},
+		{name: "a claimed death with no PR resumes", at: claimedAt, reason: EndVanished, state: "running", crashed: true},
+		{name: "a claimed death with a PR resumes", task: Item{PR: "pr-url"}, at: claimedAt, reason: EndVanished, state: "running", crashed: true},
+		{name: "a claimed death with an open question resumes", question: true, at: claimedAt, reason: EndVanished, state: "running", crashed: true},
+		{name: "the resume of a vanished attempt resumes again", task: Item{PR: "pr-url"}, at: claimedAt, before: []prior{crash}, reason: EndVanished, state: "running", crashed: true},
+		{name: "the cap's death fails the task", at: claimedAt, before: []prior{crash, crash}, reason: EndFailed, state: "failed", crashed: true},
+		{name: "a release after done resets the count", at: claimedAt, before: []prior{crash, {}, crash}, reason: EndVanished, state: "running", crashed: true},
+		{name: "the operator's stop resets the count", at: claimedAt, before: []prior{crash, {reason: EndStopped}, crash}, reason: EndVanished, state: "running", crashed: true},
+		{name: "a retry after the cap starts the count again", at: claimedAt, before: []prior{crash, crash, {reason: EndFailed, crashed: true}, crash}, reason: EndVanished, state: "running", crashed: true},
+		{name: "an early death ends the run", at: claimedAt, before: []prior{crash, {reason: EndEarlyDeath, early: true}, crash}, reason: EndVanished, state: "running", crashed: true},
+		{name: "limit, stopped and unopened attempts neither count nor reset", at: claimedAt,
+			before: []prior{crash, {reason: EndVanished, limited: true}, {reason: EndVanished}, {reason: EndVanished, unopened: true}, crash}, reason: EndFailed, state: "failed", crashed: true},
+		{name: "a death at a limit is uncounted", at: Attempt{Started: start, LiveAt: live, Limited: true}, before: []prior{crash, crash}, reason: EndVanished, state: "running"},
+		{name: "coordination stopped after it was last seen live", plan: Item{StoppedAt: live}, at: claimedAt, before: []prior{crash, crash}, reason: EndVanished, state: "running"},
+		{name: "stopped before it was ever seen live", plan: Item{StoppedAt: start.Add(time.Minute)}, at: Attempt{Started: start}, reason: EndVanished, state: "running"},
+		{name: "stopped, then seen live after the restart", plan: Item{StoppedAt: live.Add(-time.Minute)}, at: claimedAt, reason: EndVanished, state: "running", crashed: true},
+		{name: "an unclaimed death is early, PR or not", task: Item{PR: "pr-url"}, at: Attempt{Started: start, LiveAt: start.Add(time.Minute)}, reason: EndEarlyDeath, state: "todo"},
+		{name: "a second unclaimed death fails", at: Attempt{Started: start}, before: []prior{{reason: EndEarlyDeath, early: true}}, reason: EndFailed, state: "failed"},
+		{name: "an unclaimed death after crashes is still the first", at: Attempt{Started: start}, before: []prior{crash, crash}, reason: EndEarlyDeath, state: "todo"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			c.plan.ID, c.plan.Kind = "p1", "plan"
-			c.task.ID, c.task.Kind, c.task.Plan, c.task.State, c.task.Attempt = "t2", "task", "p1", "running", "a3"
-			c.at.ID, c.at.Item, c.at.State = "a3", "t2", "running"
-			st := emptyState()
-			st.Items[c.plan.ID], st.Items[c.task.ID], st.Attempts[c.at.ID] = c.plan, c.task, c.at
-			switch c.prev {
-			case "":
-			case "unlaunched": // the operator ended a dispatch that opened no window
-				st.Attempts["a1"] = Attempt{ID: "a1", Item: "t2", State: "ended", Reason: EndVanished}
-			default:
-				st.Attempts["a1"] = Attempt{ID: "a1", Item: "t2", State: "ended", Reason: c.prev, Window: "@1"}
-				st.Attempts["a9"] = Attempt{ID: "a9", Item: "t8", State: "ended", Reason: EndFailed}
-			}
+			st := vanishState(c.task, c.plan, c.before)
+			c.at.ID, c.at.Item, c.at.State, c.at.Window = "a99", "t2", "running", "@1"
+			st.Attempts[c.at.ID] = c.at
 			if c.question {
 				st.Updates = append(st.Updates, Update{ID: 1, Item: "t2", Kind: "ask", RequiresReply: true})
 			}
-			if got := resumable(&st, c.task, c.at); got != c.want {
-				t.Fatalf("resumable = %v, want %v", got, c.want)
+			s := Service{Now: func() time.Time { return live.Add(time.Hour) }}
+			at := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
+			if at.Reason != c.reason || at.Crashed != c.crashed || st.Items["t2"].State != c.state {
+				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, st.Items["t2"].State, c.reason, c.crashed, c.state)
 			}
 		})
 	}
 }
 
-func TestReconcileLeavesAResumableTaskForAResumeAndFailsTheRest(t *testing.T) {
+// vanishState holds plan p1 and its running task t2, whose current attempt
+// is a99, after the earlier attempts before, oldest first.
+func vanishState(task, plan Item, before []prior) State {
+	plan.ID, plan.Kind = "p1", "plan"
+	task.ID, task.Kind, task.Plan, task.State, task.Attempt = "t2", "task", "p1", "running", "a99"
+	st := emptyState()
+	st.Items[plan.ID], st.Items[task.ID] = plan, task
+	for i, p := range before {
+		id := fmt.Sprintf("a%d", i+1)
+		window := "@1"
+		if p.unopened {
+			window = ""
+		}
+		st.Attempts[id] = Attempt{ID: id, Item: "t2", State: "ended", Window: window, Reason: p.reason,
+			Crashed: p.crashed, Limited: p.limited, Early: p.early}
+	}
+	st.Attempts["a50"] = Attempt{ID: "a50", Item: "t8", State: "ended", Window: "@1", Reason: EndFailed}
+	return st
+}
+
+func TestReconcileResumesClaimedDeathsUntilTheCap(t *testing.T) {
 	s := service(t)
 	ended := 0
 	s.Reconcile = func(string) error { ended++; return nil }
@@ -87,10 +114,18 @@ func TestReconcileLeavesAResumableTaskForAResumeAndFailsTheRest(t *testing.T) {
 	launched(t, s, resumed.Attempt.ID)
 	seenLive(t, s, resumed.Attempt.ID)
 	call(t, s, worker, Request{Op: "say", ID: task.ID, Body: "started"})
-	failed := call(t, s, op, Request{Op: "attempt-reconcile", ID: resumed.Attempt.ID, Body: "crashed"}).Attempt
+	again = call(t, s, op, Request{Op: "attempt-reconcile", ID: resumed.Attempt.ID, Body: "crashed"}).Attempt
+	current = call(t, s, op, Request{Op: "get", ID: task.ID}).Item
+	if again.Reason != EndVanished || current.State != "running" {
+		t.Fatalf("the resume's claimed death did not resume: %+v %+v", again, current)
+	}
+	worker, resumed = dispatch(t, s, *current)
+	launched(t, s, resumed.Attempt.ID)
+	call(t, s, worker, Request{Op: "say", ID: task.ID, Body: "started again"})
+	failed := call(t, s, op, Request{Op: "attempt-reconcile", ID: resumed.Attempt.ID, Body: "crashed again"}).Attempt
 	current = call(t, s, op, Request{Op: "get", ID: task.ID}).Item
 	if failed.Reason != EndFailed || current.State != "failed" {
-		t.Fatalf("a real failure did not fail its task: %+v %+v", failed, current)
+		t.Fatalf("the cap's claimed death did not fail its task: %+v %+v", failed, current)
 	}
 	reject(t, s, op, Request{Op: "claim", ID: task.ID, Body: "devbox", State: "claude"}, 409)
 }
