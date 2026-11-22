@@ -88,4 +88,5 @@ func TestEndPassMovesTheSavedTimeForwardOnly(t *testing.T) {
 	if _, outage, err := store.StartPass(t0.Add(8*time.Minute), 5*time.Minute); err != nil || outage {
 		t.Errorf("pass a minute after a long pass ended: outage %v, err %v; want none", outage, err)
 	}
+	durable(t, store)
 }
