@@ -90,7 +90,7 @@ func TestReleaseMovedSaysWhatOriginLacks(t *testing.T) {
 	}{
 		"a failed push": {moveGit(errors.New("could not read from remote"), "2", " M main.go\n"),
 			[]string{"2 commits on task/r-7, as the push failed: could not read from remote", "uncommitted changes in "}},
-		"commits after the push": {moveGit(nil, "1", ""), []string{"1 commits made on task/r-7 after the push"}},
+		"commits after the push": {moveGit(nil, "1", ""), []string{"1 commit made on task/r-7 after the push"}},
 	}
 	for name, c := range cases {
 		r, worktree, err := movedRelease(t, c.run, &tmuxFake{windows: []string{"@5 %5 1 r-7"}})

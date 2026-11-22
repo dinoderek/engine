@@ -69,7 +69,7 @@ func TestTaskMovePrintsTheMovedTaskAndIsSafeToRepeat(t *testing.T) {
 func TestTaskMoveOffAnUnreachableHostWarnsAndNeedsConfirming(t *testing.T) {
 	e, task := moving(t, true)
 	errOut := e.Err.(*bytes.Buffer)
-	if code := Main([]string{"task", "move", task}, e); code != 1 || !strings.Contains(errOut.String(), "warning: host devbox was not reachable") ||
+	if code := Main([]string{"task", "move", task}, e); code != 1 || !strings.Contains(errOut.String(), "warning: the coordinator's latest pass did not read host devbox") ||
 		!strings.Contains(errOut.String(), "may still be running and pushing") || !strings.Contains(errOut.String(), "rerun with --yes") {
 		t.Fatalf("an unconfirmed move exited %d: %s", code, errOut)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/hostops"
 	"github.com/dinoderek/engine/internal/hosts"
+	"github.com/dinoderek/engine/internal/reconcile"
 	"github.com/dinoderek/engine/internal/remote"
 )
 
@@ -141,7 +142,7 @@ func TestABlindMoveStartsElsewhereAndReleasesTheOldWindowOnReturn(t *testing.T) 
 		t.Fatalf("on devbox's return: devbox released %v with %v, mac %v", devbox.released, devbox.outcomes, mac.released)
 	}
 	notices := operatorNotices(t, c, task.ID)
-	if len(notices) != 1 || !strings.Contains(notices[0].Body, "Origin lacks uncommitted changes in /wt") || !strings.Contains(notices[0].Body, "host devbox") {
+	if len(notices) != 1 || !strings.Contains(notices[0].Body, "What origin lacks: uncommitted changes in /wt.") || !strings.Contains(notices[0].Body, "host devbox") {
 		t.Fatalf("notices %+v", notices)
 	}
 	pass(t, c)
@@ -172,7 +173,21 @@ func TestABlindMoveOffARebootedHostStillPushesOnReturn(t *testing.T) {
 	if !slices.Equal(devbox.outcomes, []hostops.Outcome{hostops.RunMoved}) {
 		t.Fatalf("devbox released %v with %v", devbox.released, devbox.outcomes)
 	}
-	if notices := operatorNotices(t, c, task.ID); len(notices) != 1 || !strings.Contains(notices[0].Body, "Origin lacks 2 commits") {
+	if notices := operatorNotices(t, c, task.ID); len(notices) != 1 || !strings.Contains(notices[0].Body, "What origin lacks: 2 commits") {
 		t.Fatalf("notices %+v", notices)
+	}
+}
+
+// A moved attempt on a host gone from hosts.toml has nothing left to
+// release, so it holds no plan; one on a host that cannot be read may.
+func TestAStrayOnAHostGoneFromHostsTomlHoldsNothing(t *testing.T) {
+	st := control.State{Items: map[string]control.Item{"r1": {ID: "r1", Kind: "repo", Slug: "owner/demo"}},
+		Attempts: map[string]control.Attempt{"a2": {ID: "a2", Item: "t3", Host: "old", Window: "@1", Reason: control.EndMoved, State: "ended"}}}
+	task := control.Item{ID: "t3", Kind: "task", Repo: "r1"}
+	if out, unknown := strays(st, task, reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "devbox"}}}); len(out) != 0 || unknown {
+		t.Errorf("a host gone from hosts.toml: %+v, unknown %v", out, unknown)
+	}
+	if _, unknown := strays(st, task, reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "old", Unreachable: "ssh: exit 255"}}}); !unknown {
+		t.Error("an unreachable host's stray is not unknown")
 	}
 }

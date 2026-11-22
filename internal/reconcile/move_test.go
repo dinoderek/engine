@@ -85,12 +85,17 @@ func TestAMovedTaskWaitsForItsOldHostUnlessMovedBlind(t *testing.T) {
 	v.Fleet.Hosts[0] = HostLoad{Name: "devbox", Unreachable: "ssh: exit 255"}
 	// The operator is told, once per move (the key), how to send it on.
 	acts := Decide(v)
-	if got := shows(acts); got != "notice t2 move-wait/a2" || !strings.Contains(acts[0].Text, "engine task move t2 --yes") {
+	if got := shows(acts); got != "notice t2 move-wait/a2" || !strings.Contains(acts[0].Text, "`engine task move t2 --host mac --yes`") {
 		t.Errorf("with devbox unreachable: %q, %+v", got, acts)
 	}
 	v.Fleet.Hosts[0] = HostLoad{Name: "devbox", Harnesses: []string{"claude"}, Status: statusWithRunsError()}
 	if got := shows(Decide(v)); got != "notice t2 move-wait/a2" {
 		t.Errorf("with devbox's runs unreadable: %q", got)
+	}
+	withHarness := moveView(moved(2, "running", "", "codex"))
+	withHarness.Fleet.Hosts[0] = HostLoad{Name: "devbox", Unreachable: "ssh: exit 255"}
+	if acts := Decide(withHarness); len(acts) != 1 || !strings.Contains(acts[0].Text, "`engine task move t2 --harness codex --yes`") {
+		t.Errorf("the suggested command drops the harness: %+v", acts)
 	}
 	blind := moved(2, "running", "mac", "")
 	blind.Current.MovedBlind = true

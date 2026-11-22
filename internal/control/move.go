@@ -40,7 +40,7 @@ func (s Service) moveTask(st *State, a Actor, r Request) (Response, error) {
 	read := fleet.read(at.Host) || at.MoveReleased
 	if !read && !r.Move.Confirm {
 		return Response{}, &Problem{Status: 409, Reason: ReasonMoveUnconfirmed, Message: fmt.Sprintf(
-			"host %s was not reachable at the last check: task %s's session there may still be running and pushing to its branch, "+
+			"the coordinator's latest pass did not read host %s: task %s's session there may still be running and pushing to its branch, "+
 				"though its credential is revoked; confirm to move it anyway", at.Host, item.ID)}
 	}
 	kind := "moved"

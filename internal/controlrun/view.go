@@ -92,10 +92,11 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 // answered, oldest first: their window, live, dead or already gone, is
 // released, pushing the branch. Only such a run's window is the attempt's,
 // as a later session there may reuse its tmux id. unknown is set when such
-// an attempt's host could not be read.
+// an attempt's host could not be read; a host gone from hosts.toml has
+// nothing left to release.
 func strays(st control.State, item control.Item, fleet reconcile.Fleet) (out []reconcile.Stray, unknown bool) {
 	for _, at := range st.Attempts {
-		if at.Item != item.ID || at.Reason != control.EndMoved || at.Window == "" || at.MoveReleased {
+		if _, configured := fleet.Host(at.Host); at.Item != item.ID || at.Reason != control.EndMoved || at.Window == "" || at.MoveReleased || !configured {
 			continue
 		}
 		s := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))

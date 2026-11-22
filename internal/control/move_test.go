@@ -90,7 +90,7 @@ func TestMoveOffAnUnreadHostNeedsConfirmation(t *testing.T) {
 			s.Hosts = fleet
 			_, err := s.Execute(op, Request{Op: "task-move", ID: task.ID, Key: "k", Move: &MoveRequest{}})
 			var p *Problem
-			if !errors.As(err, &p) || p.Status != 409 || p.Reason != ReasonMoveUnconfirmed || !strings.Contains(p.Message, "may still be running and pushing") {
+			if !errors.As(err, &p) || p.Status != 409 || p.Reason != ReasonMoveUnconfirmed || !strings.Contains(p.Message, "did not read host devbox") || !strings.Contains(p.Message, "may still be running and pushing") {
 				t.Fatalf("err = %v", err)
 			}
 			if got := mustSnapshot(t, s).Attempts[at.ID]; got.State != "running" {

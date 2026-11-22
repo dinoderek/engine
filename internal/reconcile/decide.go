@@ -203,10 +203,23 @@ func moveWaits(v View) []Action {
 		if t.open() && len(t.Strays) == 0 && t.Current.Reason == control.EndMoved && v.moveHeld(t) {
 			acts = append(acts, notice(t, "move-wait/"+t.Current.ID, fmt.Sprintf(
 				"%s waits for host %s, which could not be read, to release its old session before it resumes elsewhere. "+
-					"`engine task move %s --yes` sends it on without waiting; the old session may then still push.", t.ID, t.Current.Host, t.ID)))
+					"`%s` sends it on without waiting; the old session may then still push.", t.ID, t.Current.Host, moveCommand(t))))
 		}
 	}
 	return acts
+}
+
+// moveCommand is the command that moves t again to where its move sends it,
+// confirmed.
+func moveCommand(t Item) string {
+	text := "engine task move " + t.ID
+	if h := t.Current.MoveHost; h != "" {
+		text += " --host " + h
+	}
+	if h := t.Current.MoveHarness; h != "" {
+		text += " --harness " + h
+	}
+	return text + " --yes"
 }
 
 // releaseMoved releases each window a moved attempt left on a host that

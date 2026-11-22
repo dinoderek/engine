@@ -116,6 +116,14 @@ func Release(d Deps, name string, outcome Outcome, mergedHead string) (Released,
 	return r, nil
 }
 
+// commits says n commits.
+func commits(n string) string {
+	if n == "1" {
+		return "1 commit"
+	}
+	return n + " commits"
+}
+
 // closeWindows closes every window called name.
 func (r *Released) closeWindows(d Deps, name string) error {
 	windows, err := d.Tmux.Windows()
@@ -181,7 +189,7 @@ func pushMoved(d Deps, name string) moving {
 // push origin refused because it is ahead leaves nothing to report.
 func (r *Released) left(d Deps, m moving) {
 	if !m.ok {
-		r.Unpushed = "no run of " + r.Name + " records its branch, so nothing was pushed"
+		r.Unpushed = "everything on the branch, as no run of " + r.Name + " records it, so nothing was pushed"
 		return
 	}
 	r.Pushed = m.push == nil
@@ -198,9 +206,9 @@ func (r *Released) left(d Deps, m moving) {
 	case err != nil:
 		out = append(out, fmt.Sprintf("whatever %s holds that it lacks, which could not be checked: %v", m.rec.Branch, errors.Join(m.push, err)))
 	case n != "0" && m.push != nil:
-		out = append(out, fmt.Sprintf("%s commits on %s, as the push failed: %v", n, m.rec.Branch, m.push))
+		out = append(out, fmt.Sprintf("%s on %s, as the push failed: %v", commits(n), m.rec.Branch, m.push))
 	case n != "0":
-		out = append(out, fmt.Sprintf("%s commits made on %s after the push", n, m.rec.Branch))
+		out = append(out, fmt.Sprintf("%s made on %s after the push", commits(n), m.rec.Branch))
 	}
 	if _, err := os.Stat(m.rec.Worktree); m.rec.Worktree != "" && err == nil {
 		status, err := d.Run(m.rec.Worktree, nil, "git", "status", "--porcelain")
