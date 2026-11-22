@@ -29,7 +29,7 @@
    - the protocol's hard-stop classes (`plugins/engine/skills/build/references/hard-stops.md`);
    - **loosening a gate:** a lower threshold, a baseline row, a `//nolint`, a
      linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,
-     `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`;
+     `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`.
 5. **One Go version.** `go.mod`'s `toolchain` line is the only source. Run
    every verb and lane through `./dev`, which pins it. Docs cite `go.mod`,
    never the version.
