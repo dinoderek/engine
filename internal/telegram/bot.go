@@ -114,3 +114,14 @@ func (b Bot) Updates(ctx context.Context, offset int64, timeout int) ([]Incoming
 	err := b.call(ctx, "getUpdates", map[string]any{"offset": offset, "timeout": timeout, "allowed_updates": []string{"message", "callback_query"}}, &updates)
 	return updates, err
 }
+
+// Send sends text to chat as an audible message with no buttons, for a caller
+// that never polls the bot.
+func (b Bot) Send(ctx context.Context, chat int64, text string) error {
+	var msg Message
+	err := b.call(ctx, "sendMessage", map[string]any{"chat_id": chat, "text": text}, &msg)
+	if err == nil && msg.ID == 0 {
+		err = errors.New("telegram send returned no message ID")
+	}
+	return err
+}
