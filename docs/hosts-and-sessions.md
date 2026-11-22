@@ -46,7 +46,6 @@ harnesses = ["claude", "codex"]
 ram_gb = 32
 capabilities = ["linux", "vm", "docker"]
 bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
-
 ```
 
 **Services.** The optional `services` table names the control server's

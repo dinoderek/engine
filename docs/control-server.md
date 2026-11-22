@@ -1,5 +1,3 @@
-# Control server
-
 > **Owns:** server deployment, records, API, credentials, the inbox and host status. **Not here:** dispatch, recovery, the merge queue, host calls (`coordinator.md`), the dashboard and the session view (`dashboard.md`), session signals (`session-signals.md`), host configuration (`hosts-and-sessions.md`), executor practices (the `engine` skill).
 
 # Control server
@@ -20,15 +18,15 @@ engine serve
 
 A host whose `hosts.toml` entry records `services` starts through its systemd unit, never a second tmux server; a failed start exits 1, naming its `journalctl --user -u`.
 
-`--foreground` runs it in place. For other networks, use an SSH tunnel or TLS proxy and set `[server] url` instead of `host`. Without config.toml, the CLI uses `http://devbox:7331`; `ENGINE_SERVER_URL` overrides both. The CLI reads its credential from `~/.config/engine/server-token` or `ENGINE_SERVER_TOKEN_FILE`; workers get the advertised URL.
+`--foreground` runs it in place. For other networks, use an SSH tunnel or TLS proxy and set `[server] url` instead of `host`, and use `--foreground`. Without config.toml, the CLI uses `http://devbox:7331`; `ENGINE_SERVER_URL` overrides both. The CLI reads its credential from `~/.config/engine/server-token` or `ENGINE_SERVER_TOKEN_FILE`; workers get the advertised URL.
 
 For backup, stop the server, run `engine serve --backup <new-path>`, restart it, and copy the backup off-machine. Restore with the server stopped, keeping the operator credential. Backups hold credentials, are private and never overwrite a file. Test restores in an isolated database first.
 
 ## Records and commands
 
-IDs are global to engine across repositories, plans, tasks and attempts. Every task belongs to one plan; creating a task without `--plan` fails. `engine help` lists command groups; the flags are in `internal/controlcmd/command.go`.
+IDs are global across repositories, plans, tasks and attempts. Every task belongs to one plan; creating a task without `--plan` fails. `engine help` lists command groups; the flags are in `internal/controlcmd/command.go`.
 
-Edits, approvals and workflow changes require the current `--version`. A plan's edit invalidates its approval; an active execution, a plan's children included, prevents an edit. Approve, run and stop take a plan and persist its coordination intent (`coordinator.md`). `get`, `list` and `plan-view` add a plan's derived, unstored `status` (`execution-protocol.md`, "States").
+Edits, approvals and workflow changes require the current `--version`. A plan's edit invalidates its approval; an active execution, a plan's children included, prevents an edit. Approve, run and stop take a plan and persist its coordination intent (`coordinator.md`). `get`, `list` and `plan-view` add a plan's derived, unstored `status` .
 
 `engine lint <plan-id>` checks a plan's tasks before approval, changing nothing, from one snapshot including outside dependencies.
 
@@ -52,7 +50,7 @@ Updates are immutable and ordered; read up to 200 after a cursor. Comments chang
 
 **Choices and class.** `ask` takes `choices` (at most 6, each one line of at most 80 characters, taken verbatim), `recommended` (an index into them from 0) and `class` (a hard-stop class in lower case, listed in `internal/control/question.go`); choices on another operation, or a bad value, is a 400. The update keeps them: `updates`, `inbox`, a plan's `question` and `feedback` return them. A resolution by choice records the choice's text as its body, then any note. Resolving an already-resolved question, by the operator or a pane answer, is a 409 with reason `already-resolved` naming the resolving update, writing nothing; a replayed request key still returns its first result.
 
-**Pane input.** `pane-input`, which only a session's prompt hook posts (`harnesses.md`), records the operator's pane text verbatim for the session's own item. It resolves the oldest open question holding it that was asked before the text was typed (host clock, ±30 seconds), the session's own first, never a task's for a planner, and releases holds as a resolution does; else, or for a harness command such as `/compact`, it is a `pane-message` resolving nothing. A post unsigned, failing the attempt's `pane_key`, or missing from the transcript still counts, adding one coordinator note to the operator.
+**Pane input.** `pane-input`, which only a session's prompt hook posts (`harnesses.md`), records the operator's pane text verbatim for the session's own item. It records a `pane-answer` resolving the oldest open question holding it that was asked before the text was typed (host clock, ±30 seconds), the session's own first, never a task's for a planner, and releases holds as a resolution does; else, or for a harness command such as `/compact`, it is a `pane-message` resolving nothing. A post unsigned, failing the attempt's `pane_key`, or missing from the transcript still counts, adding one coordinator note to the operator.
 
 Messages addressed to the operator appear in the cross-repository inbox. Informational ones leave it on acknowledgement, singly or with `ack-all` (`engine ack --all [--repo <id>] [--before <sequence>]`), which skips questions; questions leave on resolution. Idle, unrestricted sessions get wake-up pointers for others' messages on their item; tasks also for others' plan messages and resolutions, except coordinator notices and those to the operator.
 
