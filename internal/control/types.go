@@ -68,8 +68,11 @@ type Attempt struct {
 	// spell at a usage limit.
 	LimitedSince time.Time `json:"limited_since,omitzero"`
 	Seen         int       `json:"seen,omitempty"`
-	FarFor       int64     `json:"far_for,omitempty"`
-	StuckFor     int64     `json:"stuck_for,omitempty"`
+	// WokenFor is the start, in Unix nanoseconds, of the server outage the
+	// session was last woken for.
+	WokenFor int64 `json:"woken_for,omitempty"`
+	FarFor   int64 `json:"far_for,omitempty"`
+	StuckFor int64 `json:"stuck_for,omitempty"`
 	// LiveAt is the last coordinator pass that saw the attempt's window live.
 	LiveAt time.Time `json:"live_at,omitzero"`
 	// Reason is why the attempt ended: EndVanished, EndEarlyDeath or
@@ -214,6 +217,9 @@ type State struct {
 	Auth     map[string]Actor      `json:"auth"`
 	Receipts map[string]receipt    `json:"receipts"`
 	Next     int                   `json:"next"`
+	// PassStart is when the newest coordinator pass started; zero before the
+	// first.
+	PassStart time.Time `json:"pass_start,omitzero"`
 }
 
 func emptyState() State {

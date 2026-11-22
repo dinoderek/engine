@@ -32,10 +32,13 @@ func TestAPlannerHeldAtADialogStallsAndIsNeverTyped(t *testing.T) {
 	if n := dialogNotices(t, c, plan.ID); len(n) != 0 {
 		t.Fatalf("notices before StallWait: %q", n)
 	}
-	later := now.Add(reconcile.StallWait)
+	// Passes follow each other within OutageGap, or the wait would restart.
+	later := now
 	c.Service.Now = func() time.Time { return later }
-	pass(t, c)
-	pass(t, c)
+	for range 3 {
+		later = later.Add(4 * time.Minute)
+		pass(t, c)
+	}
 	if n := dialogNotices(t, c, plan.ID); len(n) != 1 || !strings.Contains(n[0], "has waited for input for 10m0s: its harness says it is likely held at a dialog in its window") {
 		t.Errorf("notices %q, want one stall naming the dialog", n)
 	}
