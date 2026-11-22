@@ -28,6 +28,9 @@ func (s Service) now() time.Time {
 	return time.Now().UTC()
 }
 
+// readOps change no record: each runs on a view, beside the others.
+var readOps = []string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view", "host-status"}
+
 // Execute deduplicates successful writes by actor and caller-supplied request key.
 func (s Service) Execute(a Actor, r Request) (Response, error) {
 	checked := "" // the attempt's state the host check confirmed
@@ -38,7 +41,12 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 		}
 	}
 	var out Response
-	err := s.Store.Transaction(func(st *State) error {
+	write := !slices.Contains(readOps, r.Op)
+	run := s.Store.Transaction
+	if !write {
+		run = s.Store.View
+	}
+	err := run(func(st *State) error {
 		if err := authorizeExecution(st, a); err != nil {
 			return err
 		}
@@ -47,7 +55,6 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 				return err
 			}
 		}
-		write := !slices.Contains([]string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view", "host-status"}, r.Op)
 		if write && (r.Key == "" || len(r.Key) > 200) {
 			return problem(400, "a request key of 1–200 characters is required")
 		}
