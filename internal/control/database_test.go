@@ -105,6 +105,7 @@ func TestEveryRecordKindSurvivesReopen(t *testing.T) {
 		st.Next = 10
 		st.Hosts["devbox"] = HostRecord{TmuxStart: 1234}
 		st.PassAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		st.Upgrade = UpgradeRecord{Start: st.PassAt, End: st.PassAt.Add(time.Minute)}
 		st.Items["r1"] = Item{ID: "r1", Kind: "repo", Title: "repo"}
 		st.Attempts["a2"] = Attempt{ID: "a2", Item: "r1", State: "ended"}
 		st.Updates = []Update{{ID: 3, Item: "r1", Body: "persisted", At: st.PassAt}}
