@@ -1,6 +1,7 @@
 package control
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -65,7 +66,45 @@ func TestAPlannerThatWroteATaskOrDiedAtALimitEndsVanished(t *testing.T) {
 		t.Fatalf("a death at a limit counted toward the bound: %+v", at)
 	}
 	newTask(t, s, plan.Repo, plan.ID)
-	if at, _ = plannerDies(t, s, plan, "wrote a task"); at.Reason != EndVanished || at.Early || at.Tail != "" {
+	if at, _ = plannerDies(t, s, plan, "wrote a task"); at.Reason != EndVanished || at.Early || !at.Crashed || at.Tail != "wrote a task" {
 		t.Fatalf("a planner that wrote a task: %+v", at)
+	}
+}
+
+func TestAPlannerThatWroteTasksResumesUntilTheCapThenCoordinationStops(t *testing.T) {
+	s := ticking(service(t))
+	_, plan := coordinatedPlan(t, s)
+	newTask(t, s, plan.Repo, plan.ID)
+	for i := range DeathCap - 1 {
+		at, current := plannerDies(t, s, plan, fmt.Sprint("crash ", i))
+		if at.Reason != EndVanished || !at.Crashed || !current.Coordinating {
+			t.Fatalf("death %d: %+v, coordinating %v", i, at, current.Coordinating)
+		}
+	}
+	at, current := plannerDies(t, s, plan, "the cap")
+	if at.Reason != EndFailed || !at.Crashed || at.Early || at.Tail != "the cap" || current.Coordinating || current.StoppedAt.IsZero() {
+		t.Fatalf("the cap's death: %+v, coordinating %v stopped %v", at, current.Coordinating, current.StoppedAt)
+	}
+	current = *call(t, s, op, Request{Op: "run", ID: plan.ID, Version: current.Version}).Item
+	if at, _ = plannerDies(t, s, current, "after a run"); at.Reason != EndVanished {
+		t.Fatalf("a run did not start the count again: %+v", at)
+	}
+}
+
+func TestAPlannerThatWroteTasksAndDiedWhileStoppedIsUncounted(t *testing.T) {
+	s := ticking(service(t))
+	_, plan := coordinatedPlan(t, s)
+	newTask(t, s, plan.Repo, plan.ID)
+	for range DeathCap - 1 {
+		plannerDies(t, s, plan, "crash")
+	}
+	current := *call(t, s, op, Request{Op: "get", ID: plan.ID}).Item
+	_, out := dispatch(t, s, current)
+	launched(t, s, out.Attempt.ID)
+	seenLive(t, s, out.Attempt.ID)
+	call(t, s, op, Request{Op: "stop", ID: plan.ID})
+	at := dies(t, s, out.Attempt.ID, "stopped")
+	if at.Reason != EndVanished || at.Crashed {
+		t.Fatalf("a death after coordination stopped counted: %+v", at)
 	}
 }

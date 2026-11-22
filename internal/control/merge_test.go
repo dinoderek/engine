@@ -186,9 +186,8 @@ func TestLeavingInReviewLeavesTheQueueExceptForAHardStop(t *testing.T) {
 	}
 	failing, c, claimed := inReview(t, s, repo, plan)
 	call(t, s, c, ready(failing.ID, good()))
-	if _, err := s.EndDead(claimed.Attempt.ID, "window gone", ""); err != nil {
-		t.Fatal(err)
-	}
+	launched(t, s, claimed.Attempt.ID)
+	crashOut(t, s, failing.ID)
 	st = mustSnapshot(t, s)
 	if _, ok := st.Queue[failing.ID]; ok || st.Items[failing.ID].State != "failed" {
 		t.Fatalf("a failed task stayed queued: %s", st.Items[failing.ID].State)
