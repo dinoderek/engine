@@ -14,6 +14,11 @@ func lintMain(args []string, e Env) int {
 		fmt.Fprintln(e.Err, "usage: engine lint <plan-id>")
 		return 2
 	}
+	call, err := newCaller(e)
+	if err != nil {
+		fmt.Fprintf(e.Err, "engine lint: %v\n", err)
+		return 2
+	}
 	client, err := makeClient(e)
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine lint:", err)
@@ -25,7 +30,7 @@ func lintMain(args []string, e Env) int {
 	}
 	// A single read returns a consistent, credential-scoped snapshot, including
 	// dependencies outside the plan. No approval or coordination is required.
-	out, err := client.Call(ctx, control.Request{Op: "plan-view", ID: args[0]})
+	out, err := call(ctx, client, control.Request{Op: "plan-view", ID: args[0]})
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine lint:", err)
 		return 1
