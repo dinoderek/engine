@@ -29,10 +29,7 @@
    - the protocol's hard-stop classes (`plugins/engine/skills/build/references/hard-stops.md`);
    - **loosening a gate:** a lower threshold, a baseline row, a `//nolint`, a
      linter exclusion, a bigger word budget, or an `exempt`, `ephemeral`,
-     `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`;
-   - **a new runtime dependency:** any module in `go.mod` that the `engine`
-     binary links. Dev tools (go.mod's `tool`
-     block) are yours to add, logged as a ruling.
+     `budget-only` or `set` row added or widened in `scripts/doc-budgets.tsv`.
 5. **One Go version.** `go.mod`'s `toolchain` line is the only source. Run
    every verb and lane through `./dev`, which pins it. Docs cite `go.mod`,
    never the version.
@@ -59,7 +56,7 @@ Read these at each session start:
 | changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
 | changes dispatch, recovery, merges, the merge queue or host ops | `docs/coordinator.md` |
 | changes how the coordinator reads a session's liveness, stalls, early deaths or limit recovery | `docs/session-signals.md` |
-| changes Telegram alerts, callbacks or bot setup | `docs/telegram.md` |
+| changes Telegram alerts, callbacks, bot setup or the server watcher | `docs/telegram.md` |
 | changes server records, API, credentials or inbox | `docs/control-server.md` |
 | changes `engine ui` or the session view | `docs/dashboard.md` |
 | changes what `engine ui` writes, the inbox, plan and task control, its `--host`, Origin check or request keys | `docs/dashboard-writes.md` |

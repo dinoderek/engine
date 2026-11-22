@@ -92,6 +92,9 @@ func diff(old, cur *State) ([]change, error) {
 	if old.Next != cur.Next {
 		d.put("next", cur.Next)
 	}
+	if !old.PassAt.Equal(cur.PassAt) {
+		d.put("pass", cur.PassAt)
+	}
 	diffMap(d, "item/", old.Items, cur.Items)
 	diffMap(d, "attempt/", old.Attempts, cur.Attempts)
 	d.updates(old.Updates, cur.Updates)
@@ -123,6 +126,8 @@ func (s *State) install(changes []change, patch State) {
 		switch {
 		case kind == "next":
 			s.Next = patch.Next
+		case kind == "pass":
+			s.PassAt = patch.PassAt
 		case !c.del:
 		case kind == "update":
 			n, _ := strconv.Atoi(id)
@@ -210,6 +215,8 @@ func loadRecord(s *State, key string, b []byte) error {
 	switch kind {
 	case "next":
 		return json.Unmarshal(b, &s.Next)
+	case "pass":
+		return json.Unmarshal(b, &s.PassAt)
 	case "item":
 		var v Item
 		if err := json.Unmarshal(b, &v); err != nil {

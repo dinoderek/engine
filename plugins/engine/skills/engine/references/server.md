@@ -78,6 +78,10 @@ Follow the `build` skill, hands-off, with these changes replacing its merge step
        turn, and request again once they say it is fixed.
      - `merge-withdrawn`: read why.
   5. To rework the PR, set the task `running`, which leaves the queue.
+- **After an outage.** A wake saying the server was unavailable from one time
+  to another means engine commands may have failed in that window: retry each
+  with its request key, read `engine updates` for what changed, then carry on
+  from where you were.
 - **Step 11.** On `merged`, above.
 
 A server outage blocks the merge request: keep your work and wait. Never

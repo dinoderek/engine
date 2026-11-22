@@ -32,9 +32,6 @@ non-test imports. The reasons:
 ## Decisions new code must respect
 
 - **One binary, `engine`, for macOS and Linux.**
-- **The runtime is the standard library plus approved libraries:** `go.mod`'s
-  direct requirements, each with no requirements and no cgo. A new one is a
-  hard stop (`AGENTS.md`).
 - **External tools use injectable CLI runners**, including `sqlite3`; the
   server exposes a versioned HTTP API.
 - **Coordination derives decisions from authoritative records and host

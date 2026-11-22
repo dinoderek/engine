@@ -1,4 +1,4 @@
-> **Owns:** Telegram operator alerts, one-tap answers and bot pairing. **Not here:** the operator inbox and question records (`control-server.md`), dashboard access (`dashboard.md`), host setup (`operator-setup.md`).
+> **Owns:** Telegram operator alerts, one-tap answers, bot pairing and the server watcher's messages. **Not here:** the operator inbox and question records (`control-server.md`), dashboard access (`dashboard.md`), host setup (`operator-setup.md`).
 
 # Telegram
 
@@ -32,7 +32,7 @@ and leave the server running.
    file and restart the server. To pair a replacement chat, remove the chat
    setting first and repeat setup.
 
-The token stays on the server's host. Question text and informational operator
+Only the server and the Mac's watcher hold the token. Question text and operator
 messages go to Telegram, so choose a bot and private chat you control.
 
 ## Alerts and answers
@@ -78,3 +78,29 @@ send idempotency key. This narrow failure window affects notifications;
 question resolution remains exactly once through server request keys. Message
 edits retry independently, so an uneditable old message cannot block later alerts
 or answers. Presentation intent persists before callback polling advances.
+
+## The watcher
+
+The server cannot report its own death, so `engine watch --chat <id>` runs
+outside it, on the Mac. Local `engine setup` on the Mac installs it as the
+launchd agent `com.github.dinoderek.engine.watch`, once another host records
+the server's `services` and Telegram is paired there. Setup copies that
+host's chat into the agent's arguments and its bot token to
+`~/.config/engine/watch-telegram-token` (mode 600), and never prints it.
+Rerun setup after re-pairing or updating engine, which reloads the agent.
+
+Every minute the watcher makes one authenticated call through the operator's
+client, bounded at 30 seconds, so a listener whose commands hang counts as
+down. Two failures in a row send one audible message, "Engine server on
+`<host>` is not answering since `<time>`", followed by `engine server status`
+and `engine server restart`. More failures send nothing more; the first
+answer after that sends one "answers again" message. A message that fails to
+send is retried on the next call. A failure more than two minutes after the
+last one starts a new streak, as after the Mac sleeps. An `engine upgrade`
+that keeps the server stopped for over a minute sends both messages too.
+
+It only sends, with no buttons: polling the bot would take the answers meant
+for the server's own questions. Its streak lives in
+`~/.local/share/engine/watch.json`, so a restart of the watcher neither
+repeats an alert nor forgets a failure; its errors go to
+`~/.local/share/engine/watch.log`.

@@ -52,6 +52,11 @@ commands:
   upgrade [--dry-run]       bring every host to the head of main: stop the server,
                             back it up, install, set up each host, start it again;
                             exits 1 while any item is open
+  server status|restart [--json]
+                            from any host: the server's unit, API, database,
+                            disk and last 50 log lines, or restart its unit
+  watch --chat <id>         call the server every minute; on Telegram, say when
+                            it stops answering and when it answers again
   host <op> --json          run one of this host's ops for a caller on any host:
                             sync-repo, spawn, status, collect or release
   host status --all [--json]
@@ -132,6 +137,10 @@ func Run(args []string, env Env) int {
 		return runSetup(args[1:], env)
 	case "upgrade":
 		return runUpgrade(args[1:], env)
+	case "server":
+		return runServerOps(args[1:], env)
+	case "watch":
+		return runWatch(args[1:], env)
 	case "ui":
 		return ui.Main(args[1:], ui.Env{Out: env.Out, Err: env.Err, Now: env.Now, Connect: func() (ui.Caller, error) {
 			return controlcmd.Connect(controlEnv(env))

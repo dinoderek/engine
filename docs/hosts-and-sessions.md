@@ -50,7 +50,9 @@ bin = { claude = "~/.local/bin/claude", codex = "~/.local/bin/codex" }
 
 **Services.** The optional `services` table names the control server's
 `systemctl --user` unit on its host. Another manager, one key without the other, or a unit that is not
-a `.service` name is refused at load.
+a `.service` name is refused at load. Only one host may record it: that
+host is where `engine server status|restart` and the watcher reach the
+server, and each of them refuses a config where several do.
 
 Each harness runs through its pinned `bin`, never a `PATH` lookup. For launch lines and tiers, load `launch-lines.md`.
 
@@ -99,7 +101,12 @@ The coordinator picks the host (`coordinator.md`); its `control-spawn` then:
    window: as it is, with its unpushed commits and uncommitted changes,
    fast-forwarded to `origin`'s tip when clean and behind it, and refused when
    the two diverged or `origin` is ahead of uncommitted changes; the kickoff
-   names its head. A resume of an unmarked branch reopens `origin`'s at its tip;
+   names its head. Before an adoption it removes the worktree's
+   `.git/index.lock` when no process holds it open and no git process works in
+   the worktree (`lsof`, which must be installed: without it, adopting a
+   worktree that has a lock fails), and the kickoff notes the removal; a held
+   lock refuses the adoption.
+   A resume of an unmarked branch reopens `origin`'s at its tip;
 2. trusts the worktree, and any directory the launch adds, for its harness, and opens the window `<repo>-<task>`
    in the session `engine`;
 3. runs the launch line at the task's tier with the adapter's flags and the
