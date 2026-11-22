@@ -18,7 +18,7 @@ The host serializes dispatches by run ID and returns an existing run on replay. 
 
 A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`, "Vanish" and "Early death").
 
-Operator-only `engine attempt reconcile <id> <evidence>` applies the vanish and early-death rules once a successful host read shows a started attempt's window gone with its run recorded, or a `dispatching` task's with no window of its name and no run record (ending it vanished, its task back in `todo`). Otherwise, a planner's dispatch included, it refuses (`control-server.md`); unknown dispatch outcomes stay reserved. A spawn still in flight shows neither and may then open an orphan window, which blocks the next dispatch until removed.
+Operator-only `engine attempt reconcile <id> <evidence>` applies the vanish and early-death rules once a successful host read shows a started attempt's window gone with its run recorded, or a `dispatching` attempt's with no window of its name and no run record (ending it vanished, its task back in `todo`). Otherwise, a planner's dispatch included, it refuses (`control-server.md`); unknown dispatch outcomes stay reserved. A spawn still in flight shows neither and may then open an orphan window, which blocks the next dispatch until removed.
 
 ## Merge queue
 
@@ -32,7 +32,7 @@ Every wait is bounded. A head outstaying its bound, failing `gh` repeatedly, or 
 
 ## Reaching hosts
 
-A host does its own work through `engine host <op> --json`: one job, one JSON object on stdout, exit 0, or 1 on failure. The caller passes the model, effort and kickoff; the host reads only its `hosts.toml` launch line, harness binary, `path` and slots. Its own host's ops run in-process, another machine's over `ssh` (`internal/remote/ssh.go`). It refuses to run unless `~/.config/engine/host` names a `hosts.toml` machine (`hosts-and-sessions.md`).
+A host does its own work through `engine host <op> --json`: one job, one JSON object on stdout, exit 0, or 1 on failure. The caller passes the model, effort and kickoff; the host reads only its `hosts.toml` launch line, harness binary, `path` and slots. The coordinator runs its own host's ops in-process, another machine's over `ssh` (`internal/remote/ssh.go`), and refuses to run unless `~/.config/engine/host` names a `hosts.toml` machine (`hosts-and-sessions.md`).
 
 | Op | Does |
 | --- | --- |

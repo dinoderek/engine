@@ -54,8 +54,7 @@ config, and ends with `engine start --check --host <name>`, a suggested
 fresh readiness probe of every repo engine has cloned there
 (`readiness.md`). It builds engine with that commit's go.mod
 `toolchain`, read from GitHub. Setup changes only engine's own files
-(`~/.config/engine/`, `~/.local/bin/engine`, `~/.local/share/engine/`), Claude's
-plugin, and Codex's plugin in your Codex home (through `codex plugin` only,
+(`~/.config/engine/`, `~/.local/bin/engine`, `~/.local/share/engine/`), Claude's plugin, Codex's plugin in your Codex home (through `codex plugin` only,
 never another file in `~/.codex`), and Codex's plugin and daemon in engine's own
 Codex home. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one
 exact command, and it exits 1 while any item is open. It refuses a build that is
@@ -135,7 +134,7 @@ and changes nothing.
 
 It refuses, changing nothing, while a task is `running`, `in-review` or
 `needs-human`, or when the server's host records no `services` table, does
-not answer, or its unit is not active. An unreachable or open host stops no others: run the commands the report lists, then rerun
+not answer, or its unit is not active. A host that is unreachable or stays open stops no others: run the commands the report lists, then rerun
 it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
 it by hand, in the same order: stop and back up the server
 (`control-server.md`, "Start"), install the engine and your plugins, run

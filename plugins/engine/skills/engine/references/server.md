@@ -44,8 +44,7 @@ Follow the `build` skill, hands-off, with these changes replacing its merge step
 - **Step 2.** Also read the parent plan, `engine updates` for the task and the
   plan, and the card's and plan's `## Overrides`. A dependency not `done` is a
   **Drift** hard stop.
-- **Updates are the inbox.** Read them before you change code, the PR, the
-  merge request, and when the session resumes.
+- **Updates are the inbox.** Read them before you change code, the PR, the merge request, and when resuming.
 - **Step 8.** Omit issue-closing directives. Put `low` notes (`build`,
   "Decisions") and the digest in the template's rulings section if it has one.
   Then set the task `in-review` with its PR URL.
