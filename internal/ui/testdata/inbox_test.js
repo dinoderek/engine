@@ -171,6 +171,10 @@ const scenarios = {
       assert.ok(fx.loads > loads, "the inbox reloads");
       assert.equal(b.hidden, true, "no messages left to acknowledge");
       assert.deepEqual(t.cards().map((c) => c.id), ["card-5"], "the question stays");
+      fx.inbox = inboxOf([QUESTION, card(11, "message")]);
+      await t.refresh();
+      assert.equal(b.hidden, false);
+      assert.equal(t.$("inbox-ack-result").textContent, "", "a new message clears the result");
     });
   },
 

@@ -271,7 +271,10 @@ window.engine.inbox = function (ctx) {
     $("tab-inbox").textContent = d ? "Inbox" + (d.cards.length ? " · " + d.cards.length : "") : "Inbox";
     $("inbox-head").textContent = d ? "Inbox · " + counts(d) : "Inbox";
     $("inbox-banner").hidden = !(env && env.stale);
-    $("inbox-ack-all").hidden = !d || !d.messages || !!env.stale;
+    const hide = !d || !d.messages || !!env.stale;
+    // A result belongs to the messages it acted on: new ones clear it.
+    if ($("inbox-ack-all").hidden && !hide) $("inbox-ack-result").textContent = "";
+    $("inbox-ack-all").hidden = hide;
     $("inbox-banner").textContent = "Control server unavailable; showing the last successful view.";
     const empty = $("inbox-empty");
     if (!d) {

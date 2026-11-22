@@ -82,6 +82,8 @@ func TestAckAllRefusals(t *testing.T) {
 	reject(t, s, op, Request{Op: "ack-all", Item: Item{Repo: "r99"}}, 404)
 	reject(t, s, op, Request{Op: "ack-all", Before: -1}, 400)
 	reject(t, s, op, Request{Op: "ack-all", ReplyTo: 1}, 400)
+	reject(t, s, op, Request{Op: "ack-all", Item: Item{Plan: plan.ID}}, 400)
+	reject(t, s, op, Request{Op: "ack-all", Recipient: "operator"}, 400)
 	if len(inboxIDs(t, s)) != 1 {
 		t.Fatal("a refused ack-all acknowledged")
 	}

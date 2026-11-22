@@ -21,6 +21,10 @@ func TestCLIAckAllAcknowledgesMessagesInScope(t *testing.T) {
 	if replay := command(t, e, "ack", "--all", "--repo", repo.ID, "--before", strconv.Itoa(later.ID), "--request-key", "bulk"); replay.Updates[0].ID != out.Updates[0].ID {
 		t.Fatal("a replay acknowledged again")
 	}
+	e.Err.(*bytes.Buffer).Reset()
+	if code := Main([]string{"ack", "--all", "--plan", plan.ID}, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), "only a repository and an upper bound") {
+		t.Fatalf("ack --all --plan: exit %d: %s", code, e.Err)
+	}
 	out = command(t, e, "ack", "--all")
 	if len(out.Updates) != 1 || out.Updates[0].ReplyTo != later.ID {
 		t.Fatalf("ack --all %+v", out.Updates)
