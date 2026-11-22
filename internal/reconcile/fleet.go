@@ -17,6 +17,9 @@ type Fleet struct {
 	Local          string
 	DefaultHarness string
 	HarnessRatio   map[string]int
+	// QuotaThresholds is the percent of each usage window, by window name,
+	// at which a harness is near full and goes after those with room.
+	QuotaThresholds map[string]int
 	// Caps is each harness's max_sessions, across all hosts.
 	Caps map[string]int
 	// Heavy are the capabilities that make a task heavy.

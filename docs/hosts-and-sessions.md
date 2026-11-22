@@ -27,6 +27,7 @@ one list is `hosts.Capabilities` in `internal/hosts/hosts.go`.
 ```toml
 default_harness = "claude"
 harness_ratio = { claude = 4, codex = 1 }
+quota_threshold = { five_hour = 90, seven_day = 95 }
 gb_per_session = 8
 reserve_gb = 8
 heavy_capabilities = ["ios", "vm"]
@@ -75,6 +76,11 @@ For an unpinned card, `harness_ratio` scores each positive-weight harness by
 `(live sessions across hosts + 1) / weight`; the lowest wins, ties prefer
 `default_harness`, then name. If no host fits, the next harness is tried.
 Without a ratio, `default_harness` is used.
+
+**Quota.** An unpinned card tries near-full harnesses last, unless all are:
+those that used `quota_threshold` percent of any window, by default
+`{ five_hour = 90, seven_day = 95 }`. The fleet's newest reading counts;
+a window past its reset, or absent, is empty.
 
 An unplaced task stays ready; the operator is notified once if no host could
 take it even with every slot free. The planner starts at `deep` on the plan's

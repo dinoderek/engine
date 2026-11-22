@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-// harnesses orders unpinned choices by live load divided by weight. Rational
+// harnesses orders unpinned choices by live load divided by weight, with
+// near-full harnesses last unless every harness is near full. Rational
 // arithmetic keeps ties exact even for large integer weights.
 func (f Fleet) harnesses(w Want, running map[string]int) ([]string, error) {
 	if w.Invalid != nil {
@@ -32,7 +33,7 @@ func (f Fleet) harnesses(w Want, running map[string]int) ([]string, error) {
 	slices.SortFunc(names, func(a, b string) int {
 		return cmp.Or(score(a).Cmp(score(b)), cmp.Compare(preference(a, f.DefaultHarness), preference(b, f.DefaultHarness)), strings.Compare(a, b))
 	})
-	return names, nil
+	return f.preferRoom(names), nil
 }
 
 // choose tries every eligible harness before holding an item back. Notify
