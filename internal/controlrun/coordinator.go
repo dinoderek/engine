@@ -40,6 +40,10 @@ type Coordinator struct {
 	Ready *Readiness
 	// notesDue is true until this pass has posted its readiness notes.
 	notesDue bool
+	// outage is a server outage whose wake is not yet done; keepOutage is
+	// set by a pass that could not wake every session it should.
+	outage     *outage
+	keepOutage bool
 }
 
 // Run reconciles immediately and then periodically until shutdown.
@@ -68,7 +72,17 @@ func (c *Coordinator) log(format string, args ...any) {
 }
 
 // Pass reconciles persisted intent; host outages leave executions reserved.
+// It first saves its start, so a pass that follows a server outage knows.
 func (c *Coordinator) Pass(ctx context.Context) error {
+	if err := c.startPass(); err != nil {
+		return err
+	}
+	err := c.reconcilePass(ctx)
+	c.endPass(err)
+	return err
+}
+
+func (c *Coordinator) reconcilePass(ctx context.Context) error {
 	st, err := c.Service.Store.Snapshot()
 	if err != nil {
 		return err
@@ -130,6 +144,10 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	}
 	if err = c.wakeMessages(st, v, cfg); err != nil {
 		c.log("wake messages: %v", err)
+	}
+	if err = c.wakeOutage(v, cfg); err != nil {
+		c.keepOutage = true
+		c.log("wake after outage: %v", err)
 	}
 	released := true
 	for _, act := range acts {

@@ -11,6 +11,8 @@ A session is **idle** when `waiting`, or `working` with `background` set. Only i
 
 **Stalls.** Limited, queued and background-only sessions never stall. A dispatched session that has not claimed its task 5 minutes after it started is noticed once, and one that ended before claiming is an early death. A session waiting 10 minutes on an open task with no hard stop or question has stopped outside the protocol; the operator is notified once, naming the sign-in for a signed-out harness. A denial at most 10 minutes older than the wait makes the stall a Permission hard stop naming the tool, input and reason.
 
+**Server outage.** Each pass saves its start before it reads hosts, and its end. A pass starting more than 5 minutes after the saved time follows an outage of the server, with no outage on a first pass, when nothing is saved. It clears the wait and idle starts of every live attempt, so stalls count from that pass, and wakes each idle session of a `running` task once for the gap, typing when the server was unavailable and asking it to retry, with their request keys, the engine commands that failed in that time. Sessions waiting on the merge queue, at a hard stop or at a dialog are not woken. The wake goes through the typed-text log, and the attempt keeps the gap it was woken for, so a pass that repeats sends it once; a failed wake is tried again.
+
 **Vanish.** A window gone from a host that answered ends an unfinished task's current attempt by the first rule that applies:
 
 1. It died at a usage limit (**Death at a limit**, below), or coordination stopped after the window was last seen live: `vanished`, uncounted.
