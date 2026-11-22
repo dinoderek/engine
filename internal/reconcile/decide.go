@@ -30,6 +30,7 @@ func Decide(v View) []Action {
 	acts = append(acts, releaseMoved(v)...)
 	acts = append(acts, moveWaits(v)...)
 	acts = append(acts, stalls(v)...)
+	acts = append(acts, quiets(v)...)
 	acts = append(acts, reaps(v)...)
 	acts = append(acts, limitNotes(v)...)
 	placed := place(v)
@@ -67,7 +68,7 @@ func planStep(v View) ([]Action, bool) {
 		if planner.Waited(v.Now, StallWait) && !planner.Flagged(planner.WaitingSince) {
 			return stall(p, planner.WaitingSince, WaitText(*planner, "the planner "+planner.Name+" has waited for input for "+StallWait.String())), true
 		}
-		return nil, true
+		return quiet(v, p), true
 	case len(v.Tasks) == 0 && planner != nil:
 		return []Action{plannerEnd(p)}, true
 	case len(v.Tasks) == 0:

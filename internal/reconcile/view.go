@@ -133,7 +133,8 @@ type Action struct {
 	// Key dedupes a Notice, or the notice a Release sends: one notice per
 	// item and key.
 	Key string
-	// Stalled is the session start, or the wait, a stall Notice flags.
+	// Stalled is the session start, the wait, or the last activity of a
+	// quiet session, which a stall or quiet Notice flags.
 	Stalled time.Time
 	// Limit is the reset a limit Notice marks as alerted, far or stuck.
 	Limit int64

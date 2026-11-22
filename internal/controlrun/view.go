@@ -157,7 +157,11 @@ func withWindow(s *reconcile.Session, w hostops.Window) {
 	s.DeadWindow = !w.Alive
 	s.Dialog = w.Alive && w.State == session.StateWaiting && w.Dialog
 	s.Waiting = w.Alive && w.State == session.StateWaiting && !w.Dialog
+	s.Working = w.Alive && w.State == session.StateWorking && !w.Background
 	s.Background = w.Alive && w.State == session.StateWorking && w.Background
+	if w.Alive && w.LastActivity > 0 {
+		s.LastActivity = time.Unix(w.LastActivity, 0)
+	}
 	s.Limited = w.Alive && w.State == session.StateLimited
 	s.DiedAtLimit = s.DiedAtLimit && !w.Alive
 	if w.Alive {

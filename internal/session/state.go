@@ -25,14 +25,16 @@ const (
 const StateFile = "harness-state.json"
 
 // HarnessState is the state file: the state, the harness event that set it,
-// when, and the harness's own session ID once it is known.
+// when, and the harness's own session ID once it is known. Transcript is the
+// path of the session's transcript, as the hook events name it, once one has.
 type HarnessState struct {
-	State     string    `json:"state"`
-	Event     string    `json:"event"`
-	At        time.Time `json:"at"`
-	SessionID string    `json:"session_id,omitempty"`
-	TurnID    string    `json:"turn_id,omitempty"`
-	ResetsAt  int64     `json:"resets_at,omitempty"` // limit reset, epoch seconds
+	State      string    `json:"state"`
+	Event      string    `json:"event"`
+	At         time.Time `json:"at"`
+	SessionID  string    `json:"session_id,omitempty"`
+	TurnID     string    `json:"turn_id,omitempty"`
+	ResetsAt   int64     `json:"resets_at,omitempty"` // limit reset, epoch seconds
+	Transcript string    `json:"transcript,omitempty"`
 }
 
 // WriteHarnessState writes the state file in dir atomically: a reader sees
