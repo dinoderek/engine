@@ -103,6 +103,7 @@ func diff(old, cur *State) ([]change, error) {
 	diffMap(d, "queue/", old.Queue, cur.Queue)
 	diffMap(d, "auth/", old.Auth, cur.Auth)
 	diffMap(d, "receipt/", old.Receipts, cur.Receipts)
+	diffMap(d, "host/", old.Hosts, cur.Hosts)
 	return d.changes, d.err
 }
 
@@ -144,6 +145,7 @@ func (s *State) install(changes []change, patch State) {
 	maps.Copy(s.Queue, patch.Queue)
 	maps.Copy(s.Auth, patch.Auth)
 	maps.Copy(s.Receipts, patch.Receipts)
+	maps.Copy(s.Hosts, patch.Hosts)
 	for _, u := range patch.Updates {
 		if i, ok := s.find(u.ID); ok {
 			s.Updates[i] = u
@@ -170,6 +172,8 @@ func (s *State) drop(kind, id string) {
 		delete(s.Auth, id)
 	case "receipt":
 		delete(s.Receipts, id)
+	case "host":
+		delete(s.Hosts, id)
 	}
 }
 
@@ -248,6 +252,12 @@ func loadRecord(s *State, key string, b []byte) error {
 			return err
 		}
 		s.Receipts[id] = v
+	case "host":
+		var v HostRecord
+		if err := json.Unmarshal(b, &v); err != nil {
+			return err
+		}
+		s.Hosts[id] = v
 	default:
 		return fmt.Errorf("unknown record kind %q", kind)
 	}

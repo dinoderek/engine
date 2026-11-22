@@ -278,4 +278,30 @@ func TestAdoptedKickoff(t *testing.T) {
 	if got := adoptedKickoff("go", adopted); !strings.HasPrefix(got, "go The task's branch task/r-7 is at abc123") {
 		t.Errorf("kickoff %q", got)
 	}
+	if got := adoptedKickoff("go", adopted); strings.Contains(got, "index.lock") {
+		t.Errorf("a worktree with no stale lock notes one: %q", got)
+	}
+	stale := adopted
+	stale.StaleLock = true
+	if got := adoptedKickoff("go", stale); !strings.HasSuffix(got, "was removed before resuming.") || !strings.Contains(got, ".git/index.lock") {
+		t.Errorf("the kickoff does not note the removed stale lock: %q", got)
+	}
+}
+
+// A session started without a scope of its own still runs, and the reply
+// says what that costs.
+func TestSpawnWarnsOfAStartWithoutAScope(t *testing.T) {
+	h := newHome(t, "mac")
+	h.clone(t)
+	tm := &tmuxFake{scopeErr: errors.New("Failed to connect to user scope bus")}
+	got, err := Spawn(spawnDeps(t, h, (&gitFake{}).run, tm, nil), request())
+	want := "the tmux session engine was created without its own systemd scope, so a tmux server it started dies with the unit that started it: Failed to connect to user scope bus"
+	if err != nil || got.Window != "@9" || got.Warning != want {
+		t.Errorf("reply %+v, %v; want the warning %q", got, err, want)
+	}
+	scoped := slices.IndexFunc(tm.calls, func(c string) bool { return strings.HasPrefix(c, "systemd-run --user --scope") })
+	plain := slices.IndexFunc(tm.calls, func(c string) bool { return strings.HasPrefix(c, "new-session") })
+	if scoped < 0 || plain < scoped {
+		t.Errorf("the plain start follows the refused scoped one: %v", tm.calls)
+	}
 }

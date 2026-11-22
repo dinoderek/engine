@@ -171,6 +171,9 @@ func (s spawn) open(d Deps, clone session.Clone, wt session.Worktree, u *undo) (
 	if opened.AwakeErr != nil {
 		warnings = append(warnings, "the host may sleep while the session runs: "+opened.AwakeErr.Error())
 	}
+	if opened.ScopeErr != nil {
+		warnings = append(warnings, "the tmux session "+session.Name+" was created without its own systemd scope, so a tmux server it started dies with the unit that started it: "+opened.ScopeErr.Error())
+	}
 	if joinWarning != "" {
 		warnings = append(warnings, joinWarning)
 	}
@@ -184,8 +187,12 @@ func adoptedKickoff(kickoff string, wt session.Worktree) string {
 	if !wt.Adopted || wt.Head == "" {
 		return kickoff
 	}
-	return kickoff + " The task's branch " + wt.Branch + " is at " + wt.Head + ", where an earlier attempt left it: resume from that commit, " +
+	out := kickoff + " The task's branch " + wt.Branch + " is at " + wt.Head + ", where an earlier attempt left it: resume from that commit, " +
 		"and keep any change it left uncommitted in the worktree."
+	if wt.StaleLock {
+		out += " A stale .git/index.lock, which no running process held, was removed before resuming."
+	}
+	return out
 }
 
 // undo is what one Spawn created before its window opened, so a failure

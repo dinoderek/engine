@@ -7,13 +7,20 @@ package control
 // in a row since coordination last started; that one ends failed. One that
 // wrote none ends early-death, its pane log tail kept, for the next pass to
 // start a new planner; the second such death since the plan's coordination
-// last started ends failed. A failed planner stops coordination, so a
+// last started ends failed. A planner lost in a host-wide loss (at.HostLost)
+// ends vanished, or early-death with Early unset when it wrote no task:
+// neither counts. A failed planner stops coordination, so a
 // planner that keeps dying never loops; the operator's next run starts the
 // counts again.
 func (s Service) endPlanner(st *State, plan Item, at *Attempt) {
 	at.Reason = EndVanished
 	switch {
 	case at.Limited:
+		return
+	case at.HostLost:
+		if !hasTasks(st, plan.ID) {
+			at.Reason = EndEarlyDeath
+		}
 		return
 	case hasTasks(st, plan.ID):
 		if stoppedSince(st, plan, *at) {

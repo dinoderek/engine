@@ -119,7 +119,7 @@ func setup(t *testing.T) (*Coordinator, *host, control.Item, control.Item, contr
 	task := execute(t, svc, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Task", Repo: repo.ID, Plan: plan.ID, Body: "## Outcome\nWorks\n## Tests\nProve it"}})
 	plan = execute(t, svc, control.Request{Op: "approve", ID: plan.ID, Version: plan.Version})
 	plan = execute(t, svc, control.Request{Op: "run", ID: plan.ID, Version: plan.Version})
-	h := &host{status: hostops.Status{FreeSlots: 2, FreeHeavySlots: 2}, launches: map[string]hostops.ControlRequest{}}
+	h := &host{status: hostops.Status{FreeSlots: 2, FreeHeavySlots: 2, TmuxKnown: true, TmuxStart: 1000}, launches: map[string]hostops.ControlRequest{}}
 	cfg := &hosts.Config{DefaultHarness: "claude", HarnessRatio: map[string]int{"claude": 1},
 		Harnesses: map[string]hosts.Harness{"claude": {MaxSessions: 2, Tiers: map[hosts.Tier]hosts.TierModel{
 			hosts.Standard: {Model: "executor", Effort: "high"}, hosts.Deep: {Model: "reviewer", Effort: "high"}}}},
