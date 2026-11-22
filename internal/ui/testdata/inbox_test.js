@@ -155,6 +155,51 @@ const scenarios = {
     });
   },
 
+  async "acknowledge all acknowledges up to the newest message shown, then refreshes"() {
+    const LATER = card(9, "message", { item: "t9", title: "Docs", body: "Second notice" });
+    const fx = { inbox: inboxOf([QUESTION, MESSAGE, LATER]), answer: ok };
+    await page("#/inbox", fx, async (t) => {
+      const b = t.$("inbox-ack-all");
+      assert.equal(b.hidden, false);
+      fx.inbox = inboxOf([QUESTION]);
+      const loads = fx.loads;
+      b.click();
+      await t.flush();
+      assert.equal(fx.posts.length, 1);
+      assert.deepEqual([fx.posts[0].path, Object.keys(fx.posts[0].body)], ["/api/updates/9/ack-all", ["key"]]);
+      assert.equal(t.$("inbox-ack-result").textContent, "Acknowledged every message.");
+      assert.ok(fx.loads > loads, "the inbox reloads");
+      assert.equal(b.hidden, true, "no messages left to acknowledge");
+      assert.deepEqual(t.cards().map((c) => c.id), ["card-5"], "the question stays");
+      fx.inbox = inboxOf([QUESTION, card(11, "message")]);
+      await t.refresh();
+      assert.equal(b.hidden, false);
+      assert.equal(t.$("inbox-ack-result").textContent, "", "a new message clears the result");
+    });
+  },
+
+  async "acknowledge all is hidden without messages, and a resend after no answer reuses its key"() {
+    await page("#/inbox", { inbox: inboxOf([QUESTION]), answer: ok }, async (t) => {
+      assert.equal(t.$("inbox-ack-all").hidden, true);
+    });
+    let calls = 0;
+    const fx = { inbox: inboxOf([MESSAGE]), answer: () => (++calls === 1 ? new Error("offline") : calls === 2 ? { status: 502, body: { error: "control server unreachable" } } : { status: 409, body: { error: "request key was already used" } }) };
+    await page("#/inbox", fx, async (t) => {
+      const b = t.$("inbox-ack-all");
+      b.click();
+      await t.flush();
+      assert.ok(t.$("inbox-ack-result").textContent.includes("Tap again to retry."));
+      b.click();
+      await t.flush();
+      assert.equal(fx.posts[0].body.key, fx.posts[1].body.key, "a resend reuses the key");
+      b.click();
+      await t.flush();
+      assert.equal(fx.posts[1].body.key, fx.posts[2].body.key);
+      assert.equal(t.$("inbox-ack-result").textContent, "request key was already used");
+      assert.equal(t.$("inbox-ack-result").className, "bulk-result bad");
+    });
+  },
+
   async "a draft survives a reload and goes once it is sent"() {
     const fx = { inbox: inboxOf([QUESTION, MESSAGE]), answer: ok };
     await page("#/inbox", fx, async (t) => {

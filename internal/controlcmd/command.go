@@ -49,6 +49,7 @@ const Usage = "engine serve\n" +
 	"engine ask <id> <text> [--choice <text>]... [--recommend <index from 0>] [--class <hard-stop class>]\n" +
 	"engine inbox [--operator]\n" +
 	"engine reply|ack|resolve <sequence> [<text>]\n" +
+	"engine ack --all [--repo <id>] [--before <sequence>]\n" +
 	"engine merge-queue <repo-id>\n" +
 	"engine host status --all [--json]\n" +
 	"engine attempt list [<task-id>]\n" +
@@ -172,6 +173,8 @@ func Parse(args []string, e Env) (control.Request, error) {
 	fs.StringVar(&depends, "depends", "", "")
 	fs.StringVar(&requires, "requires", "", "")
 	questionFlags(fs, &r)
+	all := fs.Bool("all", false, "")
+	fs.IntVar(&r.Before, "before", 0, "")
 	// Go flag parsing stops at a positional; allow IDs and text before flags.
 	flags, position := splitFlags(rest)
 	if err = fs.Parse(flags); err != nil {
@@ -179,6 +182,9 @@ func Parse(args []string, e Env) (control.Request, error) {
 	}
 	if r.Op != "ask" && (r.Choices != nil || r.Recommended != nil || r.Class != "") {
 		return r, fmt.Errorf("--choice, --recommend and --class are only for ask")
+	}
+	if err = ackAll(&r, *all); err != nil {
+		return r, err
 	}
 	if *toOperator {
 		r.Recipient = "operator"
@@ -303,6 +309,24 @@ func questionFlags(fs *flag.FlagSet, r *control.Request) {
 	fs.StringVar(&r.Class, "class", "", "")
 }
 
+// ackAll turns ack --all into the bulk acknowledgement; only it takes
+// --before.
+func ackAll(r *control.Request, all bool) error {
+	if all {
+		if r.Op != "ack" {
+			return fmt.Errorf("--all is only for ack")
+		}
+		r.Op = "ack-all"
+	}
+	if r.Before != 0 && r.Op != "ack-all" {
+		return fmt.Errorf("--before is only for ack --all")
+	}
+	if r.Before < 0 {
+		return fmt.Errorf("--before takes an update sequence")
+	}
+	return nil
+}
+
 func splitFlags(args []string) ([]string, []string) {
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {
@@ -316,7 +340,7 @@ func splitFlags(args []string) ([]string, []string) {
 			continue
 		}
 		flags = append(flags, a)
-		if strings.Contains(a, "=") || a == "--operator" || a == "--json" || a == "--server" {
+		if strings.Contains(a, "=") || a == "--operator" || a == "--all" || a == "--json" || a == "--server" {
 			continue
 		}
 		if i+1 < len(args) {
@@ -338,7 +362,7 @@ func positionals(r *control.Request, pos []string) error {
 		}
 		r.ReplyTo = n
 		pos = pos[1:]
-	} else if r.Op != "create" && r.Op != "inbox" {
+	} else if r.Op != "create" && r.Op != "inbox" && r.Op != "ack-all" {
 		if len(pos) > 0 {
 			r.ID = pos[0]
 			pos = pos[1:]

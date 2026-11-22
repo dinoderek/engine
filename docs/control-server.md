@@ -52,7 +52,7 @@ Updates are immutable and ordered; read up to 200 after a cursor. Comments leave
 
 **Pane input.** `pane-input`, which only a session's prompt hook posts (`harnesses.md`), records the operator's pane text verbatim for the session's own item: a `pane-answer` resolving the oldest open question holding it that was asked before the text was typed (by the host's clock, give or take 30 seconds), the session's own first, never a task's for a planner, released as a resolution is; else, or for a harness command such as `/compact`, a `pane-message` resolving nothing. A post unsigned, failing the attempt's `pane_key`, or missing from the transcript still counts, and adds one coordinator note to the operator in its transaction.
 
-Messages addressed to the operator appear in the cross-repository inbox. Informational messages leave the inbox on acknowledgement; questions leave on resolution. Idle, unrestricted sessions get wake-up pointers for others' messages on their item; tasks also for others' plan messages and resolutions, except coordinator notices and those to the operator. Messages persist when wake-up fails.
+Messages addressed to the operator appear in the cross-repository inbox. Informational messages leave the inbox on acknowledgement, one at a time or with `ack-all` (`engine ack --all [--repo <id>] [--before <sequence>]`), which writes one acknowledgement per message and skips questions; questions leave on resolution. Idle, unrestricted sessions get wake-up pointers for others' messages on their item; tasks also for others' plan messages and resolutions, except coordinator notices and those to the operator. Messages persist when wake-up fails.
 
 ## Host status
 

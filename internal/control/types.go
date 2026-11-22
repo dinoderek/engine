@@ -171,8 +171,10 @@ type Request struct {
 	ReplyTo       int    `json:"reply_to,omitempty"`
 	RequiresReply bool   `json:"requires_reply,omitempty"`
 	After         int    `json:"after,omitempty"`
-	Attempt       string `json:"attempt,omitempty"`
-	State         string `json:"state,omitempty"`
+	// Before bounds ack-all to updates numbered below it; 0 is no bound.
+	Before  int    `json:"before,omitempty"`
+	Attempt string `json:"attempt,omitempty"`
+	State   string `json:"state,omitempty"`
 	// Merge is a merge-request's PR, head, method and verdict.
 	Merge *MergeRequest `json:"merge,omitempty"`
 	// Pane is how a pane-input post's prompt hook vouches for it.

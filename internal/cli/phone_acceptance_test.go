@@ -253,13 +253,16 @@ func buttons(c botCall) []string {
 
 func (p *phone) telegramAlerts() {
 	t := p.t
+	// The question was open before pairing, so it goes; a message waiting
+	// then would not, so this one is sent once the integration is up.
+	p.stopFirstLoop = p.tg.loop(p.s.service, operatorChat, dashboardURL)
+	eventually(t, "the alert", func() bool { return len(p.tg.sent("sendMessage")) >= 1 })
 	say, err := p.worker.Call(context.Background(), control.Request{Op: "say", ID: p.task.ID, Body: "Docs are green and waiting.", Recipient: "operator"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	p.message = say.Updates[0].ID
-	p.stopFirstLoop = p.tg.loop(p.s.service, operatorChat, dashboardURL)
-	eventually(t, "the alert and the digest", func() bool { return len(p.tg.sent("sendMessage")) >= 2 })
+	eventually(t, "the digest", func() bool { return len(p.tg.sent("sendMessage")) >= 2 })
 	sends := p.tg.sent("sendMessage")
 	alert, digest := sends[0], sends[1]
 	p.firstQ, p.digest = p.tg.message(0), p.tg.message(1)

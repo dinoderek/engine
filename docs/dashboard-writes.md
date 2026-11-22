@@ -17,6 +17,7 @@ A write is a `POST` of one JSON object, at most 64 KiB, with only the fields its
 | `/api/updates/{n}/resolve` | `choice?`, `note?` | `resolve` |
 | `/api/updates/{n}/reply` | `body` | `reply` |
 | `/api/updates/{n}/ack` | none | `ack` |
+| `/api/updates/{n}/ack-all` | none | `ack-all` before `n + 1` |
 | `/api/items/{id}/say` | `body` | `say`, as `engine tell` |
 | `/api/plans/{id}/approve` | `version` | `approve` |
 | `/api/plans/{id}/run`, `/stop` | none | `run`, `stop` |
@@ -38,7 +39,7 @@ The server applies a key once: a resend with the same key and body returns the f
 
 `GET /api/inbox` (`internal/ui/inbox.go`) adds no control operation. It reads `inbox` after a cursor, 200 updates a page until a short one, then `list` for titles, repositories and pull requests and `session-view` for each session's latest line. It goes through the snapshot cache like the read views: a failed read returns the last inbox marked stale. Cards list open questions, oldest first, then unacknowledged messages, oldest first, across repositories. A plan question a task's session asked takes that session's pull request and latest line. Only an absolute http or https pull request URL becomes a link; bodies are text.
 
-The Inbox tab is the first and the default page (`internal/ui/static/inbox.js`). A choice button resolves with that choice and the note; Answer sends the note alone; Reply and Say go to their routes; Acknowledge is offered on messages, because an acknowledged question stays open until resolved. A refresh keeps the cards on screen, so typing and focus stay.
+The Inbox tab is the first and the default page (`internal/ui/static/inbox.js`). A choice button resolves with that choice and the note; Answer sends the note alone; Reply and Say go to their routes; Acknowledge is offered on messages, because an acknowledged question stays open until resolved. Acknowledge all messages, shown while a message card is listed and the view is fresh, acknowledges every informational message up to the newest card's update, never a question; one that arrives meanwhile stays. It resends its key after no answer or a 5xx, like a card. A refresh keeps the cards on screen, so typing and focus stay.
 
 - A 409 keeps the typed text, shows the server's message and reloads. A card the server no longer lists stays, marked, until dismissed.
 - A note is a draft in `localStorage`, `engine.draft.<update>`, from the first keystroke until it is sent. A fresh read drops the drafts of cards it no longer lists.
