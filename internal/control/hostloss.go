@@ -51,7 +51,8 @@ func (s Service) SawTmux(host string, read TmuxRead, alive func(*State, Attempt)
 
 // hostLoss lists the attempts of host a read shows lost with its tmux
 // server, none when it shows no host-wide loss. An attempt already marked
-// belongs to a loss settled before.
+// belongs to a loss settled before, and a dispatch still in flight has no
+// window to lose.
 func hostLoss(st *State, host string, read TmuxRead, saved int64, alive func(*State, Attempt) bool) []Attempt {
 	if read.Known && (saved == 0 || read.Start == saved) {
 		return nil
@@ -59,7 +60,7 @@ func hostLoss(st *State, host string, read TmuxRead, saved int64, alive func(*St
 	var gone []Attempt
 	seen := false
 	for _, at := range st.Attempts {
-		if at.Host != host || at.State == "ended" || at.Window == "" || at.HostLost || st.Items[at.Item].Attempt != at.ID {
+		if at.Host != host || at.State == "ended" || at.State == "dispatching" || at.Window == "" || at.HostLost || st.Items[at.Item].Attempt != at.ID {
 			continue
 		}
 		up := alive(st, at)

@@ -156,6 +156,24 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 	}
 }
 
+func TestSawTmuxLeavesADispatchInFlightAlone(t *testing.T) {
+	f := newLossFixture(t)
+	err := f.s.Store.Transaction(func(st *State) error {
+		at := st.Attempts[f.a2]
+		at.State = "dispatching"
+		st.Attempts[at.ID] = at
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := f.s.SawTmux("devbox", TmuxRead{}, windows())
+	st, _ := f.s.Store.Snapshot()
+	if err != nil || n != 1 || st.Attempts[f.a2].HostLost || !st.Attempts[f.a1].HostLost {
+		t.Fatalf("%d %v %+v", n, err, st.Attempts)
+	}
+}
+
 func TestSawTmuxLeavesAnotherHostsAttemptsAlone(t *testing.T) {
 	f := newLossFixture(t)
 	n, err := f.s.SawTmux("elsewhere", TmuxRead{}, windows())
