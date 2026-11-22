@@ -111,6 +111,9 @@ tr.needs-feedback td { background: var(--warn-bg); }
 }
 .inbox { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
 .inbox-head { font-size: 15px; margin: 0 0 8px; }
+.inbox-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.inbox-bulk:has(> button[hidden]):has(> .bulk-result:empty) { display: none; }
+.bulk-result.bad { color: var(--blocked); }
 .inbox:focus-visible, .card a:focus-visible, .card button:focus-visible, .note:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .card { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; }

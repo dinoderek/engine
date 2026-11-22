@@ -137,6 +137,8 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return s.transition(st, a, r)
 	case "updates", "inbox", "say", "ask", "reply", "ack", "resolve":
 		return s.messages(st, a, r)
+	case "ack-all":
+		return s.ackAll(st, a, r)
 	case "claim":
 		return s.reserve(st, a, r)
 	case "attempt-reconcile":

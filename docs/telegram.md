@@ -27,7 +27,8 @@ and leave the server running.
    its scheme and any port, as the phone reaches it. For the tailnet proxy and
    `--host`, load `dashboard-writes.md`. With no URL, alerts and choice answers
    still work, links are omitted, and the server logs how to configure them.
-5. Start `engine serve`. To disable Telegram, remove the chat setting or token
+5. Start `engine serve`. It sends the questions already open, never the messages
+   already waiting. To disable Telegram, remove the chat setting or token
    file and restart the server. To pair a replacement chat, remove the chat
    setting first and repeat setup.
 
@@ -62,7 +63,10 @@ coordinator pass or an API write across a network request.
 
 The server database migrates on open to include a delivery table and polling
 state. Pending entries are recorded before sending; successful sends record the
-bot's message ID. The highest recorded update is the delivery cursor. Pending
+bot's message ID. The highest recorded update is the delivery cursor. With no deliveries recorded,
+the first scan starts from pairing: it records every informational entry then in
+the inbox as settled and unsent, stages open questions, and records a settled
+row for update 0 so a later scan of an empty table still has a cursor. Pending
 entries remain eligible regardless of that cursor; an entry settled before its
 send succeeds is retired. Poll offsets and the digest time persist too. Backups
 include these tables; when changing storage or backups, load `control-server.md`.

@@ -21,7 +21,7 @@ const writeLimit = 64 << 10
 
 // writeOps is every control operation a dashboard write may forward. The
 // reads in readOps are separate: a write never widens them.
-var writeOps = []string{"resolve", "reply", "ack", "say", "approve", "run", "stop", "task-stop", "task-resume", "state", "complete-external"}
+var writeOps = []string{"resolve", "reply", "ack", "ack-all", "say", "approve", "run", "stop", "task-stop", "task-resume", "state", "complete-external"}
 
 // questionRead is the one read a write makes: the updates from a question
 // on, to turn a resolve's choice index into the choice's text. Unlike the
@@ -103,6 +103,12 @@ var writeRoutes = []writeRoute{
 		}},
 	{"/api/updates/{n}/reply", "n", "update", updateNumber, messaging(), reaction("reply")},
 	{"/api/updates/{n}/ack", "n", "update", updateNumber, keyOnly(), reaction("ack")},
+	// Every unacknowledged message numbered up to n, the newest the page
+	// shows: one that arrived since is still to be read.
+	{"/api/updates/{n}/ack-all", "n", "update", updateNumber, keyOnly(),
+		func(n string, b writeBody, _ string) control.Request {
+			return control.Request{Op: "ack-all", Before: sequence(n) + 1, Key: b.Key}
+		}},
 	{"/api/items/{id}/say", "id", "item", panelItem, messaging(),
 		func(id string, b writeBody, _ string) control.Request {
 			return control.Request{Op: "say", ID: id, Body: b.Body, Key: b.Key}

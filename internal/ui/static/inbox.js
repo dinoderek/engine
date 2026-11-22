@@ -15,6 +15,37 @@ window.engine.inbox = function (ctx) {
   const forms = new Map(); // a request's JSON -> the form holding its key
   const conflicts = new Map(); // update -> the card a 409 left, kept while the server no longer lists it
   let last = null;
+  let bulk = null; // acknowledge all: its route and the form holding its key
+
+  // newestMessage is the highest update among the message cards, or 0.
+  function newestMessage(d) {
+    return d.cards.reduce((n, c) => (c.kind === "message" ? Math.max(n, c.update) : n), 0);
+  }
+
+  // ackAll acknowledges every message up to the newest one shown, never a
+  // question. A resend after no answer or a server error reuses the key.
+  async function ackAll() {
+    const d = last && last.data;
+    const newest = d ? newestMessage(d) : 0;
+    if (!newest) return;
+    const path = "/api/updates/" + newest + "/ack-all";
+    if (!bulk || bulk.path !== path) bulk = { path, form: window.engine.writes.form() };
+    const b = $("inbox-ack-all");
+    const result = $("inbox-ack-result");
+    b.setAttribute("disabled", "");
+    const r = await bulk.form.send(path, {});
+    b.removeAttribute("disabled");
+    if (r.status === 0 || r.status >= 500) {
+      result.textContent = (r.error || "No answer") + " Tap again to retry.";
+      result.className = "bulk-result bad";
+      return;
+    }
+    bulk = null;
+    result.textContent = r.ok ? "Acknowledged every message." : r.error || "The dashboard refused the write.";
+    result.className = r.ok ? "bulk-result" : "bulk-result bad";
+    ctx.refresh();
+  }
+  $("inbox-ack-all").addEventListener("click", ackAll);
 
   function storage() {
     try {
@@ -240,6 +271,7 @@ window.engine.inbox = function (ctx) {
     $("tab-inbox").textContent = d ? "Inbox" + (d.cards.length ? " · " + d.cards.length : "") : "Inbox";
     $("inbox-head").textContent = d ? "Inbox · " + counts(d) : "Inbox";
     $("inbox-banner").hidden = !(env && env.stale);
+    $("inbox-ack-all").hidden = !d || !d.messages || !!env.stale;
     $("inbox-banner").textContent = "Control server unavailable; showing the last successful view.";
     const empty = $("inbox-empty");
     if (!d) {

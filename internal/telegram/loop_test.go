@@ -62,6 +62,15 @@ func fakeBot(t *testing.T) (Bot, *botServer) {
 }
 func testLoop(t *testing.T) (*Loop, *botServer, string) {
 	t.Helper()
+	l, f, plan := unpairedLoop(t)
+	// The pairing pass: what follows is new since the integration started.
+	pass(t, l, time.Time{})
+	return l, f, plan
+}
+
+// unpairedLoop is a loop that has never passed: no delivery cursor yet.
+func unpairedLoop(t *testing.T) (*Loop, *botServer, string) {
+	t.Helper()
 	if _, err := exec.LookPath("sqlite3"); err != nil {
 		t.Skip("sqlite3 missing")
 	}
@@ -94,6 +103,16 @@ func ask(t *testing.T, l *Loop, plan string) control.Update {
 	return command(t, l.Service, control.Request{Op: "ask", ID: plan, Body: "Question <plain>", Choices: []string{"yes", "no"}, Recommended: &zero, Class: "product"}).Updates[0]
 }
 
+// deliveries is the store's Telegram state without the pairing pass's
+// marker row.
+func deliveries(store *control.Store) ([]control.TelegramDelivery, int64, time.Time, error) {
+	rows, offset, at, err := store.TelegramState()
+	if len(rows) > 0 && rows[0].Update == 0 {
+		rows = rows[1:]
+	}
+	return rows, offset, at, err
+}
+
 var instant = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func pass(t *testing.T, l *Loop, at time.Time) {
@@ -121,7 +140,7 @@ func TestQuestionSendsOnceRetriesAndRestarts(t *testing.T) {
 	if err := l.Pass(context.Background(), instant); err == nil {
 		t.Fatal("failed send succeeded")
 	}
-	rows, _, _, err := l.Service.Store.TelegramState()
+	rows, _, _, err := deliveries(l.Service.Store)
 	if err != nil || len(rows) != 1 || rows[0].Message != 0 {
 		t.Fatalf("pending rows %+v %v", rows, err)
 	}
@@ -147,7 +166,7 @@ func TestQuestionSendsOnceRetriesAndRestarts(t *testing.T) {
 	if body["disable_notification"] != false || strings.Contains(body["text"].(string), "<b>") || body["parse_mode"] != nil {
 		t.Fatal(body)
 	}
-	rows, _, _, _ = store.TelegramState()
+	rows, _, _, _ = deliveries(store)
 	if rows[0].Update != q.ID || rows[0].Message == 0 || len(rows) != 2 {
 		t.Fatalf("rows %+v", rows)
 	}
@@ -278,7 +297,7 @@ func TestPendingSendAndDigestThrottleSurviveReopen(t *testing.T) {
 	if len(f.calls["sendMessage"]) != 3 {
 		t.Fatal("restart resent first digest or skipped pending question")
 	}
-	rows, _, _, err := store.TelegramState()
+	rows, _, _, err := deliveries(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +330,7 @@ func TestRunPollsAndPersistsOffsetBeforeRestart(t *testing.T) {
 		}
 	}
 	l.Run(ctx)
-	rows, offset, _, err := l.Service.Store.TelegramState()
+	rows, offset, _, err := deliveries(l.Service.Store)
 	if err != nil || offset != 701 || len(rows) != 1 || !rows[0].Settled {
 		t.Fatalf("poll state %+v %d %v", rows, offset, err)
 	}
@@ -350,7 +369,7 @@ func TestEditFailureRetriesSettlementWithoutResending(t *testing.T) {
 	if err := l.Pass(context.Background(), instant); err == nil {
 		t.Fatal("expected failed edit")
 	}
-	rows, _, _, _ := l.Service.Store.TelegramState()
+	rows, _, _, _ := deliveries(l.Service.Store)
 	if rows[0].Settled {
 		t.Fatal("failed edit retired delivery")
 	}
@@ -435,7 +454,7 @@ func TestFailedCallbackEditsDoNotBlockLaterCallbacks(t *testing.T) {
 		}
 	}
 	l.Run(ctx)
-	rows, offset, _, err := l.Service.Store.TelegramState()
+	rows, offset, _, err := deliveries(l.Service.Store)
 	if err != nil || offset != 702 || len(rows) != 2 {
 		t.Fatalf("state %+v %d %v", rows, offset, err)
 	}
@@ -449,7 +468,7 @@ func TestFailedCallbackEditsDoNotBlockLaterCallbacks(t *testing.T) {
 	}
 	f.failures["editMessageText"] = 0
 	pass(t, l, instant)
-	rows, _, _, err = l.Service.Store.TelegramState()
+	rows, _, _, err = deliveries(l.Service.Store)
 	if err != nil || !rows[0].Settled || !rows[1].Settled {
 		t.Fatalf("presentation did not retry %+v %v", rows, err)
 	}

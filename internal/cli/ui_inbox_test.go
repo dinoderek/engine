@@ -218,3 +218,23 @@ func installable(t *testing.T, b *browser) {
 		}
 	}
 }
+
+// ackAllOnAPhone clears the inbox's messages in one tap: the message is
+// acknowledged on the server, and both questions stay open.
+func ackAllOnAPhone(b *browser, s *controlStack, shots string) {
+	t := b.t
+	b.waitFor("acknowledge all", "!document.getElementById('inbox-ack-all').hidden")
+	tap(b, "#inbox-ack-all")
+	b.waitFor("the messages to go", "document.getElementById('inbox-head').innerText === 'Inbox · 2 questions · 0 messages' && document.getElementById('inbox-ack-all').hidden")
+	if got := text(b, "#inbox-ack-result"); got != "Acknowledged every message." {
+		t.Errorf("result %q", got)
+	}
+	inbox, err := s.operator().Call(context.Background(), control.Request{Op: "inbox"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inbox.Updates) != 2 || !inbox.Updates[0].RequiresReply || !inbox.Updates[1].RequiresReply {
+		t.Errorf("after acknowledge all the inbox holds %+v, want the two open questions", inbox.Updates)
+	}
+	b.screenshot(shots, "phone-inbox-acknowledged")
+}

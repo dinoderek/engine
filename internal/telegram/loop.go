@@ -302,15 +302,24 @@ func (l *Loop) tap(ctx context.Context, c Callback) error {
 	return nil
 }
 
+// stage records a pending delivery for each inbox entry past the cursor.
+// The first pass, with no deliveries yet, starts from pairing instead: it
+// retires every informational entry already waiting, unsent, and keeps only
+// open questions pending. Its settled row for update 0 marks that the first
+// pass ran even when the inbox was empty.
 func (l *Loop) stage(rows []control.TelegramDelivery, all []control.Update) ([]control.TelegramDelivery, error) {
+	first := len(rows) == 0
 	cursor := 0
 	for _, d := range rows {
 		cursor = max(cursor, d.Update)
 	}
 	var staged []control.TelegramDelivery
+	if first {
+		staged = append(staged, control.TelegramDelivery{Settled: true})
+	}
 	for _, u := range all {
 		if u.ID > cursor {
-			staged = append(staged, control.TelegramDelivery{Update: u.ID})
+			staged = append(staged, control.TelegramDelivery{Update: u.ID, Settled: first && !u.RequiresReply})
 		}
 	}
 	if len(staged) > 0 {
