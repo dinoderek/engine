@@ -18,6 +18,7 @@ func (s State) clone() State {
 		Receipts: make(map[string]receipt, len(s.Receipts)),
 		Next:     s.Next,
 		PassAt:   s.PassAt,
+		Upgrade:  s.Upgrade,
 	}
 	for k, v := range s.Items {
 		out.Items[k] = v.clone()

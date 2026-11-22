@@ -17,9 +17,7 @@ the next reboot). In a Terminal, after `gh auth login -h github.com`, run
 gh auth token | gh auth login -h github.com --with-token --insecure-storage
 ```
 
-which keeps the token in plaintext in `~/.config/gh/hosts.yml`. Setup's `gh
-auth` step stays open while gh fails on the host or, on macOS, keeps its token
-in the keychain.
+which keeps the token in plaintext in `~/.config/gh/hosts.yml`.
 
 ## Notifications
 
@@ -57,8 +55,7 @@ fresh readiness probe of every repo engine has cloned there
 (`~/.config/engine/`, `~/.local/bin/engine`, `~/.local/share/engine/`, and on the Mac the watcher's agent in `~/Library/LaunchAgents/`), Claude's plugin, Codex's plugin in your Codex home (through `codex plugin` only,
 never another file in `~/.codex`), and Codex's plugin and daemon in engine's own
 Codex home. For anything else (`~/.bashrc`, `sudo`, `/login`) it prints one
-exact command, and it exits 1 while any item is open. It refuses a build that is
-dirty or not on GitHub, and a name that is not a machine in `hosts.toml`. With
+exact command, and it exits 1 while any item is open. With
 no `--host` it checks this host. A host gets only the steps of the harnesses it
 lists.
 
@@ -70,8 +67,7 @@ on another host, `ssh -t <address> codex login --device-auth`. After a reboot re
 setup to start engine's daemon. Setup records the daemon it starts; one it did
 not start leaves setup open, since it may hold a session's
 environment: finish its sessions, run the stop command setup prints, and rerun
-setup. Setup reports the operator's own remote-control errors and ignored config
-keys, and fixes none.
+setup.
 
 **Claude's one-time prompts.** Nobody is there to answer them in an engine
 window. When the preflight finds one, run `claude --permission-mode auto
@@ -126,20 +122,21 @@ then run `engine setup --host devbox`.
 ## Upgrading
 
 `engine upgrade`, from any host in `hosts.toml`, brings every host to the
-head of `main`. It stops the server's unit and backs up the database with
-the old binary, installs the new engine and your plugins on this host, sets
-up the server's host and starts the server, then sets up every other host.
-The server starts again even when a step fails. `--dry-run` prints the steps
-and changes nothing.
+head of `main`, mid-plan too. It stops the server's unit and backs up the
+database with the old binary, installs the new engine and your plugins on
+this host, sets up the server's host and starts the server, then sets up
+every other host. The server starts again even when a step fails.
+`--dry-run` prints the steps and changes nothing.
 
-It refuses, changing nothing, while a task is `running`, `in-review` or
-`needs-human`, or when the server's host records no `services` table, does
-not answer, or its unit is not active. A host that is unreachable or stays open stops no others: run the commands the report lists, then rerun
-it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
-it by hand, in the same order: stop and back up the server
-(`control-server.md`, "Start"), install the engine and your plugins, run
-`engine setup` here and `engine setup --host <name>` for each other host,
-then start the server.
+Busy tasks carry on; a session that dies meanwhile is an engine bug
+(`session-signals.md`, "Upgrade"; old plugin versions: `harnesses.md`).
+
+It refuses, changing nothing, when the server's host records no `services`
+table, does not answer, or its unit is not active. A host that is
+unreachable or stays open stops no others: run the commands the report
+lists, then rerun it. Restart `engine ui` yourself. A Mac server host has no unit: upgrade
+it by hand, in the order above (to back up, `control-server.md`, "Start"),
+with `engine setup` and `engine setup --host <name>` for the setups.
 
 **The server's unit.** Write it once, by hand, on the server's host, as
 `~/.config/systemd/user/engine-server.service`. It runs `~/.local/bin/engine`,
@@ -162,6 +159,15 @@ interactive agent (a usable key, or `SSH_AUTH_SOCK` in the unit). Then run `syst
 `loginctl enable-linger <user>`, so the unit outlives your login, and record
 it in the host's `hosts.toml` entry as `[host.<name>.services]` with
 `manager = "systemd"` and `server = "engine-server.service"`.
+
+On a Linux server host, setup's `server unit` step only reads the unit,
+and stays open for each fault, or a state it cannot read: the unit is not `enabled`
+(`systemctl --user enable`); `Restart` is `no` (`systemctl --user edit`, set
+`Restart=on-failure`); linger is off (`loginctl enable-linger <user>`); or
+host status reports `tmux_unit`, a session tmux inside the unit that a stop
+would end (restart it with the command status gives, once its sessions are
+finished). A server host that records no `services` gets a note: its server
+will not return after a reboot.
 
 ## Watching a run
 
