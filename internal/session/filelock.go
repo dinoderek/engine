@@ -50,8 +50,9 @@ func (l fileLock) acquire() error {
 		if !errors.Is(err, fs.ErrExist) {
 			return fmt.Errorf("lock %s: %w", l.dir, err)
 		}
-		// Another writer may take a stale lock over at the same time:
-		// whichever Mkdir wins holds it.
+		// Two writers taking the same stale lock over at once can both end
+		// up holding it, as with proper-lockfile itself: this follows only a
+		// dead holder, and the stamp check still catches the lost write.
 		if info, err := os.Lstat(l.dir); err == nil && l.now().Sub(info.ModTime()) > lockStale && os.Remove(l.dir) == nil {
 			continue
 		}
