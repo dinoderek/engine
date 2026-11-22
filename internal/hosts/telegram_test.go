@@ -113,3 +113,16 @@ func TestTelegramDashboardURL(t *testing.T) {
 		})
 	}
 }
+
+func TestParseTelegramReadsAnotherHostsConfig(t *testing.T) {
+	tg, err := ParseTelegram("[server]\nhost = \"box\"\n\n[telegram]\nchat = 42\n")
+	if err != nil || tg.Chat != 42 {
+		t.Errorf("telegram %+v, %v; want chat 42", tg, err)
+	}
+	if tg, err = ParseTelegram("[server]\nhost = \"box\"\n"); err != nil || tg.Chat != 0 {
+		t.Errorf("no table: %+v, %v", tg, err)
+	}
+	if _, err = ParseTelegram("[telegram]\nchat = 0\n"); err == nil {
+		t.Error("a zero chat parsed")
+	}
+}

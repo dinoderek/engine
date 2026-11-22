@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"os"
@@ -96,6 +97,9 @@ type box struct {
 	down        bool
 	shims       []string // version manager shim directories under /home/me
 	clones      []string // repos engine has cloned for the server, owner/name
+	// agent is the watcher's launchd agent: loaded, and whether bootstrap
+	// fails.
+	agentLoaded, bootstrapFail bool
 
 	mutations []string
 	commands  []string
@@ -127,6 +131,9 @@ func (b *box) mutate(cmd string) { b.mutations = append(b.mutations, cmd) }
 // answer is the host's reply to one command line.
 func (b *box) answer(cmd, stdin string, out io.Writer, errOut io.Writer) int {
 	b.commands = append(b.commands, cmd)
+	if code, ok := b.watcherAnswer(cmd, out, errOut); ok {
+		return code
+	}
 	say := func(format string, args ...any) int { fmt.Fprintf(out, format, args...); return 0 }
 	switch {
 	case strings.HasPrefix(cmd, "for t in"):
@@ -258,6 +265,8 @@ func (b *box) write(cmd, stdin string, errOut io.Writer) int {
 
 // rig is a setup run against a box, with the Mac's own answers.
 type rig struct {
+	t     *testing.T
+	os    string // this host's GOOS; "" is linux
 	home  string
 	box   *box
 	local *box // the Mac, which answers sh
@@ -342,7 +351,7 @@ func (r *rig) deps() Deps {
 				return "/bin/zsh"
 			}
 			return ""
-		}, Exec: r.exec, GH: r.gh, Info: r.info, Harnesses: harness.NewAdapters(r.claude, r.codex),
+		}, Exec: r.exec, GH: r.gh, Info: r.info, OS: cmp.Or(r.os, "linux"), Harnesses: harness.NewAdapters(r.claude, r.codex),
 		Check: func(name string, out io.Writer) (bool, error) {
 			fmt.Fprintln(out, "the check report")
 			r.checked = append(r.checked, name)

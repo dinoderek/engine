@@ -2,11 +2,13 @@
 // caller's engine commit, plugin and config. Its own steps check the host's
 // tools, engine, config and suspend; each harness the host lists adds its
 // steps after them, through its adapter; gh's sign-in, the preflight
-// check, a path suggestion and the readiness probe come last. The report
-// numbers the steps in order. It is safe to
-// rerun. It changes only engine's own files (~/.config/engine, ~/.local/bin,
-// ~/.local/share/engine) and what the adapters change (Codex's plugin in the
-// operator's Codex home, through Codex's own CLI), and for anything else it
+// check, a path suggestion and the readiness probe come next, and a local
+// setup on a Mac ends with the watcher's launchd agent. The report numbers
+// the steps in order. It is safe to rerun. It changes only engine's own
+// files (~/.config/engine, ~/.local/bin, ~/.local/share/engine, and the
+// watcher's plist in ~/Library/LaunchAgents) and what the adapters change
+// (Codex's plugin in the operator's Codex home, through Codex's own CLI),
+// and for anything else it
 // prints the exact command for the operator to run. With no host it
 // checks this one; an adapter's steps may still act on it.
 package setup
@@ -41,6 +43,9 @@ type Deps struct {
 	// being set up, prints its report, and reports whether an unattended
 	// session there would run.
 	Check func(harness string, out io.Writer) (bool, error)
+	// OS is this host's GOOS, which decides whether a local setup installs
+	// the watcher; empty is the running engine's.
+	OS string
 	// Ready runs the readiness probe of the repo (owner/name) afresh on the
 	// host being set up, prints its report, and reports whether it passed.
 	Ready func(repo string, out io.Writer) (bool, error)
@@ -51,8 +56,9 @@ type runner struct {
 	d    Deps
 	t    target
 	want wanted
-	// host is the target's entry in hosts.toml.
+	// host is the target's entry in hosts.toml, and cfg all of it.
 	host hosts.Host
+	cfg  *hosts.Config
 	// defaultHarness is the harness a request that names none runs.
 	defaultHarness string
 	// adapters are the adapters of the harnesses the host lists, in the
@@ -88,7 +94,7 @@ func Run(host string, d Deps, out io.Writer) (bool, error) {
 		}
 		t, h = target{name: other.Name, address: other.Address, exec: d.Exec}, other
 	}
-	r := &runner{d: d, t: t, host: h, defaultHarness: cfg.DefaultHarness, missing: map[string]bool{}}
+	r := &runner{d: d, t: t, host: h, cfg: cfg, defaultHarness: cfg.DefaultHarness, missing: map[string]bool{}}
 	r.adapters = hostAdapters(d.Harnesses, h)
 	if r.defaultHarness == "" {
 		if a, ok := lookup(d.Harnesses, ""); ok {
@@ -164,7 +170,8 @@ func report(out io.Writer, t target, opens []string) bool {
 // harnesses act on this host. A host that is this one has no engine to
 // install or config to copy: it only checks. Each harness the host lists
 // adds its steps, in the registry's order. gh's sign-in comes next, then
-// the check, the path suggestion and, last, the readiness probe.
+// the check, the path suggestion and the readiness probe; a local setup
+// ends with the watcher.
 func (r *runner) steps(out io.Writer) []harness.Step {
 	steps := []harness.Step{{Name: "tools", Run: r.tools}, {Name: "engine", Run: r.enginePath}, {Name: "no suspend", Run: r.noSuspend}}
 	if r.t.remote() {
@@ -182,6 +189,12 @@ func (r *runner) steps(out io.Writer) []harness.Step {
 		harness.Step{Name: "preflight", Run: func() (harness.Outcome, error) { return r.preflight(out) }},
 		harness.Step{Name: "path", Run: r.path},
 		harness.Step{Name: "readiness", Run: func() (harness.Outcome, error) { return r.readiness(out) }})
+	if !r.t.remote() {
+		if _, watches, _ := r.watched(); watches {
+			r.t.acts = append(r.t.acts, "watcher")
+		}
+		steps = append(steps, harness.Step{Name: "watcher", Run: r.watcher, Acts: true})
+	}
 	r.names = make([]string, len(steps))
 	for i, s := range steps {
 		r.names[i] = s.Name

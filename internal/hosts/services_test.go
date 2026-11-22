@@ -95,6 +95,7 @@ func TestServerCommand(t *testing.T) {
 	for op, want := range map[ServerOp]string{
 		ServerStart:    "systemctl --user start engine-server.service",
 		ServerStop:     "systemctl --user stop engine-server.service",
+		ServerRestart:  "systemctl --user restart engine-server.service",
 		ServerIsActive: "systemctl --user is-active engine-server.service",
 	} {
 		argv, err := h.ServerCommand(op)
@@ -119,7 +120,7 @@ func TestServerShellLineQuotesTheUnit(t *testing.T) {
 
 func TestServerCommandRefusals(t *testing.T) {
 	recorded := Host{Name: "devbox", Services: Services{Manager: ManagerSystemd, Server: "engine-server.service"}}
-	if _, err := recorded.ServerCommand("restart"); err == nil || !strings.Contains(err.Error(), `unknown server operation "restart"`) {
+	if _, err := recorded.ServerCommand("reload"); err == nil || !strings.Contains(err.Error(), `unknown server operation "reload"`) {
 		t.Errorf("unknown op: %v", err)
 	}
 	bare := Host{Name: "devbox"}
@@ -128,5 +129,42 @@ func TestServerCommandRefusals(t *testing.T) {
 	}
 	if _, err := bare.ServerShellLine(ServerStart); err == nil {
 		t.Error("a host with no services has no shell line")
+	}
+}
+
+// box is a second host for base, with services when the body is not empty.
+func withBox(body string) string {
+	box := "\n[host.box]\naddress = \"dev@box\"\nharnesses = [\"claude\"]\nram_gb = 24\nbin = { claude = \"~/bin/claude\" }\n"
+	if body != "" {
+		box += "[host.box.services]\n" + body
+	}
+	return box
+}
+
+const unit = "manager = \"systemd\"\nserver = \"engine-server.service\"\n"
+
+func TestServerHostIsTheOneThatRecordsServices(t *testing.T) {
+	c, err := Parse(base + withBox(unit))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := c.ServerHost()
+	if err != nil || h.Name != "box" || h.Address != "dev@box" {
+		t.Errorf("server host %+v, %v; want box", h, err)
+	}
+}
+
+func TestServerHostRefusesNoneAndSeveral(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{base + withBox(""), "no host in hosts.toml records a [host.<name>.services] table"},
+		{withServices(unit) + withBox(unit), "hosts box and mac each record a [services] table"},
+	} {
+		c, err := Parse(tc.src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.ServerHost(); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("got %v, want %q", err, tc.want)
+		}
 	}
 }
