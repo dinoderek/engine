@@ -159,8 +159,8 @@ interactive agent (a usable key, or `SSH_AUTH_SOCK` in the unit). Then run `syst
 it in the host's `hosts.toml` entry as `[host.<name>.services]` with
 `manager = "systemd"` and `server = "engine-server.service"`.
 
-Setup's `server unit` step only reads the unit, on a Linux server host
-and stays open for each fault: the unit is not `enabled`
+On a Linux server host, setup's `server unit` step only reads the unit,
+and stays open for each fault, or a state it cannot read: the unit is not `enabled`
 (`systemctl --user enable`); `Restart` is `no` (`systemctl --user edit`, set
 `Restart=on-failure`); linger is off (`loginctl enable-linger <user>`); or
 host status reports `tmux_unit`, a session tmux inside the unit that a stop

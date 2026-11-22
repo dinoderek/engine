@@ -54,6 +54,10 @@ func (u unitState) answer(cmd string, out, errOut io.Writer) (int, bool) {
 		return 0, true
 	case `loginctl show-user "$(id -un)" -p Linger`:
 		got := u.linger
+		if got == "absent" {
+			fmt.Fprint(errOut, "Failed to get user: User 1000 is not logged in or lingering")
+			return 1, true
+		}
 		if got == "" {
 			got = "yes"
 		}
@@ -121,6 +125,7 @@ func TestABadUnitRefusesWithItsFix(t *testing.T) {
 		{"unit unknown", unitState{notFound: true}, "is not enabled (Failed to get unit file state", "systemctl --user enable"},
 		{"no restart", unitState{restart: "no"}, "has Restart=no; set Restart=on-failure under [Service]", "ssh -t dev@box 'systemctl --user edit engine-server.service'"},
 		{"no linger", unitState{linger: "no"}, "linger is off, so the unit stops at logout", `loginctl enable-linger "$(id -un)"`},
+		{"no session and no linger", unitState{linger: "absent"}, "linger is off, so the unit stops at logout", `loginctl enable-linger "$(id -un)"`},
 		{"tmux inside the unit", unitState{tmuxUnit: true}, "the session tmux runs inside engine-server.service: tmux server 9", "engine setup --host box"},
 		{"tmux cgroup unreadable", unitState{tmuxErr: true}, "cannot read the session tmux's cgroup: read tmux server 9's cgroup: permission denied", "engine setup --host box"},
 		{"status fails", unitState{statusFails: true}, "cannot read the session tmux: tmux: no server running", "engine setup --host box"},

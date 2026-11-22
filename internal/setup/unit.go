@@ -116,7 +116,11 @@ func (r *runner) unitLingers(string) (*unitFault, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch got, found := strings.CutPrefix(res.FirstLine(), "Linger="); {
+	line := res.FirstLine()
+	if strings.Contains(res.Why(), "not logged in or lingering") {
+		line = "Linger=no" // loginctl knows no user that neither lingers nor has a session
+	}
+	switch got, found := strings.CutPrefix(line, "Linger="); {
 	case !found:
 		return &unitFault{"cannot read the user's linger: " + res.Why(), ""}, nil
 	case got != "yes":
