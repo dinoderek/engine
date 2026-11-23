@@ -114,7 +114,7 @@ func TestAQuestionsChoicesRecommendationAndClassReachEveryRead(t *testing.T) {
 	shared := call(t, s, op, ask).Updates[0]
 	want("ask", own.Choices, own.Recommended, own.Class)
 	reader := Service{Store: reopen(t, s)}
-	st, err := reader.Store.Snapshot()
+	st, err := reader.Store.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func reopen(t *testing.T, s Service) *Store {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(path, nil)
+	store, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,10 +222,7 @@ func TestAVersion3DatabaseOpensAndReads(t *testing.T) {
 	approve(t, s, plan)
 	worker, _ := dispatch(t, s, task)
 	question := call(t, s, worker, Request{Op: "ask", ID: task.ID, Body: "Approve the schema change?"}).Updates[0]
-	if _, err := s.Store.sql("PRAGMA user_version=3;"); err != nil {
-		t.Fatal(err)
-	}
-	reader := Service{Store: reopen(t, s)}
+	reader := Service{Store: openAt(t, toRecords(t, s, 3))}
 	out, err := reader.Execute(op, Request{Op: "inbox"})
 	if err != nil || len(out.Updates) != 1 || out.Updates[0].ID != question.ID || out.Updates[0].Body != "Approve the schema change?" {
 		t.Fatalf("inbox after the migration: %+v, %v", out.Updates, err)

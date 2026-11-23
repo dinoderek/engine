@@ -22,7 +22,7 @@ with a run under its name takes a slot.
 below its slots.
 
 **Capabilities** are declared per host and named by a card's `requires`
-(`hosts.Capabilities`, `internal/hosts/hosts.go`).
+(`internal/hosts/hosts.go`).
 
 ```toml
 default_harness = "claude"
@@ -58,10 +58,10 @@ Each harness runs through its pinned `bin`, never a `PATH` lookup. For launch li
 
 ## Placement
 
-In start order, each ready task goes to a host that has a free slot (a free
+In start order, each ready task goes to a host that has a free slot (a
 heavy slot, for a heavy task), the chosen harness signed in and under its cap,
-every capability the card requires, a tmux server whose working directory
-exists (`tmux.md`), a passed readiness probe for its repo (`readiness.md`),
+every capability the card requires, not paused (`engine host pause`), a tmux server whose working
+directory exists (`tmux.md`), a passed readiness probe for its repo (`readiness.md`),
 and no usage limit holding that host × harness (`session-signals.md`, "Death
 at a limit").
 Among those, the host with most free slots wins, then the fewest
@@ -122,6 +122,9 @@ unrunnable harness, or an existing window; slots, capabilities and caps are
 placement's alone.
 
 **Preflight:** `engine start --check` runs `gh auth status`, then a hands-off light-tier session exercising the skill, `gh`, `engine` and `/tmp`; it exits 1 if gh failed or the session was denied, stalled or skipped a step.
+
+A moved task resumes on its old host from the kept worktree, uncommitted
+work too, and elsewhere from `origin`'s branch (`coordinator.md`).
 
 ## Seeing and reaching sessions
 

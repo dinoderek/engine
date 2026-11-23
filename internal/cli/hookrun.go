@@ -165,7 +165,12 @@ func stateHook(env Env, name string, hooks harness.Hooks, ev harness.Event) int 
 	}
 	h := hook.State{Err: env.Err, Unattended: run.Unattended}
 	h.Write = func(sig hook.Signal) error {
-		if err := session.WriteHarnessState(run.Dir, session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID}); err != nil {
+		st := session.HarnessState{State: sig.State, Event: sig.Event, At: env.Now(), SessionID: sig.SessionID, TurnID: sig.TurnID, Transcript: ev.Transcript}
+		if prev, ok := session.ReadHarnessState(run.Dir); ok && st.Transcript == "" {
+			// An event that names no transcript keeps the one already known.
+			st.Transcript = prev.Transcript
+		}
+		if err := session.WriteHarnessState(run.Dir, st); err != nil {
 			return err
 		}
 		hooks.Signalled(harness.HookContext{Run: run, Err: env.Err, Detach: detachHook(env, name)}, ev)

@@ -2,21 +2,22 @@ package control
 
 // planView returns a consistent plan snapshot using the existing read scope.
 // A task credential cannot lint a partial view of its parent's task graph.
-func planView(st *State, a Actor, id string) (Response, error) {
-	item, ok := st.Items[id]
+func planView(tx *Tx, a Actor, id string) (Response, error) {
+	item, ok := tx.Item(id)
 	if !ok || item.Kind != "plan" {
 		return Response{}, problem(404, "unknown plan")
 	}
-	if a.Role == "worker" && st.Attempts[a.Attempt].Item != id {
+	if at, _ := tx.Attempt(a.Attempt); a.Role == "worker" && at.Item != id {
 		return Response{}, problem(403, "only the plan execution can read its full plan view")
 	}
-	out := Response{Items: []Item{withStatus(st, item), st.Items[item.Repo]}}
+	repo, _ := tx.Item(item.Repo)
+	out := Response{Items: []Item{withStatus(tx, item), repo}}
 	seen := map[string]bool{}
 	var pending []string
-	for _, t := range st.Items {
-		if t.Plan == id {
-			pending = append(pending, t.ID)
-		}
+	own := map[string]Item{}
+	for _, t := range tx.ItemsOfPlan(id) {
+		pending = append(pending, t.ID)
+		own[t.ID] = t
 	}
 	for len(pending) > 0 {
 		next := pending[len(pending)-1]
@@ -25,10 +26,13 @@ func planView(st *State, a Actor, id string) (Response, error) {
 			continue
 		}
 		seen[next] = true
-		if !readable(st, a, next) {
+		if !readable(tx, a, next) {
 			return Response{}, problem(403, "dependency is outside this execution's read scope")
 		}
-		task := st.Items[next]
+		task, ok := own[next]
+		if !ok {
+			task, _ = tx.Item(next)
+		}
 		out.Items = append(out.Items, task)
 		pending = append(pending, task.Depends...)
 	}

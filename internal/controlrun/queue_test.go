@@ -23,7 +23,7 @@ func refusedOnce(t *testing.T, c *Coordinator, id, want string) {
 	if notices := operatorNotices(t, c, id); !ok || !strings.Contains(u.Body, want) || len(notices) != 1 {
 		t.Fatalf("refusal %+v; %d operator notices", u, len(notices))
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[id].State != "in-review" {
 		t.Fatalf("task %s after the refusal", st.Items[id].State)
 	}
@@ -72,7 +72,7 @@ func TestAnUnreachableHostLeavesTheMergeUnknownThenRefusesIt(t *testing.T) {
 		return hostops.Merged{}, &remote.UnreachableError{Host: "devbox", Address: "devbox", Detail: "timeout"}
 	})
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if e := st.Queue[task.ID]; e.FailSince.IsZero() || len(operatorNotices(t, c, task.ID)) != 0 || st.Attempts[st.Items[task.ID].Attempt].State == "ended" {
 		t.Fatalf("an outage acted: entry %+v", e)
 	}
@@ -83,14 +83,13 @@ func TestAnUnreachableHostLeavesTheMergeUnknownThenRefusesIt(t *testing.T) {
 
 func TestAHostMissingFromTheConfigRefusesTheHead(t *testing.T) {
 	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged"))
-	if err := c.Service.Store.Transaction(func(st *control.State) error {
-		at := st.Attempts[st.Items[task.ID].Attempt]
+	mutate(t, c.Service.Store, func(tx *control.Tx) error {
+		item, _ := tx.Item(task.ID)
+		at, _ := tx.Attempt(item.Attempt)
 		at.Host = "gone"
-		st.Attempts[at.ID] = at
+		tx.PutAttempt(at)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	if err := c.queues(c.Config); err != nil {
 		t.Fatal(err)
 	}
@@ -104,18 +103,16 @@ func TestAHostMissingFromTheConfigRefusesTheHead(t *testing.T) {
 // to repo's merge queue behind the others.
 func queuedTask(t *testing.T, c *Coordinator, repo, plan, id string) {
 	t.Helper()
-	if err := c.Service.Store.Transaction(func(st *control.State) error {
+	mutate(t, c.Service.Store, func(tx *control.Tx) error {
 		at := "a" + id[1:]
-		st.Items[id] = control.Item{ID: id, Kind: "task", Repo: repo, Plan: plan, Title: id, State: "in-review", PR: reviewedPR, Attempt: at, Version: 1}
-		st.Attempts[at] = control.Attempt{ID: at, Item: id, Host: "devbox", State: "running"}
-		u := control.Update{ID: len(st.Updates) + 1, Item: id, Author: at, Kind: "merge-request",
-			Merge: &control.MergeRequest{PR: reviewedPR, Head: reviewedHead, Method: "squash", Verdict: "APPROVED"}}
-		st.Updates = append(st.Updates, u)
-		st.Queue[id] = control.QueueEntry{Task: id, Repo: repo, Request: u.ID, PR: reviewedPR, Head: reviewedHead, Seq: u.ID, Phase: control.QueueWaiting}
+		u := tx.AppendUpdate(control.Actor{Name: at}, control.Request{ID: id}, "merge-request", "", time.Time{})
+		u.Merge = &control.MergeRequest{PR: reviewedPR, Head: reviewedHead, Method: "squash", Verdict: "APPROVED"}
+		tx.PutUpdate(u)
+		tx.PutItem(control.Item{ID: id, Kind: "task", Repo: repo, Plan: plan, Title: id, State: "in-review", PR: reviewedPR, Attempt: at, Version: 1})
+		tx.PutAttempt(control.Attempt{ID: at, Item: id, Host: "devbox", State: "running"})
+		tx.PutQueueEntry(control.QueueEntry{Task: id, Repo: repo, Request: u.ID, PR: reviewedPR, Head: reviewedHead, Seq: u.ID, Phase: control.QueueWaiting})
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 }
 
 func TestOneMergeInFlightPerRepositoryInRequestOrder(t *testing.T) {
@@ -144,7 +141,7 @@ func TestOneMergeInFlightPerRepositoryInRequestOrder(t *testing.T) {
 	if err := c.queues(c.Config); err != nil {
 		t.Fatal(err)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if _, queued := st.Queue[task.ID]; queued || st.Items["t90"].State != "done" || len(m.requests) != 2+reconcile.GhFailures {
 		t.Fatalf("t90 %s, head queued %v, %d calls", st.Items["t90"].State, queued, len(m.requests))
 	}
@@ -206,7 +203,7 @@ func TestAMergeRereadsTheServerBeforeTheHostCall(t *testing.T) {
 func TestAMergeRacingAWithdrawalIsRecorded(t *testing.T) {
 	c, m, task, worker := requested(t, nil)
 	m.reply = func(r hostops.MergeRequest) (hostops.Merged, error) {
-		st, _ := c.Service.Store.Snapshot()
+		st, _ := snapshotOf(c.Service.Store)
 		if _, err := c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "running", Key: control.Secret()}); err != nil {
 			t.Fatal(err)
 		}
@@ -215,15 +212,17 @@ func TestAMergeRacingAWithdrawalIsRecorded(t *testing.T) {
 	if err := c.queues(c.Config); err != nil {
 		t.Fatal(err)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "done" || st.Items[task.ID].PR != reviewedPR || len(operatorNotices(t, c, task.ID)) != 1 {
 		t.Fatalf("task %+v, notices %d", st.Items[task.ID], len(operatorNotices(t, c, task.ID)))
 	}
 	// The withdrawal ended the entry, but the merged update still names the
 	// head the host merged at.
-	if got := control.MergedHead(&st, task.ID); got != reviewedHead {
-		t.Fatalf("merged head %q, want %q", got, reviewedHead)
-	}
+	inTx(t, c.Service.Store, func(tx *control.Tx) {
+		if got := control.MergedHead(tx, task.ID); got != reviewedHead {
+			t.Fatalf("merged head %q, want %q", got, reviewedHead)
+		}
+	})
 }
 
 // A head whose session vanishes during its turn is resumed in-review, and
@@ -234,7 +233,7 @@ func TestAResumedHeadKeepsItsTurnsBound(t *testing.T) {
 	m.status.Windows = nil
 	pass(t, c) // vanished
 	pass(t, c) // resumed
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if at := st.Attempts[st.Items[task.ID].Attempt]; at.State == "ended" || st.Items[task.ID].State != "in-review" || st.Queue[task.ID].Phase != control.QueueRefresh {
 		t.Fatalf("after the resume: task %s, attempt %+v, entry %+v", st.Items[task.ID].State, at, st.Queue[task.ID])
 	}

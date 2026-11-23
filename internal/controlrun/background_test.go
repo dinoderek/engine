@@ -19,7 +19,7 @@ func TestASessionBusyOnlyInABackgroundJobIsWokenAndReleased(t *testing.T) {
 	var texts []string
 	c.Wake = func(_ reconcile.Session, text string) error { texts = append(texts, text); return nil }
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 {
 		t.Fatalf("task %s, windows %v: want merged with the window kept to report", st.Items[task.ID].State, m.status.Windows)
 	}
@@ -33,7 +33,7 @@ func TestASessionBusyOnlyInABackgroundJobIsWokenAndReleased(t *testing.T) {
 	later := c.Service.Now().Add(reconcile.CleanupWait)
 	c.Service.Now = func() time.Time { return later }
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if len(m.status.Windows) != 0 || st.Attempts[at.ID].State != "ended" {
 		t.Fatalf("windows %v, attempt %s after the report window", m.status.Windows, st.Attempts[at.ID].State)
 	}
@@ -53,14 +53,14 @@ func TestASessionBusyInATurnIsLeftAlone(t *testing.T) {
 	later := c.Service.Now().Add(reconcile.CleanupWait + reconcile.StallWait)
 	c.Service.Now = func() time.Time { return later }
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "done" || woke != 0 || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, woke %d, windows %v, attempt %s: want merged, untouched and open",
 			st.Items[task.ID].State, woke, m.status.Windows, st.Attempts[at.ID].State)
 	}
 }
 
-func releaseNotices(st control.State, id string) []control.Update {
+func releaseNotices(st snapshot, id string) []control.Update {
 	var out []control.Update
 	for _, u := range st.Updates {
 		if u.Item == id && u.Recipient == "operator" && strings.Contains(u.Body, "was released") {

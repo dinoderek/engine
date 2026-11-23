@@ -13,12 +13,12 @@ import (
 	"github.com/dinoderek/engine/internal/reconcile"
 )
 
-// apply does one action of a pass decided on st. A Merge is applied by
+// apply does one action of a pass decided on tx. A Merge is applied by
 // merge, before the rest of the pass.
-func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Config) error {
+func (c *Coordinator) apply(tx *control.Tx, a reconcile.Action, cfg *hosts.Config) error {
 	switch a.Kind {
 	case reconcile.Dispatch:
-		return c.dispatch(st, a, cfg)
+		return c.dispatch(tx, a, cfg)
 	case reconcile.SetState:
 		if err := c.change(a.Item, a.State); err != nil || a.Key == "" {
 			return err
@@ -41,23 +41,28 @@ func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Con
 // endAttempt ends a dead session's attempt and tells the operator how: a
 // vanished task resumes, a session that died before claiming its task is
 // dispatched again once, and a second early death, or the crash that makes
-// control.DeathCap in a row, fails the task. A death in a host-wide loss says
-// nothing more: its host's notice did.
+// control.DeathCap in a row, fails the task. A death while an upgrade ran is
+// reported as an engine bug, with its tail. Any other death in a host-wide
+// loss says nothing more: its host's notice did.
 func (c *Coordinator) endAttempt(a reconcile.Action) error {
 	if a.AtLimit {
 		return c.endAtLimit(a)
 	}
 	at, err := c.Service.EndDead(a.Attempt, a.Text, a.Tail)
+	if err == nil && at.Upgraded {
+		return c.notice(a.Item, "upgrade-death/"+at.ID, a.Text+" while engine upgrade ran. No session should die from an upgrade, so this is an engine bug: "+
+			"report it, with the tail below. The death counts toward no limit, and the work resumes"+tails([]control.Attempt{at}))
+	}
 	if err != nil || at.HostLost {
 		// A host-wide loss told the operator once for the host.
 		return err
 	}
-	st, err := c.Service.Store.Snapshot()
+	plan, history, err := c.history(a.Item)
 	if err != nil {
 		return err
 	}
-	if st.Items[a.Item].Kind == "plan" {
-		return c.plannerEnded(st, a, at)
+	if plan {
+		return c.plannerEnded(history, a, at)
 	}
 	switch {
 	case at.Reason == control.EndVanished:
@@ -65,10 +70,10 @@ func (c *Coordinator) endAttempt(a reconcile.Action) error {
 	case at.Reason == control.EndEarlyDeath:
 		return c.notice(a.Item, "early/"+at.ID, a.Text+" before it claimed the task; the task is dispatched again once"+tails([]control.Attempt{at}))
 	case at.Early:
-		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(st, at)))
+		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(history)))
 	case at.Crashed:
 		return c.notice(a.Item, "failed/"+at.ID, fmt.Sprintf("%s after claiming the task, %d such deaths in a row; the task failed%s",
-			a.Text, control.DeathCap, tails(lastCrashes(st, at))))
+			a.Text, control.DeathCap, tails(lastCrashes(history))))
 	}
 	return c.notice(a.Item, "failed/"+at.ID, a.Text)
 }
@@ -81,12 +86,12 @@ func (c *Coordinator) endAtLimit(a reconcile.Action) error {
 	if err != nil || a.Probe {
 		return err
 	}
-	st, err := c.Service.Store.Snapshot()
+	plan, history, err := c.history(a.Item)
 	if err != nil {
 		return err
 	}
-	if st.Items[a.Item].Kind == "plan" {
-		return c.plannerAtLimit(st, a, at)
+	if plan {
+		return c.plannerAtLimit(history, a, at)
 	}
 	return c.notice(a.Item, "limit-death/"+at.ID, fmt.Sprintf("%s; the task stays resumable and is dispatched again %s, from its own branch. "+
 		"Until then no task starts on %s on %s; another host or harness with quota may take it.", a.Text, limitWhen(at), at.Harness, at.Host))
@@ -101,24 +106,36 @@ func limitWhen(at control.Attempt) string {
 	return fmt.Sprintf("by a probe every %d minutes, the reset being unknown", int(reconcile.ProbeEvery.Minutes()))
 }
 
+// history is whether item is a plan, and all its attempts, as the records
+// hold them now.
+func (c *Coordinator) history(item string) (plan bool, attempts []control.Attempt, err error) {
+	err = read(c.Service.Store, func(tx *control.Tx) error {
+		it, _ := tx.Item(item)
+		plan, attempts = it.Kind == "plan", tx.AttemptsFor(item)
+		return nil
+	})
+	return plan, attempts, err
+}
+
 // earlyAttempts are the attempts of at's task that died before claiming it,
 // oldest first, at the newest.
-func earlyAttempts(st control.State, at control.Attempt) []control.Attempt {
-	return attemptsOf(st, at, func(o control.Attempt) bool { return o.Early })
+func earlyAttempts(history []control.Attempt) []control.Attempt {
+	return attemptsOf(history, func(o control.Attempt) bool { return o.Early })
 }
 
 // lastCrashes are the last two crashes of at's item, at the newest: the
 // deaths the cap counted last.
-func lastCrashes(st control.State, at control.Attempt) []control.Attempt {
-	out := attemptsOf(st, at, func(o control.Attempt) bool { return o.Crashed })
+func lastCrashes(history []control.Attempt) []control.Attempt {
+	out := attemptsOf(history, func(o control.Attempt) bool { return o.Crashed })
 	return out[max(0, len(out)-2):]
 }
 
-// attemptsOf are the attempts of at's item that keep, oldest first.
-func attemptsOf(st control.State, at control.Attempt, keep func(control.Attempt) bool) []control.Attempt {
+// attemptsOf are the attempts of one item among history that keep, oldest
+// first.
+func attemptsOf(history []control.Attempt, keep func(control.Attempt) bool) []control.Attempt {
 	var out []control.Attempt
-	for _, o := range st.Attempts {
-		if o.Item == at.Item && keep(o) {
+	for _, o := range history {
+		if keep(o) {
 			out = append(out, o)
 		}
 	}
@@ -136,7 +153,8 @@ func tails(attempts []control.Attempt) string {
 }
 
 // mark sends a notice, then records on its attempt what it flagged: the
-// stall's start or wait, or the limit reset it alerted.
+// stall's start or wait, the last activity of a quiet session, or the limit
+// reset it alerted.
 func (c *Coordinator) mark(a reconcile.Action) error {
 	if err := c.notice(a.Item, a.Key, a.Text); err != nil || a.Attempt == "" {
 		return err
@@ -144,8 +162,8 @@ func (c *Coordinator) mark(a reconcile.Action) error {
 	if a.Stalled.IsZero() && a.Limit == 0 {
 		return nil
 	}
-	return c.Service.Store.Transaction(func(st *control.State) error {
-		at := st.Attempts[a.Attempt]
+	return write(c.Service.Store, func(tx *control.Tx) error {
+		at, _ := tx.Attempt(a.Attempt)
 		switch {
 		case !a.Stalled.IsZero():
 			at.Notice = a.Stalled
@@ -154,7 +172,7 @@ func (c *Coordinator) mark(a reconcile.Action) error {
 		default:
 			at.StuckFor = a.Limit
 		}
-		st.Attempts[at.ID] = at
+		tx.PutAttempt(at)
 		return nil
 	})
 }
@@ -171,18 +189,18 @@ func (c *Coordinator) resume(a reconcile.Action, cfg *hosts.Config) error {
 	}
 	eligible := false
 	var at control.Attempt
-	err := c.Service.Store.Transaction(func(st *control.State) error {
-		current := st.Items[a.Item]
-		if control.OwnQuestion(st, current.ID) > 0 {
+	err := write(c.Service.Store, func(tx *control.Tx) error {
+		current, _ := tx.Item(a.Item)
+		if control.OwnQuestion(tx, current.ID) > 0 {
 			return nil
 		}
-		at = st.Attempts[current.Attempt]
+		at, _ = tx.Attempt(current.Attempt)
 		if current.State == "needs-human" || at.ID != a.Attempt || at.State == "ended" || resumed(at, a.ResetsAt, c.now()) {
 			return nil
 		}
 		at.ResumedFor = a.ResetsAt
 		at.ResumeAt = c.now()
-		st.Attempts[at.ID] = at
+		tx.PutAttempt(at)
 		eligible = true
 		return nil
 	})
@@ -210,9 +228,10 @@ func (c *Coordinator) now() time.Time {
 
 // release closes a finished session's window and worktree on its host, and
 // ends its attempt. A stopped task's keeps the worktree and branch, and its
-// attempt has ended already. A release with a Key tells the operator, once,
-// and so does a done task's release whose host replied with a note, such as
-// the repo's own worktree release failing.
+// attempt has ended already; so does a moved one's, after pushing its
+// branch. A release with a Key tells the operator, once, and so does a done
+// task's release whose host replied with a note, such as the repo's own
+// worktree release failing, and a moved one's that left work origin lacks.
 func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 	outcome := hostops.RunEnded
 	switch {
@@ -220,10 +239,18 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 		outcome = hostops.RunDone
 	case a.Stopped:
 		outcome = hostops.RunStopped
+	case a.Moved:
+		outcome = hostops.RunMoved
 	}
 	reply, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, outcome, a.Head)
 	if err != nil {
 		return err
+	}
+	if a.Moved {
+		if err := c.movedLeft(a, reply); err != nil {
+			return err
+		}
+		return c.Service.MovedReleased(a.Attempt)
 	}
 	if a.Key != "" {
 		if err := c.notice(a.Item, a.Key, a.Text); err != nil {
@@ -241,6 +268,29 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 	return c.Service.SetAttempt(a.Attempt, "ended", "")
 }
 
+// movedLeft tells the operator, once per moved attempt, what releasing its
+// window left that origin lacks. A move back onto the same host is told
+// nothing: its resume opens on the kept worktree and branch.
+func (c *Coordinator) movedLeft(a reconcile.Action, reply hostops.Released) error {
+	if reply.Unpushed == "" {
+		return nil
+	}
+	var moveHost string
+	if err := read(c.Service.Store, func(tx *control.Tx) error {
+		at, _ := tx.Attempt(a.Attempt)
+		moveHost = at.MoveHost
+		return nil
+	}); err != nil {
+		return err
+	}
+	if moveHost == a.Session.Host {
+		return nil
+	}
+	return c.notice(a.Item, "moved-left/"+a.Attempt, fmt.Sprintf(
+		"The moved task's old session %s on host %s was released, keeping its worktree there. What origin lacks: %s. A resume on another host starts without it.",
+		a.Session.Name, a.Session.Host, reply.Unpushed))
+}
+
 // stop clears root's coordination intent. Completed and failed intent stays
 // persisted; it cannot redispatch a task.
 func (c *Coordinator) stop(root string) error {
@@ -248,14 +298,14 @@ func (c *Coordinator) stop(root string) error {
 	if err != nil {
 		return err
 	}
-	return c.Service.Store.Transaction(func(s *control.State) error {
-		i := s.Items[root]
+	return write(c.Service.Store, func(tx *control.Tx) error {
+		i, _ := tx.Item(root)
 		if i.Version != out.Item.Version {
 			return nil
 		}
 		i.Coordinating = false
 		i.Version++
-		s.Items[root] = i
+		tx.PutItem(i)
 		return nil
 	})
 }

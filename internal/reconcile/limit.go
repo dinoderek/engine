@@ -60,7 +60,7 @@ func Limit(s Session, now time.Time) (LimitStep, string) {
 	reset := time.Unix(s.ResetsAt, 0)
 	switch {
 	case reset.Sub(now) > farReset:
-		if s.FarNoted {
+		if s.FarNoted || s.LimitAsked {
 			return NoLimitStep, ""
 		}
 		return LimitFar, fmt.Sprintf("%s has a usage limit resetting more than 24 hours away (%s); waiting without typing", s.Name, reset.UTC().Format(time.RFC3339))

@@ -38,8 +38,8 @@ func runUpgrade(args []string, env Env) int {
 	return checkCode(closed)
 }
 
-// upgradeDeps are what the upgrade runs with: env's runners, the server's
-// task list through the operator's client, and env's clock.
+// upgradeDeps are what the upgrade runs with: env's runners, the server
+// through the operator's client, and env's clock.
 func upgradeDeps(env Env, ctx context.Context) upgrade.Deps {
 	exec := env.SSH
 	if exec == nil {
@@ -51,25 +51,34 @@ func upgradeDeps(env Env, ctx context.Context) upgrade.Deps {
 	}
 	return upgrade.Deps{
 		Home: env.Home, Exec: exec, GH: env.Run, Harnesses: adapters(env), Now: env.Now, Sleep: sleep, Context: ctx,
-		Tasks: func() ([]upgrade.Task, error) { return serverTasks(env) },
+		Answers: func() error { return serverAnswers(env) },
+		Mark:    func(end bool) error { return markUpgrade(env, end) },
 	}
 }
 
-// serverTasks is the server's task list, a call every server version
+// serverAnswers lists the server's tasks, a call every server version
 // answers. An interrupt does not cancel it: the wait for the restarted server
 // still needs it.
-func serverTasks(env Env) ([]upgrade.Task, error) {
+func serverAnswers(env Env) error {
 	client, err := controlcmd.Connect(controlEnv(env))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	res, err := client.Call(context.Background(), control.Request{Op: "list", State: "task"})
+	_, err = client.Call(context.Background(), control.Request{Op: "list", State: "task"})
+	return err
+}
+
+// markUpgrade records the upgrade's start, or with end its end, on the
+// server, under a request key of its own. An interrupt does not cancel it.
+func markUpgrade(env Env, end bool) error {
+	client, err := controlcmd.Connect(controlEnv(env))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	tasks := make([]upgrade.Task, len(res.Items))
-	for i, item := range res.Items {
-		tasks[i] = upgrade.Task{ID: item.ID, State: item.State}
+	stage := control.UpgradeStart
+	if end {
+		stage = control.UpgradeEnd
 	}
-	return tasks, nil
+	_, err = client.Call(context.Background(), control.Request{Op: "upgrade", State: stage, Key: "upgrade-" + stage + "-" + control.Secret()})
+	return err
 }

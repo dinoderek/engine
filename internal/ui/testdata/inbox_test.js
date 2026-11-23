@@ -4,7 +4,7 @@
 // that survive a reload, and a conflict that keeps the typed text.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { boot, Event } = require("./dom_shim.js");
+const { boot, Event, withOverview } = require("./dom_shim.js");
 
 const STATIC = path.join(__dirname, "..", "static");
 const AT = "2026-11-07T09:00:00Z";
@@ -53,7 +53,7 @@ async function page(hash, fx, body) {
     return reply(404, { error: "not found" });
   };
   const navigator = { setAppBadge: async (n) => { fx.badge.push(n); }, clearAppBadge: async () => { fx.badge.push(0); } };
-  const p = boot(STATIC, hash, fetchImpl, { localStorage: fx.storage, navigator });
+  const p = boot(STATIC, hash, withOverview(fetchImpl), { localStorage: fx.storage, navigator });
   const $ = (id) => p.doc.getElementById(id);
   const t = {
     p, $, fx,
@@ -123,6 +123,24 @@ const scenarios = {
       assert.deepEqual(t.cards().map((c) => c.id), ["card-3"]);
       assert.equal(fx.storage.getItem("engine.draft.5"), null);
       assert.deepEqual(fx.badge.slice(-1), [0]);
+    });
+  },
+
+  async "a question about a host has no item to open, and a choice resolves it"() {
+    const HOST = card(11, "question", {
+      item: "", title: "Host mac", host: "mac", repo: "", repo_slug: "", state: "", author: "coordinator", class: "environment",
+      body: "mac has been unreachable since 2026-11-07 09:00 UTC.", choices: ["Wait, and resume when it returns", "Move its tasks to other hosts", "Stop its tasks"], recommended: 0,
+    });
+    const fx = { inbox: inboxOf([HOST]), answer: ok };
+    await page("#/inbox", fx, async (t) => {
+      const q = t.card(11);
+      assert.equal(q.querySelector(".card-title").textContent, "Host mac");
+      assert.equal(q.querySelector(".card-title").tagName.toLowerCase(), "span", "no panel to open");
+      assert.ok(!q.textContent.includes(" · ·"), "no item in the meta line");
+      assert.equal(q.querySelectorAll(".choice").length, 3);
+      assert.equal(t.button(11, "Say"), undefined, "no item to say on");
+      await t.tap(11, "Move");
+      assert.deepEqual([fx.posts[0].path, fx.posts[0].body.choice], ["/api/updates/11/resolve", 1]);
     });
   },
 

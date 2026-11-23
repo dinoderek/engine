@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -78,10 +77,7 @@ func TestRenderHostStatusReadyAndNoPass(t *testing.T) {
 // fleetEnv is a command environment whose server reports fleet.
 func fleetEnv(t *testing.T, fleet control.HostStatus) Env {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 absent")
-	}
-	st, err := control.Open(filepath.Join(t.TempDir(), "db"), nil)
+	st, err := control.Open(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}

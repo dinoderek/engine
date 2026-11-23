@@ -13,14 +13,9 @@ func TestTelegramMigrationAndDurableState(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "kept"})
-	if _, err := s.Store.sql("DROP TABLE telegram_deliveries; DROP TABLE telegram_state; PRAGMA user_version=4;"); err != nil {
-		t.Fatal(err)
-	}
-	path := s.Store.path
-	if err := s.Store.Close(); err != nil {
-		t.Fatal(err)
-	}
-	store, err := Open(path, nil)
+	path := toRecords(t, s, 4)
+	rawSQL(t, path, "DROP TABLE telegram_deliveries; DROP TABLE telegram_state;")
+	store, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +32,7 @@ func TestTelegramMigrationAndDurableState(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = store.Close()
-	store, err = Open(copyPath, nil)
+	store, err = Open(copyPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +40,7 @@ func TestTelegramMigrationAndDurableState(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got, want) || offset != 42 || !digest.Equal(at) {
 		t.Fatalf("state %+v %d %v %v", got, offset, digest, err)
 	}
-	st, err := store.Snapshot()
+	st, err := store.snapshot()
 	if err != nil || len(st.Updates) != 3 {
 		t.Fatalf("migration lost commands: %+v %v", st, err)
 	}

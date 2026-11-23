@@ -16,10 +16,10 @@ import (
 	"github.com/dinoderek/engine/internal/session"
 )
 
-// dispatch reserves an attempt for a's item, at its version in st, and
+// dispatch reserves an attempt for a's item, at its version in tx, and
 // launches it where a places it.
-func (c *Coordinator) dispatch(st control.State, a reconcile.Action, cfg *hosts.Config) error {
-	item := st.Items[a.Item]
+func (c *Coordinator) dispatch(tx *control.Tx, a reconcile.Action, cfg *hosts.Config) error {
+	item, _ := tx.Item(a.Item)
 	key := fmt.Sprintf("dispatch/%s/%d", item.ID, item.Version)
 	out, err := c.Service.Dispatch(item, a.Host, a.Harness, key)
 	if err != nil {
@@ -27,16 +27,16 @@ func (c *Coordinator) dispatch(st control.State, a reconcile.Action, cfg *hosts.
 	}
 	// Only a new execution releases: a replayed one may have a spawn still
 	// in flight on the host, whose window and worktree release would take.
-	if _, replay := st.Attempts[out.Attempt.ID]; !replay {
-		c.releaseEnded(st, *out.Item, *out.Attempt, c.Client(cfg.Hosts[out.Attempt.Host]))
+	if _, replay := tx.Attempt(out.Attempt.ID); !replay {
+		c.releaseEnded(tx, *out.Item, *out.Attempt, c.Client(cfg.Hosts[out.Attempt.Host]))
 	}
-	return c.launch(st, *out.Attempt, out.Credential, a.Resume, cfg)
+	return c.launch(tx, *out.Attempt, out.Credential, a.Resume, cfg)
 }
 
 // launch has the attempt's host start its session; resume says an earlier
 // attempt ran, so the session resumes the task's own branch.
-func (c *Coordinator) launch(st control.State, at control.Attempt, credential string, resume bool, cfg *hosts.Config) error {
-	item := st.Items[at.Item]
+func (c *Coordinator) launch(tx *control.Tx, at control.Attempt, credential string, resume bool, cfg *hosts.Config) error {
+	item, _ := tx.Item(at.Item)
 	if err := c.Service.CheckDispatch(item.ID, at.ID); err != nil {
 		return err
 	}
@@ -55,11 +55,15 @@ func (c *Coordinator) launch(st control.State, at control.Attempt, credential st
 	if err != nil {
 		return err
 	}
-	repo := st.Items[item.Repo]
+	repo, _ := tx.Item(item.Repo)
 	req := hostops.ControlRequest{URL: c.URL, Credential: credential, Attempt: at.ID, Remote: repo.Remote,
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Title: session.Title(item.ID, item.Title), Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
-			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model, resume)}}
+			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model, resume) + movedKickoff(tx, at)}}
+	// A read that failed above left zero values in req: never spawn on them.
+	if err := tx.Err(); err != nil {
+		return err
+	}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
 	var refused *hostops.RefusedError
 	if errors.As(err, &refused) {
@@ -94,9 +98,9 @@ var tmuxID = regexp.MustCompile(`([@%$])\d+`)
 // ran on a host: a retry or a resume, whose branch is the task's own. An
 // attempt that never opened a window, such as one the host refused, does not
 // count, so a stray branch it was refused for is never adopted.
-func hadEarlierAttempt(st control.State, item, current string) bool {
-	for _, at := range st.Attempts {
-		if at.Item == item && at.ID != current && at.Window != "" {
+func hadEarlierAttempt(tx *control.Tx, item, current string) bool {
+	for _, at := range tx.AttemptsFor(item) {
+		if at.ID != current && at.Window != "" {
 			return true
 		}
 	}
@@ -110,15 +114,15 @@ func hadEarlierAttempt(st control.State, item, current string) bool {
 // dead or absent, and whose newest run under that name is not this
 // execution's own; a live window, or one that cannot be read, is left alone.
 // Release keeps a worktree with uncommitted changes, and the branch.
-func (c *Coordinator) releaseEnded(st control.State, item control.Item, at control.Attempt, client remote.Client) {
-	if !endedEarlier(st, item.ID, at) {
+func (c *Coordinator) releaseEnded(tx *control.Tx, item control.Item, at control.Attempt, client remote.Client) {
+	if !endedEarlier(tx, item.ID, at) {
 		return
 	}
 	status, err := client.Status()
 	if err != nil || status.RunsError != "" {
 		return
 	}
-	name := windowName(st, item)
+	name := windowName(tx, item)
 	for _, w := range status.Windows {
 		if w.Name == name && w.Alive {
 			return
@@ -136,9 +140,9 @@ func (c *Coordinator) releaseEnded(st control.State, item control.Item, at contr
 
 // endedEarlier reports whether an attempt of item other than current ran on
 // current's host and has ended.
-func endedEarlier(st control.State, item string, current control.Attempt) bool {
-	for _, at := range st.Attempts {
-		if at.Item == item && at.ID != current.ID && at.Host == current.Host && at.State == "ended" && at.Window != "" {
+func endedEarlier(tx *control.Tx, item string, current control.Attempt) bool {
+	for _, at := range tx.AttemptsFor(item) {
+		if at.ID != current.ID && at.Host == current.Host && at.State == "ended" && at.Window != "" {
 			return true
 		}
 	}
@@ -146,8 +150,10 @@ func endedEarlier(st control.State, item string, current control.Attempt) bool {
 }
 
 // windowName is the task's tmux window name on a host, <repo>-<task>.
-func windowName(st control.State, item control.Item) string {
-	return fmt.Sprintf("%s-%d", strings.Split(st.Items[item.Repo].Slug, "/")[1], control.Number(item.ID))
+func windowName(tx *control.Tx, item control.Item) string {
+	repo, _ := tx.Item(item.Repo)
+	_, name, _ := strings.Cut(repo.Slug, "/")
+	return fmt.Sprintf("%s-%d", name, control.Number(item.ID))
 }
 
 func kickoff(item control.Item, at control.Attempt, reviewer string, resume bool) string {
@@ -166,35 +172,62 @@ func kickoff(item control.Item, at control.Attempt, reviewer string, resume bool
 	return text
 }
 
-func (c *Coordinator) reconcileDispatches(root string, fleet reconcile.Fleet, cfg *hosts.Config) error {
-	st, err := c.Service.Store.Snapshot()
-	if err != nil {
-		return err
-	}
-	if !st.Items[root].Coordinating {
-		return nil
-	}
-	for _, item := range st.Items {
-		if item.ID != root && item.Plan != root {
+// movedKickoff is what the kickoff adds when at follows the operator's move:
+// the attempt just before it ended moved. While an earlier blind move's
+// window is not yet released, its old session may still push to the task's
+// branch, so the new one checks origin's branch before each push and asks
+// the operator once it holds commits the new one lacks, rather than merging
+// or overwriting them.
+func movedKickoff(tx *control.Tx, at control.Attempt) string {
+	var prev, blind control.Attempt
+	for _, o := range tx.AttemptsFor(at.Item) {
+		if control.Number(o.ID) >= control.Number(at.ID) {
 			continue
 		}
-		at, ok := st.Attempts[item.Attempt]
-		if !ok || at.State != "dispatching" {
-			continue
+		if control.Number(o.ID) > control.Number(prev.ID) {
+			prev = o
 		}
-		for _, h := range fleet.Hosts {
-			if h.Name != at.Host || h.Unreachable != "" || h.Status.RunsError != "" {
-				continue
-			}
-			if err = c.reconcileDispatch(st, item, at, h, cfg); err != nil {
-				return err
-			}
+		if o.Reason == control.EndMoved && o.MovedBlind && !o.MoveReleased {
+			blind = o
 		}
 	}
-	return nil
+	text := ""
+	if prev.Reason == control.EndMoved {
+		text = " The operator moved this task here from host " + prev.Host + "."
+	}
+	if blind.ID != "" {
+		text += " The operator moved it off host " + blind.Host + " while that host could not be reached, so its old session may still be running and pushing to the task's branch. " +
+			"Before each push, fetch: if origin's branch has commits your branch lacks, do not merge, rebase over or overwrite them; " +
+			"ask the operator (engine ask, class drift) what to keep."
+	}
+	return text
 }
 
-func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at control.Attempt, h reconcile.HostLoad, cfg *hosts.Config) error {
+func (c *Coordinator) reconcileDispatches(root string, fleet reconcile.Fleet, cfg *hosts.Config) error {
+	return read(c.Service.Store, func(tx *control.Tx) error {
+		rootItem, _ := tx.Item(root)
+		if !rootItem.Coordinating {
+			return nil
+		}
+		for _, item := range append(tx.ItemsOfPlan(root), rootItem) {
+			at, ok := tx.Attempt(item.Attempt)
+			if !ok || at.State != "dispatching" {
+				continue
+			}
+			for _, h := range fleet.Hosts {
+				if h.Name != at.Host || h.Unreachable != "" || h.Status.RunsError != "" {
+					continue
+				}
+				if err := c.reconcileDispatch(tx, item, at, h, cfg); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
+func (c *Coordinator) reconcileDispatch(tx *control.Tx, item control.Item, at control.Attempt, h reconcile.HostLoad, cfg *hosts.Config) error {
 	for _, r := range h.Status.Runs {
 		if r.Record.RunID == at.RunID {
 			_, window, _ := strings.Cut(r.Record.Tmux, ":")
@@ -204,11 +237,11 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 			return c.Service.Started(at.ID, window, r.PaneKey)
 		}
 	}
-	credentials := st.ReceiptsForDispatch(at.ID)
+	credentials := tx.DispatchTokens(at.ID)
 	if len(credentials) != 1 {
 		return fmt.Errorf("dispatch %s has no unique credential receipt", at.ID)
 	}
-	if err := c.launch(st, at, credentials[0], hadEarlierAttempt(st, item.ID, at.ID), cfg); err != nil {
+	if err := c.launch(tx, at, credentials[0], hadEarlierAttempt(tx, item.ID, at.ID), cfg); err != nil {
 		c.log("recover dispatch %s: %v", at.ID, err)
 	}
 	return nil
@@ -222,18 +255,29 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 // planner's dispatch is refused: only a retry dispatches a planner again. Its refusals
 // are 409 problems with reason control.ReasonReconcileRefused.
 func (c *Coordinator) ConfirmEnded(id string) error {
-	st, err := c.Service.Store.Snapshot()
-	if err != nil {
+	var at control.Attempt
+	var ok, plan bool
+	var name string
+	if err := read(c.Service.Store, func(tx *control.Tx) error {
+		if at, ok = tx.Attempt(id); !ok {
+			return nil
+		}
+		item, _ := tx.Item(at.Item)
+		plan = item.Kind == "plan"
+		if at.State != "ended" {
+			name = windowName(tx, item)
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
-	at, ok := st.Attempts[id]
 	if !ok {
 		return &control.Problem{Status: 404, Message: "unknown execution"}
 	}
 	if at.State == "ended" {
 		return nil
 	}
-	if at.State == "dispatching" && st.Items[at.Item].Kind == "plan" {
+	if at.State == "dispatching" && plan {
 		return refuseReconcile("a planner's dispatch is retried each pass, never reconciled")
 	}
 	cfg, _, err := c.configuration()
@@ -251,7 +295,6 @@ func (c *Coordinator) ConfirmEnded(id string) error {
 	if status.RunsError != "" {
 		return refuseReconcile("host %s's run records are unreadable", at.Host)
 	}
-	name := windowName(st, st.Items[at.Item])
 	if at.State == "dispatching" {
 		return dispatchGone(status, name, at)
 	}

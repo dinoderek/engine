@@ -75,15 +75,19 @@ func TestOnlyTheOperatorReadsTheFleet(t *testing.T) {
 }
 
 func TestTheBoardShowsAnUnreachableHostAndKeepsOnlyTheLatestPass(t *testing.T) {
+	store := emptyStore(t)
+	record := func(b *HostBoard, fleet reconcile.Fleet) {
+		inTx(t, store, func(tx *control.Tx) { b.Record(tx, fleet, nil) })
+	}
 	var b *HostBoard
-	b.Record(control.State{}, reconcile.Fleet{}, nil) // a nil board records nothing
+	record(b, reconcile.Fleet{}) // a nil board records nothing
 	b = &HostBoard{Now: func() time.Time { return boardAt }}
 	down := reconcile.Load("mac", nil, nil, hostops.Status{}, errString("ssh: timed out"))
 	up := reconcile.Load("devbox", nil, nil, hostops.Status{Slots: 2, FreeSlots: 1, Windows: []hostops.Window{{Name: "demo-9", ID: "@2"}, {Name: "demo-8", ID: "@3", Alive: true}},
 		Runs:        []hostops.Run{{Name: "demo-8", Record: session.Record{Harness: "codex"}}},
 		Quota:       map[string]session.Quota{"codex": {Windows: map[string]session.QuotaWindow{"weekly": {Used: 5, ResetsAt: 7}}}},
 		TmuxCwdGone: &hostops.TmuxCwdGone{Pid: 4, Dir: "/gone", Reason: "tmux server's directory is gone"}}, nil)
-	b.Record(control.State{}, reconcile.Fleet{Hosts: []reconcile.HostLoad{down, up}}, nil)
+	record(b, reconcile.Fleet{Hosts: []reconcile.HostLoad{down, up}})
 	got := b.Status()
 	if len(got.Hosts) != 2 || got.Hosts[0].Unreachable != "ssh: timed out" || got.Hosts[0].Windows == nil || got.Hosts[0].Slots != 0 {
 		t.Fatalf("unreachable host: %+v", got.Hosts)
@@ -98,7 +102,7 @@ func TestTheBoardShowsAnUnreachableHostAndKeepsOnlyTheLatestPass(t *testing.T) {
 	if want := []control.HostQuota{{Harness: "codex", Window: "weekly", Used: 5, ResetsAt: 7}}; !reflect.DeepEqual(up2.Quota, want) {
 		t.Fatalf("a quota whose reading names no harness: %+v", up2.Quota)
 	}
-	b.Record(control.State{}, reconcile.Fleet{Hosts: []reconcile.HostLoad{up}}, nil)
+	record(b, reconcile.Fleet{Hosts: []reconcile.HostLoad{up}})
 	if got = b.Status(); len(got.Hosts) != 1 || got.Hosts[0].Name != "devbox" {
 		t.Fatalf("a host that left hosts.toml stays: %+v", got.Hosts)
 	}

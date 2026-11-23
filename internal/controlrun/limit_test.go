@@ -22,7 +22,7 @@ func at(c *Coordinator, d time.Duration) {
 // resetting at reset (zero unknown), and runs a pass that ends its attempt.
 func dieAtLimit(t *testing.T, c *Coordinator, h *host, task control.Item, reset int64) control.Attempt {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	for i, w := range h.status.Windows {
 		if w.Name == "demo-"+task.ID[1:] {
@@ -35,7 +35,7 @@ func dieAtLimit(t *testing.T, c *Coordinator, h *host, task control.Item, reset 
 		}
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	return st.Attempts[at.ID]
 }
 
@@ -45,7 +45,7 @@ func TestASessionDeadAtAKnownLimitIsDispatchedAgainAfterTheReset(t *testing.T) {
 	pass(t, c)
 	reset := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
 	ended := dieAtLimit(t, c, h, task, reset.Unix())
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if ended.Reason != control.EndVanished || !ended.Limited || ended.ResetsAt != reset.Unix() || st.Items[task.ID].State == "failed" {
 		t.Fatalf("a death at a limit: %+v, task %s", ended, st.Items[task.ID].State)
 	}

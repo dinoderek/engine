@@ -15,9 +15,7 @@ import (
 func plannerSetup(t *testing.T) (*Coordinator, *host, control.Item) {
 	t.Helper()
 	c, h, _, plan, task := setup(t)
-	if err := c.Service.Store.Transaction(func(st *control.State) error { delete(st.Items, task.ID); return nil }); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, c.Service.Store, func(tx *control.Tx) error { tx.DeleteItem(task.ID); return nil })
 	now := c.Service.Now()
 	c.Service.Now = func() time.Time { now = now.Add(time.Minute); return now }
 	return c, h, plan
@@ -29,7 +27,7 @@ func plannerSetup(t *testing.T) (*Coordinator, *host, control.Item) {
 func plannerGone(t *testing.T, c *Coordinator, h *host, plan control.Item, tail string) control.Attempt {
 	t.Helper()
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[plan.ID].Attempt]
 	if at.State == "ended" || len(h.status.Windows) != 1 {
 		t.Fatalf("no planner was started: %+v, windows %v", at, h.status.Windows)
@@ -43,7 +41,7 @@ func plannerGone(t *testing.T, c *Coordinator, h *host, plan control.Item, tail 
 		}
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	return st.Attempts[at.ID]
 }
 
@@ -61,7 +59,7 @@ func TestAPlannerThatDiesWithoutATaskIsReplacedThenStops(t *testing.T) {
 		t.Fatalf("the first death's notice: %q", n)
 	}
 	second := plannerGone(t, c, h, plan, "claude: command not found")
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if second.ID == first.ID || second.Reason != control.EndFailed || st.Items[plan.ID].Coordinating {
 		t.Fatalf("the second planner's end: %+v, coordinating %v", second, st.Items[plan.ID].Coordinating)
 	}
@@ -74,7 +72,7 @@ func TestAPlannerThatDiesWithoutATaskIsReplacedThenStops(t *testing.T) {
 		t.Fatalf("the second death's notice: %q", last)
 	}
 	pass(t, c)
-	if st, _ = c.Service.Store.Snapshot(); len(st.Attempts) != 2 {
+	if st, _ = snapshotOf(c.Service.Store); len(st.Attempts) != 2 {
 		t.Fatalf("a stopped plan started a planner: %d attempts", len(st.Attempts))
 	}
 	execute(t, c.Service, control.Request{Op: "run", ID: plan.ID, Version: st.Items[plan.ID].Version})
@@ -88,13 +86,13 @@ func TestAPlannerThatDiesWithoutATaskIsReplacedThenStops(t *testing.T) {
 func TestAPlannerDeadAtALimitIsStartedAfterTheReset(t *testing.T) {
 	c, h, plan := plannerSetup(t)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[plan.ID].Attempt]
 	reset := c.Service.Now().Add(time.Hour)
 	h.status.Windows, h.status.FreeSlots = nil, 2
 	h.status.Runs[0].Limit = &hostops.RunLimit{ResetsAt: reset.Unix()}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if ended := st.Attempts[at.ID]; ended.Reason != control.EndVanished || !ended.Limited {
 		t.Fatalf("the planner's end: %+v", ended)
 	}
@@ -102,20 +100,20 @@ func TestAPlannerDeadAtALimitIsStartedAfterTheReset(t *testing.T) {
 		t.Fatalf("notices %q", n)
 	}
 	pass(t, c)
-	if st, _ = c.Service.Store.Snapshot(); len(st.Attempts) != 1 {
+	if st, _ = snapshotOf(c.Service.Store); len(st.Attempts) != 1 {
 		t.Fatal("a planner started before the reset")
 	}
 	later := reset.Add(3 * time.Minute)
 	c.Service.Now = func() time.Time { return later }
 	pass(t, c)
-	if st, _ = c.Service.Store.Snapshot(); len(st.Attempts) != 2 {
+	if st, _ = snapshotOf(c.Service.Store); len(st.Attempts) != 2 {
 		t.Fatal("no planner started after the reset")
 	}
 	// The replacement meets the limit again: the operator was told already.
 	h.status.Windows, h.status.FreeSlots = nil, 2
 	h.status.Runs[len(h.status.Runs)-1].Limit = &hostops.RunLimit{ResetsAt: later.Add(time.Hour).Unix()}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if ended := st.Attempts[st.Items[plan.ID].Attempt]; !ended.Limited || len(taskNotices(c, plan)) != 1 {
 		t.Fatalf("a repeat death at a limit: %+v, notices %q", ended, taskNotices(c, plan))
 	}

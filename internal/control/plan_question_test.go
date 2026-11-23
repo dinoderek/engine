@@ -19,21 +19,14 @@ func TestPlanQuestionBlocksOnlyNewDispatches(t *testing.T) {
 	call(t, s, child, Request{Op: "state", ID: task.ID, Version: claimed.Item.Version, State: "in-review", Item: Item{PR: good().PR}})
 	call(t, s, child, ready(task.ID, good()))
 	st := mustSnapshot(t, s)
-	if _, queued := st.Queue[task.ID]; !queued || OwnQuestion(&st, task.ID) != 0 || PlanQuestion(&st, task.ID) != question.ID {
-		t.Fatalf("queued %v, own %d, plan %d; want a queued task held by no own question", queued, OwnQuestion(&st, task.ID), PlanQuestion(&st, task.ID))
+	if _, queued := st.Queue[task.ID]; !queued || OwnQuestion(st.tx(), task.ID) != 0 || PlanQuestion(st.tx(), task.ID) != question.ID {
+		t.Fatalf("queued %v, own %d, plan %d; want a queued task held by no own question", queued, OwnQuestion(st.tx(), task.ID), PlanQuestion(st.tx(), task.ID))
 	}
 
 	// A task that never started is held; one that did is dispatched again.
 	other := newTask(t, s, repo.ID, plan.ID)
 	reject(t, s, op, Request{Op: "claim", ID: other.ID, Body: "devbox", State: "claude"}, 409)
-	if err := s.Store.Transaction(func(st *State) error {
-		at := st.Attempts[claimed.Attempt.ID]
-		at.LiveAt = time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC)
-		st.Attempts[at.ID] = at
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	editAttempt(t, s.Store, claimed.Attempt.ID, func(at *Attempt) { at.LiveAt = time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC) })
 	if at, err := s.EndDead(claimed.Attempt.ID, "window gone", ""); err != nil || at.Reason != EndVanished {
 		t.Fatal(at, err)
 	}
@@ -66,13 +59,4 @@ func TestPlanQuestionLeavesAnotherTasksStateAndMergeAlone(t *testing.T) {
 		t.Fatal("a sibling's merge request was refused under a plan question")
 	}
 	call(t, s, op, Request{Op: "state", ID: two.ID, Version: review.Version, State: "done"})
-}
-
-func mustSnapshot(t *testing.T, s Service) State {
-	t.Helper()
-	st, err := s.Store.Snapshot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return st
 }

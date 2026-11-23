@@ -34,6 +34,7 @@ type InboxCard struct {
 	RepoSlug    string             `json:"repo_slug,omitempty"`
 	State       string             `json:"state,omitempty"`
 	Task        string             `json:"task,omitempty"` // the task whose session asked a plan question
+	Host        string             `json:"host,omitempty"` // the host a fleet question, which has no item, is about
 	Author      string             `json:"author"`
 	At          time.Time          `json:"at"`
 	Class       string             `json:"class,omitempty"`
@@ -83,6 +84,9 @@ func inboxList(updates []control.Update, items, repos []control.Item, rows []con
 		if u.RequiresReply {
 			c.Kind, c.Class, c.Choices, c.Recommended = cardQuestion, u.Class, u.Choices, u.Recommended
 		}
+		if u.Host != "" {
+			c.Host, c.Title = u.Host, "Host "+u.Host
+		}
 		// A plan question a task's session asked belongs to that session.
 		session := u.Item
 		if u.Task != "" {
@@ -122,37 +126,57 @@ func prLink(s string) string {
 // inbox loads the Inbox tab. Like every view it falls back to its last
 // success, marked stale, when the control server fails.
 func (u *upstream) inbox(ctx context.Context) (Envelope, int) {
+	return u.inboxFrom(ctx, u.newRead())
+}
+
+// inboxFrom reads the inbox from the overview when the server has one and
+// the inbox fits in it, else from the inbox pages.
+func (u *upstream) inboxFrom(ctx context.Context, read *overviewRead) (Envelope, int) {
 	return u.view(ctx, "inbox", func(ctx context.Context) (any, error) {
-		var updates []control.Update
-		for cursor, reads := 0, 0; ; reads++ {
-			if reads == maxInboxReads {
-				return nil, &control.Problem{Status: 502, Message: "inbox too long to show"}
-			}
-			page, err := u.call(ctx, control.Request{Op: "inbox", After: cursor})
-			if err != nil {
-				return nil, err
-			}
-			updates = append(updates, page.Updates...)
-			if len(page.Updates) < inboxPage {
-				break
-			}
-			cursor = page.Updates[len(page.Updates)-1].ID
-		}
-		if len(updates) == 0 {
-			return inboxList(nil, nil, nil, nil), nil
-		}
-		var lists [3][]control.Item
-		for i, kind := range []string{"task", "plan", "repo"} {
-			got, err := u.call(ctx, control.Request{Op: "list", State: kind})
-			if err != nil {
-				return nil, err
-			}
-			lists[i] = got.Items
-		}
-		sessions, err := u.call(ctx, control.Request{Op: "session-view"})
+		got, ok, err := read.get(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return inboxList(updates, append(lists[0], lists[1]...), lists[2], sessions.Sessions), nil
+		if ok && len(got.Updates) < inboxPage {
+			repos, rest := splitRepos(got.Items)
+			return inboxList(got.Updates, rest, repos, got.Sessions), nil
+		}
+		return u.inboxPages(ctx)
 	})
+}
+
+// inboxPages reads the inbox 200 updates at a time, then the titles and the
+// session rows its cards need.
+func (u *upstream) inboxPages(ctx context.Context) (any, error) {
+	var updates []control.Update
+	for cursor, reads := 0, 0; ; reads++ {
+		if reads == maxInboxReads {
+			return nil, &control.Problem{Status: 502, Message: "inbox too long to show"}
+		}
+		page, err := u.call(ctx, control.Request{Op: "inbox", After: cursor})
+		if err != nil {
+			return nil, err
+		}
+		updates = append(updates, page.Updates...)
+		if len(page.Updates) < inboxPage {
+			break
+		}
+		cursor = page.Updates[len(page.Updates)-1].ID
+	}
+	if len(updates) == 0 {
+		return inboxList(nil, nil, nil, nil), nil
+	}
+	var lists [3][]control.Item
+	for i, kind := range []string{"task", "plan", "repo"} {
+		got, err := u.call(ctx, control.Request{Op: "list", State: kind})
+		if err != nil {
+			return nil, err
+		}
+		lists[i] = got.Items
+	}
+	sessions, err := u.call(ctx, control.Request{Op: "session-view"})
+	if err != nil {
+		return nil, err
+	}
+	return inboxList(updates, append(lists[0], lists[1]...), lists[2], sessions.Sessions), nil
 }

@@ -12,8 +12,13 @@ type HostStatus struct {
 // HostRow is one host of the latest pass, in hosts.toml. An unreachable host
 // carries only its name and why; the rest is unknown.
 type HostRow struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// Paused is the operator's pause: the host takes no new session.
+	Paused      bool   `json:"paused,omitempty"`
 	Unreachable string `json:"unreachable,omitempty"`
+	// RunsError says why the host's run records could not be read: its
+	// sessions are unknown.
+	RunsError string `json:"runs_error,omitempty"`
 	// Slots are how many sessions the host runs at once and how many more
 	// it can start, with the heavy ones counted apart.
 	Slots          int `json:"slots"`

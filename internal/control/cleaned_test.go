@@ -23,15 +23,12 @@ func TestCleanedNeedsTheTasksOwnExecutionAndADoneTask(t *testing.T) {
 	}
 	var newest Update
 	var ok bool
-	if err := s.Store.Transaction(func(st *State) error {
-		newest, ok = CleanedUp(st, task.ID)
-		if _, other := CleanedUp(st, "t99"); other {
+	edit(t, s.Store, func(tx *Tx) {
+		newest, ok = CleanedUp(tx, task.ID)
+		if _, other := CleanedUp(tx, "t99"); other {
 			t.Error("a task with no report has one")
 		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	if !ok || newest.ID != again.ID {
 		t.Fatalf("CleanedUp = %+v %v, want the newest report", newest, ok)
 	}

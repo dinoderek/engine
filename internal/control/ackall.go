@@ -6,7 +6,7 @@ import "reflect"
 // operator inbox lists: one acknowledgement each, as ack writes. It never
 // touches a question. r.Item.Repo limits it to one repository's items, and
 // a nonzero r.Before to messages numbered below it.
-func (s Service) ackAll(st *State, a Actor, r Request) (Response, error) {
+func (s Service) ackAll(tx *Tx, a Actor, r Request) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
 	}
@@ -20,40 +20,28 @@ func (s Service) ackAll(st *State, a Actor, r Request) (Response, error) {
 		return Response{}, problem(400, "before is an update sequence")
 	}
 	if repo := r.Item.Repo; repo != "" {
-		if item, ok := st.Items[repo]; !ok || item.Kind != "repo" {
+		if item, ok := tx.Item(repo); !ok || item.Kind != "repo" {
 			return Response{}, problem(404, "unknown repository")
 		}
 	}
-	acked := map[int]bool{}
-	for _, u := range st.Updates {
-		if u.Kind == "acknowledged" {
-			acked[u.ReplyTo] = true
-		}
-	}
 	var pending []Update
-	for _, u := range st.Updates {
-		if r.Before > 0 && u.ID >= r.Before {
-			break
-		}
-		if u.Recipient != "operator" || u.RequiresReply || acked[u.ID] || resolved(st, u.ID) {
-			continue
-		}
-		if r.Item.Repo != "" && updateRepo(st, u) != r.Item.Repo {
+	for u := range tx.NoticesBefore(r.Before) {
+		if r.Item.Repo != "" && updateRepo(tx, u) != r.Item.Repo {
 			continue
 		}
 		pending = append(pending, u)
 	}
 	out := Response{Updates: []Update{}}
 	for _, u := range pending {
-		out.Updates = append(out.Updates, st.update(a, Request{ID: u.Item, ReplyTo: u.ID}, "acknowledged", "", s.now()))
+		out.Updates = append(out.Updates, tx.AppendUpdate(a, Request{ID: u.Item, ReplyTo: u.ID}, "acknowledged", "", s.now()))
 	}
 	return out, nil
 }
 
 // updateRepo is the repository an update's item belongs to, or "" for an
 // update about no item.
-func updateRepo(st *State, u Update) string {
-	item := st.Items[u.Item]
+func updateRepo(tx *Tx, u Update) string {
+	item, _ := tx.Item(u.Item)
 	if item.Kind == "repo" {
 		return item.ID
 	}

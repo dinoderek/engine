@@ -22,20 +22,39 @@ func PlanStatus(plan Item, tasks []Item, asked bool) string {
 
 // withStatus returns a read response's copy of item, with a plan's status
 // and open question filled in. Neither is ever stored.
-func withStatus(st *State, item Item) Item {
-	if item.Kind != "plan" {
-		return item
-	}
-	var tasks []Item
-	for _, t := range st.Items {
-		if t.Kind == "task" && t.Plan == item.ID {
-			tasks = append(tasks, t)
+func withStatus(tx *Tx, item Item) Item {
+	return withStatuses(tx, []Item{item})[0]
+}
+
+// withStatuses is withStatus of each of items, reading every plan's tasks and
+// open question once for all of them.
+func withStatuses(tx *Tx, items []Item) []Item {
+	var plans []string
+	for _, it := range items {
+		if it.Kind == "plan" {
+			plans = append(plans, it.ID)
 		}
 	}
-	id := OwnQuestion(st, item.ID)
-	item.Status = PlanStatus(item, tasks, id > 0)
-	if id > 0 {
-		item.Question = updateRef(st.Updates[id-1])
+	if len(plans) == 0 {
+		return items
 	}
-	return item
+	tasks, questions := tx.TaskStatesOfPlans(plans), tx.OwnQuestions(plans)
+	ids := make([]int, 0, len(questions))
+	for _, q := range questions {
+		ids = append(ids, q)
+	}
+	asked := tx.UpdatesByID(ids)
+	out := make([]Item, len(items))
+	for i, it := range items {
+		out[i] = it
+		if it.Kind != "plan" {
+			continue
+		}
+		id := questions[it.ID]
+		out[i].Status = PlanStatus(it, tasks[it.ID], id > 0)
+		if id > 0 {
+			out[i].Question = updateRef(asked[id])
+		}
+	}
+	return out
 }

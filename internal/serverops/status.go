@@ -16,8 +16,7 @@ const minFreeKB = 1 << 20
 
 // dbTimeout bounds the database check, in seconds, so a locked database
 // cannot hang the status; busyMS is how long it waits on the server's own
-// write lock. -init /dev/null skips the host's ~/.sqliterc, as the server
-// does.
+// write lock. -init /dev/null skips the host's ~/.sqliterc.
 const (
 	dbTimeout = 30
 	busyMS    = 5000
@@ -58,6 +57,8 @@ func databaseCheck(s server, rel string) (string, bool, string) {
 	line := fmt.Sprintf("timeout %d sqlite3 -init /dev/null -batch -readonly -cmd '.timeout %d' %s 'PRAGMA quick_check;'", dbTimeout, busyMS, dbOnHost(rel))
 	res, err := s.sh.Sh(line, "")
 	switch {
+	case res.Code == 127:
+		return "database", false, "unknown: sqlite3 is unavailable on the server host"
 	case err != nil || res.Code != 0:
 		return "database", false, why(res, err)
 	case res.FirstLine() != "ok":

@@ -21,7 +21,7 @@ func TestTaskAsksOnItsPlanAndTheResolutionReleasesTheAsker(t *testing.T) {
 	if st.Items[one.ID].State != "needs-human" || st.Items[two.ID].State != "running" {
 		t.Fatalf("states = %s, %s", st.Items[one.ID].State, st.Items[two.ID].State)
 	}
-	if OwnQuestion(&st, one.ID) != question.ID || OwnQuestion(&st, two.ID) != 0 || PlanQuestion(&st, two.ID) != question.ID {
+	if OwnQuestion(st.tx(), one.ID) != question.ID || OwnQuestion(st.tx(), two.ID) != 0 || PlanQuestion(st.tx(), two.ID) != question.ID {
 		t.Fatal("the plan question holds the sibling, or not the asker")
 	}
 	call(t, s, second, Request{Op: "state", ID: two.ID, Version: claimed.Item.Version, State: "in-review", Item: Item{PR: good().PR}})
@@ -35,8 +35,8 @@ func TestTaskAsksOnItsPlanAndTheResolutionReleasesTheAsker(t *testing.T) {
 		t.Fatalf("resolution = %+v, want the plan resolution and the asker's restored state", out.Updates)
 	}
 	st = mustSnapshot(t, s)
-	if st.Items[one.ID].State != "running" || OwnQuestion(&st, one.ID) != 0 || OwnQuestion(&st, two.ID) != 0 {
-		t.Fatalf("after resolution: %s, pending %d and %d", st.Items[one.ID].State, OwnQuestion(&st, one.ID), OwnQuestion(&st, two.ID))
+	if st.Items[one.ID].State != "running" || OwnQuestion(st.tx(), one.ID) != 0 || OwnQuestion(st.tx(), two.ID) != 0 {
+		t.Fatalf("after resolution: %s, pending %d and %d", st.Items[one.ID].State, OwnQuestion(st.tx(), one.ID), OwnQuestion(st.tx(), two.ID))
 	}
 }
 
@@ -162,7 +162,7 @@ func TestHeldFromIsTheNewestStateBeforeNeedsHuman(t *testing.T) {
 		{"not active", []Update{{Item: "t1", Snapshot: snap("todo")}, {Item: "t1", RequiresReply: true, Snapshot: snap("needs-human")}}, ""},
 	}
 	for _, tc := range cases {
-		if got := heldFrom(&State{Updates: tc.updates}, "t1"); got != tc.want {
+		if got := heldFrom(records{Updates: tc.updates}.load(t), "t1"); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
 		}
 	}

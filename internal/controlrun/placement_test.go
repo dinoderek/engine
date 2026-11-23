@@ -12,16 +12,15 @@ import (
 func TestEditedCardInvalidatesStalePlacement(t *testing.T) {
 	c, h, _, _, task := setup(t)
 	pass(t, c)
-	before, err := c.Service.Store.Snapshot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	execute(t, c.Service, control.Request{Op: "edit", ID: task.ID, Version: task.Version,
-		Item: control.Item{Title: task.Title, Body: task.Body, Requires: []string{"linux"}, Tier: "deep"}})
-	if err = c.dispatch(before, reconcile.Action{Item: task.ID, Host: "devbox", Harness: "claude"}, c.Config); err == nil {
-		t.Fatal("stale placement reserved an execution")
-	}
-	after, err := c.Service.Store.Snapshot()
+	// The pass decided on the records as they were before the edit.
+	inTx(t, c.Service.Store, func(tx *control.Tx) {
+		execute(t, c.Service, control.Request{Op: "edit", ID: task.ID, Version: task.Version,
+			Item: control.Item{Title: task.Title, Body: task.Body, Requires: []string{"linux"}, Tier: "deep"}})
+		if err := c.dispatch(tx, reconcile.Action{Item: task.ID, Host: "devbox", Harness: "claude"}, c.Config); err == nil {
+			t.Fatal("stale placement reserved an execution")
+		}
+	})
+	after, err := snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +28,7 @@ func TestEditedCardInvalidatesStalePlacement(t *testing.T) {
 		t.Fatal("stale placement launched work")
 	}
 	pass(t, c)
-	after, err = c.Service.Store.Snapshot()
+	after, err = snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +64,7 @@ func limitedAskedOn(t *testing.T, onPlan bool) (c *Coordinator, task control.Ite
 
 func TestATaskQuestionPreventsAutomaticResumeUntilResolved(t *testing.T) {
 	c, task, question, resumes := limitedAskedOn(t, false)
-	st, err := c.Service.Store.Snapshot()
+	st, err := snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +93,7 @@ func TestAPlanQuestionKeepsANewTaskOutOfPlacement(t *testing.T) {
 	c, h, _, plan, task := setup(t)
 	execute(t, c.Service, control.Request{Op: "ask", ID: plan.ID, Body: "Pause to decide scope"})
 	pass(t, c)
-	st, err := c.Service.Store.Snapshot()
+	st, err := snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}

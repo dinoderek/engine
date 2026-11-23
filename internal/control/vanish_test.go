@@ -14,6 +14,7 @@ type prior struct {
 	crashed, limited bool
 	early, unopened  bool
 	hostLost         bool
+	upgraded         bool
 }
 
 func TestTheVanishRule(t *testing.T) {
@@ -41,6 +42,7 @@ func TestTheVanishRule(t *testing.T) {
 		{name: "an early death ends the run", at: claimedAt, before: []prior{crash, {reason: EndEarlyDeath, early: true}, crash}, reason: EndVanished, state: "running", crashed: true},
 		{name: "limit, stopped and unopened attempts neither count nor reset", at: claimedAt,
 			before: []prior{crash, {reason: EndVanished, limited: true}, {reason: EndVanished}, {reason: EndVanished, unopened: true}, crash}, reason: EndFailed, state: "failed", crashed: true},
+		{name: "the operator's move neither counts nor resets", at: claimedAt, before: []prior{crash, {reason: EndMoved}, crash}, reason: EndFailed, state: "failed", crashed: true},
 		{name: "a death at a limit is uncounted", at: Attempt{Started: start, LiveAt: live, Limited: true}, before: []prior{crash, crash}, reason: EndVanished, state: "running"},
 		{name: "coordination stopped after it was last seen live", plan: Item{StoppedAt: live}, at: claimedAt, before: []prior{crash, crash}, reason: EndVanished, state: "running"},
 		{name: "stopped before it was ever seen live", plan: Item{StoppedAt: start.Add(time.Minute)}, at: Attempt{Started: start}, reason: EndVanished, state: "running"},
@@ -63,9 +65,10 @@ func TestTheVanishRule(t *testing.T) {
 				st.Updates = append(st.Updates, Update{ID: 1, Item: "t2", Kind: "ask", RequiresReply: true})
 			}
 			s := Service{Now: func() time.Time { return live.Add(time.Hour) }}
-			at := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
-			if at.Reason != c.reason || at.Crashed != c.crashed || at.Early && c.at.HostLost || st.Items["t2"].State != c.state {
-				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, st.Items["t2"].State, c.reason, c.crashed, c.state)
+			tx := st.load(t)
+			at := s.endDead(tx, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
+			if at.Reason != c.reason || at.Crashed != c.crashed || at.Early && c.at.HostLost || tx.item("t2").State != c.state {
+				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, tx.item("t2").State, c.reason, c.crashed, c.state)
 			}
 		})
 	}
@@ -73,10 +76,10 @@ func TestTheVanishRule(t *testing.T) {
 
 // vanishState holds plan p1 and its running task t2, whose current attempt
 // is a99, after the earlier attempts before, oldest first.
-func vanishState(task, plan Item, before []prior) State {
+func vanishState(task, plan Item, before []prior) records {
 	plan.ID, plan.Kind = "p1", "plan"
 	task.ID, task.Kind, task.Plan, task.State, task.Attempt = "t2", "task", "p1", "running", "a99"
-	st := emptyState()
+	st := newRecords()
 	st.Items[plan.ID], st.Items[task.ID] = plan, task
 	for i, p := range before {
 		id := fmt.Sprintf("a%d", i+1)
@@ -85,7 +88,7 @@ func vanishState(task, plan Item, before []prior) State {
 			window = ""
 		}
 		st.Attempts[id] = Attempt{ID: id, Item: "t2", State: "ended", Window: window, Reason: p.reason,
-			Crashed: p.crashed, Limited: p.limited, Early: p.early, HostLost: p.hostLost}
+			Crashed: p.crashed, Limited: p.limited, Early: p.early, HostLost: p.hostLost, Upgraded: p.upgraded}
 	}
 	st.Attempts["a50"] = Attempt{ID: "a50", Item: "t8", State: "ended", Window: "@1", Reason: EndFailed}
 	return st
@@ -182,14 +185,7 @@ func launched(t *testing.T, s Service, id string) {
 // seenLive records that a coordinator pass saw attempt id's window live.
 func seenLive(t *testing.T, s Service, id string) {
 	t.Helper()
-	if err := s.Store.Transaction(func(st *State) error {
-		at := st.Attempts[id]
-		at.LiveAt = s.now()
-		st.Attempts[id] = at
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	editAttempt(t, s.Store, id, func(at *Attempt) { at.LiveAt = s.now() })
 }
 
 // The operator's reconcile of a dispatch that never launched, which its host

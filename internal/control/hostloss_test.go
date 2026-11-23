@@ -30,8 +30,8 @@ func newLossFixture(t *testing.T) lossFixture {
 }
 
 // windows says which attempts still have a window.
-func windows(ids ...string) func(*State, Attempt) bool {
-	return func(_ *State, at Attempt) bool {
+func windows(ids ...string) func(*Tx, Attempt) bool {
+	return func(_ *Tx, at Attempt) bool {
 		for _, id := range ids {
 			if at.ID == id {
 				return true
@@ -41,7 +41,7 @@ func windows(ids ...string) func(*State, Attempt) bool {
 	}
 }
 
-func hostNotices(st State) []string {
+func hostNotices(st records) []string {
 	var out []string
 	for _, u := range st.Updates {
 		if u.Item == "" && u.Recipient == "operator" {
@@ -66,7 +66,7 @@ func TestSawTmuxMarksAHostWideLossOnceAndItsDeathsSkipTheCap(t *testing.T) {
 	if again, _ := s.SawTmux("devbox", TmuxRead{Known: true, Start: 2000}, windows()); again != 0 {
 		t.Fatalf("a second pass marked %d", again)
 	}
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if got := hostNotices(st); len(got) != 1 || got[0] != "devbox's tmux restarted; 2 tasks will resume" {
 		t.Fatalf("notices: %q", got)
 	}
@@ -81,14 +81,14 @@ func TestSawTmuxMarksAHostWideLossOnceAndItsDeathsSkipTheCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, _ = s.Store.Snapshot()
+	st, _ = s.Store.snapshot()
 	if claimedEnd.Reason != EndVanished || claimedEnd.Crashed || claimedEnd.Tail != "" || st.Items[f.t1.ID].State != "running" {
 		t.Errorf("claimed: %+v, task %s", claimedEnd, st.Items[f.t1.ID].State)
 	}
 	if unclaimedEnd.Reason != EndEarlyDeath || unclaimedEnd.Early || unclaimedEnd.Tail != "unclaimed tail" || st.Items[f.t2.ID].State != "todo" {
 		t.Errorf("unclaimed: %+v, task %s", unclaimedEnd, st.Items[f.t2.ID].State)
 	}
-	if !Vanished(&st, st.Items[f.t1.ID]) || !Vanished(&st, st.Items[f.t2.ID]) {
+	if !Vanished(st.tx(), st.Items[f.t1.ID]) || !Vanished(st.tx(), st.Items[f.t2.ID]) {
 		t.Error("a host-wide death did not leave its task to be dispatched again")
 	}
 }
@@ -101,16 +101,8 @@ func taskWrote(t *testing.T, s Service, attempt string, task Item) {
 // unsee forgets that a pass saw the attempts' windows live.
 func unsee(t *testing.T, s Service, ids ...string) {
 	t.Helper()
-	err := s.Store.Transaction(func(st *State) error {
-		for _, id := range ids {
-			at := st.Attempts[id]
-			at.LiveAt = time.Time{}
-			st.Attempts[id] = at
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	for _, id := range ids {
+		editAttempt(t, s.Store, id, func(at *Attempt) { at.LiveAt = time.Time{} })
 	}
 }
 
@@ -119,19 +111,19 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 		name  string
 		saved int64
 		read  TmuxRead
-		up    func(f lossFixture) func(*State, Attempt) bool
+		up    func(f lossFixture) func(*Tx, Attempt) bool
 		seen  bool
 	}{
 		{"every window gone but the start time unchanged: per-task deaths", 1000, TmuxRead{Known: true, Start: 1000},
-			func(lossFixture) func(*State, Attempt) bool { return windows() }, true},
+			func(lossFixture) func(*Tx, Attempt) bool { return windows() }, true},
 		{"a new start time with one window still up", 1000, TmuxRead{Known: true, Start: 2000},
-			func(f lossFixture) func(*State, Attempt) bool { return windows(f.a1) }, true},
+			func(f lossFixture) func(*Tx, Attempt) bool { return windows(f.a1) }, true},
 		{"no start time was saved to compare", 0, TmuxRead{Known: true, Start: 2000},
-			func(lossFixture) func(*State, Attempt) bool { return windows() }, true},
+			func(lossFixture) func(*Tx, Attempt) bool { return windows() }, true},
 		{"no tmux server and no attempt last seen live: tmux exits after its last window", 1000, TmuxRead{},
-			func(lossFixture) func(*State, Attempt) bool { return windows() }, false},
+			func(lossFixture) func(*Tx, Attempt) bool { return windows() }, false},
 		{"no tmux server but a window is up", 1000, TmuxRead{},
-			func(f lossFixture) func(*State, Attempt) bool { return windows(f.a2) }, true},
+			func(f lossFixture) func(*Tx, Attempt) bool { return windows(f.a2) }, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -145,7 +137,7 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 				}
 			}
 			n, err := f.s.SawTmux("devbox", c.read, c.up(f))
-			st, _ := f.s.Store.Snapshot()
+			st, _ := f.s.Store.snapshot()
 			if err != nil || n != 0 || len(hostNotices(st)) != 0 || st.Attempts[f.a1].HostLost || st.Attempts[f.a2].HostLost {
 				t.Fatalf("a loss: %d %v, notices %q, %+v", n, err, hostNotices(st), st.Attempts)
 			}
@@ -158,17 +150,9 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 
 func TestSawTmuxLeavesADispatchInFlightAlone(t *testing.T) {
 	f := newLossFixture(t)
-	err := f.s.Store.Transaction(func(st *State) error {
-		at := st.Attempts[f.a2]
-		at.State = "dispatching"
-		st.Attempts[at.ID] = at
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	editAttempt(t, f.s.Store, f.a2, func(at *Attempt) { at.State = "dispatching" })
 	n, err := f.s.SawTmux("devbox", TmuxRead{}, windows())
-	st, _ := f.s.Store.Snapshot()
+	st, _ := f.s.Store.snapshot()
 	if err != nil || n != 1 || st.Attempts[f.a2].HostLost || !st.Attempts[f.a1].HostLost {
 		t.Fatalf("%d %v %+v", n, err, st.Attempts)
 	}
@@ -177,7 +161,7 @@ func TestSawTmuxLeavesADispatchInFlightAlone(t *testing.T) {
 func TestSawTmuxLeavesAnotherHostsAttemptsAlone(t *testing.T) {
 	f := newLossFixture(t)
 	n, err := f.s.SawTmux("elsewhere", TmuxRead{}, windows())
-	st, _ := f.s.Store.Snapshot()
+	st, _ := f.s.Store.snapshot()
 	if err != nil || n != 0 || st.Attempts[f.a1].HostLost || len(st.Hosts) != 0 {
 		t.Fatalf("%d %v %+v", n, err, st.Hosts)
 	}
@@ -188,7 +172,7 @@ func TestSawTmuxWithNoServerEndsEveryAttemptLastSeenLive(t *testing.T) {
 	if n, err := f.s.SawTmux("devbox", TmuxRead{}, windows()); err != nil || n != 2 {
 		t.Fatalf("%d, %v", n, err)
 	}
-	st, _ := f.s.Store.Snapshot()
+	st, _ := f.s.Store.snapshot()
 	if got := hostNotices(st); len(got) != 1 || !strings.Contains(got[0], "2 tasks will resume") {
 		t.Fatalf("notices: %q", got)
 	}
@@ -203,12 +187,12 @@ func TestTheSavedTmuxStartTimeSurvivesAStoreReopen(t *testing.T) {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(path, nil)
+	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = reopened.Close() }()
-	st, err := reopened.Snapshot()
+	st, err := reopened.snapshot()
 	if err != nil || st.Hosts["devbox"].TmuxStart != 1234 {
 		t.Fatalf("%+v %v", st.Hosts, err)
 	}

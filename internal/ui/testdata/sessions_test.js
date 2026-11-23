@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const vm = require("node:vm");
 const fs = require("node:fs");
-const { boot } = require("./dom_shim.js");
+const { boot, withOverview } = require("./dom_shim.js");
 
 const STATIC = path.join(__dirname, "..", "static");
 const AT = "2026-11-07T09:00:00Z";
@@ -64,7 +64,7 @@ async function page(hash, fx, body) {
     }
     return reply(404, { error: "not found" });
   };
-  const p = boot(STATIC, hash, fetchImpl);
+  const p = boot(STATIC, hash, withOverview(fetchImpl));
   const $ = (id) => p.doc.getElementById(id);
   const t = {
     p, $, fx,

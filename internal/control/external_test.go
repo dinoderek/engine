@@ -3,6 +3,7 @@ package control
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -25,7 +26,7 @@ func TestExternalCompletionPreservesGraphAndUnblocksDependent(t *testing.T) {
 		t.Fatal("completion rewrote dependency or approval")
 	}
 	last := st.Updates[len(st.Updates)-1]
-	if last.Author != "operator" || last.Kind != "complete-external" || last.Snapshot == nil || last.Snapshot.PR != done.PR {
+	if last.Author != "operator" || last.Kind != "complete-external" || last.Snapshot == nil || last.Snapshot.State != "done" || !strings.Contains(last.Body, done.PR) {
 		t.Fatalf("missing completion evidence: %+v", last)
 	}
 	req.Item.PR = externalPR("other/repo")
@@ -59,17 +60,14 @@ func TestExternalCompletionValidationIsAtomic(t *testing.T) {
 			s := service(t)
 			repo, plan := repoPlan(t, s)
 			task := newTask(t, s, repo.ID, plan.ID)
-			if err := s.Store.Transaction(func(st *State) error {
+			edit(t, s.Store, func(tx *Tx) {
 				task.State = tt.state
 				if tt.attemptState != "" {
 					task.Attempt = "a99"
-					st.Attempts[task.Attempt] = Attempt{ID: task.Attempt, Item: task.ID, State: tt.attemptState}
+					tx.PutAttempt(Attempt{ID: task.Attempt, Item: task.ID, State: tt.attemptState})
 				}
-				st.Items[task.ID] = task
-				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
+				tx.PutItem(task)
+			})
 			before := mustSnapshot(t, s)
 			pr := tt.pr
 			if pr == "valid" {
@@ -85,19 +83,16 @@ func TestExternalCompletionValidationIsAtomic(t *testing.T) {
 }
 
 func TestExternalCompletionInactiveStatesAndQuestions(t *testing.T) {
-	for _, state := range []string{"todo", "failed"} {
-		t.Run(state, func(t *testing.T) {
+	for _, want := range []string{"todo", "failed"} {
+		t.Run(want, func(t *testing.T) {
 			s := service(t)
 			repo, plan := repoPlan(t, s)
 			task := newTask(t, s, repo.ID, plan.ID)
-			if err := s.Store.Transaction(func(st *State) error {
-				task.State, task.Attempt = state, "a99"
-				st.Attempts[task.Attempt] = Attempt{ID: task.Attempt, Item: task.ID, State: "ended"}
-				st.Items[task.ID] = task
-				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
+			edit(t, s.Store, func(tx *Tx) {
+				task.State, task.Attempt = want, "a99"
+				tx.PutAttempt(Attempt{ID: task.Attempt, Item: task.ID, State: "ended"})
+				tx.PutItem(task)
+			})
 			done := call(t, s, op, Request{Op: "complete-external", ID: task.ID, Version: task.Version, Item: Item{PR: externalPR(repo.Slug)}}).Item
 			if done.State != "done" || done.Attempt != task.Attempt {
 				t.Fatal("completion lost attempt history or did not finish the task")
@@ -108,14 +103,7 @@ func TestExternalCompletionInactiveStatesAndQuestions(t *testing.T) {
 		s := service(t)
 		repo, plan := repoPlan(t, s)
 		task := newTask(t, s, repo.ID, plan.ID)
-		if err := s.Store.Transaction(func(st *State) error {
-			item := st.Items[task.ID]
-			item.State = "running"
-			st.Items[item.ID] = item
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
+		editItem(t, s.Store, task.ID, func(item *Item) { item.State = "running" })
 		call(t, s, op, Request{Op: "ask", ID: task.ID, Body: "Need a decision"})
 		task.Version++
 		task = *call(t, s, op, Request{Op: "state", ID: task.ID, Version: task.Version, State: "failed"}).Item

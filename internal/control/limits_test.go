@@ -25,7 +25,7 @@ func TestAWindowDeadAtALimitEndsVanishedEveryTime(t *testing.T) {
 		if at.Reason != EndVanished || !at.Limited || at.ResetsAt != 5000 || at.Early || current.State == "failed" {
 			t.Fatalf("death %d at a limit: %+v, task %s", i+1, at, current.State)
 		}
-		if snap := st0(t, s); !Vanished(&snap, *current) {
+		if snap := st0(t, s); !Vanished(snap.tx(), *current) {
 			t.Fatalf("death %d: the task is not dispatched again", i+1)
 		}
 	}
@@ -36,9 +36,9 @@ func TestAWindowDeadAtALimitEndsVanishedEveryTime(t *testing.T) {
 	}
 }
 
-func st0(t *testing.T, s Service) State {
+func st0(t *testing.T, s Service) records {
 	t.Helper()
-	st, err := s.Store.Snapshot()
+	st, err := s.Store.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestHarnessLimits(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			st := emptyState()
+			st := newRecords()
 			for _, a := range c.attempts {
 				st.Attempts[a.ID] = a
 				st.Items[a.Item] = Item{ID: a.Item, Kind: "task"}
@@ -96,7 +96,8 @@ func TestHarnessLimits(t *testing.T) {
 				st.Updates = append(st.Updates, Update{ID: 1, Author: c.wrote})
 			}
 			var got []string
-			for _, l := range HarnessLimits(&st) {
+			tx := st.load(t)
+			for _, l := range HarnessLimits(tx) {
 				probe := time.Duration(0)
 				if !l.Probe.IsZero() {
 					probe = l.Probe.Sub(t0)

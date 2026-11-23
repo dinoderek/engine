@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -24,9 +23,19 @@ type recorder struct {
 	mu    sync.Mutex
 	calls []control.Request
 	reply func(control.Request) (control.Response, error)
+	// aggregates makes it a server that has the aggregate reads.
+	aggregates bool
 }
 
+// aggregateOp is an operation a control server older than the aggregate reads
+// refuses. The fakes that stand for one answer it so and keep it out of
+// what they record: the tests count the reads the dashboard needs.
+func aggregateOp(op string) bool { return op == "overview" || op == "plan-detail" }
+
 func (c *recorder) Call(_ context.Context, r control.Request) (control.Response, error) {
+	if aggregateOp(r.Op) && !c.aggregates {
+		return control.Response{}, &control.Problem{Status: 400, Message: "unknown operation " + strconv.Quote(r.Op)}
+	}
 	c.mu.Lock()
 	c.calls = append(c.calls, r)
 	c.mu.Unlock()
@@ -367,10 +376,7 @@ func TestMainParsesHost(t *testing.T) {
 // service: the question is still readable, so the request is the same and the
 // server replays the first result; a new key for it gets the server's refusal.
 func TestAResentResolveReplaysAgainstTheRealServer(t *testing.T) {
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 is absent")
-	}
-	store, err := control.Open(filepath.Join(t.TempDir(), "control.db"), nil)
+	store, err := control.Open(filepath.Join(t.TempDir(), "control.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

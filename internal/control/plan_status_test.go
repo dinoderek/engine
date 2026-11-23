@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -80,7 +79,7 @@ func TestReadsCarryPlanStatusThatIsNeverStored(t *testing.T) {
 	if got := call(t, s, op, Request{Op: "get", ID: task.ID}).Item.Status; got != "" {
 		t.Fatalf("a task carries a status: %q", got)
 	}
-	out, err := s.Store.sql("SELECT data FROM records WHERE key LIKE 'item/%';")
+	out, err := s.Store.sql("SELECT data FROM items;")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,9 +89,6 @@ func TestReadsCarryPlanStatusThatIsNeverStored(t *testing.T) {
 }
 
 func TestStoreMigratesRemovedPlanStates(t *testing.T) {
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 is absent")
-	}
 	path := filepath.Join(t.TempDir(), "control.db")
 	records := map[string]Item{
 		"item/r1": {ID: "r1", Kind: "repo", Version: 1, Title: "Demo", Slug: "o/d", Remote: "x", State: "active"},
@@ -109,16 +105,16 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 		sql.WriteString("INSERT INTO records VALUES ('" + key + "', '" + string(b) + "');\n")
 	}
 	sql.WriteString("PRAGMA user_version=1;\n")
-	if _, err := SQLite(context.Background(), path, sql.String()); err != nil {
+	if _, err := fixtureSQL(context.Background(), path, sql.String()); err != nil {
 		t.Fatal(err)
 	}
-	before := rawRecords(t, path)
+	before := rawRecords(t, path, "SELECT key, data FROM records;")
 	for range 2 { // the second open is a no-op
-		store, err := Open(path, nil)
+		store, err := Open(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		st, err := store.Snapshot()
+		st, err := store.snapshot()
 		_ = store.Close()
 		if err != nil {
 			t.Fatal(err)
@@ -132,22 +128,22 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 				t.Fatalf("%s migrated to %+v", key, got)
 			}
 		}
-		after := rawRecords(t, path)
+		after := rawRecords(t, path, "SELECT 'item/' || id AS key, data FROM items;")
 		for _, key := range []string{"item/r1", "item/p5", "item/t6"} {
 			if after[key] != before[key] {
 				t.Fatalf("%s changed: %s, was %s", key, after[key], before[key])
 			}
 		}
 	}
-	out, err := SQLite(context.Background(), path, "PRAGMA user_version;")
+	out, err := fixtureSQL(context.Background(), path, "PRAGMA user_version;")
 	if err != nil || !strings.Contains(string(out), fmt.Sprintf(`"user_version":%d`, schemaVersion)) {
 		t.Fatalf("schema version: %s %v", out, err)
 	}
 }
 
-func rawRecords(t *testing.T, path string) map[string]string {
+func rawRecords(t *testing.T, path, query string) map[string]string {
 	t.Helper()
-	out, err := SQLite(context.Background(), path, "SELECT key, data FROM records;")
+	out, err := fixtureSQL(context.Background(), path, query)
 	if err != nil {
 		t.Fatal(err)
 	}

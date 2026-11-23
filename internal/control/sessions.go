@@ -60,29 +60,64 @@ var humanKinds = []string{"say", "ask", "reply", "resolved", KindPaneAnswer, Kin
 // sessionView projects every current, unended attempt, and every vanished
 // or early-death one awaiting its dispatch, from one snapshot. Host observations come only
 // from the cache, so a request never probes a host.
-func (s Service) sessionView(st *State, a Actor) (Response, error) {
+func (s Service) sessionView(tx *Tx, a Actor) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
 	}
-	out := Response{}
-	for _, at := range st.Attempts {
-		item, ok := st.Items[at.Item]
-		if !ok || item.Attempt != at.ID || at.State == "ended" && !Vanished(st, item) {
-			continue
+	return Response{Sessions: s.sessionRows(tx, tx.SessionAttempts())}, nil
+}
+
+// sessionFacts are what the rows of a session list read beyond their items
+// and attempts, each fetched once for the whole list.
+type sessionFacts struct {
+	repos map[string]Item
+	// asked is the open question that holds each item, and latest the
+	// newest message about it.
+	asked, latest map[string]Update
+}
+
+// sessionRows are the session rows of the given current attempts, by item
+// number: an ended attempt is listed only while its item has vanished.
+func (s Service) sessionRows(tx *Tx, attempts []Attempt) []SessionRow {
+	ids := make([]string, len(attempts))
+	for i, at := range attempts {
+		ids[i] = at.Item
+	}
+	items := tx.ItemsByID(ids)
+	var listed []Attempt
+	var repos, shown []string
+	for _, at := range attempts {
+		if item := items[at.Item]; at.State != "ended" || Vanished(tx, item) {
+			listed = append(listed, at)
+			shown = append(shown, at.Item)
+			repos = append(repos, item.Repo)
 		}
-		row := s.sessionRow(st, item, at)
+	}
+	facts := sessionFacts{repos: tx.ItemsByID(repos), latest: tx.LatestMessages(shown, humanKinds), asked: map[string]Update{}}
+	questions := tx.OwnQuestions(shown)
+	byID := make([]int, 0, len(questions))
+	for _, q := range questions {
+		byID = append(byID, q)
+	}
+	updates := tx.UpdatesByID(byID)
+	for id, q := range questions {
+		facts.asked[id] = updates[q]
+	}
+	var rows []SessionRow
+	for _, at := range listed {
+		row := s.sessionRow(items[at.Item], at, facts)
 		if at.State == "ended" {
 			row.Observed = "exited"
 		}
-		out.Sessions = append(out.Sessions, row)
+		rows = append(rows, row)
 	}
-	slices.SortFunc(out.Sessions, func(x, y SessionRow) int { return Number(x.Item) - Number(y.Item) })
-	return out, nil
+	slices.SortFunc(rows, func(x, y SessionRow) int { return Number(x.Item) - Number(y.Item) })
+	return rows
 }
 
-func (s Service) sessionRow(st *State, item Item, at Attempt) SessionRow {
+func (s Service) sessionRow(item Item, at Attempt, facts sessionFacts) SessionRow {
 	row := SessionRow{Item: item.ID, Kind: item.Kind, Role: "executor", Title: item.Title, Repo: item.Repo,
-		RepoSlug: st.Items[item.Repo].Slug, Plan: item.Plan, State: item.State, Attempt: at.ID, Host: at.Host,
+		RepoSlug: facts.repos[item.Repo].Slug, Plan: item.Plan, State: item.State, Attempt: at.ID, Host: at.Host,
 		Harness: at.Harness, Started: at.Started, Observed: "unknown"}
 	if item.Kind == "plan" {
 		row.Role, row.Plan = "planner", item.ID
@@ -94,15 +129,11 @@ func (s Service) sessionRow(st *State, item Item, at Attempt) SessionRow {
 			row.Observed = obs.State
 		}
 	}
-	if id := OwnQuestion(st, item.ID); id > 0 {
-		row.Feedback = updateRef(st.Updates[id-1])
+	if q, ok := facts.asked[item.ID]; ok {
+		row.Feedback = updateRef(q)
 	}
-	for i := len(st.Updates) - 1; i >= 0; i-- {
-		u := st.Updates[i]
-		if u.Item == item.ID && u.Author != "coordinator" && slices.Contains(humanKinds, u.Kind) && strings.TrimSpace(u.Body) != "" {
-			row.Latest = updateRef(u)
-			break
-		}
+	if u, ok := facts.latest[item.ID]; ok {
+		row.Latest = updateRef(u)
 	}
 	return row
 }

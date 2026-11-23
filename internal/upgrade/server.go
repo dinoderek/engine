@@ -75,13 +75,13 @@ func (f *fleet) start(out io.Writer) bool {
 	return true
 }
 
-// answers waits, a pause between tries, until the server lists its tasks.
+// answers waits, a pause between tries, until the server answers.
 func (f *fleet) answers() bool {
 	for i := range answerTries {
 		if i > 0 {
 			f.d.Sleep(answerPause)
 		}
-		if _, err := f.d.Tasks(); err == nil {
+		if err := f.d.Answers(); err == nil {
 			return true
 		}
 	}

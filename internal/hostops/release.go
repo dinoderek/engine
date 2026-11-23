@@ -2,6 +2,7 @@ package hostops
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"strings"
@@ -24,6 +25,10 @@ const (
 	// RunStopped is a run the operator stopped: its task is held, and the
 	// worktree stays for the resume.
 	RunStopped Outcome = "stopped"
+	// RunMoved is a run the operator moved to another host or harness: its
+	// branch is pushed to origin before the window closes, and the worktree
+	// and branch stay for a resume on this host.
+	RunMoved Outcome = "moved"
 	// RunDone is a done task's run: the repo's own `worktree release` runs
 	// first.
 	RunDone Outcome = "done"
@@ -40,6 +45,11 @@ type Released struct {
 	WorktreeKept bool   `json:"worktree_kept"`
 	// BranchDeleted is true when a done task's local branch was deleted.
 	BranchDeleted bool `json:"branch_deleted,omitempty"`
+	// Pushed is true when a moved run's branch was pushed to origin;
+	// Unpushed says what a moved run left that origin lacks: commits a push
+	// failed to send, or uncommitted changes in the worktree.
+	Pushed   bool   `json:"pushed,omitempty"`
+	Unpushed string `json:"unpushed,omitempty"`
 	// Note says what went wrong without failing the release: the repo's
 	// `worktree release` failing or timing out, why a worktree was kept when
 	// the run had not failed, why a done task's branch was kept or not
@@ -51,7 +61,8 @@ type Released struct {
 // Release closes the session's window if it is still open, deletes what each
 // harness adapter wrote for this session alone, and removes the worktree of
 // its newest run, unless the run failed, when it is kept for the operator, or
-// was stopped, when it is kept for the resume. For a done task's run, the
+// was stopped or moved, when it is kept for the resume. A moved run's branch
+// is pushed to origin first, while the window is still open. For a done task's run, the
 // repo's own `dev worktree release <branch>` runs first, from engine's clone,
 // when the repo provides it, best effort under TeardownLimit. Engine's
 // removal is git's plain `worktree remove` of a worktree still on disk, which
@@ -68,18 +79,15 @@ func Release(d Deps, name string, outcome Outcome, mergedHead string) (Released,
 		return Released{}, err
 	}
 	r := Released{Name: name}
-	windows, err := d.Tmux.Windows()
-	if err != nil {
-		return Released{}, err
+	var moved moving
+	if outcome == RunMoved {
+		moved = pushMoved(d, name)
 	}
-	for _, w := range windows {
-		if w.Name != name {
-			continue
-		}
-		if err := d.Tmux.Kill(w.ID); err != nil {
-			return r, err
-		}
-		r.WindowClosed = true
+	if err := r.closeWindows(d, name); err != nil {
+		return r, err
+	}
+	if outcome == RunMoved {
+		r.left(d, moved)
 	}
 	run, ok, err := session.LatestRun(d.Home, name)
 	// Every adapter releases the session, whatever the run's harness: a
@@ -108,6 +116,32 @@ func Release(d Deps, name string, outcome Outcome, mergedHead string) (Released,
 	return r, nil
 }
 
+// commits says n commits.
+func commits(n string) string {
+	if n == "1" {
+		return "1 commit"
+	}
+	return n + " commits"
+}
+
+// closeWindows closes every window called name.
+func (r *Released) closeWindows(d Deps, name string) error {
+	windows, err := d.Tmux.Windows()
+	if err != nil {
+		return err
+	}
+	for _, w := range windows {
+		if w.Name != name {
+			continue
+		}
+		if err := d.Tmux.Kill(w.ID); err != nil {
+			return err
+		}
+		r.WindowClosed = true
+	}
+	return nil
+}
+
 // releaseWorktree removes rec's worktree unless it is gone already or the
 // run failed or was stopped, and records what it found in r.
 func (r *Released) releaseWorktree(d Deps, rec session.Record, outcome Outcome) {
@@ -115,7 +149,7 @@ func (r *Released) releaseWorktree(d Deps, rec session.Record, outcome Outcome) 
 		return
 	}
 	r.Worktree, r.WorktreeKept = rec.Worktree, true
-	if outcome == RunFailed || outcome == RunStopped {
+	if outcome == RunFailed || outcome == RunStopped || outcome == RunMoved {
 		return
 	}
 	if err := removeWorktree(d, rec); err != nil {
@@ -123,6 +157,66 @@ func (r *Released) releaseWorktree(d Deps, rec session.Record, outcome Outcome) 
 		return
 	}
 	r.WorktreeKept = false
+}
+
+// moving is a moved run's branch, as release pushed it.
+type moving struct {
+	rec  session.Record
+	ok   bool
+	push error
+}
+
+// pushMoved pushes the branch of the session's newest run to origin, without
+// force, so a resume elsewhere starts from its commits.
+func pushMoved(d Deps, name string) moving {
+	run, ok, _ := session.LatestRun(d.Home, name)
+	m := moving{rec: run.Record, ok: ok && run.Record.Branch != ""}
+	if !m.ok {
+		return m
+	}
+	clone, err := cloneOf(d, m.rec)
+	if err == nil {
+		ref := "refs/heads/" + m.rec.Branch
+		_, err = d.Run(clone, []string{"GIT_TERMINAL_PROMPT=0"}, "git", "push", "--quiet", "origin", ref+":"+ref)
+	}
+	m.push = err
+	return m
+}
+
+// left records in r, once the window is closed, what origin lacks of the
+// moved run: commits on its branch that no origin branch has, after a fetch,
+// whether the push failed or they came after it, and uncommitted changes. A
+// push origin refused because it is ahead leaves nothing to report.
+func (r *Released) left(d Deps, m moving) {
+	if !m.ok {
+		r.Unpushed = "everything on the branch, as no run of " + r.Name + " records it, so nothing was pushed"
+		return
+	}
+	r.Pushed = m.push == nil
+	var out []string
+	clone, err := cloneOf(d, m.rec)
+	if err == nil {
+		_, err = d.Run(clone, []string{"GIT_TERMINAL_PROMPT=0"}, "git", "fetch", "--quiet", "origin")
+	}
+	var count string
+	if err == nil {
+		count, err = d.Run(clone, nil, "git", "rev-list", "--count", "refs/heads/"+m.rec.Branch, "--not", "--remotes=origin")
+	}
+	switch n := strings.TrimSpace(count); {
+	case err != nil:
+		out = append(out, fmt.Sprintf("whatever %s holds that it lacks, which could not be checked: %v", m.rec.Branch, errors.Join(m.push, err)))
+	case n != "0" && m.push != nil:
+		out = append(out, fmt.Sprintf("%s on %s, as the push failed: %v", commits(n), m.rec.Branch, m.push))
+	case n != "0":
+		out = append(out, fmt.Sprintf("%s made on %s after the push", commits(n), m.rec.Branch))
+	}
+	if _, err := os.Stat(m.rec.Worktree); m.rec.Worktree != "" && err == nil {
+		status, err := d.Run(m.rec.Worktree, nil, "git", "status", "--porcelain")
+		if err != nil || strings.TrimSpace(status) != "" {
+			out = append(out, "uncommitted changes in "+m.rec.Worktree)
+		}
+	}
+	r.Unpushed = strings.Join(out, "; ")
 }
 
 // note adds err, if any, to the reply's note.

@@ -127,9 +127,6 @@ func newControlStack(t *testing.T, hostNames ...string) *controlStack {
 // newControlStackAt is a control stack on the database at db.
 func newControlStackAt(t *testing.T, db string, hostNames ...string) *controlStack {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 is absent")
-	}
 	s := &controlStack{t: t, db: db, token: control.Secret(),
 		addr: "127.0.0.1:0", clock: &stackClock{at: time.Now().UTC().Truncate(time.Second)}, hosts: map[string]*fakeHost{}}
 	for _, name := range hostNames {
@@ -148,7 +145,7 @@ func newControlStackAt(t *testing.T, db string, hostNames ...string) *controlSta
 // wires it, except that host reads reach the fake hosts.
 func (s *controlStack) start() {
 	s.t.Helper()
-	store, err := control.Open(s.db, nil)
+	store, err := control.Open(s.db)
 	if err != nil {
 		s.t.Fatal(err)
 	}

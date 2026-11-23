@@ -31,7 +31,7 @@ For Telegram alerts and pairing, load `telegram.md`.
 ## Each host
 
 **The Mac, by hand.** Install `go`, `tmux`, `gh`, `git` and `claude` (and
-`sqlite3` on a Codex host, to read the daemon's connection), and put
+`sqlite3` only for Codex hosts), and put
 `~/.local/bin` on `PATH`. Write `~/.config/engine/host` (the host's logical
 name: `hosts-and-sessions.md`, "Hosts") and `~/.config/engine/hosts.toml` (the same on every host). Install engine
 with `GOBIN=~/.local/bin go install ./cmd/engine` from a checkout, and the
@@ -113,29 +113,30 @@ then run `engine setup --host devbox`.
    `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
    prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
    "Names and addresses"), which goes in `hosts.toml` on the Mac.
-4. **Install the tools** `go`, `tmux`, `gh` and `git` on the devbox, plus
+4. **Install the tools** `go`, `tmux`, `gh`, `git` and `lsof` on the devbox, plus
    `claude` if it runs Claude and `sqlite3` if it runs Codex. `engine setup`
-   lists what is missing, and prints the `PATH` line and the `sudo systemctl
-   mask` line that stops the devbox suspending. Sign in once over SSH:
+   does not check `lsof` or `sqlite3`, and prints the `PATH` line and the `sudo systemctl
+   mask` line that stops suspending. Sign in once over SSH:
    `ssh -t <address> claude /login`.
 
 ## Upgrading
 
 `engine upgrade`, from any host in `hosts.toml`, brings every host to the
-head of `main`. It stops the server's unit and backs up the database with
-the old binary, installs the new engine and your plugins on this host, sets
-up the server's host and starts the server, then sets up every other host.
-The server starts again even when a step fails. `--dry-run` prints the steps
-and changes nothing.
+head of `main`, mid-plan too. It stops the server's unit and backs up the
+database with the old binary, installs the new engine and your plugins on
+this host, sets up the server's host and starts the server, then sets up
+every other host. The server starts again even when a step fails.
+`--dry-run` prints the steps and changes nothing.
 
-It refuses, changing nothing, while a task is `running`, `in-review` or
-`needs-human`, or when the server's host records no `services` table, does
-not answer, or its unit is not active. A host that is unreachable or stays open stops no others: run the commands the report lists, then rerun
-it. Restart `engine ui` yourself. A Mac server host has no unit, so upgrade
-it by hand, in the same order: stop and back up the server
-(`control-server.md`, "Start"), install the engine and your plugins, run
-`engine setup` here and `engine setup --host <name>` for each other host,
-then start the server.
+Busy tasks carry on; a session that dies meanwhile is an engine bug
+(`session-signals.md`, "Upgrade"; old plugin versions: `harnesses.md`).
+
+It refuses, changing nothing, when the server's host records no `services`
+table, does not answer, or its unit is not active. A host that is
+unreachable or stays open stops no others: run the commands the report
+lists, then rerun it. Restart `engine ui` yourself. A Mac server host has no unit: upgrade
+it by hand, in the order above (to back up, `control-server.md`, "Start"),
+with `engine setup` and `engine setup --host <name>` for the setups.
 
 **The server's unit.** Write it once, by hand, on the server's host, as
 `~/.config/systemd/user/engine-server.service`. It runs `~/.local/bin/engine`,
@@ -189,7 +190,7 @@ when you like:
   installs on the Mac, says so on Telegram (load `telegram.md`). From any
   host, `engine server status` shows its unit, API, database, disk and last 50
   log lines, and `engine server restart` restarts its unit; both take
-  `--json`.
+  `--json`. The database check is unknown without `sqlite3` on the server.
 
 A task with many `review` rulings had a weak card (`execution-protocol.md`,
 "Rulings and hard stops"): raise it at the next Prepare.

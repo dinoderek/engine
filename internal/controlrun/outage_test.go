@@ -51,7 +51,7 @@ func (r *outageRig) after(t *testing.T, d time.Duration) {
 
 func (r *outageRig) attempt(t *testing.T) control.Attempt {
 	t.Helper()
-	st, err := r.c.Service.Store.Snapshot()
+	st, err := snapshotOf(r.c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,13 +147,13 @@ func TestAnOutageDoesNotWakeSessionsOutsideRunningOrAtADialog(t *testing.T) {
 	}{
 		{"in review", func(t *testing.T, r *outageRig) {
 			claim(t, r.c, r.task)
-			st, _ := r.c.Service.Store.Snapshot()
+			st, _ := snapshotOf(r.c.Service.Store)
 			item := st.Items[r.task.ID]
 			execute2(t, r.c, item.Attempt, control.Request{Op: "state", ID: item.ID, Version: item.Version, State: "in-review"})
 		}},
 		{"needs-human", func(t *testing.T, r *outageRig) {
 			claim(t, r.c, r.task)
-			st, _ := r.c.Service.Store.Snapshot()
+			st, _ := snapshotOf(r.c.Service.Store)
 			item := st.Items[r.task.ID]
 			execute2(t, r.c, item.Attempt, control.Request{Op: "ask", ID: item.ID, Body: "Which one?"})
 		}},

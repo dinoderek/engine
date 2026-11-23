@@ -24,7 +24,7 @@ func TestTheClaimWaitActsOnlyOnARetriedTaskWithALiveWindow(t *testing.T) {
 		t.Fatalf("a dispatched task waited for its claim: %d notices, %d launches", n, h.calls)
 	}
 	for _, state := range []string{"failed", "todo"} {
-		st, _ := c.Service.Store.Snapshot()
+		st, _ := snapshotOf(c.Service.Store)
 		execute(t, c.Service, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: state})
 	}
 	pass(t, c)
@@ -39,7 +39,7 @@ func TestTheClaimWaitActsOnlyOnARetriedTaskWithALiveWindow(t *testing.T) {
 
 func claimNotices(t *testing.T, c *Coordinator, id string) int {
 	t.Helper()
-	st, err := c.Service.Store.Snapshot()
+	st, err := snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}

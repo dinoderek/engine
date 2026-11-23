@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-func (s Service) completeExternal(st *State, a Actor, r Request) (Response, error) {
+func (s Service) completeExternal(tx *Tx, a Actor, r Request) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
 	}
-	item, ok := st.Items[r.ID]
+	item, ok := tx.Item(r.ID)
 	if !ok {
 		return Response{}, problem(404, "unknown task")
 	}
@@ -22,19 +22,19 @@ func (s Service) completeExternal(st *State, a Actor, r Request) (Response, erro
 	if item.Version != r.Version {
 		return Response{}, problem(409, "version is %d", item.Version)
 	}
-	if active(st, item) || !slices.Contains([]string{"todo", "failed"}, item.State) {
+	if active(tx, item) || !slices.Contains([]string{"todo", "failed"}, item.State) {
 		return Response{}, problem(409, "external completion requires an inactive, unfinished task without a hard stop")
 	}
-	if OwnQuestion(st, item.ID) > 0 {
+	if OwnQuestion(tx, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
-	if !completionPR(r.Item.PR, st.Items[item.Repo].Slug) {
+	if !completionPR(r.Item.PR, tx.item(item.Repo).Slug) {
 		return Response{}, problem(400, "a GitHub PR URL for this repository is required")
 	}
 	item.State, item.PR = "done", r.Item.PR
 	item.Version++
-	st.Items[item.ID] = item
-	st.update(a, r, "complete-external", fmt.Sprintf("done: %s (version %d)", item.PR, item.Version), s.now())
+	tx.PutItem(item)
+	tx.AppendUpdate(a, r, "complete-external", fmt.Sprintf("done: %s (version %d)", item.PR, item.Version), s.now())
 	return Response{Item: &item}, nil
 }
 

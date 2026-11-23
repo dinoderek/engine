@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"regexp"
 	"slices"
 	"strings"
@@ -161,22 +162,42 @@ func TestUpgradeStopsBacksUpAndStartsTheServer(t *testing.T) {
 	}
 }
 
-// A task that is running, in review or waiting on the operator, a server
-// host with no services table, and a server host that cannot be reached
-// each refuse, name the cause, and change nothing.
-func TestUpgradeRefusesBeforeChangingAnything(t *testing.T) {
-	busy := newUpgradeFleet(t, "mac", "box", "lab")
-	busy.withServer()
-	sd, plan := busy.seed()
-	var held []string
+// Tasks running, in review and waiting on the operator refuse nothing: the
+// upgrade runs through, leaves each task as it was, and marks its start and
+// end on the server.
+func TestUpgradeRunsWithTasksBusy(t *testing.T) {
+	f := newUpgradeFleet(t, "mac", "box", "lab")
+	f.withServer()
+	sd, plan := f.seed()
+	want := map[string]string{}
 	for _, state := range []string{"running", "in-review", "needs-human"} {
 		task := sd.task(plan, state, "## Outcome\n\nWorks.\n")
 		sd.run(task, "lab", "@1")
 		if state != "running" {
 			sd.state(sd.workers[task.ID], task.ID, state)
 		}
-		held = append(held, task.ID+" ("+state+")")
+		want[task.ID] = state
 	}
+	env, out, errOut := f.env("mac")
+	if code := Run([]string{"upgrade"}, env); code != 0 {
+		t.Fatalf("exit %d; err %s\n%s", code, errOut, out)
+	}
+	wantIn(t, out.String(), "every host is upgraded")
+	for _, task := range f.tasks() {
+		if state, ok := want[task.ID]; ok && task.State != state {
+			t.Errorf("%s is %s after the upgrade; want %s", task.ID, task.State, state)
+		}
+	}
+	var upgrade control.UpgradeRecord
+	err := f.stack.service.Store.Read(context.Background(), func(tx *control.Tx) error { upgrade = tx.Upgrade(); return nil })
+	if err != nil || upgrade.Start.IsZero() || upgrade.End.Before(upgrade.Start) {
+		t.Errorf("the server's upgrade record is %+v (%v); want a start and an end", upgrade, err)
+	}
+}
+
+// A server host with no services table, and a server host that cannot be
+// reached each refuse, name the cause, and change nothing.
+func TestUpgradeRefusesBeforeChangingAnything(t *testing.T) {
 	noUnit := newUpgradeFleet(t, "mac", "box", "lab")
 	noUnit.hosts["box"].services = ""
 	down := newUpgradeFleet(t, "mac", "box", "lab")
@@ -186,7 +207,6 @@ func TestUpgradeRefusesBeforeChangingAnything(t *testing.T) {
 		f    *upgradeFleet
 		want string
 	}{
-		{"busy tasks", busy, "3 task(s) are running, in review or waiting on the operator: " + strings.Join(held, ", ") + "; let them finish first"},
 		{"no services table", noUnit, "host box, the server's host, records no [host.box.services] table, so upgrade cannot stop and start its server; upgrade it by hand"},
 		{"unreachable server host", down, "cannot reach box, the server's host: host box is unreachable over ssh (dev@box): ssh: connect to host box port 22: No route to host"},
 	}

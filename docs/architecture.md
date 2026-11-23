@@ -32,13 +32,17 @@ non-test imports. The reasons:
 ## Decisions new code must respect
 
 - **One binary, `engine`, for macOS and Linux.**
-- **External tools use injectable CLI runners**, including `sqlite3`; the
-  server exposes a versioned HTTP API.
+- **External tools use injectable CLI runners**; the
+  server exposes a versioned HTTP API. Control storage uses `database/sql` with
+  `modernc.org/sqlite`, in process.
 - **Coordination derives decisions from authoritative records and host
   observations.** The server persists intent and execution identities.
   Coordinators never edit code; the server's coordinator merges its tasks.
   For server records and API, load `control-server.md`; for dispatch, merges
   and host reach, load `coordinator.md`; for session signals, `session-signals.md`.
+- **Records are reached only through `Store.Read` and `Store.Write`**, by the
+  typed accessors of their `Tx`, each scoped accessor one indexed query; SQL never leaves
+  `internal/control`.
 - **The reconcile core reads only its View**, with no CLI assumptions.
 - **Tooling is Go too:** a lane is one external command or a tested
   `dev check` subcommand.

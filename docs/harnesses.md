@@ -32,6 +32,7 @@ What each harness answers today:
 | a limit's reset | the hook's, the quota reading's, else the stop message's `resets <time>`, the next such time in the host's zone | the state file's, else the quota reading's |
 | a limit marker | the run's `limit.json` | none |
 | folder trust | `.claude.json`, under Claude Code's lock: worktree, clone, plugin directory | the session's profile, or engine's `config.toml` when joined |
+| an old plugin version | Claude keeps it while a session runs it | setup keeps it in engine's home while an older window lives |
 
 **Adding a harness:** a package under `internal/harness/` that passes
 `harnesstest`'s contract suite, a registry line, its `scripts/import-rules.tsv`

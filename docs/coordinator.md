@@ -5,7 +5,7 @@
 ## Shape
 
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
-- **Stateless.** Each pass derives everything from the server's records and each host's tmux sessions, observations, run directories and readiness.
+- **Stateless.** Each pass derives everything from the server's records, read per plan and repository, and each host's tmux sessions, observations, run directories and readiness.
 - **One pass** runs every 30 seconds and once at start, reading every host's `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer reuses those reads (`dashboard.md`). Stopping coordination leaves sessions running; plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`, "Placement". For session liveness, stalls, vanishes, early deaths and limits, load `session-signals.md`.
@@ -16,7 +16,9 @@ Plans serialize against fresh fleet capacity. A dispatch records its attempt, ho
 
 The host serializes dispatches by run ID and returns an existing run on replay. A spawn failing before its window opens removes what it made (the run directory; the worktree and branch unless reused), naming any leftover; a run directory with no `run.json` and no window is reused. It uses the host's Git credentials and identity, with isolated clones under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin into an owner-only run file whose path the window command exports; hooks recover their connection from the worktree's server-session record. Credential files are never collected.
 
-A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`, "Vanish" and "Early death").
+A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`).
+
+A task the operator moved (`control-server.md`) waits until a pass's `release --moved` of its old run, window open or gone, succeeds, and while the old host is unread, unless it was moved blind; a wait on an unread host tells the operator once. Releasing work `origin` lacks tells the operator, unless the move stayed on that host. A blind move's old run is released when its host answers, a done plan's too. Until then, each kickoff warns that the old session may still push: before each push, the new session fetches and asks the operator if `origin`'s branch has commits it lacks.
 
 Operator-only `engine attempt reconcile <id> <evidence>` applies the vanish and early-death rules once a successful host read shows a started attempt's window gone with its run recorded, or a `dispatching` attempt's with no window of its name and no run record (ending it vanished, its task back in `todo`). Otherwise, a planner's dispatch included, it refuses (`control-server.md`); unknown dispatch outcomes stay reserved. A spawn still in flight shows neither and may then open an orphan window, which blocks the next dispatch until removed.
 
@@ -44,8 +46,10 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `merge` | Merges a PR pinned to the reviewed head once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start counts. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. |
 | `ready` | Probes a repo's readiness (`readiness.md`). |
 | `typed` | Logs a text's hash before the coordinator types it (`pane-input.md`). |
-| `release` | Closes the window and deletes its harness files. For a done task, runs the repo's `dev worktree release <branch>` if provided. Removes the worktree unless the run failed or was stopped, hit a usage limit again, or has changes; deletes the local branch if its tip is the merged head (`--head`) or in `origin`'s default branch after a fetch, else notes the unmerged commits. Other releases keep the branch. |
+| `release` | Closes the window and deletes its harness files. For a done task, runs the repo's `dev worktree release <branch>` if provided. Removes the worktree unless the run failed, was stopped or moved, hit a usage limit again, or has changes; a moved run's branch is first pushed, without force, and the reply says what `origin` lacks; deletes the local branch if its tip is the merged head (`--head`) or in `origin`'s default branch after a fetch, else notes the unmerged commits. Other releases keep the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine` (the build) and `host`. A failure is `{"error": …, "refused": true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is an unreachable host. A caller refuses a reply on another protocol, or not an engine's, and tells the operator to run `engine setup --host <name>`.
 
 **A failed call is unknown, never dead.** No session of a failed call or unreachable host is marked dead, failed, stalled, restarted or reaped; only a successful `status` lacking a window shows it gone.
+
+**An unreachable host is asked about** (`internal/control/unreachable.go`). Its first failed read is saved, and a server outage restarts the count. After 15 minutes unreachable with tasks there, the operator gets one fleet question for the stretch: wait (recommended, and the default), move its tasks as `engine host move` does, or stop each as `engine task stop` does. The next pass while a plan coordinates runs the answer once; a move or stop tells the operator what it did. A host that answers first resolves it as `returned`, in one note on every task.
