@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"iter"
 	"path/filepath"
@@ -75,7 +76,7 @@ func TestAWriteErrorLeavesRecordsUnchangedInMemoryAndOnDisk(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("Write returned %v, want the function's error", err)
 	}
-	check := func(where string, st state) {
+	check := func(where string, st records) {
 		t.Helper()
 		if st.Items[plan.ID].Title != plan.Title || len(st.Updates) != len(before.Updates) {
 			t.Errorf("%s: title %q with %d updates after a failed write; want %q with %d",
@@ -135,7 +136,7 @@ func TestAReadTransactionRefusesAWrite(t *testing.T) {
 	_, plan := repoPlan(t, s)
 	writes := map[string]func(*Tx){
 		"PutItem":      func(tx *Tx) { tx.PutItem(plan) },
-		"PutReceipt":   func(tx *Tx) { tx.PutReceipt("k", receipt{}) },
+		"PutReceipt":   func(tx *Tx) { tx.PutReceipt("k", receipt{}, time.Time{}) },
 		"AppendUpdate": func(tx *Tx) { tx.AppendUpdate(op, Request{}, "say", "x", time.Time{}) },
 		"PutUpdate":    func(tx *Tx) { tx.PutUpdate(Update{ID: 1}) },
 	}
@@ -240,5 +241,44 @@ func TestQuestionQueriesFollowTheirResolutions(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAFailedCommitLeavesTheRecordsUnchanged(t *testing.T) {
+	s := service(t)
+	_, plan := repoPlan(t, s)
+	before := mustSnapshot(t, s)
+	s.Store.commit = func(*sql.Tx) error { return errors.New("disk full") }
+	if _, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "lost", Key: "k"}); err == nil {
+		t.Fatal("a failed commit succeeded")
+	}
+	s.Store.commit = (*sql.Tx).Commit
+	if after := mustSnapshot(t, s); fingerprint(after) != fingerprint(before) {
+		t.Fatal("a failed commit changed the records")
+	}
+	if out := call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "lost", Key: "k"}); out.Updates[0].Body != "lost" {
+		t.Fatalf("the retry: %+v", out)
+	}
+}
+
+// A commit SQLite took whose success was lost is answered from its receipt
+// when the caller retries with the same key: the command applies once.
+func TestACommitReportedFailedAfterItTookIsAnsweredFromItsReceipt(t *testing.T) {
+	s := service(t)
+	_, plan := repoPlan(t, s)
+	s.Store.commit = func(tx *sql.Tx) error {
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		return errors.New("reply lost")
+	}
+	if _, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "once", Key: "k"}); err == nil {
+		t.Fatal("the lost reply was reported a success")
+	}
+	s.Store.commit = (*sql.Tx).Commit
+	before := len(mustSnapshot(t, s).Updates)
+	again := call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "once", Key: "k"})
+	if after := len(mustSnapshot(t, s).Updates); after != before || again.Updates[0].Body != "once" {
+		t.Fatalf("the retry applied again: %d updates, then %d; %+v", before, after, again)
 	}
 }

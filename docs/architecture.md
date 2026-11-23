@@ -41,7 +41,7 @@ non-test imports. The reasons:
   For server records and API, load `control-server.md`; for dispatch, merges
   and host reach, load `coordinator.md`; for session signals, `session-signals.md`.
 - **Records are reached only through `Store.Read` and `Store.Write`**, by the
-  typed accessors of their `Tx`; the records' in-memory form never leaves
+  typed accessors of their `Tx`, each scoped accessor one indexed query; SQL never leaves
   `internal/control`.
 - **The reconcile core reads only its View**, with no CLI assumptions.
 - **Tooling is Go too:** a lane is one external command or a tested

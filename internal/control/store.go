@@ -12,23 +12,24 @@ import (
 	"time"
 )
 
-// Store allows one server process per database, and serializes its transactions.
-// The OS releases its process lock on a crash. As the database's only owner
-// it reads the records once, at open: state is then the authority, and
-// SQLite its durable copy.
+// Store allows one server process per database. The OS releases its process
+// lock on a crash. Reads run in WAL read transactions on a small read-only
+// pool, beside the one writer connection (Store.Read, Store.Write).
 type Store struct {
+	// mu guards lock and the handles against a concurrent Close.
 	mu      sync.RWMutex
 	path    string
 	lock    *os.File
 	writer  *sql.DB
 	readers *sql.DB
 	commit  func(*sql.Tx) error
-	// state never leaves the store: callers get clones, and a commit
-	// installs records decoded from what it wrote.
-	state state
+	// writeTimeout bounds each Store.Write.
+	writeTimeout time.Duration
 }
 
-// Open creates a private database and refuses a database already owned by a server.
+// Open creates a private database and refuses a database already owned by a
+// server. It migrates an older schema (migrate) and refuses a newer one; a
+// current database opens without reading any record.
 func Open(path string) (*Store, error) {
 	if path == "" {
 		return nil, errors.New("a database path is required")
@@ -48,12 +49,9 @@ func Open(path string) (*Store, error) {
 		_ = f.Close()
 		return nil, fmt.Errorf("database already owned: %w", err)
 	}
-	s := &Store{path: path, lock: f, commit: (*sql.Tx).Commit}
+	s := &Store{path: path, lock: f, commit: (*sql.Tx).Commit, writeTimeout: writeTimeout}
 	if err = s.openDatabases(); err == nil {
 		err = s.initialize()
-	}
-	if err == nil {
-		s.state, _, err = s.load()
 	}
 	if err != nil {
 		_ = s.Close()
@@ -68,19 +66,26 @@ func (s *Store) initialize() error {
 		return err
 	}
 	if version > schemaVersion {
-		return errors.New("unsupported control database schema")
+		return fmt.Errorf("control database schema %d is newer than this server's %d", version, schemaVersion)
 	}
-	if v := version; v == 1 || v == 2 {
-		return s.migrate()
+	if version == schemaVersion {
+		return nil
 	}
-	return s.write(nil, "CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, data TEXT NOT NULL); "+migratePlanStates+telegramSchema+fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion))
+	var records int
+	if err := s.writer.QueryRow("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='records'").Scan(&records); err != nil {
+		return err
+	}
+	if records > 0 {
+		return s.migrate(version)
+	}
+	if version != 0 {
+		return fmt.Errorf("control database schema %d has no records table", version)
+	}
+	return s.transaction(func(tx *sql.Tx) error {
+		_, err := tx.Exec(schema + telegramSchema + fmt.Sprintf("PRAGMA user_version=%d;", schemaVersion))
+		return err
+	})
 }
-
-// migratePlanStates moves a plan stored in a state version 1 allowed, and
-// later versions derive, back to planned. It is a no-op once applied.
-const migratePlanStates = "UPDATE records SET data = json_set(data, '$.state', 'planned') " +
-	"WHERE key LIKE 'item/%' AND json_extract(data, '$.kind') = 'plan' " +
-	"AND json_extract(data, '$.state') IN ('executing', 'verifying', 'blocked'); "
 
 // Close releases this process's ownership. It must follow HTTP and coordinator shutdown.
 func (s *Store) Close() error {
@@ -94,81 +99,6 @@ func (s *Store) Close() error {
 	return err
 }
 
-// modify commits all changed records together; an error leaves history
-// unchanged, in memory and on disk. fn works on a copy of the state.
-func (s *Store) modify(fn func(*state) error) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.lock == nil {
-		return errors.New("store is closed")
-	}
-	work := s.state.clone()
-	if err := fn(&work); err != nil {
-		return err
-	}
-	changes, err := diff(&s.state, &work)
-	if err != nil || len(changes) == 0 {
-		return err
-	}
-	// Decoding before the write keeps a record SQLite took from failing to
-	// reach memory.
-	patch, err := decode(changes)
-	if err != nil {
-		return err
-	}
-	if err = s.write(changes, ""); err != nil {
-		// A write can fail after SQLite committed it; disk then decides.
-		if disk, _, lerr := s.load(); lerr == nil {
-			s.state = disk
-		}
-		return err
-	}
-	s.state.install(changes, patch)
-	return nil
-}
-
-// write sends changes, then tail, to SQLite in one transaction.
-func (s *Store) write(changes []change, tail string) error {
-	return s.transaction(func(tx *sql.Tx) error {
-		for _, c := range changes {
-			var err error
-			if c.del {
-				_, err = tx.Exec("DELETE FROM records WHERE key=?", c.key)
-			} else {
-				_, err = tx.Exec("INSERT INTO records(key,data) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data", c.key, c.data)
-			}
-			if err != nil {
-				return err
-			}
-		}
-		if tail != "" {
-			_, err := tx.Exec(tail)
-			return err
-		}
-		return nil
-	})
-}
-
-// snapshot returns a detached consistent view, without reading SQLite.
-// Snapshots run beside each other, and wait only for a commit.
-func (s *Store) snapshot() (state, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.lock == nil {
-		return state{}, errors.New("store is closed")
-	}
-	return s.state.clone(), nil
-}
-
-// view runs fn on a snapshot and commits nothing.
-func (s *Store) view(fn func(*state) error) error {
-	st, err := s.snapshot()
-	if err != nil {
-		return err
-	}
-	return fn(&st)
-}
-
 // Backup takes a transactionally consistent SQLite copy; it never overwrites a file.
 func (s *Store) Backup(path string) error {
 	s.mu.Lock()
@@ -176,6 +106,12 @@ func (s *Store) Backup(path string) error {
 	if s.lock == nil {
 		return errors.New("store is closed")
 	}
+	return s.vacuumInto(path)
+}
+
+// vacuumInto writes an owner-only copy of the database to path, published
+// whole or not at all, and refuses to replace any existing file.
+func (s *Store) vacuumInto(path string) error {
 	dir, err := os.MkdirTemp(filepath.Dir(path), ".engine-backup-")
 	if err != nil {
 		return err

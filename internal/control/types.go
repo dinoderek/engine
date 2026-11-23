@@ -253,46 +253,6 @@ type receipt struct {
 	Response Response `json:"response"`
 }
 
-// state is a consistent database snapshot used by one transaction.
-type state struct {
-	Items    map[string]Item       `json:"items"`
-	Attempts map[string]Attempt    `json:"attempts"`
-	Updates  []Update              `json:"updates"`
-	Queue    map[string]QueueEntry `json:"queue"`
-	Auth     map[string]Actor      `json:"auth"`
-	Receipts map[string]receipt    `json:"receipts"`
-	// Hosts are what the coordinator saved of each host, by name.
-	Hosts map[string]HostRecord `json:"hosts"`
-	Next  int                   `json:"next"`
-	// PassAt is the last time the coordinator was known to run: the start of
-	// its newest pass, or the end of it once it finished; zero before the
-	// first pass.
-	PassAt time.Time `json:"pass_at,omitzero"`
-	// Upgrade is the newest `engine upgrade` run's start and end.
-	Upgrade UpgradeRecord `json:"upgrade,omitzero"`
-}
-
-func emptyState() state {
-	return state{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Queue: map[string]QueueEntry{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Hosts: map[string]HostRecord{}, Next: 1}
-}
-
-func (s *state) id(prefix string) string {
-	id := fmt.Sprintf("%s%d", prefix, s.Next)
-	s.Next++
-	return id
-}
-
-func (s *state) update(a Actor, r Request, kind, body string, now time.Time) Update {
-	u := Update{ID: len(s.Updates) + 1, Item: r.ID, Author: a.Name, At: now.UTC(), Kind: kind, Body: body,
-		Recipient: r.Recipient, ReplyTo: r.ReplyTo, RequiresReply: r.RequiresReply,
-		Choices: r.Choices, Recommended: r.Recommended, Class: r.Class}
-	if item, ok := s.Items[r.ID]; ok {
-		u.Snapshot = &item
-	}
-	s.Updates = append(s.Updates, u)
-	return u
-}
-
 // Secret generates an opaque credential.
 func Secret() string { return hex.EncodeToString(randomBytes()) }
 func randomBytes() []byte {

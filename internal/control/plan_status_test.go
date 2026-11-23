@@ -79,7 +79,7 @@ func TestReadsCarryPlanStatusThatIsNeverStored(t *testing.T) {
 	if got := call(t, s, op, Request{Op: "get", ID: task.ID}).Item.Status; got != "" {
 		t.Fatalf("a task carries a status: %q", got)
 	}
-	out, err := s.Store.sql("SELECT data FROM records WHERE key LIKE 'item/%';")
+	out, err := s.Store.sql("SELECT data FROM items;")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 	if _, err := fixtureSQL(context.Background(), path, sql.String()); err != nil {
 		t.Fatal(err)
 	}
-	before := rawRecords(t, path)
+	before := rawRecords(t, path, "SELECT key, data FROM records;")
 	for range 2 { // the second open is a no-op
 		store, err := Open(path)
 		if err != nil {
@@ -128,7 +128,7 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 				t.Fatalf("%s migrated to %+v", key, got)
 			}
 		}
-		after := rawRecords(t, path)
+		after := rawRecords(t, path, "SELECT 'item/' || id AS key, data FROM items;")
 		for _, key := range []string{"item/r1", "item/p5", "item/t6"} {
 			if after[key] != before[key] {
 				t.Fatalf("%s changed: %s, was %s", key, after[key], before[key])
@@ -141,9 +141,9 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 	}
 }
 
-func rawRecords(t *testing.T, path string) map[string]string {
+func rawRecords(t *testing.T, path, query string) map[string]string {
 	t.Helper()
-	out, err := fixtureSQL(context.Background(), path, "SELECT key, data FROM records;")
+	out, err := fixtureSQL(context.Background(), path, query)
 	if err != nil {
 		t.Fatal(err)
 	}

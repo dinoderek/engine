@@ -27,8 +27,8 @@ const telegramSchema = `CREATE TABLE IF NOT EXISTS telegram_deliveries (
 
 // TelegramState reads delivery state independently of command records.
 func (s *Store) TelegramState() ([]TelegramDelivery, int64, time.Time, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.lock == nil {
 		return nil, 0, time.Time{}, errors.New("store is closed")
 	}
@@ -73,8 +73,8 @@ func (s *Store) TelegramState() ([]TelegramDelivery, int64, time.Time, error) {
 // SaveTelegram atomically records deliveries and, when nonzero, the poll offset
 // and digest time. Offset never moves backwards when the two loops save.
 func (s *Store) SaveTelegram(deliveries []TelegramDelivery, offset int64, digest time.Time) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.lock == nil {
 		return errors.New("store is closed")
 	}

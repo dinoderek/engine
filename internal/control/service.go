@@ -79,7 +79,7 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 			return err
 		}
 		if write {
-			tx.PutReceipt(key, receipt{Digest: hash, Response: out})
+			tx.PutReceipt(key, receipt{Digest: hash, Response: out}, s.now())
 		}
 		return nil
 	})

@@ -41,7 +41,7 @@ func windows(ids ...string) func(*Tx, Attempt) bool {
 	}
 }
 
-func hostNotices(st state) []string {
+func hostNotices(st records) []string {
 	var out []string
 	for _, u := range st.Updates {
 		if u.Item == "" && u.Recipient == "operator" {
@@ -101,16 +101,8 @@ func taskWrote(t *testing.T, s Service, attempt string, task Item) {
 // unsee forgets that a pass saw the attempts' windows live.
 func unsee(t *testing.T, s Service, ids ...string) {
 	t.Helper()
-	err := s.Store.modify(func(st *state) error {
-		for _, id := range ids {
-			at := st.Attempts[id]
-			at.LiveAt = time.Time{}
-			st.Attempts[id] = at
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	for _, id := range ids {
+		editAttempt(t, s.Store, id, func(at *Attempt) { at.LiveAt = time.Time{} })
 	}
 }
 
@@ -158,15 +150,7 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 
 func TestSawTmuxLeavesADispatchInFlightAlone(t *testing.T) {
 	f := newLossFixture(t)
-	err := f.s.Store.modify(func(st *state) error {
-		at := st.Attempts[f.a2]
-		at.State = "dispatching"
-		st.Attempts[at.ID] = at
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	editAttempt(t, f.s.Store, f.a2, func(at *Attempt) { at.State = "dispatching" })
 	n, err := f.s.SawTmux("devbox", TmuxRead{}, windows())
 	st, _ := f.s.Store.snapshot()
 	if err != nil || n != 1 || st.Attempts[f.a2].HostLost || !st.Attempts[f.a1].HostLost {
