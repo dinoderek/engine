@@ -98,6 +98,39 @@ func TestAnUnreachableHostWithNoTasksIsNotAsked(t *testing.T) {
 	}
 }
 
+// waited checks that a wait answer changed nothing.
+func waited(t *testing.T, st State, tasks []Item) {
+	if st.Hosts["devbox"].Paused || st.Items[tasks[0].ID].State != "running" || st.Attempts[st.Items[tasks[0].ID].Attempt].State == "ended" {
+		t.Errorf("a wait changed something: %+v", st.Items[tasks[0].ID])
+	}
+}
+
+// moved checks that a move answer paused devbox and moved its two tasks,
+// and only those.
+func moved(t *testing.T, st State, tasks []Item) {
+	for _, task := range tasks[:2] {
+		if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != EndMoved || st.Items[task.ID].State != "running" {
+			t.Errorf("%s was not moved: %+v", task.ID, at)
+		}
+	}
+	if !st.Hosts["devbox"].Paused || st.Attempts[st.Items[tasks[2].ID].Attempt].State == "ended" {
+		t.Errorf("the host is not paused, or spare's task moved: %+v", st.Hosts["devbox"])
+	}
+}
+
+// stopped checks that a stop answer held devbox's two tasks, leaving the
+// host unpaused.
+func stopped(t *testing.T, st State, tasks []Item) {
+	for _, task := range tasks[:2] {
+		if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != EndStopped || !st.Items[task.ID].Held || st.Items[task.ID].State != "todo" {
+			t.Errorf("%s was not stopped: %+v %+v", task.ID, at, st.Items[task.ID])
+		}
+	}
+	if st.Hosts["devbox"].Paused {
+		t.Error("a stop paused the host")
+	}
+}
+
 func TestEachAnswerToAFleetQuestionRunsOnce(t *testing.T) {
 	for name, c := range map[string]struct {
 		answer string
@@ -106,31 +139,11 @@ func TestEachAnswerToAFleetQuestionRunsOnce(t *testing.T) {
 		// moved or stopped tasks; empty is none.
 		note string
 	}{
-		"wait": {answer: ChoiceWait, check: func(t *testing.T, st State, tasks []Item) {
-			if st.Hosts["devbox"].Paused || st.Items[tasks[0].ID].State != "running" || st.Attempts[st.Items[tasks[0].ID].Attempt].State == "ended" {
-				t.Errorf("a wait changed something: %+v", st.Items[tasks[0].ID])
-			}
-		}},
-		"move": {answer: ChoiceMove + "\nthey are urgent", check: func(t *testing.T, st State, tasks []Item) {
-			for _, task := range tasks[:2] {
-				if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != EndMoved || st.Items[task.ID].State != "running" {
-					t.Errorf("%s was not moved: %+v", task.ID, at)
-				}
-			}
-			if !st.Hosts["devbox"].Paused || st.Attempts[st.Items[tasks[2].ID].Attempt].State == "ended" {
-				t.Errorf("the host is not paused, or spare's task moved: %+v", st.Hosts["devbox"])
-			}
-		}, note: "As answered in update %d, the coordinator moved %s on devbox. devbox is paused until `engine host resume devbox`."},
-		"stop": {answer: ChoiceStop, check: func(t *testing.T, st State, tasks []Item) {
-			for _, task := range tasks[:2] {
-				if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != EndStopped || !st.Items[task.ID].Held || st.Items[task.ID].State != "todo" {
-					t.Errorf("%s was not stopped: %+v %+v", task.ID, at, st.Items[task.ID])
-				}
-			}
-			if st.Hosts["devbox"].Paused {
-				t.Error("a stop paused the host")
-			}
-		}, note: "As answered in update %d, the coordinator stopped %s on devbox. Each is held until `engine task resume`."},
+		"wait": {answer: ChoiceWait, check: waited},
+		"move": {answer: ChoiceMove + "\nthey are urgent", check: moved,
+			note: "As answered in update %d, the coordinator moved %s on devbox. devbox is paused until `engine host resume devbox`."},
+		"stop": {answer: ChoiceStop, check: stopped,
+			note: "As answered in update %d, the coordinator stopped %s on devbox. Each is held until `engine task resume`."},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s, tasks := onHosts(t)
@@ -201,6 +214,46 @@ func TestTheReturnedNoteSaysWhatBecameOfATaskNoLongerThere(t *testing.T) {
 	}
 	notes := coordinatorNotes(mustSnapshot(t, s))
 	if len(notes) != 1 || !strings.Contains(notes[0], tasks[1].ID+": no longer runs there; it is todo.") {
+		t.Fatalf("notes %q", notes)
+	}
+}
+
+// A task whose dispatch is still in flight has no session to stop: the
+// answer leaves it, saying so, and the note on the host's return says its
+// dispatch is settled next.
+func TestAnAnswerLeavesATaskWhoseDispatchIsInFlight(t *testing.T) {
+	s, tasks := onHosts(t)
+	extra := newTask(t, s, tasks[0].Repo, tasks[0].Plan)
+	call(t, s, op, Request{Op: "claim", ID: extra.ID, Body: "devbox", State: "claude"})
+	unreachableFor(t, &s, stretch, UnreachableAsk)
+	q := fleetQuestions(mustSnapshot(t, s))[0]
+	if !strings.Contains(q.Body, "3 tasks run there: "+tasks[0].ID+", "+tasks[1].ID+", "+extra.ID+".") {
+		t.Fatalf("question %q", q.Body)
+	}
+	call(t, s, op, Request{Op: "resolve", ReplyTo: q.ID, Body: ChoiceStop})
+	if err := s.SawReach("devbox", true, everyWindowAlive); err != nil {
+		t.Fatal(err)
+	}
+	st := mustSnapshot(t, s)
+	notes := coordinatorNotes(st)
+	if len(notes) != 1 || !strings.HasSuffix(notes[0], "Left, their dispatch still in flight: "+extra.ID+"; repeat once they start.") {
+		t.Fatalf("notes %q", notes)
+	}
+	if st.Items[extra.ID].Held || st.Attempts[st.Items[extra.ID].Attempt].State != "dispatching" {
+		t.Fatalf("the dispatch in flight was stopped: %+v", st.Items[extra.ID])
+	}
+}
+
+func TestTheReturnedNoteSaysADispatchInFlightIsSettledNext(t *testing.T) {
+	s, tasks := onHosts(t)
+	extra := newTask(t, s, tasks[0].Repo, tasks[0].Plan)
+	call(t, s, op, Request{Op: "claim", ID: extra.ID, Body: "devbox", State: "claude"})
+	unreachableFor(t, &s, stretch, UnreachableAsk)
+	if err := s.SawReach("devbox", true, everyWindowAlive); err != nil {
+		t.Fatal(err)
+	}
+	notes := coordinatorNotes(mustSnapshot(t, s))
+	if len(notes) != 1 || !strings.HasSuffix(notes[0], extra.ID+": its dispatch there is settled by the next pass.") {
 		t.Fatalf("notes %q", notes)
 	}
 }
