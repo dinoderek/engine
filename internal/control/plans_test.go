@@ -66,6 +66,8 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 		"UpdatesAfter": {"updates_item"}, "InboxAfter": {"updates_recipient", "updates_reply"},
 		"NoticesBefore": {"updates_recipient", "updates_reply"}, "UpdatesAboutNewestFirst": {"updates_item", "updates_task"},
 		"QuestionsAbout": {"updates_item", "updates_task"}, "Resolution": {"updates_reply"}, "LatestUpdate": {"updates_item"},
+		"TaskStatesOfPlans": {"items_plan"}, "OwnQuestions": {"updates_asked_item", "updates_asked_task", "updates_reply"},
+		"LatestMessages": {"updates_item"},
 	}
 	for name, read := range map[string]func(){
 		"Item":             func() { tx.Item("t3") },
@@ -100,6 +102,11 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 		"Resolution":              func() { tx.Resolution(3) },
 		"LatestUpdate":            func() { tx.LatestUpdate("t3", "say") },
 		"Host":                    func() { tx.Host("devbox") },
+		"ItemsByID":               func() { tx.ItemsByID([]string{"t3", "p2"}) },
+		"UpdatesByID":             func() { tx.UpdatesByID([]int{3, 4}) },
+		"TaskStatesOfPlans":       func() { tx.TaskStatesOfPlans([]string{"p2"}) },
+		"OwnQuestions":            func() { tx.OwnQuestions([]string{"t3", "p2"}) },
+		"LatestMessages":          func() { tx.LatestMessages([]string{"t3"}, humanKinds) },
 	} {
 		e.plans = nil
 		read()
@@ -121,9 +128,10 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 
 // scansOnlyWhatIsBounded reports whether a scan step walks an index that
 // holds only a bounded part of its table: the attempts that hit a usage limit,
-// or the merges in flight.
+// or the merges in flight; or a list of IDs the caller passed, which a
+// batched read unpacks with json_each, and the rows of such a query it reads once.
 func scansOnlyWhatIsBounded(step string) bool {
-	for _, ok := range []string{"SCAN CONSTANT ROW", "USING INDEX attempts_limited", "USING COVERING INDEX queue_repo"} {
+	for _, ok := range []string{"SCAN CONSTANT ROW", "USING INDEX attempts_limited", "USING COVERING INDEX queue_repo", " VIRTUAL TABLE INDEX ", "SCAN (subquery-"} {
 		if strings.Contains(step, ok) {
 			return true
 		}

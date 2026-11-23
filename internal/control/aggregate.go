@@ -36,21 +36,23 @@ func (s Service) overview(tx *Tx, a Actor) (Response, error) {
 		}
 	}
 	for _, kind := range []string{"repo", "plan"} {
-		for _, it := range tx.ItemsByKindUnder(kind, "") {
-			out.Items = append(out.Items, withStatus(tx, it))
-		}
+		out.Items = append(out.Items, withStatuses(tx, tx.ItemsByKindUnder(kind, ""))...)
 	}
-	shown := map[string]bool{}
+	shown := map[string]bool{"": true}
 	for _, it := range out.Items {
 		shown[it.ID] = true
 	}
+	var about []string
 	for _, u := range out.Updates {
 		for _, id := range []string{u.Item, u.Task} {
-			if it, ok := tx.Item(id); ok && !shown[id] {
+			if !shown[id] {
 				shown[id] = true
-				out.Items = append(out.Items, it)
+				about = append(about, id)
 			}
 		}
+	}
+	for _, it := range tx.ItemsByID(about) {
+		out.Items = append(out.Items, it)
 	}
 	slices.SortFunc(out.Items, func(x, y Item) int { return Number(x.ID) - Number(y.ID) })
 	out.Sessions = s.sessionRows(tx, tx.SessionAttempts())
