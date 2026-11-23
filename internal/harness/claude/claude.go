@@ -6,8 +6,9 @@
 // daemon. Claude Code shows a workspace trust dialog in a new folder, and an
 // add-directory dialog for an --add-dir directory that holds skills, both
 // before the session starts and both defaulting to exit, so Trust records
-// the worktree and the plugin directory as accepted in Claude Code's own
-// state file, where the keys stay: every session shares them.
+// the worktree, its clone and the plugin directory as accepted in Claude
+// Code's own state file, under Claude Code's lock on it, where the keys
+// stay: every session shares them.
 //
 // The session's state comes from `claude agents --json`, which lists every
 // live session on the host, engine's or not. A session held at a dialog
@@ -82,12 +83,18 @@ type launcher Adapter
 // Join is false: Claude's launch line names the session for Remote Control.
 func (launcher) Join(string, string) (bool, string) { return false, "" }
 
-func (l launcher) Trust(dir, _ string, _ bool) error {
-	config := Config(l.env.Var, l.env.Home)
-	for _, d := range []string{dir, PluginDir(l.env.Var, l.env.Home)} {
-		if err := TrustFolder(config, d); err != nil {
-			return fmt.Errorf("trust %s for Claude Code: %w", d, err)
-		}
+// Trust records the worktree, its clone and the plugin directory as trusted.
+// Claude Code keys a worktree's project by its clone, the canonical git root,
+// and checks that key before the worktree's own: once the clone is trusted,
+// a concurrent write that drops a later worktree's own key leaves the
+// session trusted.
+func (l launcher) Trust(dir, clone string, _ bool) error {
+	dirs := []string{dir, PluginDir(l.env.Var, l.env.Home)}
+	if clone != "" {
+		dirs = append(dirs, clone)
+	}
+	if err := TrustFolder(Config(l.env.Var, l.env.Home), dirs...); err != nil {
+		return fmt.Errorf("trust %s for Claude Code: %w", dir, err)
 	}
 	return nil
 }
