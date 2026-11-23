@@ -24,7 +24,7 @@ CREATE INDEX items_kind ON items(kind, slug);
 CREATE INDEX items_repo ON items(repo);
 CREATE INDEX items_plan ON items(plan);
 CREATE INDEX items_state ON items(state);
-CREATE INDEX items_coordinating ON items(coordinating) WHERE coordinating;
+CREATE INDEX items_coordinating ON items(coordinating);
 CREATE INDEX items_attempt ON items(attempt);
 CREATE TABLE item_deps (item TEXT NOT NULL, depends TEXT NOT NULL, PRIMARY KEY(item, depends)) WITHOUT ROWID;
 CREATE INDEX item_deps_depends ON item_deps(depends);
@@ -39,9 +39,9 @@ CREATE TABLE updates (
  reply_to INTEGER NOT NULL DEFAULT 0, recipient TEXT NOT NULL DEFAULT '', task TEXT NOT NULL DEFAULT '',
  requires_reply INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX updates_item ON updates(item, id);
-CREATE INDEX updates_task ON updates(task, id) WHERE task != '';
-CREATE INDEX updates_reply ON updates(reply_to, kind) WHERE reply_to != 0;
-CREATE INDEX updates_recipient ON updates(recipient, id) WHERE recipient != '';
+CREATE INDEX updates_task ON updates(task, id);
+CREATE INDEX updates_reply ON updates(reply_to, kind);
+CREATE INDEX updates_recipient ON updates(recipient, id);
 CREATE INDEX updates_author ON updates(author);
 CREATE TABLE queue (task TEXT PRIMARY KEY, repo TEXT NOT NULL, seq INTEGER NOT NULL, data TEXT NOT NULL);
 CREATE INDEX queue_repo ON queue(repo, seq);
@@ -51,7 +51,7 @@ CREATE TABLE receipts (
  key TEXT PRIMARY KEY, created TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
  attempt TEXT NOT NULL DEFAULT '', data TEXT NOT NULL);
 CREATE INDEX receipts_created ON receipts(created);
-CREATE INDEX receipts_attempt ON receipts(attempt) WHERE attempt != '';
+CREATE INDEX receipts_attempt ON receipts(attempt);
 CREATE TABLE hosts (name TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);
 INSERT INTO counters(name, value) VALUES('next', 1);

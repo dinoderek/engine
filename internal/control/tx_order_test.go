@@ -171,19 +171,30 @@ func TestDispatchTokensAreTheCredentialsOfAnAttemptsReceipts(t *testing.T) {
 
 func TestOnlyAWriteIsBoundedInTime(t *testing.T) {
 	s := service(t)
-	repoPlan(t, s)
-	s.Store.writeTimeout = 20 * time.Millisecond
-	slow := func(tx *Tx) error {
-		time.Sleep(60 * time.Millisecond)
-		if items := tx.ItemsByKindUnder("", ""); len(items) != 2 {
-			return errors.New("the records went missing")
-		}
+	var readBound, writeBound bool
+	var writeLeft time.Duration
+	if err := s.Store.Read(context.Background(), func(tx *Tx) error {
+		_, readBound = tx.ctx.Deadline()
 		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if err := s.Store.Read(context.Background(), slow); err != nil {
-		t.Fatalf("a slow read: %v", err)
+	if err := s.Store.Write(context.Background(), func(tx *Tx) error {
+		var at time.Time
+		at, writeBound = tx.ctx.Deadline()
+		writeLeft = time.Until(at)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if err := s.Store.Write(context.Background(), slow); err == nil {
-		t.Fatal("a write outlived its bound")
+	if readBound || !writeBound || writeLeft > writeTimeout {
+		t.Fatalf("read bounded %v; write bounded %v with %v left, want at most %v", readBound, writeBound, writeLeft, writeTimeout)
+	}
+	s.Store.writeTimeout = time.Nanosecond
+	if err := s.Store.Write(context.Background(), func(*Tx) error { return nil }); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("a write past its bound: %v", err)
+	}
+	if err := s.Store.Read(context.Background(), func(tx *Tx) error { tx.Item("r1"); return nil }); err != nil {
+		t.Fatalf("a read beside a short write bound: %v", err)
 	}
 }

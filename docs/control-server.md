@@ -24,7 +24,7 @@ For backup, stop the server, run `engine serve --backup <new-path>`, restart it,
 
 ## Records and commands
 
-Every task belongs to one plan; creating a task without `--plan` fails. `engine help` lists commands; flags are in `internal/controlcmd/command.go`.
+IDs are global across repositories, plans, tasks and attempts. Every task belongs to one plan; creating a task without `--plan` fails. `engine help` lists commands; flags are in `internal/controlcmd/command.go`.
 
 Edits, approvals and workflow changes require the current `--version`. A plan's edit invalidates its approval; an active execution, a plan's children included, prevents an edit. Approve, run and stop take a plan and persist its coordination intent (`coordinator.md`). `get`, `list` and `plan-view` add a plan's derived, unstored `status` (`execution-protocol.md`).
 
@@ -42,9 +42,9 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 `POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors carry an HTTP status and sometimes a stable `reason`; storage details stay in server logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`; the CLI never retries it.
 
-Every write has a request key; reusing one for another command fails. A call retries uncertain delivery once with the same key. A session's command (one with `ENGINE_ATTEMPT_ID`) also retries connect errors, timeouts and 5xx for 90 seconds, under that key (`internal/controlcmd/retry.go`), and its first retry prints one stderr line naming the key; a 4xx never retries. `ENGINE_RETRY_FOR` (a Go duration, `0` for none) sets the window for every server command but `engine attach`; the operator's default is none. An edit invalidates a placement decision before any execution is reserved or launched.
+Every write has a request key; reusing one for another command fails. A call retries uncertain delivery once with the same key. A session's command (one with `ENGINE_ATTEMPT_ID`) also retries connect errors, timeouts and 5xx for 90 seconds, under that key (`internal/controlcmd/retry.go`), and its first retry prints one stderr line naming the key; a 4xx never retries. `ENGINE_RETRY_FOR` (a Go duration, `0` for none) sets the window for every server command but `engine attach`; the operator's default is none. Version conflicts require reading the current record. An edit invalidates a placement decision before any execution is reserved or launched.
 
-SQLite runs in process (`modernc.org/sqlite`); one server owns a database: never write to it while it runs. Tables and indexes: `internal/control/schema.go`. Reads use WAL read transactions beside the one writer; a write commits records, history and its receipt together. Opening a schema 6 or older database first copies it to `<db>.pre-v7`, owner-only (an existing file stops the open), then migrates it in one transaction; a newer schema is refused.
+One server owns a database, in process via `modernc.org/sqlite`; nothing else writes it. Reads are WAL transactions beside one writer; a write commits records, history and receipt at once. An older schema is first copied to `<db>.pre-v7`, owner-only (an existing copy stops it), then migrated in one transaction; a newer one is refused.
 
 The operator credential is an owner-only regular file. Every dispatch creates a separate execution credential, scoped to that plan or task; workers cannot approve, start coordination or read the operator inbox. Ending an attempt revokes its credential. Credentials are hashed for lookup; dispatch receipts retain the token privately for interrupted dispatch recovery.
 
@@ -60,4 +60,4 @@ Messages addressed to the operator appear in the cross-repository inbox. Informa
 
 ## Host status
 
-`host-status`, an operator-only read, returns the fleet as the latest coordinator pass read it: per `hosts.toml` host, reachability, slots, windows with attempts, quota and readiness. It is held in memory, starts empty and never contacts a host, so it ages while no plan is coordinating. Unlike it, each host's last tmux start time is a stored record (`session-signals.md`, "Host-wide loss").
+`host-status`, an operator-only read, returns the fleet as the latest coordinator pass read it: per `hosts.toml` host, reachability, slots, windows with attempts, quota and readiness. It is held in memory, starts empty and never contacts a host, so it ages while no plan is coordinating. `engine host status --all [--json]` prints it. Unlike it, each host's last tmux start time is a stored record (`session-signals.md`, "Host-wide loss").

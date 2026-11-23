@@ -93,9 +93,13 @@ func (t *Tx) UpdatesAfter(after int, item string) iter.Seq[Update] {
 // operator that no resolution answers, and, unless they ask for a reply,
 // no acknowledgement either.
 func (t *Tx) InboxAfter(after int, item string) iter.Seq[Update] {
-	return t.scan("SELECT data FROM updates u WHERE u.id>? AND u.recipient='operator' AND (?='' OR u.item=?2)"+
+	about := ""
+	if item != "" {
+		about = " AND u.item=?2"
+	}
+	return t.scan("SELECT data FROM updates u WHERE u.id>?1 AND u.recipient='operator'"+about+
 		" AND NOT "+answered(resolvedKinds)+" AND (u.requires_reply OR NOT "+answered(ackedKinds)+")"+
-		" ORDER BY u.id LIMIT ?", after, false, item)
+		" ORDER BY u.id LIMIT ?3", after, false, item)
 }
 
 // NoticesBefore are the messages to the operator that need no reply and

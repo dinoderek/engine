@@ -226,10 +226,12 @@ func TestAnExistingBackupStopsTheMigrationAndIsNamed(t *testing.T) {
 
 func TestAFailedMigrationLeavesTheDatabaseAtVersion6(t *testing.T) {
 	for name, bad := range map[string]string{
-		"an unknown record":     "INSERT INTO records VALUES('unknown/x', '{}')",
-		"a record not JSON":     "INSERT INTO records VALUES('item/x', 'invalid')",
-		"an item with no kind":  `INSERT INTO records VALUES('item/x', '{"id":"x"}')`,
-		"a corrupt next record": "UPDATE records SET data='[' WHERE key='next'",
+		"an unknown record":            "INSERT INTO records VALUES('unknown/x', '{}')",
+		"a record not JSON":            "INSERT INTO records VALUES('item/x', 'invalid')",
+		"an item with no kind":         `INSERT INTO records VALUES('item/x', '{"id":"x"}')`,
+		"a corrupt next record":        "UPDATE records SET data='[' WHERE key='next'",
+		"an item of the wrong shape":   `INSERT INTO records VALUES('item/x', '{"id":"x","kind":"task","depends":"t3"}')`,
+		"a receipt of the wrong shape": `INSERT INTO records VALUES('receipt/x', '{"digest":7}')`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := fixtureDB(t)

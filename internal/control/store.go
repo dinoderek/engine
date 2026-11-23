@@ -16,7 +16,7 @@ import (
 // lock on a crash. Reads run in WAL read transactions on a small read-only
 // pool, beside the one writer connection (Store.Read, Store.Write).
 type Store struct {
-	// mu keeps Close from running beside a transaction.
+	// mu guards lock and the handles against a concurrent Close.
 	mu      sync.RWMutex
 	path    string
 	lock    *os.File

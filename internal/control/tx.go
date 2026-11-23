@@ -53,13 +53,15 @@ func (s *Store) run(ctx context.Context, write bool, fn func(*Tx) error) error {
 		return err
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.lock == nil {
-		return errors.New("store is closed")
-	}
-	db := s.readers
+	closed, db := s.lock == nil, s.readers
 	if write {
 		db = s.writer
+	}
+	s.mu.RUnlock()
+	// A Close from here on fails the transaction: the lock is never held
+	// across fn, which may start another transaction.
+	if closed {
+		return errors.New("store is closed")
 	}
 	if write {
 		var cancel context.CancelFunc
@@ -90,6 +92,11 @@ func (s *Store) run(ctx context.Context, write bool, fn func(*Tx) error) error {
 	}
 	return s.commit(tx)
 }
+
+// Err is the first query error in this transaction, or nil. A read with
+// effects outside the records checks it before each one: after a failure the
+// accessors return zero values, so a decision on them may be wrong.
+func (t *Tx) Err() error { return t.err }
 
 func (t *Tx) mustWrite() {
 	if !t.write {
@@ -176,7 +183,12 @@ func (t *Tx) rows(scan func(*sql.Rows) error, query string, args ...any) {
 
 // byNumber orders items and attempts by the number in their IDs, which
 // follows creation.
-const byNumber = " ORDER BY CAST(substr(id, 2) AS INTEGER), id"
+var byNumber = byNumberOf("id")
+
+// byNumberOf orders rows by the number in the ID that column holds.
+func byNumberOf(column string) string {
+	return " ORDER BY CAST(substr(" + column + ", 2) AS INTEGER), " + column
+}
 
 // Item is the item with this ID.
 func (t *Tx) Item(id string) (Item, bool) {
@@ -220,7 +232,7 @@ func (t *Tx) DeleteItem(id string) {
 
 // CoordinatedItems are the items whose coordination intent is set, by ID.
 func (t *Tx) CoordinatedItems() []Item {
-	return fetchAll[Item](t, "SELECT data FROM items WHERE coordinating"+byNumber)
+	return fetchAll[Item](t, "SELECT data FROM items WHERE coordinating=1"+byNumber)
 }
 
 // ItemsOfPlan are the tasks of plan, by ID.
@@ -231,7 +243,15 @@ func (t *Tx) ItemsOfPlan(plan string) []Item {
 // ItemsByKindUnder are the items of a kind that belong to repo or plan
 // parent, by ID. An empty kind or parent matches every one.
 func (t *Tx) ItemsByKindUnder(kind, parent string) []Item {
-	return fetchAll[Item](t, "SELECT data FROM items WHERE (?1='' OR kind=?1) AND (?2='' OR repo=?2 OR plan=?2)"+byNumber, kind, parent)
+	switch {
+	case parent != "" && kind != "":
+		return fetchAll[Item](t, "SELECT data FROM items WHERE kind=?1 AND (repo=?2 OR plan=?2)"+byNumber, kind, parent)
+	case parent != "":
+		return fetchAll[Item](t, "SELECT data FROM items WHERE repo=?1 OR plan=?1"+byNumber, parent)
+	case kind != "":
+		return fetchAll[Item](t, "SELECT data FROM items WHERE kind=?"+byNumber, kind)
+	}
+	return fetchAll[Item](t, "SELECT data FROM items"+byNumber)
 }
 
 // RepoBySlug is the repository item with this owner/name slug.
@@ -263,19 +283,22 @@ func (t *Tx) PutAttempt(at Attempt) {
 // AttemptsFor are the attempts of item, by ID. An empty item matches every
 // attempt.
 func (t *Tx) AttemptsFor(item string) []Attempt {
-	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE ?1='' OR item=?1"+byNumber, item)
+	if item == "" {
+		return fetchAll[Attempt](t, "SELECT data FROM attempts"+byNumber)
+	}
+	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE item=?"+byNumber, item)
 }
 
 // CurrentAttempts are the attempts that are their item's current one, by
 // ID, ended or not.
 func (t *Tx) CurrentAttempts() []Attempt {
-	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.attempt=a.id AND i.id=a.item"+
-		" ORDER BY CAST(substr(a.id, 2) AS INTEGER), a.id")
+	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.attempt=a.id AND i.id=a.item"+byNumberOf("a.id"))
 }
 
 // UnendedAttempts are the attempts not yet ended, by ID.
 func (t *Tx) UnendedAttempts() []Attempt {
-	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE state!='ended'"+byNumber)
+	// Two ranges, not !=, so the state index answers it.
+	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE state<'ended' OR state>'ended'"+byNumber)
 }
 
 // AttemptsOnHost are the attempts that ran or run on host, by ID.
@@ -287,8 +310,7 @@ func (t *Tx) AttemptsOnHost(host string) []Attempt {
 // their harness, by ID.
 func (t *Tx) HostedTaskAttempts() []Attempt {
 	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.id=a.item AND i.kind='task'"+
-		" WHERE a.host!='' AND json_extract(a.data, '$.harness')!=''"+
-		" ORDER BY CAST(substr(a.id, 2) AS INTEGER), a.id")
+		" WHERE a.host!='' AND json_extract(a.data, '$.harness')!=''"+byNumberOf("a.id"))
 }
 
 // Credential is the actor an execution credential's digest names.

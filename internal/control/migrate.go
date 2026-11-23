@@ -54,8 +54,11 @@ func (s *Store) migrate(version int) error {
 		if _, err = tx.Exec(migratePlanStates + telegramSchema + schema + copyRecords); err != nil {
 			return fmt.Errorf("control database migration: %w", err)
 		}
+		t := &Tx{ctx: context.Background(), q: tx, write: true}
+		if err = decodesAll(t); err != nil {
+			return fmt.Errorf("control database migration: %w", err)
+		}
 		if version == 1 || version == 2 {
-			t := &Tx{ctx: context.Background(), q: tx, write: true}
 			retire(t, locks, time.Now().UTC())
 			if t.err != nil {
 				return t.err
@@ -147,6 +150,21 @@ INSERT INTO hosts(name,data) SELECT substr(key, 6), data FROM records WHERE subs
 UPDATE counters SET value = COALESCE((SELECT CAST(data AS INTEGER) FROM records WHERE key = 'next'), value) WHERE name = 'next';
 INSERT INTO marks(name,data) SELECT key, data FROM records WHERE key IN ('pass', 'upgrade');
 `
+
+// decodesAll fails unless every copied row decodes as its record, as the
+// records-table loader required.
+func decodesAll(t *Tx) error {
+	fetchAll[Item](t, "SELECT data FROM items")
+	fetchAll[Attempt](t, "SELECT data FROM attempts")
+	fetchAll[Update](t, "SELECT data FROM updates")
+	fetchAll[QueueEntry](t, "SELECT data FROM queue")
+	fetchAll[Actor](t, "SELECT data FROM credentials")
+	fetchAll[receipt](t, "SELECT data FROM receipts")
+	fetchAll[HostRecord](t, "SELECT data FROM hosts")
+	fetchAll[time.Time](t, "SELECT data FROM marks WHERE name='pass'")
+	fetchAll[UpgradeRecord](t, "SELECT data FROM marks WHERE name='upgrade'")
+	return t.err
+}
 
 func retire(tx *Tx, locks []legacyLock, now time.Time) {
 	coordinator := Actor{Name: "coordinator", Role: "coordinator"}

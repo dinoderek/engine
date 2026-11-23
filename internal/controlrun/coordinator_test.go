@@ -112,7 +112,13 @@ func (h *host) ControlSpawn(r hostops.ControlRequest) (hostops.Spawned, error) {
 
 func setup(t *testing.T) (*Coordinator, *host, control.Item, control.Item, control.Item) {
 	t.Helper()
-	store, err := control.Open(filepath.Join(t.TempDir(), "db"))
+	return setupAt(t, filepath.Join(t.TempDir(), "db"))
+}
+
+// setupAt is setup, its database at path.
+func setupAt(t *testing.T, path string) (*Coordinator, *host, control.Item, control.Item, control.Item) {
+	t.Helper()
+	store, err := control.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

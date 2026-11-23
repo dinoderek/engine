@@ -5,6 +5,7 @@ package controlrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -153,13 +154,23 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 
 // decideAndApply decides root id's actions on tx and applies them.
 func (c *Coordinator) decideAndApply(ctx context.Context, tx *control.Tx, id string, fleet reconcile.Fleet, cfg *hosts.Config) error {
+	// A failed read leaves zero values: never record or decide on them.
+	if err := tx.Err(); err != nil {
+		return err
+	}
 	root, _ := tx.Item(id)
+	if err := tx.Err(); err != nil {
+		return err
+	}
 	c.Observer.Record(tx, fleet)
 	c.Board.Record(tx, fleet, c.Ready)
 	if !root.Coordinating {
 		return nil
 	}
 	v := c.view(tx, id, fleet)
+	if err := tx.Err(); err != nil {
+		return err
+	}
 	acts := reconcile.Decide(v)
 	if err := c.keepObservations(v); err != nil {
 		return err
@@ -173,8 +184,8 @@ func (c *Coordinator) decideAndApply(ctx context.Context, tx *control.Tx, id str
 	}
 	released := true
 	for _, act := range acts {
-		if ctx.Err() != nil {
-			return ctx.Err()
+		if err := errors.Join(ctx.Err(), tx.Err()); err != nil {
+			return err
 		}
 		// A stop never abandons a window it failed to release.
 		if act.Kind == reconcile.Stop && !released {
