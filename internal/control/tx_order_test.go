@@ -40,7 +40,7 @@ func TestItemAndAttemptListingsFollowTheNumberInTheirIDs(t *testing.T) {
 		"CoordinatedItems":  itemIDs(tx.CoordinatedItems()),
 		"tasks under r1":    itemIDs(tx.ItemsByKindUnder("task", "r1")),
 		"AttemptsFor":       attemptIDs(tx.AttemptsFor("")),
-		"CurrentAttempts":   attemptIDs(tx.CurrentAttempts()),
+		"SessionAttempts":   attemptIDs(tx.SessionAttempts()),
 		"UnendedAttempts":   attemptIDs(tx.UnendedAttempts()),
 		"AttemptsOnHost":    attemptIDs(tx.AttemptsOnHost("devbox")),
 		"HostedTaskAttempt": attemptIDs(tx.HostedTaskAttemptsOf("devbox", "claude")),
@@ -308,5 +308,41 @@ func TestAReceiptIsCreatedAtTheServicesClock(t *testing.T) {
 	out, err := s.Store.sql("SELECT DISTINCT created FROM receipts")
 	if want := `[{"created":"2026-11-07T09:00:00.000Z"}]`; err != nil || string(out) != want {
 		t.Fatalf("receipts created %s (%v), want every one at the service's clock: %s", out, err, want)
+	}
+}
+
+func TestSessionAttemptsLeaveOutTheEndedAttemptsOfFinishedWork(t *testing.T) {
+	tx := blank(t)
+	for _, c := range []struct{ id, state, attempt string }{
+		{"t1", "done", "ended"}, {"t2", "failed", "ended"}, {"t3", "running", "running"},
+		{"t4", "running", "ended"}, {"t5", "approved", "ended"}, {"t6", "done", "running"},
+	} {
+		n := c.id[1:]
+		tx.PutItem(Item{ID: c.id, Kind: "task", Repo: "r1", State: c.state, Attempt: "a" + n})
+		tx.PutAttempt(Attempt{ID: "a" + n, Item: c.id, State: c.attempt})
+		tx.PutAttempt(Attempt{ID: "a1" + n, Item: c.id, State: "running"}) // not current
+	}
+	got := attemptIDs(tx.SessionAttempts())
+	if want := []string{"a3", "a4", "a5", "a6"}; !slices.Equal(got, want) {
+		t.Fatalf("SessionAttempts = %v, want %v", got, want)
+	}
+}
+
+func TestTaskStatesOfPlanAreItsTasksStatesOnly(t *testing.T) {
+	tx := blank(t)
+	tx.PutItem(Item{ID: "p2", Kind: "plan", State: "planned"})
+	tx.PutItem(Item{ID: "t3", Kind: "task", Plan: "p2", State: "todo", Title: "card"})
+	tx.PutItem(Item{ID: "t4", Kind: "task", Plan: "p2", State: "failed"})
+	tx.PutItem(Item{ID: "t5", Kind: "task", Plan: "p9", State: "done"})
+	var got []string
+	for _, item := range tx.TaskStatesOfPlan("p2") {
+		if item.ID != "" || item.Title != "" {
+			t.Fatalf("a task state carries more than its state: %+v", item)
+		}
+		got = append(got, item.State)
+	}
+	slices.Sort(got)
+	if want := []string{"failed", "todo"}; !slices.Equal(got, want) {
+		t.Fatalf("TaskStatesOfPlan = %v, want %v", got, want)
 	}
 }

@@ -28,4 +28,7 @@ a fake would assume the behaviour under test.
 - **Race detector on:** the `unit` lane runs with `-race`.
 - **No sleeps or wall-clock assertions.** Test durations by rendering a fixed
   value. A real-process test may poll, against a deadline, for another
-  process's effect; it never asserts on a duration.
+  process's effect; it never asserts on a duration. One exception: the store's
+  performance gate (`internal/control/bench_test.go`) fails an operation over
+  10× its target. Under `-race` it checks answers only; the `coverage` lane
+  enforces the time.

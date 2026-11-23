@@ -1,11 +1,14 @@
 package control
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -245,6 +248,21 @@ func (t *Tx) ItemsOfPlan(plan string) []Item {
 	return fetchAll[Item](t, "SELECT data FROM items WHERE plan=?"+byNumber, plan)
 }
 
+// TaskStatesOfPlan are the tasks of plan with only their State filled: what a
+// plan's status reads, without decoding each task's card.
+func (t *Tx) TaskStatesOfPlan(plan string) []Item {
+	var out []Item
+	t.rows(func(rows *sql.Rows) error {
+		var state string
+		if err := rows.Scan(&state); err != nil {
+			return err
+		}
+		out = append(out, Item{State: state})
+		return nil
+	}, "SELECT state FROM items WHERE plan=? AND kind='task'", plan)
+	return out
+}
+
 // ItemsByKindUnder are the items of a kind that belong to repo or plan
 // parent, by ID. An empty kind or parent matches every one.
 func (t *Tx) ItemsByKindUnder(kind, parent string) []Item {
@@ -294,10 +312,16 @@ func (t *Tx) AttemptsFor(item string) []Attempt {
 	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE item=?"+byNumber, item)
 }
 
-// CurrentAttempts are the attempts that are their item's current one, by
-// ID, ended or not.
-func (t *Tx) CurrentAttempts() []Attempt {
-	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.attempt=a.id AND i.id=a.item"+byNumberOf("a.id"))
+// SessionAttempts are the attempts a session list may show, by ID: each
+// item's current attempt when it is not ended, and an unfinished task's when
+// it ended (the caller keeps the vanished ones). It never reads the ended
+// attempts of finished work, the bulk of a long-lived server's.
+func (t *Tx) SessionAttempts() []Attempt {
+	out := t.ActiveAttempts()
+	out = append(out, fetchAll[Attempt](t, "SELECT a.data FROM items i CROSS JOIN attempts a ON a.id=i.attempt AND a.item=i.id"+
+		" WHERE i.kind='task' AND i.state NOT IN ('done','failed') AND a.state='ended'")...)
+	slices.SortFunc(out, func(x, y Attempt) int { return cmp.Or(Number(x.ID)-Number(y.ID), strings.Compare(x.ID, y.ID)) })
+	return out
 }
 
 // CurrentAttemptsOfPlan are the attempts that are the current one of the plan
