@@ -111,7 +111,7 @@ func current(st *State, read LimitRead) LimitRead {
 func (s Service) limitStretch(st *State, host string, read LimitRead) {
 	rec := st.Hosts[host]
 	ask := rec.Limits[read.Harness]
-	open := ask.Question > 0 && !resolved(st, ask.Question)
+	open := ask.Question > 0 && st.LegacyTx().Resolution(ask.Question) == 0
 	ask.Tasks = slices.DeleteFunc(ask.Tasks, func(id string) bool { return !slices.Contains(read.Tasks, id) })
 	if open && len(ask.Tasks) == 0 {
 		st.update(coordinatorActor, Request{ReplyTo: ask.Question}, "resolved", ResolutionNoLimit, s.now())
@@ -197,7 +197,7 @@ func (s Service) askLimit(st *State, read LimitRead) LimitAsk {
 func (s Service) actOnLimit(st *State, host, harness string) error {
 	rec := st.Hosts[host]
 	ask := rec.Limits[harness]
-	by := resolution(st, ask.Question)
+	by := st.LegacyTx().Resolution(ask.Question)
 	if ask.Acted || by == 0 || len(ask.Tasks) == 0 {
 		return nil
 	}

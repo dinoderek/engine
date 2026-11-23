@@ -195,7 +195,7 @@ func TestRequestDeduplicationAndConcurrentClaims(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(st.Attempts) != 1 || len(st.ReceiptsForDispatch(st.Items[task.ID].Attempt)) != 1 {
+	if len(st.Attempts) != 1 || len(st.LegacyTx().DispatchTokens(st.Items[task.ID].Attempt)) != 1 {
 		t.Fatal("dispatch identity missing")
 	}
 }

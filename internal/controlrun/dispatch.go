@@ -235,7 +235,7 @@ func (c *Coordinator) reconcileDispatch(st control.State, item control.Item, at 
 			return c.Service.Started(at.ID, window, r.PaneKey)
 		}
 	}
-	credentials := st.ReceiptsForDispatch(at.ID)
+	credentials := st.LegacyTx().DispatchTokens(at.ID)
 	if len(credentials) != 1 {
 		return fmt.Errorf("dispatch %s has no unique credential receipt", at.ID)
 	}

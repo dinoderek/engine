@@ -89,7 +89,7 @@ func (s Service) reachedAgain(st *State, host string, alive func(*State, Attempt
 	if rec.UnreachableSince.IsZero() && rec.Question == 0 {
 		return
 	}
-	if rec.Question > 0 && !resolved(st, rec.Question) {
+	if rec.Question > 0 && st.LegacyTx().Resolution(rec.Question) == 0 {
 		st.update(coordinatorActor, Request{ReplyTo: rec.Question}, "resolved", ResolutionReturned, s.now())
 		s.hostNote(st, host, returnedNote(st, host, rec, alive))
 	}
@@ -126,7 +126,7 @@ func (s Service) actOnAnswer(st *State, host string) error {
 	if rec.Question == 0 || rec.Acted {
 		return nil
 	}
-	by := resolution(st, rec.Question)
+	by := st.LegacyTx().Resolution(rec.Question)
 	if by == 0 {
 		return nil
 	}

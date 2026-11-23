@@ -74,7 +74,7 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 	u := st.update(a, r, kind, r.Body, s.now())
 	out := Response{Updates: []Update{u}}
 	if question > 0 {
-		out.Updates = append(out.Updates, s.release(st, a, st.Updates[question-1])...)
+		out.Updates = append(out.Updates, s.release(st.LegacyTx(), a, st.Updates[question-1])...)
 	}
 	if doubts := paneDoubts(at, r.Key, r.Body, vouch); len(doubts) > 0 {
 		outcome := "resolved nothing"
@@ -109,7 +109,7 @@ const clockSkew = 30 * time.Second
 func paneQuestion(st *State, a Actor, item string, at time.Time) int {
 	other := 0
 	for _, u := range st.Updates {
-		if !u.RequiresReply || u.Item != item && u.Task != item || u.Task != "" && u.Task != item || resolved(st, u.ID) {
+		if !u.RequiresReply || u.Item != item && u.Task != item || u.Task != "" && u.Task != item || st.LegacyTx().Resolution(u.ID) > 0 {
 			continue // a task's question on its plan holds that task, not the plan's planner
 		}
 		if !at.IsZero() && u.At.After(at.Add(clockSkew)) {

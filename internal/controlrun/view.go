@@ -57,7 +57,7 @@ func pausedHosts(st control.State, hosts []reconcile.HostLoad) []reconcile.HostL
 // record is item as a pass reads it from st, without its session.
 func record(st control.State, item control.Item) reconcile.Item {
 	t := reconcile.Item{Item: item, Current: st.Attempts[item.Attempt], Name: sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)),
-		Vanished: control.Vanished(&st, item), Question: control.OwnQuestion(&st, item.ID), PlanHold: control.NewStartHold(&st, item.ID),
+		Vanished: control.Vanished(&st, item), Question: control.OwnQuestion(st.LegacyTx(), item.ID), PlanHold: control.NewStartHold(&st, item.ID),
 		Stopped: st.Attempts[item.Attempt].Reason == control.EndStopped, Claimed: control.Claimed(&st, st.Attempts[item.Attempt]), Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(&st, item.ID), MergedHead: control.MergedHead(&st, item.ID)}
 	for _, id := range item.Depends {
 		if st.Items[id].State != "done" {

@@ -61,8 +61,8 @@ func TestASignedPaneAnswerResolvesTheTasksQuestion(t *testing.T) {
 		t.Errorf("answer = %+v, want the text verbatim replying to %d", got, question.ID)
 	}
 	st := mustSnapshot(t, s)
-	if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
-		t.Errorf("task %s, open question %d; want it running with none", st.Items[task.ID].State, OwnQuestion(&st, task.ID))
+	if st.Items[task.ID].State != "running" || OwnQuestion(st.LegacyTx(), task.ID) != 0 {
+		t.Errorf("task %s, open question %d; want it running with none", st.Items[task.ID].State, OwnQuestion(st.LegacyTx(), task.ID))
 	}
 	if n := notes(st, task.ID); len(n) != 0 {
 		t.Errorf("notes = %+v, want none for a vouched answer", n)
@@ -123,8 +123,8 @@ func TestAPaneAnswerTheHookDidNotVouchForResolvesWithOneNote(t *testing.T) {
 				t.Fatalf("answer = %+v, want it recorded", out.Updates[0])
 			}
 			st := mustSnapshot(t, s)
-			if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
-				t.Errorf("task %s, open question %d; want it resolved all the same", st.Items[task.ID].State, OwnQuestion(&st, task.ID))
+			if st.Items[task.ID].State != "running" || OwnQuestion(st.LegacyTx(), task.ID) != 0 {
+				t.Errorf("task %s, open question %d; want it resolved all the same", st.Items[task.ID].State, OwnQuestion(st.LegacyTx(), task.ID))
 			}
 			n := notes(st, task.ID)
 			if len(n) != 1 || !strings.Contains(n[0].Body, tc.reason) || !strings.Contains(n[0].Body, fmt.Sprintf("resolved question %d", question.ID)) {
@@ -164,8 +164,8 @@ func TestAPaneAnswerResolvesAQuestionTheTaskAskedOnItsPlan(t *testing.T) {
 	if out.Updates[0].ReplyTo != question.ID || out.Updates[0].Item != plan.ID {
 		t.Fatalf("answer = %+v, want it on the plan, resolving %d", out.Updates[0], question.ID)
 	}
-	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" || PlanQuestion(&st, task.ID) != 0 {
-		t.Errorf("task %s, plan question %d", st.Items[task.ID].State, PlanQuestion(&st, task.ID))
+	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" || PlanQuestion(st.LegacyTx(), task.ID) != 0 {
+		t.Errorf("task %s, plan question %d", st.Items[task.ID].State, PlanQuestion(st.LegacyTx(), task.ID))
 	}
 }
 
