@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -90,9 +89,6 @@ func TestReadsCarryPlanStatusThatIsNeverStored(t *testing.T) {
 }
 
 func TestStoreMigratesRemovedPlanStates(t *testing.T) {
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 is absent")
-	}
 	path := filepath.Join(t.TempDir(), "control.db")
 	records := map[string]Item{
 		"item/r1": {ID: "r1", Kind: "repo", Version: 1, Title: "Demo", Slug: "o/d", Remote: "x", State: "active"},
@@ -109,12 +105,12 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 		sql.WriteString("INSERT INTO records VALUES ('" + key + "', '" + string(b) + "');\n")
 	}
 	sql.WriteString("PRAGMA user_version=1;\n")
-	if _, err := SQLite(context.Background(), path, sql.String()); err != nil {
+	if _, err := fixtureSQL(context.Background(), path, sql.String()); err != nil {
 		t.Fatal(err)
 	}
 	before := rawRecords(t, path)
 	for range 2 { // the second open is a no-op
-		store, err := Open(path, nil)
+		store, err := Open(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,7 +135,7 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 			}
 		}
 	}
-	out, err := SQLite(context.Background(), path, "PRAGMA user_version;")
+	out, err := fixtureSQL(context.Background(), path, "PRAGMA user_version;")
 	if err != nil || !strings.Contains(string(out), fmt.Sprintf(`"user_version":%d`, schemaVersion)) {
 		t.Fatalf("schema version: %s %v", out, err)
 	}
@@ -147,7 +143,7 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 
 func rawRecords(t *testing.T, path string) map[string]string {
 	t.Helper()
-	out, err := SQLite(context.Background(), path, "SELECT key, data FROM records;")
+	out, err := fixtureSQL(context.Background(), path, "SELECT key, data FROM records;")
 	if err != nil {
 		t.Fatal(err)
 	}

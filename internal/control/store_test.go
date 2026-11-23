@@ -1,11 +1,8 @@
 package control
 
 import (
-	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -14,7 +11,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 	repo, plan := repoPlan(t, s)
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "persisted"})
 	path := s.Store.path
-	if _, err := Open(path, nil); err == nil {
+	if _, err := Open(path); err == nil {
 		t.Fatal("second server opened database")
 	}
 	backup := filepath.Join(t.TempDir(), "copy.db")
@@ -30,7 +27,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 	if _, err := s.Store.Snapshot(); err == nil {
 		t.Fatal("closed store accepted command")
 	}
-	reopened, err := Open(path, nil)
+	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +39,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 	if st.Items[repo.ID].Slug != "owner/demo" || len(st.Updates) != 3 {
 		t.Fatalf("restart lost state: %+v", st)
 	}
-	copyStore, err := Open(backup, nil)
+	copyStore, err := Open(backup)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,18 +61,16 @@ func TestSQLiteFailureRollsBackStateAndHistory(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
 	before, _ := s.Store.Snapshot()
-	fail := true
-	s.Store.run = func(ctx context.Context, path, sql string) ([]byte, error) {
-		if fail && strings.Contains(sql, "INSERT INTO records") {
-			return SQLite(ctx, path, strings.Replace(sql, "COMMIT;", "INVALID SQL; COMMIT;", 1))
-		}
-		return SQLite(ctx, path, sql)
+	if _, err := s.Store.writer.Exec("CREATE TRIGGER fail_insert BEFORE INSERT ON records WHEN new.key LIKE 'receipt/%' BEGIN SELECT RAISE(ABORT, 'disk full'); END;"); err != nil {
+		t.Fatal(err)
 	}
 	_, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "not committed", Key: "retry"})
 	if err == nil {
 		t.Fatal("invalid transaction succeeded")
 	}
-	fail = false
+	if _, err := s.Store.writer.Exec("DROP TRIGGER fail_insert"); err != nil {
+		t.Fatal(err)
+	}
 	after, _ := s.Store.Snapshot()
 	if fingerprint(before) != fingerprint(after) {
 		t.Fatal("partial transaction committed")
@@ -107,14 +102,18 @@ func TestStoreRefusesUnknownSchemaAndCorruption(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = s.Store.Close()
-	if _, err := Open(path, nil); err == nil {
+	if _, err := Open(path); err == nil {
 		t.Fatal("future schema accepted")
 	}
-	if _, err := Open("", nil); err == nil {
+	if _, err := Open(""); err == nil {
 		t.Fatal("empty database path accepted")
 	}
-	if _, err := Open(filepath.Join(t.TempDir(), "db"), func(context.Context, string, string) ([]byte, error) { return nil, errors.New("missing sqlite") }); err == nil {
-		t.Fatal("sqlite failure accepted")
+	invalid := filepath.Join(t.TempDir(), "db")
+	if err := os.WriteFile(invalid, []byte("not a database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(invalid); err == nil {
+		t.Fatal("corrupt database accepted")
 	}
 	for _, key := range []string{"unknown/x", "item/x", "attempt/x", "update/x", "auth/x", "receipt/x", "queue/x", "next"} {
 		st := emptyState()

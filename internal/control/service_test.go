@@ -2,7 +2,6 @@ package control
 
 import (
 	"errors"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -16,10 +15,7 @@ var op = Actor{Name: "operator", Role: "operator"}
 
 func service(t *testing.T) Service {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 is absent")
-	}
-	store, err := Open(filepath.Join(t.TempDir(), "control.db"), nil)
+	store, err := Open(filepath.Join(t.TempDir(), "control.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

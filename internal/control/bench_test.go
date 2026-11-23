@@ -1,10 +1,8 @@
 package control
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,15 +14,11 @@ import (
 // about 27 MB of records.
 func benchStore(b *testing.B) Service {
 	b.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		b.Skip("sqlite3 is absent")
-	}
 	at := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
-	var sql strings.Builder
-	sql.WriteString("BEGIN IMMEDIATE;\n")
+	var changes []change
 	put := func(key string, v any) {
 		data, _ := json.Marshal(v)
-		fmt.Fprintf(&sql, "INSERT INTO records(key,data) VALUES(%s,%s);\n", literal(key), literal(string(data)))
+		changes = append(changes, change{key: key, data: string(data)})
 	}
 	items := make([]Item, 500)
 	for i := range items {
@@ -48,21 +42,18 @@ func benchStore(b *testing.B) Service {
 		}
 	}
 	put("next", 2000)
-	sql.WriteString("COMMIT;\n")
 	path := filepath.Join(b.TempDir(), "control.db")
-	empty, err := Open(path, nil)
+	empty, err := Open(path)
 	if err != nil {
+		b.Fatal(err)
+	}
+	if err = empty.write(changes, ""); err != nil {
 		b.Fatal(err)
 	}
 	if err = empty.Close(); err != nil {
 		b.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	if _, err = SQLite(ctx, path, sql.String()); err != nil {
-		b.Fatal(err)
-	}
-	store, err := Open(path, nil)
+	store, err := Open(path)
 	if err != nil {
 		b.Fatal(err)
 	}

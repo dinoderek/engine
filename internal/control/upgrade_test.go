@@ -42,7 +42,7 @@ func TestTheUpgradeRecordSurvivesAStoreReopen(t *testing.T) {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(path, nil)
+	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

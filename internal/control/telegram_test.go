@@ -20,7 +20,7 @@ func TestTelegramMigrationAndDurableState(t *testing.T) {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(path, nil)
+	store, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestTelegramMigrationAndDurableState(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = store.Close()
-	store, err = Open(copyPath, nil)
+	store, err = Open(copyPath)
 	if err != nil {
 		t.Fatal(err)
 	}

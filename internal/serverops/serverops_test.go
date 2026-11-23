@@ -202,7 +202,7 @@ func TestStatusChecksThatCannotRun(t *testing.T) {
 	r.host.replies[quickCheck] = answer{err: "sqlite3: command not found", code: 127}
 	r.host.replies[dfCmd] = answer{out: "df: unexpected\n"}
 	_, out, _ := r.main("status")
-	for _, want := range []string{"database: FAILED (sqlite3: command not found)", "disk: FAILED (df said: df: unexpected)"} {
+	for _, want := range []string{"database: FAILED (unknown: sqlite3 is unavailable on the server host)", "disk: FAILED (df said: df: unexpected)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q:\n%s", want, out)
 		}

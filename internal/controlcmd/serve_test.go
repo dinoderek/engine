@@ -16,6 +16,7 @@ import (
 )
 
 func TestServeDefaultsToTheDocumentedPaths(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
 	e, _ := environment(t)
 	tokenPath := filepath.Join(hosts.ConfigDir(e.Home), ServerTokenFile)
 	if code := Main([]string{"serve", "--foreground"}, e); code != 1 || !strings.Contains(e.Err.(*bytes.Buffer).String(), tokenPath) {
@@ -31,6 +32,14 @@ func TestServeDefaultsToTheDocumentedPaths(t *testing.T) {
 	if code := Main([]string{"serve", "--backup", backup}, e); code != 0 {
 		t.Fatalf("serve with defaults: %d %s", code, e.Err)
 	}
+	copied, err := control.Open(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = copied.Snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	_ = copied.Close()
 	for _, path := range []string{filepath.Join(e.Home, ServerDBPath), backup} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatal(err)

@@ -32,8 +32,9 @@ non-test imports. The reasons:
 ## Decisions new code must respect
 
 - **One binary, `engine`, for macOS and Linux.**
-- **External tools use injectable CLI runners**, including `sqlite3`; the
-  server exposes a versioned HTTP API.
+- **External tools use injectable CLI runners**; the
+  server exposes a versioned HTTP API. Control storage uses `database/sql` with
+  `modernc.org/sqlite`, in process.
 - **Coordination derives decisions from authoritative records and host
   observations.** The server persists intent and execution identities.
   Coordinators never edit code; the server's coordinator merges its tasks.
