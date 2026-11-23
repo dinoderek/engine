@@ -14,7 +14,7 @@ func (s State) clone() State {
 		Updates:  cloneUpdates(s.Updates),
 		Queue:    maps.Clone(s.Queue),
 		Auth:     maps.Clone(s.Auth),
-		Hosts:    maps.Clone(s.Hosts),
+		Hosts:    make(map[string]HostRecord, len(s.Hosts)),
 		Receipts: make(map[string]receipt, len(s.Receipts)),
 		Next:     s.Next,
 		PassAt:   s.PassAt,
@@ -22,6 +22,10 @@ func (s State) clone() State {
 	}
 	for k, v := range s.Items {
 		out.Items[k] = v.clone()
+	}
+	for k, v := range s.Hosts {
+		v.Tasks = slices.Clone(v.Tasks)
+		out.Hosts[k] = v
 	}
 	for k, v := range s.Receipts {
 		v.Response = v.Response.clone()

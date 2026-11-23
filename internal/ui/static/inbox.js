@@ -106,9 +106,14 @@ window.engine.inbox = function (ctx) {
   function statics(c) {
     const question = c.kind === "question";
     const key = "i-open-" + c.update;
-    const open = el("a", { href: ctx.panelHref(c.item, "communications", c.update), "data-key": key, class: "card-title" }, c.title || c.item);
-    open.addEventListener("click", () => ctx.noteOpener(key));
-    const meta = [c.item + " · " + (c.repo_slug || c.repo || "")];
+    // A card with no item, such as a question about a host, has no panel to open.
+    let open = el("span", { class: "card-title" }, c.title || "Engine");
+    const meta = [];
+    if (c.item) {
+      open = el("a", { href: ctx.panelHref(c.item, "communications", c.update), "data-key": key, class: "card-title" }, c.title || c.item);
+      open.addEventListener("click", () => ctx.noteOpener(key));
+      meta.push(c.item + " · " + (c.repo_slug || c.repo || ""));
+    }
     if (c.task) meta.push("asked by " + c.task);
     const when = ago(c.at, Date.now());
     meta.push(c.author + (when ? " · " + when : ""));
@@ -225,7 +230,7 @@ window.engine.inbox = function (ctx) {
   function create(c) {
     const e = { card: c, json: "", busy: false, gone: false, choices: [] };
     e.statics = el("div", { class: "card-static" });
-    e.note = el("textarea", { rows: "3", class: "note", "aria-label": "Note for " + c.item, placeholder: c.kind === "question" ? "Note, or an answer" : "Note" });
+    e.note = el("textarea", { rows: "3", class: "note", "aria-label": "Note for " + (c.item || c.title), placeholder: c.kind === "question" ? "Note, or an answer" : "Note" });
     e.note.value = draftOf(c.update);
     e.note.addEventListener("input", () => {
       keepDraft(c.update, e.note.value);
