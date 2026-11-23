@@ -53,7 +53,7 @@ func (s *Store) run(ctx context.Context, write bool, fn func(*Tx) error) error {
 		return err
 	}
 	s.mu.RLock()
-	closed, db := s.lock == nil, s.readers
+	closed, db, trace := s.lock == nil, s.readers, s.trace
 	if write {
 		db = s.writer
 	}
@@ -74,6 +74,9 @@ func (s *Store) run(ctx context.Context, write bool, fn func(*Tx) error) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	t := &Tx{ctx: ctx, q: tx, write: write}
+	if trace != nil {
+		t.q = tracing{tx, trace}
+	}
 	if !write {
 		// A WAL read transaction takes its snapshot at its first read: take
 		// it now, so fn sees the records as they were when Read began.
@@ -308,11 +311,39 @@ func (t *Tx) AttemptsOnHost(host string) []Attempt {
 	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE host=?"+byNumber, host)
 }
 
-// HostedTaskAttempts are the attempts of tasks that name both their host and
-// their harness, by ID.
-func (t *Tx) HostedTaskAttempts() []Attempt {
-	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.id=a.item AND i.kind='task'"+
-		" WHERE a.host!='' AND json_extract(a.data, '$.harness')!=''"+byNumberOf("a.id"))
+// hostedTask is what an attempt of a task that names both its host and its
+// harness satisfies.
+const hostedTask = " FROM attempts a CROSS JOIN items i ON i.id=a.item AND i.kind='task' WHERE a.host!='' AND json_extract(a.data, '$.harness')!=''"
+
+// LimitedPairs are the host and harness of every hosted task attempt that
+// ended at a usage limit, once each, by host, then harness: the partial index
+// holds only the attempts that were limited. CROSS JOIN keeps the planner from
+// starting at the items, and the unary plus from preferring the state index,
+// which holds every ended attempt.
+func (t *Tx) LimitedPairs() [][2]string {
+	var out [][2]string
+	t.rows(func(rows *sql.Rows) error {
+		var pair [2]string
+		err := rows.Scan(&pair[0], &pair[1])
+		out = append(out, pair)
+		return err
+	}, "SELECT DISTINCT a.host, json_extract(a.data, '$.harness')"+hostedTask+
+		" AND +a.state='ended' AND json_extract(a.data, '$.limited')=1 ORDER BY 1, 2")
+	return out
+}
+
+// HostedTaskAttemptsOf are the hosted task attempts on host that ran
+// harness, by ID.
+func (t *Tx) HostedTaskAttemptsOf(host, harness string) []Attempt {
+	return fetchAll[Attempt](t, "SELECT a.data"+hostedTask+" AND a.host=? AND json_extract(a.data, '$.harness')=?"+byNumberOf("a.id"), host, harness)
+}
+
+// ActiveAttempts are the attempts that are their item's current one and not
+// ended, by ID: the sessions a pass observes.
+func (t *Tx) ActiveAttempts() []Attempt {
+	// Two ranges, not !=, so the state index answers it.
+	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.attempt=a.id AND i.id=a.item"+
+		" WHERE a.state<'ended' OR a.state>'ended'"+byNumberOf("a.id"))
 }
 
 // Credential is the actor an execution credential's digest names.
@@ -372,6 +403,19 @@ func (t *Tx) QueueOf(repo string) []QueueEntry {
 // repository, each in its order.
 func (t *Tx) QueueEntries() []QueueEntry {
 	return fetchAll[QueueEntry](t, "SELECT data FROM queue ORDER BY repo, seq, task")
+}
+
+// QueuedRepos are the repositories whose merge queue is not empty, by ID
+// number. The queue holds only merges in flight, and its index answers it.
+func (t *Tx) QueuedRepos() []string {
+	var out []string
+	t.rows(func(rows *sql.Rows) error {
+		var repo string
+		err := rows.Scan(&repo)
+		out = append(out, repo)
+		return err
+	}, "SELECT DISTINCT repo FROM queue"+byNumberOf("repo"))
+	return out
 }
 
 // PutQueueEntry stores e under its task, in its repository's merge queue.

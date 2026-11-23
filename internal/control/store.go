@@ -23,13 +23,15 @@ type Store struct {
 	writer  *sql.DB
 	readers *sql.DB
 	commit  func(*sql.Tx) error
+	// trace, when set, sees every query (Trace).
+	trace func(query string, args []any)
 	// writeTimeout bounds each Store.Write.
 	writeTimeout time.Duration
 }
 
 // Open creates a private database and refuses a database already owned by a
 // server. It migrates an older schema (migrate) and refuses a newer one; a
-// current database opens without reading any record.
+// current database opens without reading any record once its indexes exist.
 func Open(path string) (*Store, error) {
 	if path == "" {
 		return nil, errors.New("a database path is required")
@@ -69,7 +71,9 @@ func (s *Store) initialize() error {
 		return fmt.Errorf("control database schema %d is newer than this server's %d", version, schemaVersion)
 	}
 	if version == schemaVersion {
-		return nil
+		// A database made before an index was added to the version gets it.
+		_, err := s.writer.Exec(currentIndexes)
+		return err
 	}
 	var records int
 	if err := s.writer.QueryRow("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='records'").Scan(&records); err != nil {

@@ -142,16 +142,13 @@ func (t *Tx) reply(id int, kinds string) int {
 	return n
 }
 
-// Authors are the names that wrote an update.
-func (t *Tx) Authors() map[string]bool {
-	out := map[string]bool{}
-	t.rows(func(rows *sql.Rows) error {
-		var name string
-		err := rows.Scan(&name)
-		out[name] = true
-		return err
-	}, "SELECT DISTINCT author FROM updates")
-	return out
+// Wrote reports whether author wrote any update: one indexed lookup.
+func (t *Tx) Wrote(author string) bool {
+	var n int
+	if t.err == nil {
+		t.fail(t.q.QueryRowContext(t.ctx, "SELECT EXISTS(SELECT 1 FROM updates WHERE author=?)", author).Scan(&n))
+	}
+	return n == 1
 }
 
 // LatestUpdate is the newest update of kind about item.

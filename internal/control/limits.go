@@ -34,17 +34,13 @@ type HarnessLimit struct {
 }
 
 // HarnessLimits are the host × harness pairs at a usage limit, by host, then
-// harness.
+// harness. It reads only the pairs that recorded a limit, each pair's
+// attempts and whether they wrote: a server whose accounts never hit a limit
+// reads no attempt.
 func HarnessLimits(tx *Tx) []HarnessLimit {
-	wrote := tx.Authors()
-	pairs := map[[2]string][]Attempt{}
-	for _, at := range tx.HostedTaskAttempts() {
-		key := [2]string{at.Host, at.Harness}
-		pairs[key] = append(pairs[key], at)
-	}
 	var out []HarnessLimit
-	for key, attempts := range pairs {
-		if l, ok := harnessLimit(wrote, key[0], key[1], attempts); ok {
+	for _, pair := range tx.LimitedPairs() {
+		if l, ok := harnessLimit(tx.Wrote, pair[0], pair[1], tx.HostedTaskAttemptsOf(pair[0], pair[1])); ok {
 			out = append(out, l)
 		}
 	}
@@ -55,7 +51,7 @@ func HarnessLimits(tx *Tx) []HarnessLimit {
 }
 
 // harnessLimit is one pair's limit, from its attempts, if it has one.
-func harnessLimit(wrote map[string]bool, host, harness string, attempts []Attempt) (HarnessLimit, bool) {
+func harnessLimit(wrote func(string) bool, host, harness string, attempts []Attempt) (HarnessLimit, bool) {
 	var limits []Attempt
 	var claim time.Time // the newest start of an attempt that claimed its task
 	for _, at := range attempts {

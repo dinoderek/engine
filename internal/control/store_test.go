@@ -116,3 +116,39 @@ func TestStoreRefusesUnknownSchemaAndCorruption(t *testing.T) {
 		t.Fatal("corrupt database accepted")
 	}
 }
+
+// A current database made before an index was added gets it on open, and one
+// that has it is left as it is.
+func TestOpenAddsAnIndexAMadeDatabaseLacks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexes := func(s *Store) (n int) {
+		if err := s.writer.QueryRow("SELECT count(*) FROM sqlite_schema WHERE name='attempts_limited'").Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if indexes(s) != 1 {
+		t.Fatal("a new database lacks the index")
+	}
+	if _, err = s.writer.Exec("DROP INDEX attempts_limited"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if s, err = Open(path); err != nil {
+			t.Fatal(err)
+		}
+		if indexes(s) != 1 {
+			t.Error("a reopened database lacks the index")
+		}
+		if err = s.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

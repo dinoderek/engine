@@ -56,7 +56,11 @@ CREATE TABLE hosts (name TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);
 INSERT INTO counters(name, value) VALUES('next', 1);
 CREATE TABLE marks (name TEXT PRIMARY KEY, data TEXT NOT NULL);
-`
+` + currentIndexes
+
+// currentIndexes creates, when absent, the indexes added to version 7 after
+// databases of it existed; a current database runs it on open.
+const currentIndexes = "CREATE INDEX IF NOT EXISTS attempts_limited ON attempts(host) WHERE json_extract(data, '$.limited')=1;\n"
 
 // snapshotFields are the fields of an item an update's snapshot keeps: what
 // its readers use. A held task's state before needs-human comes from the

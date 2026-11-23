@@ -5,7 +5,7 @@
 ## Shape
 
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
-- **Stateless.** Each pass derives everything from the server's records and each host's tmux sessions, observations, run directories and readiness.
+- **Stateless.** Each pass derives everything from the server's records, read per plan and repository, and each host's tmux sessions, observations, run directories and readiness.
 - **One pass** runs every 30 seconds and once at start, reading every host's `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer reuses those reads (`dashboard.md`). Stopping coordination leaves sessions running; plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`, "Placement". For session liveness, stalls, vanishes, early deaths and limits, load `session-signals.md`.
@@ -16,7 +16,7 @@ Plans serialize against fresh fleet capacity. A dispatch records its attempt, ho
 
 The host serializes dispatches by run ID and returns an existing run on replay. A spawn failing before its window opens removes what it made (the run directory; the worktree and branch unless reused), naming any leftover; a run directory with no `run.json` and no window is reused. It uses the host's Git credentials and identity, with isolated clones under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin into an owner-only run file whose path the window command exports; hooks recover their connection from the worktree's server-session record. Credential files are never collected.
 
-A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`, "Vanish" and "Early death").
+A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`).
 
 A task the operator moved (`control-server.md`) waits until a pass's `release --moved` of its old run, window open or gone, succeeds, and while the old host is unread, unless it was moved blind; a wait on an unread host tells the operator once. Releasing work `origin` lacks tells the operator, unless the move stayed on that host. A blind move's old run is released when its host answers, a done plan's too. Until then, each kickoff warns that the old session may still push: before each push, the new session fetches and asks the operator if `origin`'s branch has commits it lacks.
 
