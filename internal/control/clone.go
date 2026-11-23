@@ -25,6 +25,11 @@ func (s State) clone() State {
 	}
 	for k, v := range s.Hosts {
 		v.Tasks = slices.Clone(v.Tasks)
+		v.Limits = maps.Clone(v.Limits)
+		for harness, ask := range v.Limits {
+			ask.Tasks = slices.Clone(ask.Tasks)
+			v.Limits[harness] = ask
+		}
 		out.Hosts[k] = v
 	}
 	for k, v := range s.Receipts {

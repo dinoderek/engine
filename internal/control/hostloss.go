@@ -23,6 +23,9 @@ type HostRecord struct {
 	Question int      `json:"question,omitempty"`
 	Tasks    []string `json:"tasks,omitempty"`
 	Acted    bool     `json:"acted,omitempty"`
+	// Limits are the fleet questions about the host's task sessions at a
+	// usage limit, by harness (limitask.go).
+	Limits map[string]LimitAsk `json:"limits,omitempty"`
 }
 
 // TmuxRead is what a successful read of a host showed of its tmux server.

@@ -42,7 +42,8 @@ fleet question `Host <name>`, hard-stop class,
 plain question text truncated to 1000 Unicode characters, and the configured
 dashboard link when present.
 Each choice gets a button; a star marks the recommendation. An unreachable
-host's question has three: wait (starred), move its tasks, stop them. Questions without
+host's question has three: wait (starred), move its tasks, stop them. A usage
+limit's has two: wait for the reset, and the move. Questions without
 choices can be answered through the CLI or session. Links use `dashboard_url`
 exactly; it accepts an HTTP(S) origin without credentials, a path other than
 `/`, a query or a fragment. The API address never determines the dashboard link.

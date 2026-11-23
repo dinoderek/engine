@@ -94,6 +94,7 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 	}
 	sess.FarNoted = at.FarFor == sess.ResetsAt && sess.ResetsAt > 0
 	sess.StuckNoted = at.StuckFor == sess.ResetsAt && sess.ResetsAt > 0
+	sess.LimitAsked = slices.Contains(st.Hosts[at.Host].Limits[at.Harness].Tasks, item.ID)
 	t.Session = &sess
 	return t
 }
