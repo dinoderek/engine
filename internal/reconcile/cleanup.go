@@ -122,12 +122,15 @@ func told(a Action, key, text string) Action {
 }
 
 // cleanup, once the root is done, releases every session that is idle or
-// gone, a merged task's by the cleanup rule, and stops coordinating when
-// none is left busy in a turn, limited, unknown, or not yet released after
-// its merge.
+// gone, a merged task's by the cleanup rule, and every window a move left,
+// and stops coordinating when none is left busy in a turn, limited,
+// unknown, or not yet released after its merge or move.
 func cleanup(v View) []Action {
-	var acts []Action
-	pending := false
+	acts := releaseMoved(v)
+	pending := len(acts) > 0
+	for _, t := range v.Tasks {
+		pending = pending || t.StrayUnknown
+	}
 	for _, t := range v.Sessions() {
 		s := *t.Session
 		switch {

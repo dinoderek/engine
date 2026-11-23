@@ -24,6 +24,10 @@ const (
 	// EndStopped is the operator's stop: the task is todo and held, and its
 	// worktree and branch are kept for the resume.
 	EndStopped = "stopped"
+	// EndMoved is the operator's move: the task keeps its state and merge
+	// queue place, and its next dispatch is a resume where the move names
+	// (Attempt.MoveHost, MoveHarness).
+	EndMoved = "moved"
 )
 
 // DeathCap is how many claimed deaths in a row fail a task, or stop the
@@ -70,17 +74,19 @@ func claimedDeaths(st *State, at Attempt, since time.Time) int {
 
 // uncounted reports whether ended attempt o neither counts toward DeathCap
 // nor resets the count: it never opened a window, it died at a usage limit,
-// in a host-wide loss or while an upgrade ran, or it ended vanished for
-// another reason, such as coordination stopped while it ran.
+// in a host-wide loss or while an upgrade ran, the operator moved it, or it
+// ended vanished for another reason, such as coordination stopped while it
+// ran.
 func uncounted(o Attempt) bool {
-	return o.Window == "" || o.Limited || o.HostLost || o.Upgraded || o.Reason == EndVanished && !o.Crashed
+	return o.Window == "" || o.Limited || o.HostLost || o.Upgraded || o.Reason == EndMoved || o.Reason == EndVanished && !o.Crashed
 }
 
 // Vanished reports whether item is an unfinished task whose current attempt
-// ended vanished or in an early death, so coordination dispatches it again as a resume.
+// ended vanished, in an early death or by the operator's move, so
+// coordination dispatches it again as a resume.
 func Vanished(st *State, item Item) bool {
 	at, ok := st.Attempts[item.Attempt]
-	return ok && item.Kind == "task" && at.State == "ended" && (at.Reason == EndVanished || at.Reason == EndEarlyDeath) &&
+	return ok && item.Kind == "task" && at.State == "ended" && (at.Reason == EndVanished || at.Reason == EndEarlyDeath || at.Reason == EndMoved) &&
 		item.State != "done" && item.State != "failed"
 }
 

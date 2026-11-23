@@ -43,6 +43,29 @@ func TestQuestionRenderingAndCallbacks(t *testing.T) {
 	}
 }
 
+func TestAFleetQuestionNamesItsHostAndRendersThreeButtons(t *testing.T) {
+	zero := 0
+	u := control.Update{ID: 7, Host: "mac", Class: "environment", Body: "mac has been unreachable since 2026-11-07 09:00 UTC.",
+		Choices: []string{control.ChoiceWait, control.ChoiceMove, control.ChoiceStop}, Recommended: &zero}
+	text, keys := question(u, "")
+	if !strings.HasPrefix(text, "Host mac\nClass: environment\n\nmac has been unreachable") {
+		t.Fatalf("text %q", text)
+	}
+	var got []string
+	for i, row := range keys.Rows {
+		if len(row) != 1 || row[0].Data != callbackData(7, i) {
+			t.Fatalf("row %d: %+v", i, row)
+		}
+		got = append(got, row[0].Text)
+	}
+	if strings.Join(got, "|") != "★ "+control.ChoiceWait+"|"+control.ChoiceMove+"|"+control.ChoiceStop {
+		t.Fatalf("buttons %q", got)
+	}
+	if note := info(control.Update{Host: "mac", Body: "mac answers again"}); note != "Host mac\nmac answers again" {
+		t.Fatalf("a note on the host: %q", note)
+	}
+}
+
 func TestDigestLeavesRoomForSettledMarkers(t *testing.T) {
 	var rows []control.TelegramDelivery
 	for range 200 {

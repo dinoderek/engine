@@ -39,6 +39,9 @@ type HostLoad struct {
 	Harnesses    []string
 	Capabilities []string
 	FreeSlots    int
+	// Paused is the operator's pause: the host starts nothing new, though
+	// its running sessions carry on.
+	Paused bool
 	// FreeHeavySlots is how many heavy sessions the host can start now.
 	FreeHeavySlots int
 	// Sessions counts the live sessions of each harness on the host.
@@ -121,9 +124,9 @@ func signedOutText(host, harness string) string {
 }
 
 // free is how many slots the host has free now, and how many of them a heavy
-// task may take: none when it cannot be read.
+// task may take: none when it cannot be read or is paused.
 func (h HostLoad) free() slots {
-	if h.Unreachable != "" {
+	if h.Unreachable != "" || h.Paused {
 		return slots{}
 	}
 	all := max(0, h.FreeSlots)
@@ -196,6 +199,9 @@ type Want struct {
 	Requires []string
 	// Harness is the item's pinned harness, or "" to follow the ratio.
 	Harness string
+	// Host, when set, is the only host the item may start on; Avoid is a
+	// host it may not. A move sets them.
+	Host, Avoid string
 	// Invalid, when set, is why the item's harness cannot be read: it waits.
 	Invalid error
 }
@@ -254,6 +260,12 @@ func (f Fleet) fits(w Want, harness string, probed map[pair]bool) (fits []HostLo
 		missing := slices.DeleteFunc(slices.Clone(w.Requires), h.has)
 		ready := h.readiness(w.Repo)
 		switch {
+		case w.Host != "" && h.Name != w.Host:
+			continue
+		case h.Name == w.Avoid:
+			lacks = append(lacks, "the task was moved off "+h.Name)
+		case h.Paused:
+			waits = append(waits, h.Name+" is paused")
 		case !slices.Contains(h.Harnesses, harness):
 			lacks = append(lacks, fmt.Sprintf("%s does not run %s", h.Name, harness))
 		case h.Unready() != "":
@@ -279,6 +291,9 @@ func (f Fleet) fits(w Want, harness string, probed map[pair]bool) (fits []HostLo
 	}
 	if len(lacks) == 0 && len(waits) == 0 {
 		lacks = []string{"hosts.toml has no host"}
+		if w.Host != "" {
+			lacks = []string{"hosts.toml has no host " + w.Host + ", which the task was moved to"}
+		}
 	}
 	return nil, strings.Join(append(waits, lacks...), "; "), len(waits) > 0
 }

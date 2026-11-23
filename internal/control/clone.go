@@ -14,7 +14,7 @@ func (s State) clone() State {
 		Updates:  cloneUpdates(s.Updates),
 		Queue:    maps.Clone(s.Queue),
 		Auth:     maps.Clone(s.Auth),
-		Hosts:    maps.Clone(s.Hosts),
+		Hosts:    make(map[string]HostRecord, len(s.Hosts)),
 		Receipts: make(map[string]receipt, len(s.Receipts)),
 		Next:     s.Next,
 		PassAt:   s.PassAt,
@@ -22,6 +22,15 @@ func (s State) clone() State {
 	}
 	for k, v := range s.Items {
 		out.Items[k] = v.clone()
+	}
+	for k, v := range s.Hosts {
+		v.Tasks = slices.Clone(v.Tasks)
+		v.Limits = maps.Clone(v.Limits)
+		for harness, ask := range v.Limits {
+			ask.Tasks = slices.Clone(ask.Tasks)
+			v.Limits[harness] = ask
+		}
+		out.Hosts[k] = v
 	}
 	for k, v := range s.Receipts {
 		v.Response = v.Response.clone()
@@ -92,6 +101,7 @@ func (r Response) clone() Response {
 	}
 	r.Updates = cloneUpdates(r.Updates)
 	r.Attempt = clonePtr(r.Attempt)
+	r.Host = r.Host.clone()
 	r.Attempts = slices.Clone(r.Attempts)
 	r.Queue = slices.Clone(r.Queue)
 	if r.Sessions != nil {
@@ -117,6 +127,15 @@ func (h *HostStatus) clone() *HostStatus {
 		row.Quota = slices.Clone(row.Quota)
 		row.Readiness = slices.Clone(row.Readiness)
 		h.Hosts[i] = row
+	}
+	return h
+}
+
+func (h *HostChange) clone() *HostChange {
+	h = clonePtr(h)
+	if h != nil {
+		h.Moved = slices.Clone(h.Moved)
+		h.Left = slices.Clone(h.Left)
 	}
 	return h
 }

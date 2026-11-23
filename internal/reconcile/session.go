@@ -59,6 +59,9 @@ type Session struct {
 	LimitedSince time.Time
 	FarNoted     bool
 	StuckNoted   bool
+	// LimitAsked is set when a fleet question about its usage limit covers
+	// it (LimitChoices): the question stands in for the far-reset notice.
+	LimitAsked bool
 	// Working is true when its window's state, from status, is working in a
 	// turn: not limited, waiting or only in a background job. LastActivity
 	// is when its window last showed activity (hostops.Window), zero when

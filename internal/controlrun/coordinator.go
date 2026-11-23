@@ -38,8 +38,10 @@ type Coordinator struct {
 	// Ready, when set, probes each host's readiness for each coordinated
 	// repo; placement then skips a host until its probe passes.
 	Ready *Readiness
-	// notesDue is true until this pass has posted its readiness notes.
-	notesDue bool
+	// notesDue is true until this pass has posted its readiness notes, and
+	// limitsDue until it has settled its limit questions.
+	notesDue  bool
+	limitsDue bool
 	// outage is a server outage whose wake is not yet done; keepOutage is
 	// set by a pass that could not wake every session it should.
 	outage     *outage
@@ -108,6 +110,7 @@ func (c *Coordinator) reconcilePass(ctx context.Context) error {
 	if err = c.queues(cfg); err != nil {
 		return err
 	}
+	c.limitsDue = true
 	for _, id := range ids {
 		if err = c.passItem(ctx, id, cfg, local); err != nil {
 			return err
@@ -129,6 +132,10 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 	if c.notesDue {
 		c.postNotes(fleet)
 		c.notesDue = false
+	}
+	if c.limitsDue {
+		c.sawLimits(fleet)
+		c.limitsDue = false
 	}
 	st, v, acts, err := c.decide(id, fleet)
 	if err != nil {
@@ -198,6 +205,7 @@ func (c *Coordinator) fleet(cfg *hosts.Config, local hosts.Host) reconcile.Fleet
 	}
 	wg.Wait()
 	c.sawTmux(f)
+	c.sawReach(f)
 	return f
 }
 

@@ -30,6 +30,7 @@ func Tasks(st control.State, id string) []control.Item {
 func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) reconcile.View {
 	root := st.Items[id]
 	fleet.Now, fleet.Limits = c.now(), control.HarnessLimits(&st)
+	fleet.Hosts = pausedHosts(st, fleet.Hosts)
 	v := reconcile.View{Now: fleet.Now, Fleet: fleet, Root: withSession(st, root, fleet)}
 	tasks := Tasks(st, id)
 	for _, t := range tasks {
@@ -41,6 +42,16 @@ func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) r
 		}
 	}
 	return v
+}
+
+// pausedHosts is hosts with the operator's pauses from st marked; the
+// pass's own list is left as it was.
+func pausedHosts(st control.State, hosts []reconcile.HostLoad) []reconcile.HostLoad {
+	out := slices.Clone(hosts)
+	for i := range out {
+		out[i].Paused = st.Hosts[out[i].Name].Paused
+	}
+	return out
 }
 
 // record is item as a pass reads it from st, without its session.
@@ -67,6 +78,7 @@ func record(st control.State, item control.Item) reconcile.Item {
 // attempt has no session to observe.
 func withSession(st control.State, item control.Item, fleet reconcile.Fleet) reconcile.Item {
 	t := record(st, item)
+	t.Strays, t.StrayUnknown = strays(st, item, fleet)
 	at, ok := st.Attempts[item.Attempt]
 	if !ok || t.Vanished {
 		return t
@@ -82,8 +94,39 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 	}
 	sess.FarNoted = at.FarFor == sess.ResetsAt && sess.ResetsAt > 0
 	sess.StuckNoted = at.StuckFor == sess.ResetsAt && sess.ResetsAt > 0
+	sess.LimitAsked = slices.Contains(st.Hosts[at.Host].Limits[at.Harness].Tasks, item.ID)
 	t.Session = &sess
 	return t
+}
+
+// strays are item's attempts that ended moved, and were not yet released,
+// whose run is still their host's newest of its name on a host that
+// answered, oldest first: their window, live, dead or already gone, is
+// released, pushing the branch. Only such a run's window is the attempt's,
+// as a later session there may reuse its tmux id. unknown is set when such
+// an attempt's host could not be read; a host gone from hosts.toml has
+// nothing left to release.
+func strays(st control.State, item control.Item, fleet reconcile.Fleet) (out []reconcile.Stray, unknown bool) {
+	for _, at := range st.Attempts {
+		if _, configured := fleet.Host(at.Host); at.Item != item.ID || at.Reason != control.EndMoved || at.Window == "" || at.MoveReleased || !configured {
+			continue
+		}
+		s := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))
+		switch {
+		case s.Unknown:
+			unknown = true
+		case newestRun(fleet, at, s.Name):
+			out = append(out, reconcile.Stray{Attempt: at, Session: s})
+		}
+	}
+	slices.SortFunc(out, func(a, b reconcile.Stray) int { return control.Number(a.Attempt.ID) - control.Number(b.Attempt.ID) })
+	return out, unknown
+}
+
+// newestRun reports whether at's host shows at's run as its newest of name.
+func newestRun(fleet reconcile.Fleet, at control.Attempt, name string) bool {
+	h, ok := fleet.Host(at.Host)
+	return ok && slices.ContainsFunc(h.Status.Runs, func(r hostops.Run) bool { return r.Name == name && r.Record.RunID == at.RunID })
 }
 
 // observe is what the fleet shows of an attempt's session, on the host that

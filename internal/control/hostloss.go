@@ -1,12 +1,31 @@
 package control
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // HostRecord is what the coordinator saved of one host.
 type HostRecord struct {
+	// Paused is the operator's pause: placement starts nothing new on the
+	// host while it is set (hostpause.go). PausedAt is when it was set.
+	Paused   bool      `json:"paused,omitempty"`
+	PausedAt time.Time `json:"paused_at,omitzero"`
 	// TmuxStart is when the host's session tmux server started, in epoch
 	// seconds, as the last successful read that found a server saw it.
 	TmuxStart int64 `json:"tmux_start,omitempty"`
+	// UnreachableSince is the first failed read of the host's current
+	// unreachable stretch; zero while it answers (unreachable.go).
+	UnreachableSince time.Time `json:"unreachable_since,omitzero"`
+	// Question is the fleet question asked about that stretch, at most one,
+	// and Tasks the tasks it named. Acted is set once the coordinator has run
+	// the operator's answer to it.
+	Question int      `json:"question,omitempty"`
+	Tasks    []string `json:"tasks,omitempty"`
+	Acted    bool     `json:"acted,omitempty"`
+	// Limits are the fleet questions about the host's task sessions at a
+	// usage limit, by harness (limitask.go).
+	Limits map[string]LimitAsk `json:"limits,omitempty"`
 }
 
 // TmuxRead is what a successful read of a host showed of its tmux server.
@@ -38,7 +57,9 @@ func (s Service) SawTmux(host string, read TmuxRead, alive func(*State, Attempt)
 			marked++
 		}
 		if read.Known && read.Start != saved {
-			st.Hosts[host] = HostRecord{TmuxStart: read.Start}
+			rec := st.Hosts[host]
+			rec.TmuxStart = read.Start
+			st.Hosts[host] = rec
 		}
 		if marked > 0 {
 			st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{Recipient: "operator"}, "say",

@@ -14,13 +14,29 @@ func (c *Coordinator) sawTmux(f reconcile.Fleet) {
 			continue
 		}
 		read := control.TmuxRead{Known: h.Status.TmuxKnown, Start: h.Status.TmuxStart}
-		alive := func(st *control.State, at control.Attempt) bool {
-			item := st.Items[at.Item]
-			w, ok := matchWindow(at, h.Status, sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)))
-			return ok && w.Alive
-		}
-		if _, err := c.Service.SawTmux(h.Name, read, alive); err != nil {
+		if _, err := c.Service.SawTmux(h.Name, read, windowAlive(h)); err != nil {
 			c.log("tmux of %s: %v", h.Name, err)
 		}
+	}
+}
+
+// sawReach records whether this pass could read each host, which asks the
+// operator about one unreachable for long, runs their answer, and settles
+// the question once the host answers (control.Service.SawReach).
+func (c *Coordinator) sawReach(f reconcile.Fleet) {
+	for _, h := range f.Hosts {
+		if err := c.Service.SawReach(h.Name, h.Unreachable == "", windowAlive(h)); err != nil {
+			c.log("reach of %s: %v", h.Name, err)
+		}
+	}
+}
+
+// windowAlive reports whether an attempt's window runs on host h, as this
+// pass read it.
+func windowAlive(h reconcile.HostLoad) func(*control.State, control.Attempt) bool {
+	return func(st *control.State, at control.Attempt) bool {
+		item := st.Items[at.Item]
+		w, ok := matchWindow(at, h.Status, sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)))
+		return ok && w.Alive
 	}
 }

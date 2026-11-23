@@ -78,6 +78,20 @@ func TestInboxListOrdersJoinsAndFilters(t *testing.T) {
 	}
 }
 
+func TestInboxListNamesTheHostOfAFleetQuestion(t *testing.T) {
+	items, repos := inboxItems()
+	got := inboxList([]control.Update{inboxUpdate(4, "ask", "", "mac has been unreachable", func(u *control.Update) {
+		questioning(u)
+		u.Host, u.Choices = "mac", []string{"Wait, and resume when it returns", "Move its tasks to other hosts", "Stop its tasks"}
+	})}, items, repos, nil)
+	if len(got.Cards) != 1 || got.Questions != 1 {
+		t.Fatalf("cards %+v", got)
+	}
+	if c := got.Cards[0]; c.Kind != "question" || c.Item != "" || c.Host != "mac" || c.Title != "Host mac" || len(c.Choices) != 3 || c.PR != "" {
+		t.Errorf("fleet question card = %+v", c)
+	}
+}
+
 // inboxFake serves the inbox in pages, with the lists and sessions it joins.
 func inboxFake(pages [][]control.Update) *recorder {
 	items, repos := inboxItems()

@@ -76,8 +76,9 @@ type Attempt struct {
 	// LiveAt is the last coordinator pass that saw the attempt's window live.
 	LiveAt time.Time `json:"live_at,omitzero"`
 	// Reason is why the attempt ended: EndVanished, EndEarlyDeath or
-	// EndFailed for a dead window, EndStopped for the operator's stop, and
-	// empty for a session released once its work was done.
+	// EndFailed for a dead window, EndStopped for the operator's stop,
+	// EndMoved for the operator's move, and empty for a session released
+	// once its work was done.
 	Reason string `json:"reason,omitempty"`
 	// Early is set when the session died before claiming its task, or a
 	// planner's before writing any task, whether that ended the attempt
@@ -106,6 +107,26 @@ type Attempt struct {
 	// PaneKey is the public key, in hex, of the run's pane key, which its
 	// prompt hook signs the operator's pane input with.
 	PaneKey string `json:"pane_key,omitempty"`
+	// MoveHost and MoveHarness are where an attempt that ended moved sends
+	// its task's next dispatch: empty MoveHost is any host but this
+	// attempt's, empty MoveHarness the task's own choice. MovedBlind is set
+	// when the operator moved it while the latest pass could not read its
+	// host: its session may still run and push, so the task is dispatched
+	// without waiting for that host.
+	MoveHost    string `json:"move_host,omitempty"`
+	MoveHarness string `json:"move_harness,omitempty"`
+	MovedBlind  bool   `json:"moved_blind,omitempty"`
+	// MoveReleased is set once the coordinator released a moved attempt's
+	// window: nothing of it is left to release.
+	MoveReleased bool `json:"move_released,omitempty"`
+}
+
+// MoveRequest is a task move's destination. Confirm is the operator's
+// go-ahead to move off a host the latest pass could not read.
+type MoveRequest struct {
+	Host    string `json:"host,omitempty"`
+	Harness string `json:"harness,omitempty"`
+	Confirm bool   `json:"confirm,omitempty"`
 }
 
 // Update is immutable history; acknowledgement and resolution are separate records.
@@ -132,6 +153,10 @@ type Update struct {
 	Choices     []string `json:"choices,omitempty"`
 	Recommended *int     `json:"recommended,omitempty"`
 	Class       string   `json:"class,omitempty"`
+	// Host is the host a fleet question, or the coordinator's note on one,
+	// is about. A fleet question has no item, so it holds no task or plan
+	// (unreachable.go).
+	Host string `json:"host,omitempty"`
 }
 
 // QueueEntry is a task's place in its repository's merge queue, from its
@@ -197,6 +222,9 @@ type Request struct {
 	Merge *MergeRequest `json:"merge,omitempty"`
 	// Pane is how a pane-input post's prompt hook vouches for it.
 	Pane *PaneInput `json:"pane,omitempty"`
+	// Move is a task-move's destination, or a host-move's harness filter and
+	// confirmation; every other operation refuses it.
+	Move *MoveRequest `json:"move,omitempty"`
 	// Choices, Recommended and Class are an ask's (Update); every other
 	// operation refuses them.
 	Choices     []string `json:"choices,omitempty"`
@@ -216,6 +244,8 @@ type Response struct {
 	Credential string       `json:"credential,omitempty"`
 	// Fleet is the host-status op's reply.
 	Fleet *HostStatus `json:"fleet,omitempty"`
+	// Host is a host-pause, host-resume or host-move's reply.
+	Host *HostChange `json:"host,omitempty"`
 }
 
 type receipt struct {
@@ -287,6 +317,10 @@ type Problem struct {
 // ReasonReconcileRefused is attempt reconcile's refusal: the host read did
 // not confirm the execution's session gone.
 const ReasonReconcileRefused = "reconcile-refused"
+
+// ReasonMoveUnconfirmed is a task move's refusal while the latest pass could
+// not read the task's host: the operator must confirm it.
+const ReasonMoveUnconfirmed = "move-unconfirmed"
 
 func (e *Problem) Error() string {
 	if e.Reason != "" {

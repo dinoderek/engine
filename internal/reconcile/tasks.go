@@ -15,7 +15,7 @@ func place(v View) []Action {
 	wants := make([]Want, len(cands))
 	byID := map[string]Item{}
 	for i, t := range cands {
-		wants[i] = Want{ID: t.ID, Repo: t.Repo, Requires: t.Requires, Harness: t.Harness}
+		wants[i] = want(t)
 		byID[t.ID] = t
 	}
 	var acts []Action
@@ -31,14 +31,29 @@ func place(v View) []Action {
 	return acts
 }
 
+// want is what placement is asked for t: a task the operator moved goes
+// only where its move sends it.
+func want(t Item) Want {
+	w := Want{ID: t.ID, Repo: t.Repo, Requires: t.Requires, Harness: t.Harness}
+	if at := t.Current; at.Reason == control.EndMoved {
+		w.Harness = cmp.Or(at.MoveHarness, w.Harness)
+		w.Host, w.Avoid = at.MoveHost, at.Host
+		if at.MoveHost != "" {
+			w.Avoid = ""
+		}
+	}
+	return w
+}
+
 // ready are the tasks to dispatch, in start order. A held task is not ready.
 // A task whose session is live, or unknown, is not ready; nor is one whose
-// window is live on any host that answered, as an earlier attempt's may be.
+// window is live on any host that answered, as an earlier attempt's may be,
+// nor a moved one that waits for its old host (moveHeld).
 func ready(v View) []Item {
 	var cands []Item
 	for _, t := range v.Tasks {
 		s := t.observed()
-		if t.open() && !t.Held && len(t.Blocked) == 0 && t.PlanHold == 0 && !t.taken() && !s.Live && !s.Unknown && !v.Fleet.LiveAnywhere(t.Name) {
+		if t.open() && !t.Held && len(t.Blocked) == 0 && t.PlanHold == 0 && !t.taken() && !s.Live && !s.Unknown && !v.Fleet.LiveAnywhere(t.Name) && !v.moveHeld(t) {
 			cands = append(cands, t)
 		}
 	}

@@ -156,6 +156,7 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 		fs.StringVar(&name, "name", "", "")
 		fs.BoolVar(&rel.failed, "failed", false, "")
 		fs.BoolVar(&rel.stopped, "stopped", false, "")
+		fs.BoolVar(&rel.moved, "moved", false, "")
 		fs.BoolVar(&rel.done, "done", false, "")
 		fs.StringVar(&rel.head, "head", "", "")
 	case "merge":
@@ -179,24 +180,23 @@ func dispatch(op string, args []string, d Deps, in io.Reader) (any, error) {
 
 // releaseFlags are the release op's outcome flags and the head --done merged.
 type releaseFlags struct {
-	failed, stopped, done bool
-	head                  string
+	failed, stopped, moved, done bool
+	head                         string
 }
 
 // release runs the release op for its flags: at most one of --failed,
-// --stopped and --done.
+// --stopped, --moved and --done.
 func release(d Deps, name string, f releaseFlags) (Released, error) {
-	switch {
-	case f.failed && f.done || f.failed && f.stopped || f.stopped && f.done:
-		return Released{}, refuse("engine host release: --failed, --stopped and --done are exclusive")
-	case f.failed:
-		return Release(d, name, RunFailed, f.head)
-	case f.stopped:
-		return Release(d, name, RunStopped, f.head)
-	case f.done:
-		return Release(d, name, RunDone, f.head)
+	outcome, set := RunEnded, 0
+	for o, on := range map[Outcome]bool{RunFailed: f.failed, RunStopped: f.stopped, RunMoved: f.moved, RunDone: f.done} {
+		if on {
+			outcome, set = o, set+1
+		}
 	}
-	return Release(d, name, RunEnded, f.head)
+	if set > 1 {
+		return Released{}, refuse("engine host release: --failed, --stopped, --moved and --done are exclusive")
+	}
+	return Release(d, name, outcome, f.head)
 }
 
 // writeReply prints reply as one JSON object, with the envelope's fields added.

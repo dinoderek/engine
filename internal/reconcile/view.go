@@ -34,8 +34,8 @@ type Item struct {
 	// Session is the current attempt's session as the hosts show it, nil
 	// when the item has no attempt or its attempt vanished.
 	Session *Session
-	// Vanished is true when the current attempt ended vanished or in an
-	// early death: the task is dispatched again.
+	// Vanished is true when the current attempt ended vanished, in an early
+	// death or by a move: the task is dispatched again.
 	Vanished bool
 	// Question is the item's own unresolved operator question, or 0.
 	Question int
@@ -62,6 +62,19 @@ type Item struct {
 	MergedHead string
 	// Cleaned is the task's newest cleanup report, nil when it has none.
 	Cleaned *control.Update
+	// Strays are the windows the task's attempts that ended moved still
+	// have on hosts that answered, oldest first: each is released, pushing
+	// its branch first, and the task waits for them. StrayUnknown is set
+	// when such an attempt, not yet released, is on a host that could not be
+	// read, so its window may still be there.
+	Strays       []Stray
+	StrayUnknown bool
+}
+
+// Stray is a moved attempt's window, as its host shows it.
+type Stray struct {
+	Attempt control.Attempt
+	Session Session
 }
 
 // Kind is what an action does.
@@ -135,8 +148,11 @@ type Action struct {
 	// own worktree release too, and deletes the branch once it is merged.
 	Done bool
 	// Stopped is a Release of a stopped task's session: the host keeps its
-	// worktree and branch.
+	// worktree and branch. Moved is a Release of a moved attempt's: the
+	// host pushes its branch first, and keeps both, unless Stopped is set
+	// too.
 	Stopped bool
+	Moved   bool
 	// Head is the head commit a done task's PR merged at.
 	Head string
 	// Entry is the merge queue entry a Merge acts on, Request its newest
@@ -168,6 +184,23 @@ func (t Item) claimed() bool { return slices.Contains(claimStates, t.state()) }
 
 // taken reports whether the task may not start: it is held, or failed.
 func (t Item) taken() bool { return t.claimed() || t.state() == "failed" }
+
+// moveHeld reports whether a task the operator moved waits before its next
+// dispatch: for a window a moved attempt left, which is released first, or
+// for the old host to answer, unless the operator moved it while that host
+// could not be read, or the host is gone from hosts.toml.
+func (v View) moveHeld(t Item) bool {
+	if len(t.Strays) > 0 {
+		return true
+	}
+	at := t.Current
+	if at.Reason != control.EndMoved || at.MovedBlind || at.MoveReleased {
+		return false
+	}
+	// A host gone from hosts.toml has nothing left to release.
+	h, ok := v.Fleet.Host(at.Host)
+	return ok && (h.Unreachable != "" || h.Status.RunsError != "")
+}
 
 // Wakeable reports whether a pointer at new updates may be typed into the
 // item's session: the session is idle, so typing cuts into no turn, and the

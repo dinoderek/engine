@@ -35,7 +35,12 @@ func parseCallback(data string) (int, int, bool) {
 	return id, index, e1 == nil && e2 == nil && id > 0 && index >= 0 && index < 6
 }
 
+// heading names what an entry is about: its item and title, or the host a
+// fleet question asks about.
 func heading(u control.Update) string {
+	if u.Item == "" && u.Host != "" {
+		return "Host " + u.Host
+	}
 	title := ""
 	if u.Snapshot != nil {
 		title = u.Snapshot.Title

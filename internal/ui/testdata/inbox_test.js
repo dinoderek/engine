@@ -126,6 +126,24 @@ const scenarios = {
     });
   },
 
+  async "a question about a host has no item to open, and a choice resolves it"() {
+    const HOST = card(11, "question", {
+      item: "", title: "Host mac", host: "mac", repo: "", repo_slug: "", state: "", author: "coordinator", class: "environment",
+      body: "mac has been unreachable since 2026-11-07 09:00 UTC.", choices: ["Wait, and resume when it returns", "Move its tasks to other hosts", "Stop its tasks"], recommended: 0,
+    });
+    const fx = { inbox: inboxOf([HOST]), answer: ok };
+    await page("#/inbox", fx, async (t) => {
+      const q = t.card(11);
+      assert.equal(q.querySelector(".card-title").textContent, "Host mac");
+      assert.equal(q.querySelector(".card-title").tagName.toLowerCase(), "span", "no panel to open");
+      assert.ok(!q.textContent.includes(" · ·"), "no item in the meta line");
+      assert.equal(q.querySelectorAll(".choice").length, 3);
+      assert.equal(t.button(11, "Say"), undefined, "no item to say on");
+      await t.tap(11, "Move");
+      assert.deepEqual([fx.posts[0].path, fx.posts[0].body.choice], ["/api/updates/11/resolve", 1]);
+    });
+  },
+
   async "an answer without a choice needs a note, and sends only the note"() {
     const fx = { inbox: inboxOf([PLAIN]), answer: ok };
     await page("#/inbox", fx, async (t) => {

@@ -37,10 +37,13 @@ messages go to Telegram, so choose a bot and private chat you control.
 
 ## Alerts and answers
 
-Each open question gets its own audible message: item ID, title, hard-stop class,
+Each open question gets its own audible message: item ID and title, or for a
+fleet question `Host <name>`, hard-stop class,
 plain question text truncated to 1000 Unicode characters, and the configured
 dashboard link when present.
-Each choice gets a button; a star marks the recommendation. Questions without
+Each choice gets a button; a star marks the recommendation. An unreachable
+host's question has three: wait (starred), move its tasks, stop them. A usage
+limit's has two: wait for the reset, and the move. Questions without
 choices can be answered through the CLI or session. Links use `dashboard_url`
 exactly; it accepts an HTTP(S) origin without credentials, a path other than
 `/`, a query or a fragment. The API address never determines the dashboard link.
