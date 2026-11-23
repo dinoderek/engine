@@ -4,7 +4,7 @@
 
 Engine has three layers. The server (`engine serve`) runs the coordinator. Each host runs one tmux server with one session, `engine`. Each task gets one window in it, running its agent session. A lost window and a lost session look the same to engine; only what killed it differs. A failure ends the work of the layer it hits: one window ends one task, a host's tmux server or reboot ends every task on that host, and a server failure ends nothing but cuts sessions off from their records.
 
-Engine never asks before it resumes a dead task. It asks only when a choice belongs to you: a host unreachable for 15 minutes, or a session at its usage limit. A server down is reported by message, and a hung session by a notice; neither is a question.
+Engine never asks before it resumes a dead task. It asks only when a choice belongs to you: a host unreachable for long, or a session at its usage limit. A server down is reported by message, and a hung session by a notice; neither is a question. Several recovery commands are operator-only (`control-server.md`), so an agent session that runs them is refused.
 
 ## The failures
 
@@ -42,7 +42,7 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 ### 5. A session reaches its usage limit
 
 - **Detected:** the harness's limit marker and state: `limited`, or waiting with a reset time.
-- **Engine does:** a live limited session is continued once its reset has passed (`session-signals.md`, "Limit recovery"). A session that died at its limit ends `vanished`, uncounted, and its host and harness take nothing new until the reset. When another host or harness has room, the operator gets one question with the wait and move choices (`session-signals.md`, "Limit choice", "Death at a limit").
+- **Engine does:** a live limited session is continued once its reset has passed (`session-signals.md`, "Limit recovery"). A session that died at its limit ends `vanished`, uncounted; its host and harness then take placement under the rules in `session-signals.md`, "Death at a limit". When another host or harness has room, the operator gets one question with the wait and move choices (`session-signals.md`, "Limit choice").
 - **Run:** answer the question in `engine inbox --operator`, or run the move yourself:
   - `engine task move <task> --harness <h> --host <h>`
   - `engine host move <host> --harness <h>` for several tasks on one harness
@@ -60,8 +60,8 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 
 ### 7. A host is unreachable for long
 
-- **Detected:** its `status` call fails. `engine host status --all` shows it unreachable, and the dashboard shows its sessions as `unknown`.
-- **Engine does:** its sessions are unknown, never dead: nothing is ended or moved, since they may still run. New tasks go to other hosts, and a merge-queue head there ends `merge-refused` after a bounded wait (`coordinator.md`, "Merge queue"). Once the host has been unreachable for the wait the coordinator sets, with running tasks there, the operator gets one question, with three choices (`coordinator.md`, "An unreachable host is asked about"): wait, which is the default; move its tasks; or stop each. If the host returns first, the question resolves itself, and one note lists what happened to each task.
+- **Detected:** its `status` call fails. `engine host status --all` shows it unreachable (a cached read, which can be stale while no plan coordinates), and the dashboard shows its sessions as `unknown`.
+- **Engine does:** its sessions are unknown, never dead: nothing is ended or moved, since they may still run. New tasks go to other hosts, and a merge-queue head whose task is on that host ends `merge-refused` after a bounded wait (`coordinator.md`, "Merge queue"). Once the host has been unreachable for the wait the coordinator sets, with running tasks there, the operator gets one question, with three choices (`coordinator.md`, "An unreachable host is asked about"): wait, which is the default; move its tasks; or stop each. If the host returns first, the question resolves itself, and one note lists what happened to each task.
 - **Run:**
   - `engine host pause <host>`, to stop new placement there while you decide.
   - `engine host move <host>`, to move every task off it.
@@ -83,4 +83,4 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 - **A session host:** run `engine host move <host>` first. It pauses the host and moves each of its tasks elsewhere. Once each moved task's branch is pushed and its window released (`coordinator.md`, "Dispatch and recovery"), reboot. Then run `engine host resume <host>`. Without the move, the reboot is still safe: the host-wide loss resumes its tasks without counting them (4).
 - **The server's host:** run `engine host move <host>` first, as for a session host, then reboot. Rebooting it also stops the server, so the server's outage rules (1) and the watcher (8) apply. Run `engine server status` once it is back.
 
-Every command's flags and behaviour are in `control-server.md`. Every write takes a request key. A manual rerun gets a fresh key, so it is a new request, not a replay; to replay one, pass the key a retry printed with `--request-key`.
+Server commands' flags and behaviour are in `control-server.md`; `engine upgrade` and `engine server` are in `operator-setup.md`, and `engine watch` in `telegram.md`. Every write takes a request key. A manual rerun gets a fresh key, so it is a new request, not a replay; to replay one, pass the key a retry printed with `--request-key`.
