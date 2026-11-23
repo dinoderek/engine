@@ -55,6 +55,7 @@ Read these at each session start:
 | changes how agents plan, build or review | `plugins/engine/skills/build/SKILL.md`, `plugins/engine/skills/engine/SKILL.md` and their references |
 | changes phases, roles, states or protocol principles | `docs/execution-protocol.md` |
 | changes dispatch, recovery, merges, the merge queue or host ops | `docs/coordinator.md` |
+| changes a failure's response, the recovery commands, a planned reboot or an upgrade's runbook | `docs/recovery.md` |
 | changes how the coordinator reads a session's liveness, stalls, early deaths or limit recovery | `docs/session-signals.md` |
 | changes Telegram alerts, callbacks, bot setup or the server watcher | `docs/telegram.md` |
 | changes server records, API, credentials or inbox | `docs/control-server.md` |
