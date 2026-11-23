@@ -114,7 +114,7 @@ func TestAQuestionsChoicesRecommendationAndClassReachEveryRead(t *testing.T) {
 	shared := call(t, s, op, ask).Updates[0]
 	want("ask", own.Choices, own.Recommended, own.Class)
 	reader := Service{Store: reopen(t, s)}
-	st, err := reader.Store.Snapshot()
+	st, err := reader.Store.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}

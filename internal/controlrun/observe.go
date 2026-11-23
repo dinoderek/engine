@@ -68,7 +68,7 @@ func (o *Observer) Observation(id string) control.Observation {
 }
 
 // Record keeps a coordinator pass's fleet reads, so the observer reuses them.
-func (o *Observer) Record(st control.State, fleet reconcile.Fleet) {
+func (o *Observer) Record(tx *control.Tx, fleet reconcile.Fleet) {
 	if o == nil {
 		return
 	}
@@ -78,52 +78,50 @@ func (o *Observer) Record(st control.State, fleet reconcile.Fleet) {
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.prune(st)
-	for _, at := range activeAttempts(st) {
+	o.prune(tx)
+	for _, at := range activeAttempts(tx) {
 		h, ok := loads[at.Host]
-		o.put(st, at, h, ok)
+		o.put(tx, at, h, ok)
 	}
 }
 
 // Refresh starts a read of every host whose active attempts lack a fresh
 // observation and that has no read in flight. It never waits for a host.
 func (o *Observer) Refresh() error {
-	st, err := o.Store.Snapshot()
-	if err != nil {
-		return err
-	}
-	o.mu.Lock()
-	o.prune(st)
-	stale := map[string]bool{}
-	for _, at := range activeAttempts(st) {
-		if o.needsRead(st, at.Host) {
-			stale[at.Host] = true
+	return read(o.Store, func(tx *control.Tx) error {
+		o.mu.Lock()
+		o.prune(tx)
+		stale := map[string]bool{}
+		for _, at := range activeAttempts(tx) {
+			if o.needsRead(tx, at.Host) {
+				stale[at.Host] = true
+			}
 		}
-	}
-	o.mu.Unlock()
-	if len(stale) == 0 {
+		o.mu.Unlock()
+		if len(stale) == 0 {
+			return nil
+		}
+		cfg, err := o.Config()
+		if err != nil {
+			return err
+		}
+		for name := range stale {
+			o.start(tx, cfg, name)
+		}
 		return nil
-	}
-	cfg, err := o.Config()
-	if err != nil {
-		return err
-	}
-	for name := range stale {
-		o.start(st, cfg, name)
-	}
-	return nil
+	})
 }
 
-func (o *Observer) start(st control.State, cfg *hosts.Config, name string) {
+func (o *Observer) start(tx *control.Tx, cfg *hosts.Config, name string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	// Another refresh may have read the host since the staleness check.
-	if !o.needsRead(st, name) {
+	if !o.needsRead(tx, name) {
 		return
 	}
 	h, ok := cfg.Hosts[name]
 	if !ok {
-		o.putHost(st, reconcile.HostLoad{Name: name}, false)
+		o.putHost(tx, reconcile.HostLoad{Name: name}, false)
 		return
 	}
 	o.inflight[name] = true
@@ -133,11 +131,11 @@ func (o *Observer) start(st control.State, cfg *hosts.Config, name string) {
 
 // needsRead is true when the host has no read in flight and an active
 // attempt there lacks a fresh observation. Callers hold mu.
-func (o *Observer) needsRead(st control.State, host string) bool {
+func (o *Observer) needsRead(tx *control.Tx, host string) bool {
 	if o.inflight[host] {
 		return false
 	}
-	for _, at := range activeAttempts(st) {
+	for _, at := range activeAttempts(tx) {
 		e, ok := o.entries[at.ID]
 		if at.Host == host && (!ok || o.now().Sub(e.at) >= ObservationFresh) {
 			return true
@@ -155,17 +153,21 @@ func (o *Observer) read(h hosts.Host) {
 	if err != nil {
 		l.Unreachable = err.Error()
 	}
-	st, snapErr := o.Store.Snapshot()
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	delete(o.inflight, h.Name)
-	if snapErr != nil {
+	err = read(o.Store, func(tx *control.Tx) error {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+		delete(o.inflight, h.Name)
+		o.putHost(tx, l, true)
+		return nil
+	})
+	if err != nil {
+		o.mu.Lock()
+		delete(o.inflight, h.Name)
+		o.mu.Unlock()
 		if o.Logf != nil {
-			o.Logf("observer: %v", snapErr)
+			o.Logf("observer: %v", err)
 		}
-		return
 	}
-	o.putHost(st, l, true)
 }
 
 // Settle waits for the host reads in flight.
@@ -190,12 +192,12 @@ func (o *Observer) Run(ctx context.Context) {
 }
 
 // prune drops attempts that ended or were replaced, which bounds the cache. Callers hold mu.
-func (o *Observer) prune(st control.State) {
+func (o *Observer) prune(tx *control.Tx) {
 	if o.entries == nil {
 		o.entries, o.inflight = map[string]observed{}, map[string]bool{}
 	}
 	keep := map[string]bool{}
-	for _, at := range activeAttempts(st) {
+	for _, at := range activeAttempts(tx) {
 		keep[at.ID] = true
 	}
 	for id := range o.entries {
@@ -205,21 +207,22 @@ func (o *Observer) prune(st control.State) {
 	}
 }
 
-func (o *Observer) putHost(st control.State, h reconcile.HostLoad, configured bool) {
-	for _, at := range activeAttempts(st) {
+func (o *Observer) putHost(tx *control.Tx, h reconcile.HostLoad, configured bool) {
+	for _, at := range activeAttempts(tx) {
 		if at.Host == h.Name {
-			o.put(st, at, h, configured)
+			o.put(tx, at, h, configured)
 		}
 	}
 }
 
 // put records one attempt's observation, keeping the last live time. Callers hold mu.
-func (o *Observer) put(st control.State, at control.Attempt, h reconcile.HostLoad, configured bool) {
+func (o *Observer) put(tx *control.Tx, at control.Attempt, h reconcile.HostLoad, configured bool) {
 	e := o.entries[at.ID]
 	e.at, e.state = o.now(), "unknown"
 	if configured {
-		item := st.Items[at.Item]
-		e.state = hostState(at, h, st.Items[item.Repo].Slug, control.Number(item.ID))
+		item, _ := tx.Item(at.Item)
+		repo, _ := tx.Item(item.Repo)
+		e.state = hostState(at, h, repo.Slug, control.Number(item.ID))
 	}
 	if slices.Contains([]string{session.StateWorking, session.StateWaiting, session.StateLimited, "live"}, e.state) {
 		e.seen = e.at
@@ -227,10 +230,10 @@ func (o *Observer) put(st control.State, at control.Attempt, h reconcile.HostLoa
 	o.entries[at.ID] = e
 }
 
-func activeAttempts(st control.State) []control.Attempt {
+func activeAttempts(tx *control.Tx) []control.Attempt {
 	var out []control.Attempt
-	for _, at := range st.Attempts {
-		if at.State != "ended" && st.Items[at.Item].Attempt == at.ID {
+	for _, at := range tx.CurrentAttempts() {
+		if at.State != "ended" {
 			out = append(out, at)
 		}
 	}

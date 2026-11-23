@@ -89,7 +89,7 @@ func (d *differ) updates(old, cur []Update) {
 
 // diff lists the records to write to turn old into cur. Its cost follows the
 // number of records, not their size: equal records share their strings.
-func diff(old, cur *State) ([]change, error) {
+func diff(old, cur *state) ([]change, error) {
 	d := &differ{}
 	if old.Next != cur.Next {
 		d.put("next", cur.Next)
@@ -111,7 +111,7 @@ func diff(old, cur *State) ([]change, error) {
 }
 
 // decode reads the written records back, as a later open would.
-func decode(changes []change) (State, error) {
+func decode(changes []change) (state, error) {
 	patch := emptyState()
 	for _, c := range changes {
 		if c.del {
@@ -125,7 +125,7 @@ func decode(changes []change) (State, error) {
 }
 
 // install applies committed changes, with patch as their decoded records.
-func (s *State) install(changes []change, patch State) {
+func (s *state) install(changes []change, patch state) {
 	for _, c := range changes {
 		kind, id, _ := strings.Cut(c.key, "/")
 		switch {
@@ -161,11 +161,11 @@ func (s *State) install(changes []change, patch State) {
 }
 
 // find is the place of update id in history, which a load orders by id.
-func (s *State) find(id int) (int, bool) {
+func (s *state) find(id int) (int, bool) {
 	return slices.BinarySearchFunc(s.Updates, id, func(u Update, id int) int { return u.ID - id })
 }
 
-func (s *State) drop(kind, id string) {
+func (s *state) drop(kind, id string) {
 	switch kind {
 	case "item":
 		delete(s.Items, id)
@@ -184,7 +184,7 @@ func (s *State) drop(kind, id string) {
 
 // load reads every record. Version 1's lock records are returned apart,
 // for the migration; a version 2 database has none.
-func (s *Store) load() (State, []legacyLock, error) {
+func (s *Store) load() (state, []legacyLock, error) {
 	st := emptyState()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -214,7 +214,7 @@ func (s *Store) load() (State, []legacyLock, error) {
 	return st, locks, rows.Err()
 }
 
-func loadRecord(s *State, key string, b []byte) error {
+func loadRecord(s *state, key string, b []byte) error {
 	kind, id, _ := strings.Cut(key, "/")
 	switch kind {
 	case "next":

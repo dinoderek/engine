@@ -41,7 +41,7 @@ func windows(ids ...string) func(*Tx, Attempt) bool {
 	}
 }
 
-func hostNotices(st State) []string {
+func hostNotices(st state) []string {
 	var out []string
 	for _, u := range st.Updates {
 		if u.Item == "" && u.Recipient == "operator" {
@@ -66,7 +66,7 @@ func TestSawTmuxMarksAHostWideLossOnceAndItsDeathsSkipTheCap(t *testing.T) {
 	if again, _ := s.SawTmux("devbox", TmuxRead{Known: true, Start: 2000}, windows()); again != 0 {
 		t.Fatalf("a second pass marked %d", again)
 	}
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if got := hostNotices(st); len(got) != 1 || got[0] != "devbox's tmux restarted; 2 tasks will resume" {
 		t.Fatalf("notices: %q", got)
 	}
@@ -81,14 +81,14 @@ func TestSawTmuxMarksAHostWideLossOnceAndItsDeathsSkipTheCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, _ = s.Store.Snapshot()
+	st, _ = s.Store.snapshot()
 	if claimedEnd.Reason != EndVanished || claimedEnd.Crashed || claimedEnd.Tail != "" || st.Items[f.t1.ID].State != "running" {
 		t.Errorf("claimed: %+v, task %s", claimedEnd, st.Items[f.t1.ID].State)
 	}
 	if unclaimedEnd.Reason != EndEarlyDeath || unclaimedEnd.Early || unclaimedEnd.Tail != "unclaimed tail" || st.Items[f.t2.ID].State != "todo" {
 		t.Errorf("unclaimed: %+v, task %s", unclaimedEnd, st.Items[f.t2.ID].State)
 	}
-	if !Vanished(st.LegacyTx(), st.Items[f.t1.ID]) || !Vanished(st.LegacyTx(), st.Items[f.t2.ID]) {
+	if !Vanished(st.tx(), st.Items[f.t1.ID]) || !Vanished(st.tx(), st.Items[f.t2.ID]) {
 		t.Error("a host-wide death did not leave its task to be dispatched again")
 	}
 }
@@ -101,7 +101,7 @@ func taskWrote(t *testing.T, s Service, attempt string, task Item) {
 // unsee forgets that a pass saw the attempts' windows live.
 func unsee(t *testing.T, s Service, ids ...string) {
 	t.Helper()
-	err := s.Store.Transaction(func(st *State) error {
+	err := s.Store.modify(func(st *state) error {
 		for _, id := range ids {
 			at := st.Attempts[id]
 			at.LiveAt = time.Time{}
@@ -145,7 +145,7 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 				}
 			}
 			n, err := f.s.SawTmux("devbox", c.read, c.up(f))
-			st, _ := f.s.Store.Snapshot()
+			st, _ := f.s.Store.snapshot()
 			if err != nil || n != 0 || len(hostNotices(st)) != 0 || st.Attempts[f.a1].HostLost || st.Attempts[f.a2].HostLost {
 				t.Fatalf("a loss: %d %v, notices %q, %+v", n, err, hostNotices(st), st.Attempts)
 			}
@@ -158,7 +158,7 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 
 func TestSawTmuxLeavesADispatchInFlightAlone(t *testing.T) {
 	f := newLossFixture(t)
-	err := f.s.Store.Transaction(func(st *State) error {
+	err := f.s.Store.modify(func(st *state) error {
 		at := st.Attempts[f.a2]
 		at.State = "dispatching"
 		st.Attempts[at.ID] = at
@@ -168,7 +168,7 @@ func TestSawTmuxLeavesADispatchInFlightAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	n, err := f.s.SawTmux("devbox", TmuxRead{}, windows())
-	st, _ := f.s.Store.Snapshot()
+	st, _ := f.s.Store.snapshot()
 	if err != nil || n != 1 || st.Attempts[f.a2].HostLost || !st.Attempts[f.a1].HostLost {
 		t.Fatalf("%d %v %+v", n, err, st.Attempts)
 	}
@@ -177,7 +177,7 @@ func TestSawTmuxLeavesADispatchInFlightAlone(t *testing.T) {
 func TestSawTmuxLeavesAnotherHostsAttemptsAlone(t *testing.T) {
 	f := newLossFixture(t)
 	n, err := f.s.SawTmux("elsewhere", TmuxRead{}, windows())
-	st, _ := f.s.Store.Snapshot()
+	st, _ := f.s.Store.snapshot()
 	if err != nil || n != 0 || st.Attempts[f.a1].HostLost || len(st.Hosts) != 0 {
 		t.Fatalf("%d %v %+v", n, err, st.Hosts)
 	}
@@ -188,7 +188,7 @@ func TestSawTmuxWithNoServerEndsEveryAttemptLastSeenLive(t *testing.T) {
 	if n, err := f.s.SawTmux("devbox", TmuxRead{}, windows()); err != nil || n != 2 {
 		t.Fatalf("%d, %v", n, err)
 	}
-	st, _ := f.s.Store.Snapshot()
+	st, _ := f.s.Store.snapshot()
 	if got := hostNotices(st); len(got) != 1 || !strings.Contains(got[0], "2 tasks will resume") {
 		t.Fatalf("notices: %q", got)
 	}
@@ -208,7 +208,7 @@ func TestTheSavedTmuxStartTimeSurvivesAStoreReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = reopened.Close() }()
-	st, err := reopened.Snapshot()
+	st, err := reopened.snapshot()
 	if err != nil || st.Hosts["devbox"].TmuxStart != 1234 {
 		t.Fatalf("%+v %v", st.Hosts, err)
 	}

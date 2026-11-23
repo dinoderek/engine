@@ -80,10 +80,10 @@ func (c *Coordinator) sendOutage(cfg *hosts.Config, t reconcile.Item, text strin
 	if err := c.Wake(*t.Session, text); err != nil {
 		return err
 	}
-	return c.Service.Store.Transaction(func(s *control.State) error {
-		current := s.Attempts[t.Current.ID]
+	return write(c.Service.Store, func(tx *control.Tx) error {
+		current, _ := tx.Attempt(t.Current.ID)
 		current.WokenFor = key
-		s.Attempts[t.Current.ID] = current
+		tx.PutAttempt(current)
 		return nil
 	})
 }

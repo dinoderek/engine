@@ -23,7 +23,7 @@ func TestClaimedByAWorkerWriteOrALongLife(t *testing.T) {
 	for _, c := range cases {
 		st := emptyState()
 		st.Updates = c.updates
-		if got := claimed(st.LegacyTx(), c.at); got != c.want {
+		if got := claimed(st.tx(), c.at); got != c.want {
 			t.Errorf("%s: claimed = %v, want %v", c.name, got, c.want)
 		}
 	}
@@ -44,7 +44,7 @@ func dies(t *testing.T, s Service, id, tail string) Attempt {
 // wait, so its session claimed its task.
 func longLived(t *testing.T, s Service, id string) {
 	t.Helper()
-	if err := s.Store.Transaction(func(st *State) error {
+	if err := s.Store.modify(func(st *state) error {
 		at := st.Attempts[id]
 		at.LiveAt = at.Started.Add(ClaimWait)
 		st.Attempts[id] = at
@@ -174,7 +174,7 @@ func TestAnEarlyDeathLeavesAHeldTaskInItsState(t *testing.T) {
 	approve(t, s, plan)
 	_, out := dispatch(t, s, task)
 	launched(t, s, out.Attempt.ID)
-	if err := s.Store.Transaction(func(st *State) error {
+	if err := s.Store.modify(func(st *state) error {
 		item := st.Items[task.ID]
 		item.State = "in-review"
 		st.Items[task.ID] = item
@@ -187,8 +187,8 @@ func TestAnEarlyDeathLeavesAHeldTaskInItsState(t *testing.T) {
 	if at.Reason != EndEarlyDeath || current.State != "in-review" {
 		t.Fatalf("an in-review task changed: %+v, %s", at, current.State)
 	}
-	st, _ := s.Store.Snapshot()
-	if !Vanished(st.LegacyTx(), *current) {
+	st, _ := s.Store.snapshot()
+	if !Vanished(st.tx(), *current) {
 		t.Error("an early death did not leave the task ready to dispatch again")
 	}
 }

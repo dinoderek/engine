@@ -24,7 +24,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Store.Snapshot(); err == nil {
+	if _, err := s.Store.snapshot(); err == nil {
 		t.Fatal("closed store accepted command")
 	}
 	reopened, err := Open(path)
@@ -32,7 +32,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = reopened.Close() }()
-	st, err := reopened.Snapshot()
+	st, err := reopened.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = copyStore.Close() }()
-	copied, err := copyStore.Snapshot()
+	copied, err := copyStore.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 func TestSQLiteFailureRollsBackStateAndHistory(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
-	before, _ := s.Store.Snapshot()
+	before, _ := s.Store.snapshot()
 	if _, err := s.Store.writer.Exec("CREATE TRIGGER fail_insert BEFORE INSERT ON records WHEN new.key LIKE 'receipt/%' BEGIN SELECT RAISE(ABORT, 'disk full'); END;"); err != nil {
 		t.Fatal(err)
 	}
@@ -71,12 +71,12 @@ func TestSQLiteFailureRollsBackStateAndHistory(t *testing.T) {
 	if _, err := s.Store.writer.Exec("DROP TRIGGER fail_insert"); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := s.Store.Snapshot()
+	after, _ := s.Store.snapshot()
 	if fingerprint(before) != fingerprint(after) {
 		t.Fatal("partial transaction committed")
 	}
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "not committed", Key: "retry"})
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if len(st.Updates) != len(before.Updates)+1 {
 		t.Fatal("failed request could not retry")
 	}

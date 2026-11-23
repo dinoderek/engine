@@ -12,24 +12,27 @@ import (
 // (control.Service.SawLimits). It runs before the plans decide, so a session
 // a question covers sends no far-reset notice.
 func (c *Coordinator) sawLimits(fleet reconcile.Fleet) {
-	st, err := c.Service.Store.Snapshot()
+	f := fleet
+	var tasks []reconcile.Item
+	asked := map[string]bool{}
+	err := read(c.Service.Store, func(tx *control.Tx) error {
+		f.Now, f.Limits, f.Hosts = c.now(), control.HarnessLimits(tx), pausedHosts(tx, fleet.Hosts)
+		for _, root := range tx.CoordinatedItems() {
+			if root.Kind == "task" {
+				tasks = append(tasks, withSession(tx, root, f))
+			}
+			for _, t := range Tasks(tx, root.ID) {
+				tasks = append(tasks, withSession(tx, t, f))
+			}
+		}
+		for _, h := range f.Hosts {
+			asked[h.Name] = len(tx.Host(h.Name).Limits) > 0
+		}
+		return nil
+	})
 	if err != nil {
 		c.log("limits: %v", err)
 		return
-	}
-	f := fleet
-	f.Now, f.Limits, f.Hosts = c.now(), control.HarnessLimits(st.LegacyTx()), pausedHosts(st, fleet.Hosts)
-	var tasks []reconcile.Item
-	for id, root := range st.Items {
-		if !root.Coordinating {
-			continue
-		}
-		if root.Kind == "task" {
-			tasks = append(tasks, withSession(st, root, f))
-		}
-		for _, t := range Tasks(st, id) {
-			tasks = append(tasks, withSession(st, t, f))
-		}
 	}
 	reads := reconcile.LimitChoices(f, tasks)
 	for _, h := range f.Hosts {
@@ -39,7 +42,7 @@ func (c *Coordinator) sawLimits(fleet reconcile.Fleet) {
 				mine = append(mine, r)
 			}
 		}
-		if h.Unreachable != "" || h.Status.RunsError != "" || len(mine) == 0 && len(st.Hosts[h.Name].Limits) == 0 {
+		if h.Unreachable != "" || h.Status.RunsError != "" || len(mine) == 0 && !asked[h.Name] {
 			continue
 		}
 		if err := c.Service.SawLimits(h.Name, mine); err != nil {

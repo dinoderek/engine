@@ -24,7 +24,7 @@ type HostBoard struct {
 // Record replaces the board with a pass's fleet reads: each host's status,
 // the attempts running in its windows and its readiness. A nil board or
 // readiness records without it.
-func (b *HostBoard) Record(st control.State, fleet reconcile.Fleet, ready *Readiness) {
+func (b *HostBoard) Record(tx *control.Tx, fleet reconcile.Fleet, ready *Readiness) {
 	if b == nil {
 		return
 	}
@@ -33,9 +33,9 @@ func (b *HostBoard) Record(st control.State, fleet reconcile.Fleet, ready *Readi
 		now = b.Now()
 	}
 	snap := control.HostStatus{At: now.UTC(), Hosts: make([]control.HostRow, 0, len(fleet.Hosts))}
-	attempts := activeAttempts(st)
+	attempts := activeAttempts(tx)
 	for _, h := range fleet.Hosts {
-		row := hostRow(st, attempts, h)
+		row := hostRow(tx, attempts, h)
 		if ready != nil {
 			row.Readiness = ready.Report(h.Name)
 		}
@@ -57,8 +57,8 @@ func (b *HostBoard) Status() control.HostStatus {
 	return out
 }
 
-func hostRow(st control.State, attempts []control.Attempt, h reconcile.HostLoad) control.HostRow {
-	row := control.HostRow{Name: h.Name, Paused: st.Hosts[h.Name].Paused, Windows: []control.HostWindow{}}
+func hostRow(tx *control.Tx, attempts []control.Attempt, h reconcile.HostLoad) control.HostRow {
+	row := control.HostRow{Name: h.Name, Paused: tx.Host(h.Name).Paused, Windows: []control.HostWindow{}}
 	if h.Unreachable != "" {
 		row.Unreachable = h.Unreachable
 		return row
@@ -72,7 +72,7 @@ func hostRow(st control.State, attempts []control.Attempt, h reconcile.HostLoad)
 		harness[r.Name] = r.Record.Harness
 	}
 	for _, w := range s.Windows {
-		row.Windows = append(row.Windows, hostWindow(st, attempts, h.Name, w, harness[w.Name]))
+		row.Windows = append(row.Windows, hostWindow(tx, attempts, h.Name, w, harness[w.Name]))
 	}
 	for name, q := range s.Quota {
 		for window, u := range q.Windows {
@@ -96,14 +96,15 @@ func cmpHarness(key, own string) string {
 // hostWindow is a window with the active attempt that runs in it: the one on
 // this host with the window's id and its session's name, since tmux reuses
 // window ids after a restart.
-func hostWindow(st control.State, attempts []control.Attempt, host string, w hostops.Window, runHarness string) control.HostWindow {
+func hostWindow(tx *control.Tx, attempts []control.Attempt, host string, w hostops.Window, runHarness string) control.HostWindow {
 	out := control.HostWindow{Name: w.Name, Alive: w.Alive, Harness: w.Harness, State: w.State}
 	if out.Harness == "" {
 		out.Harness = runHarness
 	}
 	for _, at := range attempts {
-		item := st.Items[at.Item]
-		if at.Host == host && at.Window == w.ID && w.Name == sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)) {
+		item, _ := tx.Item(at.Item)
+		repo, _ := tx.Item(item.Repo)
+		if at.Host == host && at.Window == w.ID && w.Name == sessionName(repo.Slug, control.Number(item.ID)) {
 			out.Item, out.Attempt = item.ID, at.ID
 			break
 		}

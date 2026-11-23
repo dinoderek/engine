@@ -59,7 +59,7 @@ func TestExternalCompletionValidationIsAtomic(t *testing.T) {
 			s := service(t)
 			repo, plan := repoPlan(t, s)
 			task := newTask(t, s, repo.ID, plan.ID)
-			if err := s.Store.Transaction(func(st *State) error {
+			if err := s.Store.modify(func(st *state) error {
 				task.State = tt.state
 				if tt.attemptState != "" {
 					task.Attempt = "a99"
@@ -85,13 +85,13 @@ func TestExternalCompletionValidationIsAtomic(t *testing.T) {
 }
 
 func TestExternalCompletionInactiveStatesAndQuestions(t *testing.T) {
-	for _, state := range []string{"todo", "failed"} {
-		t.Run(state, func(t *testing.T) {
+	for _, want := range []string{"todo", "failed"} {
+		t.Run(want, func(t *testing.T) {
 			s := service(t)
 			repo, plan := repoPlan(t, s)
 			task := newTask(t, s, repo.ID, plan.ID)
-			if err := s.Store.Transaction(func(st *State) error {
-				task.State, task.Attempt = state, "a99"
+			if err := s.Store.modify(func(st *state) error {
+				task.State, task.Attempt = want, "a99"
 				st.Attempts[task.Attempt] = Attempt{ID: task.Attempt, Item: task.ID, State: "ended"}
 				st.Items[task.ID] = task
 				return nil
@@ -108,7 +108,7 @@ func TestExternalCompletionInactiveStatesAndQuestions(t *testing.T) {
 		s := service(t)
 		repo, plan := repoPlan(t, s)
 		task := newTask(t, s, repo.ID, plan.ID)
-		if err := s.Store.Transaction(func(st *State) error {
+		if err := s.Store.modify(func(st *state) error {
 			item := st.Items[task.ID]
 			item.State = "running"
 			st.Items[item.ID] = item

@@ -202,20 +202,6 @@ func (c *Coordinator) postNotes(fleet reconcile.Fleet) {
 	}
 }
 
-// askReady asks about the repo of every coordinated plan.
-func (c *Coordinator) askReady(st control.State, ids []string, cfg *hosts.Config) {
-	var repos []control.Item
-	seen := map[string]bool{}
-	for _, id := range ids {
-		repo := st.Items[st.Items[id].Repo]
-		if repo.ID != "" && !seen[repo.ID] {
-			seen[repo.ID] = true
-			repos = append(repos, repo)
-		}
-	}
-	c.Ready.Ask(cfg, repos)
-}
-
 // keyUsed reports a request key the server holds for another body.
 func keyUsed(err error) bool {
 	var p *control.Problem

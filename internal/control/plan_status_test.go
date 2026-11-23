@@ -114,7 +114,7 @@ func TestStoreMigratesRemovedPlanStates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		st, err := store.Snapshot()
+		st, err := store.snapshot()
 		_ = store.Close()
 		if err != nil {
 			t.Fatal(err)

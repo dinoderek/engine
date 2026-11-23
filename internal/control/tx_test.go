@@ -63,7 +63,7 @@ func TestAWriteErrorLeavesRecordsUnchangedInMemoryAndOnDisk(t *testing.T) {
 	}
 	s := Service{Store: store, Now: func() time.Time { return time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC) }}
 	_, plan := repoPlan(t, s)
-	before, _ := store.Snapshot()
+	before, _ := store.snapshot()
 	boom := errors.New("refused")
 	err = store.Write(bg, func(tx *Tx) error {
 		item, _ := tx.Item(plan.ID)
@@ -75,14 +75,14 @@ func TestAWriteErrorLeavesRecordsUnchangedInMemoryAndOnDisk(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("Write returned %v, want the function's error", err)
 	}
-	check := func(where string, st State) {
+	check := func(where string, st state) {
 		t.Helper()
 		if st.Items[plan.ID].Title != plan.Title || len(st.Updates) != len(before.Updates) {
 			t.Errorf("%s: title %q with %d updates after a failed write; want %q with %d",
 				where, st.Items[plan.ID].Title, len(st.Updates), plan.Title, len(before.Updates))
 		}
 	}
-	now, _ := store.Snapshot()
+	now, _ := store.snapshot()
 	check("memory", now)
 	if err = store.Close(); err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func TestAWriteErrorLeavesRecordsUnchangedInMemoryAndOnDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = reopened.Close() }()
-	disk, _ := reopened.Snapshot()
+	disk, _ := reopened.snapshot()
 	check("disk", disk)
 }
 

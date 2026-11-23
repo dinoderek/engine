@@ -27,7 +27,7 @@ func passAt(t *testing.T, c *Coordinator, now *time.Time, start time.Time, at ..
 
 // hostQuestions are the questions about a host.
 func hostQuestions(c *Coordinator) []control.Update {
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	var out []control.Update
 	for _, u := range st.Updates {
 		if u.Host != "" && u.RequiresReply {
@@ -65,7 +65,7 @@ func TestAnUnreachableHostIsAskedAboutOnceAfterFifteenMinutes(t *testing.T) {
 		!strings.HasPrefix(got[0].Body, "devbox has been unreachable since 2026-11-07 09:00 UTC. 1 task runs there: "+task.ID+".") {
 		t.Fatalf("questions %+v", got)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "running" || st.Attempts[st.Items[task.ID].Attempt].State == "ended" {
 		t.Fatalf("the question held or ended the task: %+v", st.Items[task.ID])
 	}
@@ -88,7 +88,7 @@ func TestAHostReturningFirstResolvesItsQuestionWithOneNote(t *testing.T) {
 	q := hostQuestions(c)[0]
 	h.outage = false
 	passAt(t, c, now, start, 17*time.Minute, 19*time.Minute)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	var answers []string
 	for _, u := range st.Updates {
 		if u.ReplyTo == q.ID && u.Kind == "resolved" {
@@ -118,10 +118,10 @@ func TestTheOperatorsAnswerRunsOnTheNextPassAndOnce(t *testing.T) {
 	passAt(t, c, now, start, 0, 4*time.Minute, 8*time.Minute, 12*time.Minute, 15*time.Minute)
 	q := hostQuestions(c)[0]
 	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: q.ID, Body: control.ChoiceMove})
-	before, _ := c.Service.Store.Snapshot()
+	before, _ := snapshotOf(c.Service.Store)
 	first := before.Items[task.ID].Attempt
 	passAt(t, c, now, start, 17*time.Minute, 19*time.Minute, 21*time.Minute)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if at := st.Attempts[first]; at.Reason != control.EndMoved || !at.MovedBlind || !st.Hosts["devbox"].Paused {
 		t.Fatalf("the answer did not move the task off devbox: %+v, %+v", at, st.Hosts["devbox"])
 	}

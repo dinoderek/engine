@@ -16,9 +16,7 @@ import (
 // posted once StallWait has passed, saying to answer the dialog.
 func TestAPlannerHeldAtADialogStallsAndIsNeverTyped(t *testing.T) {
 	c, h, _, plan, task := setup(t)
-	if err := c.Service.Store.Transaction(func(st *control.State) error { delete(st.Items, task.ID); return nil }); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, c.Service.Store, func(tx *control.Tx) error { tx.DeleteItem(task.ID); return nil })
 	pass(t, c)
 	if len(h.status.Windows) != 1 {
 		t.Fatalf("windows %v, want the planner's", h.status.Windows)
@@ -49,7 +47,7 @@ func TestAPlannerHeldAtADialogStallsAndIsNeverTyped(t *testing.T) {
 
 func dialogNotices(t *testing.T, c *Coordinator, id string) []string {
 	t.Helper()
-	st, err := c.Service.Store.Snapshot()
+	st, err := snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}

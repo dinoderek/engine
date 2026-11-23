@@ -13,12 +13,12 @@ import (
 	"github.com/dinoderek/engine/internal/reconcile"
 )
 
-// apply does one action of a pass decided on st. A Merge is applied by
+// apply does one action of a pass decided on tx. A Merge is applied by
 // merge, before the rest of the pass.
-func (c *Coordinator) apply(st control.State, a reconcile.Action, cfg *hosts.Config) error {
+func (c *Coordinator) apply(tx *control.Tx, a reconcile.Action, cfg *hosts.Config) error {
 	switch a.Kind {
 	case reconcile.Dispatch:
-		return c.dispatch(st, a, cfg)
+		return c.dispatch(tx, a, cfg)
 	case reconcile.SetState:
 		if err := c.change(a.Item, a.State); err != nil || a.Key == "" {
 			return err
@@ -57,12 +57,12 @@ func (c *Coordinator) endAttempt(a reconcile.Action) error {
 		// A host-wide loss told the operator once for the host.
 		return err
 	}
-	st, err := c.Service.Store.Snapshot()
+	plan, history, err := c.history(a.Item)
 	if err != nil {
 		return err
 	}
-	if st.Items[a.Item].Kind == "plan" {
-		return c.plannerEnded(st, a, at)
+	if plan {
+		return c.plannerEnded(history, a, at)
 	}
 	switch {
 	case at.Reason == control.EndVanished:
@@ -70,10 +70,10 @@ func (c *Coordinator) endAttempt(a reconcile.Action) error {
 	case at.Reason == control.EndEarlyDeath:
 		return c.notice(a.Item, "early/"+at.ID, a.Text+" before it claimed the task; the task is dispatched again once"+tails([]control.Attempt{at}))
 	case at.Early:
-		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(st, at)))
+		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(history)))
 	case at.Crashed:
 		return c.notice(a.Item, "failed/"+at.ID, fmt.Sprintf("%s after claiming the task, %d such deaths in a row; the task failed%s",
-			a.Text, control.DeathCap, tails(lastCrashes(st, at))))
+			a.Text, control.DeathCap, tails(lastCrashes(history))))
 	}
 	return c.notice(a.Item, "failed/"+at.ID, a.Text)
 }
@@ -86,12 +86,12 @@ func (c *Coordinator) endAtLimit(a reconcile.Action) error {
 	if err != nil || a.Probe {
 		return err
 	}
-	st, err := c.Service.Store.Snapshot()
+	plan, history, err := c.history(a.Item)
 	if err != nil {
 		return err
 	}
-	if st.Items[a.Item].Kind == "plan" {
-		return c.plannerAtLimit(st, a, at)
+	if plan {
+		return c.plannerAtLimit(history, a, at)
 	}
 	return c.notice(a.Item, "limit-death/"+at.ID, fmt.Sprintf("%s; the task stays resumable and is dispatched again %s, from its own branch. "+
 		"Until then no task starts on %s on %s; another host or harness with quota may take it.", a.Text, limitWhen(at), at.Harness, at.Host))
@@ -106,24 +106,36 @@ func limitWhen(at control.Attempt) string {
 	return fmt.Sprintf("by a probe every %d minutes, the reset being unknown", int(reconcile.ProbeEvery.Minutes()))
 }
 
+// history is whether item is a plan, and all its attempts, as the records
+// hold them now.
+func (c *Coordinator) history(item string) (plan bool, attempts []control.Attempt, err error) {
+	err = read(c.Service.Store, func(tx *control.Tx) error {
+		it, _ := tx.Item(item)
+		plan, attempts = it.Kind == "plan", tx.AttemptsFor(item)
+		return nil
+	})
+	return plan, attempts, err
+}
+
 // earlyAttempts are the attempts of at's task that died before claiming it,
 // oldest first, at the newest.
-func earlyAttempts(st control.State, at control.Attempt) []control.Attempt {
-	return attemptsOf(st, at, func(o control.Attempt) bool { return o.Early })
+func earlyAttempts(history []control.Attempt) []control.Attempt {
+	return attemptsOf(history, func(o control.Attempt) bool { return o.Early })
 }
 
 // lastCrashes are the last two crashes of at's item, at the newest: the
 // deaths the cap counted last.
-func lastCrashes(st control.State, at control.Attempt) []control.Attempt {
-	out := attemptsOf(st, at, func(o control.Attempt) bool { return o.Crashed })
+func lastCrashes(history []control.Attempt) []control.Attempt {
+	out := attemptsOf(history, func(o control.Attempt) bool { return o.Crashed })
 	return out[max(0, len(out)-2):]
 }
 
-// attemptsOf are the attempts of at's item that keep, oldest first.
-func attemptsOf(st control.State, at control.Attempt, keep func(control.Attempt) bool) []control.Attempt {
+// attemptsOf are the attempts of one item among history that keep, oldest
+// first.
+func attemptsOf(history []control.Attempt, keep func(control.Attempt) bool) []control.Attempt {
 	var out []control.Attempt
-	for _, o := range st.Attempts {
-		if o.Item == at.Item && keep(o) {
+	for _, o := range history {
+		if keep(o) {
 			out = append(out, o)
 		}
 	}
@@ -150,8 +162,8 @@ func (c *Coordinator) mark(a reconcile.Action) error {
 	if a.Stalled.IsZero() && a.Limit == 0 {
 		return nil
 	}
-	return c.Service.Store.Transaction(func(st *control.State) error {
-		at := st.Attempts[a.Attempt]
+	return write(c.Service.Store, func(tx *control.Tx) error {
+		at, _ := tx.Attempt(a.Attempt)
 		switch {
 		case !a.Stalled.IsZero():
 			at.Notice = a.Stalled
@@ -160,7 +172,7 @@ func (c *Coordinator) mark(a reconcile.Action) error {
 		default:
 			at.StuckFor = a.Limit
 		}
-		st.Attempts[at.ID] = at
+		tx.PutAttempt(at)
 		return nil
 	})
 }
@@ -177,18 +189,18 @@ func (c *Coordinator) resume(a reconcile.Action, cfg *hosts.Config) error {
 	}
 	eligible := false
 	var at control.Attempt
-	err := c.Service.Store.Transaction(func(st *control.State) error {
-		current := st.Items[a.Item]
-		if control.OwnQuestion(st.LegacyTx(), current.ID) > 0 {
+	err := write(c.Service.Store, func(tx *control.Tx) error {
+		current, _ := tx.Item(a.Item)
+		if control.OwnQuestion(tx, current.ID) > 0 {
 			return nil
 		}
-		at = st.Attempts[current.Attempt]
+		at, _ = tx.Attempt(current.Attempt)
 		if current.State == "needs-human" || at.ID != a.Attempt || at.State == "ended" || resumed(at, a.ResetsAt, c.now()) {
 			return nil
 		}
 		at.ResumedFor = a.ResetsAt
 		at.ResumeAt = c.now()
-		st.Attempts[at.ID] = at
+		tx.PutAttempt(at)
 		eligible = true
 		return nil
 	})
@@ -263,11 +275,15 @@ func (c *Coordinator) movedLeft(a reconcile.Action, reply hostops.Released) erro
 	if reply.Unpushed == "" {
 		return nil
 	}
-	st, err := c.Service.Store.Snapshot()
-	if err != nil {
+	var moveHost string
+	if err := read(c.Service.Store, func(tx *control.Tx) error {
+		at, _ := tx.Attempt(a.Attempt)
+		moveHost = at.MoveHost
+		return nil
+	}); err != nil {
 		return err
 	}
-	if st.Attempts[a.Attempt].MoveHost == a.Session.Host {
+	if moveHost == a.Session.Host {
 		return nil
 	}
 	return c.notice(a.Item, "moved-left/"+a.Attempt, fmt.Sprintf(
@@ -282,14 +298,14 @@ func (c *Coordinator) stop(root string) error {
 	if err != nil {
 		return err
 	}
-	return c.Service.Store.Transaction(func(s *control.State) error {
-		i := s.Items[root]
+	return write(c.Service.Store, func(tx *control.Tx) error {
+		i, _ := tx.Item(root)
 		if i.Version != out.Item.Version {
 			return nil
 		}
 		i.Coordinating = false
 		i.Version++
-		s.Items[root] = i
+		tx.PutItem(i)
 		return nil
 	})
 }

@@ -12,7 +12,7 @@ import (
 // killWindow marks task's window dead on h, its run showing tail.
 func killWindow(t *testing.T, c *Coordinator, h *host, task control.Item, tail string) control.Attempt {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	for i, w := range h.status.Windows {
 		if w.Name == fmt.Sprintf("demo-%d", control.Number(task.ID)) {
@@ -32,7 +32,7 @@ func TestADeathDuringAnUpgradeResumesUncountedWithABugNotice(t *testing.T) {
 	execute(t, c.Service, control.Request{Op: "upgrade", State: control.UpgradeStart})
 	at := killWindow(t, c, h, claimed, "panic: the plugin moved")
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	ended := st.Attempts[at.ID]
 	if ended.Reason != control.EndVanished || !ended.Upgraded || ended.Crashed || st.Items[claimed.ID].State != "running" {
 		t.Fatalf("the death during the upgrade: %+v, task %s", ended, st.Items[claimed.ID].State)
@@ -50,7 +50,7 @@ func TestADeathDuringAnUpgradeResumesUncountedWithABugNotice(t *testing.T) {
 	pass(t, c)
 	other := killWindow(t, c, h, unclaimed, "exit 1")
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if e := st.Attempts[other.ID]; e.Reason != control.EndEarlyDeath || !e.Early || e.Upgraded {
 		t.Fatalf("the death after the upgrade: %+v", e)
 	}
@@ -65,10 +65,10 @@ func TestADeathDuringAnUpgradeResumesUncountedWithABugNotice(t *testing.T) {
 func TestAHostWideLossDuringAnUpgradeAlsoReportsEachDeathAsABug(t *testing.T) {
 	c, h, claimed, unclaimed := twoRunning(t)
 	execute(t, c.Service, control.Request{Op: "upgrade", State: control.UpgradeStart})
-	before, _ := c.Service.Store.Snapshot()
+	before, _ := snapshotOf(c.Service.Store)
 	h.status.Windows, h.status.TmuxStart = nil, 2000
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if got := hostNotices(c); len(got) != 1 || got[0] != "devbox's tmux restarted; 2 tasks will resume" {
 		t.Fatalf("host notices: %q", got)
 	}

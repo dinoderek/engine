@@ -44,7 +44,7 @@ func TestALimitedSessionWithRoomIsAskedOnceAndAMoveRunsOnce(t *testing.T) {
 		!strings.HasPrefix(qs[0].Body, task.ID+" is at claude's limit on devbox until 2026-11-07 10:00 UTC.") {
 		t.Fatalf("questions %+v", qs)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Items[task.ID].Attempt
 	if st.Items[task.ID].State != "running" || st.Attempts[first].State == "ended" {
 		t.Fatalf("the question held or ended the task: %+v", st.Items[task.ID])
@@ -53,7 +53,7 @@ func TestALimitedSessionWithRoomIsAskedOnceAndAMoveRunsOnce(t *testing.T) {
 	pass(t, c)
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if at := st.Attempts[first]; at.Reason != control.EndMoved || at.MoveHost != "devbox" || at.MoveHarness != "codex" {
 		t.Fatalf("the answer did not move the task: %+v", at)
 	}
@@ -109,7 +109,7 @@ func TestALimitQuestionResolvesItselfOnceTheSessionResumes(t *testing.T) {
 	}
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	var answers []string
 	for _, u := range st.Updates {
 		if u.ReplyTo == q.ID && u.Kind == "resolved" {

@@ -65,7 +65,7 @@ func TestTheVanishRule(t *testing.T) {
 				st.Updates = append(st.Updates, Update{ID: 1, Item: "t2", Kind: "ask", RequiresReply: true})
 			}
 			s := Service{Now: func() time.Time { return live.Add(time.Hour) }}
-			at := s.endDead(st.LegacyTx(), Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
+			at := s.endDead(st.tx(), Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
 			if at.Reason != c.reason || at.Crashed != c.crashed || at.Early && c.at.HostLost || st.Items["t2"].State != c.state {
 				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, st.Items["t2"].State, c.reason, c.crashed, c.state)
 			}
@@ -75,7 +75,7 @@ func TestTheVanishRule(t *testing.T) {
 
 // vanishState holds plan p1 and its running task t2, whose current attempt
 // is a99, after the earlier attempts before, oldest first.
-func vanishState(task, plan Item, before []prior) State {
+func vanishState(task, plan Item, before []prior) state {
 	plan.ID, plan.Kind = "p1", "plan"
 	task.ID, task.Kind, task.Plan, task.State, task.Attempt = "t2", "task", "p1", "running", "a99"
 	st := emptyState()
@@ -184,7 +184,7 @@ func launched(t *testing.T, s Service, id string) {
 // seenLive records that a coordinator pass saw attempt id's window live.
 func seenLive(t *testing.T, s Service, id string) {
 	t.Helper()
-	if err := s.Store.Transaction(func(st *State) error {
+	if err := s.Store.modify(func(st *state) error {
 		at := st.Attempts[id]
 		at.LiveAt = s.now()
 		st.Attempts[id] = at

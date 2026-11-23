@@ -3,6 +3,7 @@ package controlcmd
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/controlrun"
@@ -35,15 +36,11 @@ func lintMain(args []string, e Env) int {
 		fmt.Fprintln(e.Err, "engine lint:", err)
 		return 1
 	}
-	st := control.State{Items: map[string]control.Item{}}
-	for _, item := range out.Items {
-		st.Items[item.ID] = item
-	}
-	if st.Items[args[0]].Kind != "plan" {
+	if !slices.ContainsFunc(out.Items, func(item control.Item) bool { return item.ID == args[0] && item.Kind == "plan" }) {
 		fmt.Fprintln(e.Err, "engine lint: unknown or inaccessible plan", args[0])
 		return 1
 	}
-	tasks := controlrun.Tasks(st, args[0])
+	tasks := controlrun.TasksOf(out.Items, args[0])
 	problems := lint.Items(tasks)
 	for _, p := range problems {
 		fmt.Fprintln(e.Out, p)

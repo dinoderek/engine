@@ -45,7 +45,7 @@ func TestTelegramMigrationAndDurableState(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got, want) || offset != 42 || !digest.Equal(at) {
 		t.Fatalf("state %+v %d %v %v", got, offset, digest, err)
 	}
-	st, err := store.Snapshot()
+	st, err := store.snapshot()
 	if err != nil || len(st.Updates) != 3 {
 		t.Fatalf("migration lost commands: %+v %v", st, err)
 	}

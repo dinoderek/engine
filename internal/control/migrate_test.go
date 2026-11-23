@@ -42,14 +42,14 @@ func migrateFrom(t *testing.T, version int) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	st, err := store.Snapshot()
+	st, err := store.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if st.Items[plan.ID].State != "planned" {
 		t.Fatalf("plan state %s", st.Items[plan.ID].State)
 	}
-	queue := st.LegacyTx().QueueOf(repo.ID)
+	queue := st.tx().QueueOf(repo.ID)
 	if len(queue) != 2 || queue[0].Task != waiter.ID || queue[0].Seq != older.ID || queue[1].Task != holder.ID || queue[0].Phase != QueueWaiting {
 		t.Fatalf("queue %+v", queue)
 	}

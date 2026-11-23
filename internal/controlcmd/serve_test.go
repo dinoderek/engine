@@ -36,7 +36,7 @@ func TestServeDefaultsToTheDocumentedPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = copied.Snapshot(); err != nil {
+	if err = copied.Read(context.Background(), func(*control.Tx) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	_ = copied.Close()

@@ -39,7 +39,7 @@ func TestAuthenticatedHTTPAndUncertainDeliveryRetry(t *testing.T) {
 	if out.Item == nil {
 		t.Fatal("retry lost original response")
 	}
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if len(st.Items) != 1 || len(st.Updates) != 1 {
 		t.Fatal("retry duplicated write")
 	}

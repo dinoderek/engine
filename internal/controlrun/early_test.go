@@ -10,7 +10,7 @@ import (
 
 // taskNotices are the task's notices to the operator, oldest first.
 func taskNotices(c *Coordinator, task control.Item) []string {
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	var out []string
 	for _, u := range st.Updates {
 		if u.Item == task.ID && u.Recipient == "operator" {
@@ -24,7 +24,7 @@ func taskNotices(c *Coordinator, task control.Item) []string {
 // pass that ends the attempt.
 func dieEarly(t *testing.T, c *Coordinator, h *host, task control.Item, tail string) control.Attempt {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	h.status.Windows[len(h.status.Windows)-1].Alive = false
 	for i, r := range h.status.Runs {
@@ -33,7 +33,7 @@ func dieEarly(t *testing.T, c *Coordinator, h *host, task control.Item, tail str
 		}
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	return st.Attempts[at.ID]
 }
 
@@ -42,7 +42,7 @@ func TestASessionThatDiesBeforeClaimingIsRetriedOnceThenFails(t *testing.T) {
 	pass(t, c)
 	pass(t, c)
 	first := dieEarly(t, c, h, task, "tmux: server exited unexpectedly")
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if first.Reason != control.EndEarlyDeath || st.Items[task.ID].State != "todo" {
 		t.Fatalf("the first early death: %+v, task %s", first, st.Items[task.ID].State)
 	}
@@ -51,13 +51,13 @@ func TestASessionThatDiesBeforeClaimingIsRetriedOnceThenFails(t *testing.T) {
 	}
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	second := st.Attempts[st.Items[task.ID].Attempt]
 	if second.ID == first.ID || second.State != "running" || st.Items[task.ID].State != "running" {
 		t.Fatalf("the task was not dispatched again: %+v %s", second, st.Items[task.ID].State)
 	}
 	ended := dieEarly(t, c, h, task, "claude: command not found")
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if ended.Reason != control.EndFailed || !ended.Early || st.Items[task.ID].State != "failed" {
 		t.Fatalf("the second early death: %+v, task %s", ended, st.Items[task.ID].State)
 	}
@@ -90,7 +90,7 @@ func TestASessionThatClaimedItsTaskResumesAfterItsDeathsUntilTheCap(t *testing.T
 		claim(t, c, task)
 		deaths = append(deaths, dieEarly(t, c, h, task, fmt.Sprintf("crash %d", i+1)))
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	for i, at := range deaths[:control.DeathCap-1] {
 		if at.Reason != control.EndVanished || !at.Crashed || i > 0 && at.ID == deaths[i-1].ID {
 			t.Fatalf("claimed death %d did not resume: %+v", i+1, at)
