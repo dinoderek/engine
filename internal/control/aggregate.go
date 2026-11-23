@@ -53,7 +53,7 @@ func (s Service) overview(tx *Tx, a Actor) (Response, error) {
 		}
 	}
 	slices.SortFunc(out.Items, func(x, y Item) int { return Number(x.ID) - Number(y.ID) })
-	out.Sessions = s.sessionRows(tx, tx.CurrentAttempts())
+	out.Sessions = s.sessionRows(tx, tx.SessionAttempts())
 	return out, nil
 }
 

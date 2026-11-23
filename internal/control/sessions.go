@@ -64,7 +64,7 @@ func (s Service) sessionView(tx *Tx, a Actor) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
 	}
-	return Response{Sessions: s.sessionRows(tx, tx.CurrentAttempts())}, nil
+	return Response{Sessions: s.sessionRows(tx, tx.SessionAttempts())}, nil
 }
 
 // sessionRows are the session rows of the given current attempts, by item

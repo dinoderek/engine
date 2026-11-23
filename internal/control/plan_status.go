@@ -26,14 +26,8 @@ func withStatus(tx *Tx, item Item) Item {
 	if item.Kind != "plan" {
 		return item
 	}
-	var tasks []Item
-	for _, t := range tx.ItemsOfPlan(item.ID) {
-		if t.Kind == "task" {
-			tasks = append(tasks, t)
-		}
-	}
 	id := OwnQuestion(tx, item.ID)
-	item.Status = PlanStatus(item, tasks, id > 0)
+	item.Status = PlanStatus(item, tx.TaskStatesOfPlan(item.ID), id > 0)
 	if id > 0 {
 		q, _ := tx.Update(id)
 		item.Question = updateRef(q)
