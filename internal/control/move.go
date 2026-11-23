@@ -17,15 +17,15 @@ import (
 // session, which can push though it can no longer write here: the move is
 // refused with ReasonMoveUnconfirmed unless the request confirms it, and is
 // then recorded as blind, so the next dispatch need not wait for that host.
-func (s Service) moveTask(st *State, a Actor, r Request) (Response, error) {
-	item, err := heldTarget(st, a, r)
+func (s Service) moveTask(tx *Tx, a Actor, r Request) (Response, error) {
+	item, err := heldTarget(tx, a, r)
 	if err != nil {
 		return Response{}, err
 	}
 	if r.Move == nil {
 		return Response{}, problem(400, "a move names its destination, even if empty")
 	}
-	at, ok := st.Attempts[item.Attempt]
+	at, ok := tx.Attempt(item.Attempt)
 	switch {
 	case !ok || item.State == "done" || item.State == "failed" || item.Held || at.State == "ended" && at.Reason != EndMoved:
 		return Response{}, problem(409, "task %s has no running execution to move", item.ID)
@@ -51,26 +51,26 @@ func (s Service) moveTask(st *State, a Actor, r Request) (Response, error) {
 		kind = "execution-ended"
 	}
 	at.MoveHost, at.MoveHarness, at.MovedBlind = r.Move.Host, r.Move.Harness, !read
-	st.Attempts[at.ID] = at
+	tx.PutAttempt(at)
 	// The version moves so that a pass placed on the old record dispatches
 	// nothing.
 	item.Version++
-	st.Items[item.ID] = item
-	st.update(a, r, kind, EndMoved+": the operator moved the task; "+moveText(at), s.now())
+	tx.PutItem(item)
+	tx.AppendUpdate(a, r, kind, EndMoved+": the operator moved the task; "+moveText(at), s.now())
 	return Response{Item: &item, Attempt: &at}, nil
 }
 
 // MovedReleased records that the coordinator released moved attempt id's
 // window, so no pass looks for it again. It is idempotent.
 func (s Service) MovedReleased(id string) error {
-	return s.Store.Transaction(func(st *State) error {
-		at, ok := st.Attempts[id]
+	return s.write(func(tx *Tx) error {
+		at, ok := tx.Attempt(id)
 		if !ok || at.Reason != EndMoved {
 			return problem(409, "execution %s did not end moved", id)
 		}
 		if !at.MoveReleased {
 			at.MoveReleased = true
-			st.Attempts[id] = at
+			tx.PutAttempt(at)
 		}
 		return nil
 	})
@@ -131,8 +131,8 @@ func moveText(at Attempt) string {
 
 // moveDestination refuses a dispatch of a task whose current attempt ended
 // moved anywhere its move does not send it.
-func moveDestination(st *State, item Item, host, harness string) error {
-	at, ok := st.Attempts[item.Attempt]
+func moveDestination(tx *Tx, item Item, host, harness string) error {
+	at, ok := tx.Attempt(item.Attempt)
 	if !ok || at.Reason != EndMoved {
 		return nil
 	}

@@ -46,15 +46,15 @@ func PRNumber(url string) int {
 // mergeRequest records a worker's merge request for its own task and puts
 // the task in its repository's merge queue. A task already queued keeps its
 // place with the new head, and a head is checked again at once.
-func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
+func (s Service) mergeRequest(tx *Tx, a Actor, r Request) (Response, error) {
 	if a.Role != "worker" {
 		return Response{}, problem(403, "only the task's execution can request its merge")
 	}
-	item, ok := st.Items[r.ID]
+	item, ok := tx.Item(r.ID)
 	if !ok || item.Kind != "task" || item.Attempt != a.Attempt {
 		return Response{}, problem(403, "only the task's execution can request its merge")
 	}
-	if err := validMerge(r.Merge, st.Items[item.Repo].Slug); err != nil {
+	if err := validMerge(r.Merge, tx.item(item.Repo).Slug); err != nil {
 		return Response{}, err
 	}
 	if item.State != "in-review" {
@@ -63,15 +63,15 @@ func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if item.PR != r.Merge.PR {
 		return Response{}, problem(409, "the merge request's PR is not the task's; record it with the in-review state")
 	}
-	if OwnQuestion(st.LegacyTx(), item.ID) > 0 {
+	if OwnQuestion(tx, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	m := *r.Merge
-	u := st.update(a, Request{ID: item.ID}, "merge-request",
+	u := tx.AppendUpdate(a, Request{ID: item.ID}, "merge-request",
 		fmt.Sprintf("Ready to merge %s at %s (%s); review %s.", m.PR, m.Head, m.Method, m.Verdict), s.now())
 	u.Merge = &m
-	st.Updates[len(st.Updates)-1] = u
-	e, queued := st.Queue[item.ID]
+	tx.PutUpdate(u)
+	e, queued := tx.QueueEntry(item.ID)
 	if !queued {
 		e = QueueEntry{Task: item.ID, Repo: item.Repo, Seq: u.ID, Phase: QueueWaiting}
 	}
@@ -79,7 +79,7 @@ func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if e.Phase == QueueRefresh {
 		e.Phase, e.TurnAt = QueueCheck, time.Time{}
 	}
-	st.Queue[item.ID] = e
+	tx.PutQueueEntry(e)
 	return Response{Updates: []Update{u}, Queue: []QueueEntry{e}}, nil
 }
 
@@ -100,23 +100,23 @@ func validMerge(m *MergeRequest, slug string) error {
 }
 
 // PendingMerge is the newest merge request of a task in the merge queue.
-func PendingMerge(st *State, id string) (Update, bool) {
-	e, ok := st.Queue[id]
-	if !ok || e.Request < 1 || e.Request > len(st.Updates) {
+func PendingMerge(tx *Tx, id string) (Update, bool) {
+	e, ok := tx.QueueEntry(id)
+	if !ok {
 		return Update{}, false
 	}
-	return st.Updates[e.Request-1], true
+	return tx.Update(e.Request)
 }
 
 // withdraw takes item out of the merge queue, answering its request, when
 // its task leaves in-review for anything but a hard stop.
-func withdraw(st *State, a Actor, item Item, why string, now time.Time) {
-	e, ok := st.Queue[item.ID]
+func withdraw(tx *Tx, a Actor, item Item, why string, now time.Time) {
+	e, ok := tx.QueueEntry(item.ID)
 	if !ok {
 		return
 	}
-	delete(st.Queue, item.ID)
-	st.update(a, Request{ID: item.ID, ReplyTo: e.Request}, MergeWithdrawn,
+	tx.DeleteQueueEntry(item.ID)
+	tx.AppendUpdate(a, Request{ID: item.ID, ReplyTo: e.Request}, MergeWithdrawn,
 		"Left the merge queue: "+why+". Request the merge again once the PR is in-review, reviewed and pushed.", now)
 }
 
@@ -140,8 +140,8 @@ type QueueStep struct {
 // still q.From.
 func (s Service) QueueStep(q QueueStep) (bool, error) {
 	applied := false
-	err := s.Store.Transaction(func(st *State) error {
-		cur, ok := st.Queue[q.From.Task]
+	err := s.write(func(tx *Tx) error {
+		cur, ok := tx.QueueEntry(q.From.Task)
 		if !ok || fingerprint(cur) != fingerprint(q.From) {
 			return nil
 		}
@@ -153,21 +153,21 @@ func (s Service) QueueStep(q QueueStep) (bool, error) {
 			next = &copied
 		}
 		if q.Done {
-			item := st.Items[cur.Task]
+			item := tx.item(cur.Task)
 			item.State, item.PR = "done", cur.PR
 			item.Version++
-			st.Items[item.ID] = item
+			tx.PutItem(item)
 		}
 		if q.Kind != "" {
-			st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request}, q.Kind, q.Text, now)
+			tx.AppendUpdate(a, Request{ID: cur.Task, ReplyTo: cur.Request}, q.Kind, q.Text, now)
 		}
 		if q.Notice != "" {
-			st.update(a, Request{ID: cur.Task, ReplyTo: cur.Request, Recipient: "operator"}, "say", q.Notice, now)
+			tx.AppendUpdate(a, Request{ID: cur.Task, ReplyTo: cur.Request, Recipient: "operator"}, "say", q.Notice, now)
 		}
 		if next == nil {
-			delete(st.Queue, cur.Task)
+			tx.DeleteQueueEntry(cur.Task)
 		} else {
-			st.Queue[cur.Task] = *next
+			tx.PutQueueEntry(*next)
 		}
 		return nil
 	})
@@ -180,69 +180,50 @@ func (s Service) QueueStep(q QueueStep) (bool, error) {
 // told so the race is seen. request is the merge request the merge acted on,
 // which the merged update answers: the entry may hold a newer one by now.
 func (s Service) RecordMerged(id, pr, body string, request int) error {
-	return s.Store.Transaction(func(st *State) error {
-		item, ok := st.Items[id]
+	return s.write(func(tx *Tx) error {
+		item, ok := tx.Item(id)
 		if !ok || item.State == "done" {
 			return nil
 		}
 		a, now := Actor{Name: "coordinator", Role: "coordinator"}, s.now()
 		item.State, item.PR = "done", pr
 		item.Version++
-		st.Items[id] = item
-		delete(st.Queue, id)
-		st.update(a, Request{ID: id, ReplyTo: request}, MergeMerged, body, now)
-		st.update(a, Request{ID: id, ReplyTo: request, Recipient: "operator"}, "say",
+		tx.PutItem(item)
+		tx.DeleteQueueEntry(id)
+		tx.AppendUpdate(a, Request{ID: id, ReplyTo: request}, MergeMerged, body, now)
+		tx.AppendUpdate(a, Request{ID: id, ReplyTo: request, Recipient: "operator"}, "say",
 			fmt.Sprintf("%s merged while its merge queue entry was changing (%s); the task is done. Check that the merged commit is the one you expect.", pr, body), now)
 		return nil
 	})
 }
 
-// Queue is repo's merge queue in order.
-func Queue(st *State, repo string) []QueueEntry {
-	var out []QueueEntry
-	for _, e := range st.Queue {
-		if e.Repo == repo {
-			out = append(out, e)
-		}
-	}
-	slices.SortFunc(out, func(a, b QueueEntry) int { return a.Seq - b.Seq })
-	return out
-}
-
-func mergeQueue(st *State, a Actor, repo string) (Response, error) {
-	if st.Items[repo].Kind != "repo" {
+func mergeQueue(tx *Tx, a Actor, repo string) (Response, error) {
+	if tx.item(repo).Kind != "repo" {
 		return Response{}, problem(404, "unknown repository %s", repo)
 	}
-	if !readable(st.LegacyTx(), a, repo) {
+	if !readable(tx, a, repo) {
 		return Response{}, problem(403, "repository is outside this execution's read scope")
 	}
-	return Response{Queue: Queue(st, repo)}, nil
+	return Response{Queue: tx.QueueOf(repo)}, nil
 }
 
 // MergedAt is when the coordinator recorded the task's merge; zero when it
 // has not.
-func MergedAt(st *State, id string) time.Time {
-	for i := len(st.Updates) - 1; i >= 0; i-- {
-		if u := st.Updates[i]; u.Item == id && u.Kind == MergeMerged {
-			return u.At
-		}
-	}
-	return time.Time{}
+func MergedAt(tx *Tx, id string) time.Time {
+	u, _ := tx.LatestUpdate(id, MergeMerged)
+	return u.At
 }
 
 // MergedHead is the head commit the task's PR merged at: the head of the
 // merge request its newest merged update answers. It is empty when the task
 // has no merged update or the request is gone.
-func MergedHead(st *State, id string) string {
-	for i := len(st.Updates) - 1; i >= 0; i-- {
-		u := st.Updates[i]
-		if u.Item != id || u.Kind != MergeMerged {
-			continue
-		}
-		if u.ReplyTo < 1 || u.ReplyTo > len(st.Updates) || st.Updates[u.ReplyTo-1].Merge == nil {
-			return ""
-		}
-		return st.Updates[u.ReplyTo-1].Merge.Head
+func MergedHead(tx *Tx, id string) string {
+	u, ok := tx.LatestUpdate(id, MergeMerged)
+	if !ok {
+		return ""
+	}
+	if req, ok := tx.Update(u.ReplyTo); ok && req.Merge != nil {
+		return req.Merge.Head
 	}
 	return ""
 }

@@ -70,7 +70,7 @@ func TestPauseAndResumeAreIdempotentUnderOneKeyAndWithout(t *testing.T) {
 func TestAPauseSurvivesTheHostsTmuxBeingRecorded(t *testing.T) {
 	s, _ := onHosts(t)
 	pause(t, s, "pause", "devbox", "p")
-	if _, err := s.SawTmux("devbox", TmuxRead{Known: true, Start: 77}, func(*State, Attempt) bool { return true }); err != nil {
+	if _, err := s.SawTmux("devbox", TmuxRead{Known: true, Start: 77}, func(*Tx, Attempt) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
 	if rec := mustSnapshot(t, s).Hosts["devbox"]; !rec.Paused || rec.TmuxStart != 77 {

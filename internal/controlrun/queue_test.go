@@ -221,7 +221,7 @@ func TestAMergeRacingAWithdrawalIsRecorded(t *testing.T) {
 	}
 	// The withdrawal ended the entry, but the merged update still names the
 	// head the host merged at.
-	if got := control.MergedHead(&st, task.ID); got != reviewedHead {
+	if got := control.MergedHead(st.LegacyTx(), task.ID); got != reviewedHead {
 		t.Fatalf("merged head %q, want %q", got, reviewedHead)
 	}
 }

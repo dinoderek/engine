@@ -29,7 +29,7 @@ func Tasks(st control.State, id string) []control.Item {
 // fleet's observation of their sessions.
 func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) reconcile.View {
 	root := st.Items[id]
-	fleet.Now, fleet.Limits = c.now(), control.HarnessLimits(&st)
+	fleet.Now, fleet.Limits = c.now(), control.HarnessLimits(st.LegacyTx())
 	fleet.Hosts = pausedHosts(st, fleet.Hosts)
 	v := reconcile.View{Now: fleet.Now, Fleet: fleet, Root: withSession(st, root, fleet)}
 	tasks := Tasks(st, id)
@@ -57,17 +57,17 @@ func pausedHosts(st control.State, hosts []reconcile.HostLoad) []reconcile.HostL
 // record is item as a pass reads it from st, without its session.
 func record(st control.State, item control.Item) reconcile.Item {
 	t := reconcile.Item{Item: item, Current: st.Attempts[item.Attempt], Name: sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)),
-		Vanished: control.Vanished(&st, item), Question: control.OwnQuestion(st.LegacyTx(), item.ID), PlanHold: control.NewStartHold(&st, item.ID),
-		Stopped: st.Attempts[item.Attempt].Reason == control.EndStopped, Claimed: control.Claimed(&st, st.Attempts[item.Attempt]), Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(&st, item.ID), MergedHead: control.MergedHead(&st, item.ID)}
+		Vanished: control.Vanished(st.LegacyTx(), item), Question: control.OwnQuestion(st.LegacyTx(), item.ID), PlanHold: control.NewStartHold(st.LegacyTx(), item.ID),
+		Stopped: st.Attempts[item.Attempt].Reason == control.EndStopped, Claimed: control.Claimed(st.LegacyTx(), st.Attempts[item.Attempt]), Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(st.LegacyTx(), item.ID), MergedHead: control.MergedHead(st.LegacyTx(), item.ID)}
 	for _, id := range item.Depends {
 		if st.Items[id].State != "done" {
 			t.Blocked = append(t.Blocked, id)
 		}
 	}
-	if req, ok := control.PendingMerge(&st, item.ID); ok {
+	if req, ok := control.PendingMerge(st.LegacyTx(), item.ID); ok {
 		t.Merge = &req
 	}
-	if u, ok := control.CleanedUp(&st, item.ID); ok {
+	if u, ok := control.CleanedUp(st.LegacyTx(), item.ID); ok {
 		t.Cleaned = &u
 	}
 	return t
@@ -199,7 +199,7 @@ func (c *Coordinator) keepObservations(v reconcile.View) error {
 
 // coordinating reports whether item's plan coordination still runs.
 func coordinating(st *control.State, item control.Item) bool {
-	return control.Root(st, item).Coordinating
+	return control.Root(st.LegacyTx(), item).Coordinating
 }
 
 // since is the start of a spell that holds now: the recorded start, or now

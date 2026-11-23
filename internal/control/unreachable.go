@@ -37,15 +37,15 @@ var coordinatorActor = Actor{Name: "coordinator", Role: "coordinator"}
 //   - A read that succeeds ends the stretch. A question still open then
 //     resolves as ResolutionReturned, and one note says what became of each
 //     task it named, alive saying whether a task's window still runs.
-func (s Service) SawReach(host string, reached bool, alive func(*State, Attempt) bool) error {
-	return s.Store.Transaction(func(st *State) error {
-		if err := s.actOnAnswer(st, host); err != nil {
+func (s Service) SawReach(host string, reached bool, alive func(*Tx, Attempt) bool) error {
+	return s.write(func(tx *Tx) error {
+		if err := s.actOnAnswer(tx, host); err != nil {
 			return err
 		}
 		if reached {
-			s.reachedAgain(st, host, alive)
+			s.reachedAgain(tx, host, alive)
 		} else {
-			s.unreachable(st, host)
+			s.unreachable(tx, host)
 		}
 		return nil
 	})
@@ -53,14 +53,14 @@ func (s Service) SawReach(host string, reached bool, alive func(*State, Attempt)
 
 // unreachable saves the start of host's stretch, and asks about it once it
 // has lasted UnreachableAsk with tasks running there.
-func (s Service) unreachable(st *State, host string) {
-	rec, now := st.Hosts[host], s.now()
+func (s Service) unreachable(tx *Tx, host string) {
+	rec, now := tx.Host(host), s.now()
 	if rec.UnreachableSince.IsZero() {
 		rec.UnreachableSince = now
-		st.Hosts[host] = rec
+		tx.PutHost(host, rec)
 		return
 	}
-	tasks := hostTasks(st, host, "")
+	tasks := hostTasks(tx, host, "")
 	if rec.Question > 0 || now.Sub(rec.UnreachableSince) < UnreachableAsk || len(tasks) == 0 {
 		return
 	}
@@ -74,42 +74,42 @@ func (s Service) unreachable(st *State, host string) {
 		"Stop: `engine task stop` for each; each is held until `engine task resume`.",
 		host, rec.UnreachableSince.Format("2006-01-02 15:04 MST"), run, strings.Join(tasks, ", "), host)
 	recommended := 0
-	u := st.update(coordinatorActor, Request{Recipient: "operator", RequiresReply: true,
+	u := tx.AppendUpdate(coordinatorActor, Request{Recipient: "operator", RequiresReply: true,
 		Choices: []string{ChoiceWait, ChoiceMove, ChoiceStop}, Recommended: &recommended, Class: "environment"}, "ask", body, now)
 	u.Host = host
-	st.Updates[u.ID-1] = u
+	tx.PutUpdate(u)
 	rec.Question, rec.Tasks, rec.Acted = u.ID, tasks, false
-	st.Hosts[host] = rec
+	tx.PutHost(host, rec)
 }
 
 // reachedAgain ends host's unreachable stretch, resolving a question still
 // open about it as ResolutionReturned, with one note on its tasks.
-func (s Service) reachedAgain(st *State, host string, alive func(*State, Attempt) bool) {
-	rec := st.Hosts[host]
+func (s Service) reachedAgain(tx *Tx, host string, alive func(*Tx, Attempt) bool) {
+	rec := tx.Host(host)
 	if rec.UnreachableSince.IsZero() && rec.Question == 0 {
 		return
 	}
-	if rec.Question > 0 && st.LegacyTx().Resolution(rec.Question) == 0 {
-		st.update(coordinatorActor, Request{ReplyTo: rec.Question}, "resolved", ResolutionReturned, s.now())
-		s.hostNote(st, host, returnedNote(st, host, rec, alive))
+	if rec.Question > 0 && tx.Resolution(rec.Question) == 0 {
+		tx.AppendUpdate(coordinatorActor, Request{ReplyTo: rec.Question}, "resolved", ResolutionReturned, s.now())
+		s.hostNote(tx, host, returnedNote(tx, host, rec, alive))
 	}
 	rec.UnreachableSince, rec.Question, rec.Tasks, rec.Acted = time.Time{}, 0, nil, false
-	st.Hosts[host] = rec
+	tx.PutHost(host, rec)
 }
 
 // returnedNote says what became of each task host's question named, now
 // that the host answers.
-func returnedNote(st *State, host string, rec HostRecord, alive func(*State, Attempt) bool) string {
+func returnedNote(tx *Tx, host string, rec HostRecord, alive func(*Tx, Attempt) bool) string {
 	lines := []string{fmt.Sprintf("%s answers again, before question %d was answered.", host, rec.Question)}
 	for _, id := range rec.Tasks {
-		item := st.Items[id]
-		at, ok := st.Attempts[item.Attempt]
+		item := tx.item(id)
+		at, ok := tx.Attempt(item.Attempt)
 		what := "no longer runs there; it is " + item.State
 		switch {
 		case !ok || at.Host != host || at.State == "ended":
 		case at.State == "dispatching":
 			what = "its dispatch there is settled by the next pass"
-		case alive(st, at):
+		case alive(tx, at):
 			what = "still runs there"
 		default:
 			what = "its session there is gone; it resumes, or ends, by the vanish rules"
@@ -121,53 +121,53 @@ func returnedNote(st *State, host string, rec HostRecord, alive func(*State, Att
 
 // actOnAnswer runs the operator's answer to host's fleet question once:
 // the question's choice is the first line of its resolution.
-func (s Service) actOnAnswer(st *State, host string) error {
-	rec := st.Hosts[host]
+func (s Service) actOnAnswer(tx *Tx, host string) error {
+	rec := tx.Host(host)
 	if rec.Question == 0 || rec.Acted {
 		return nil
 	}
-	by := st.LegacyTx().Resolution(rec.Question)
+	by := tx.Resolution(rec.Question)
 	if by == 0 {
 		return nil
 	}
 	rec.Acted = true
-	st.Hosts[host] = rec
-	answer, _, _ := strings.Cut(st.Updates[by-1].Body, "\n")
+	tx.PutHost(host, rec)
+	answer, _, _ := strings.Cut(tx.update(by).Body, "\n")
 	// The operator's answer is their go-ahead, confirming a move off a host
 	// the coordinator could not read.
 	as := Actor{Name: coordinatorActor.Name, Role: "operator"}
 	var moved, left []string
 	switch answer {
 	case ChoiceMove:
-		out, err := s.moveHost(st, as, Request{Op: "host-move", ID: host, Move: &MoveRequest{Confirm: true}})
+		out, err := s.moveHost(tx, as, Request{Op: "host-move", ID: host, Move: &MoveRequest{Confirm: true}})
 		if err != nil {
 			return err
 		}
 		moved, left = out.Host.Moved, out.Host.Left
 	case ChoiceStop:
 		var err error
-		if moved, left, err = s.stopHost(st, as, host); err != nil {
+		if moved, left, err = s.stopHost(tx, as, host); err != nil {
 			return err
 		}
 	default:
 		return nil
 	}
-	s.hostNote(st, host, answerNote(host, answer, by, moved, left))
+	s.hostNote(tx, host, answerNote(host, answer, by, moved, left))
 	return nil
 }
 
 // hostNote tells the operator body about host, with no item.
-func (s Service) hostNote(st *State, host, body string) {
-	u := st.update(coordinatorActor, Request{Recipient: "operator"}, "say", body, s.now())
+func (s Service) hostNote(tx *Tx, host, body string) {
+	u := tx.AppendUpdate(coordinatorActor, Request{Recipient: "operator"}, "say", body, s.now())
 	u.Host = host
-	st.Updates[u.ID-1] = u
+	tx.PutUpdate(u)
 }
 
 // stopHost stops every task running on host, as the operator's task stop
 // does, returning those stopped and those whose dispatch was still in flight.
-func (s Service) stopHost(st *State, a Actor, host string) (stopped, left []string, err error) {
-	for _, id := range hostTasks(st, host, "") {
-		_, err := s.stopTask(st, a, Request{Op: "task-stop", ID: id})
+func (s Service) stopHost(tx *Tx, a Actor, host string) (stopped, left []string, err error) {
+	for _, id := range hostTasks(tx, host, "") {
+		_, err := s.stopTask(tx, a, Request{Op: "task-stop", ID: id})
 		var p *Problem
 		switch {
 		case err == nil:

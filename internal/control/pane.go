@@ -47,14 +47,14 @@ func (s Service) Started(id, window, paneKey string) error {
 // as a resolution does. A post the hook did not vouch for (an absent or invalid
 // signature, or text missing from the transcript) is still recorded, and
 // resolves alike, but raises one coordinator note to the operator.
-func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
+func (s Service) paneInput(tx *Tx, a Actor, r Request) (Response, error) {
 	if a.Role != "worker" {
 		return Response{}, problem(403, "pane input comes only from a session's prompt hook")
 	}
 	if strings.TrimSpace(r.Body) == "" {
 		return Response{}, problem(400, "pane input text is required")
 	}
-	at := st.Attempts[a.Attempt]
+	at := tx.attempt(a.Attempt)
 	item := at.Item
 	if r.ID != "" && r.ID != item {
 		return Response{}, problem(403, "pane input is for the session's own item, %s", item)
@@ -66,15 +66,15 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 	r.ID, r.Recipient, r.ReplyTo, r.RequiresReply, r.Pane = item, "", 0, false, nil
 	kind, question := KindPaneMessage, 0
 	if !harnessCommand.MatchString(strings.TrimSpace(r.Body)) {
-		question = paneQuestion(st, a, item, vouch.At)
+		question = paneQuestion(tx, a, item, vouch.At)
 	}
 	if question > 0 {
-		kind, r.ID, r.ReplyTo = KindPaneAnswer, st.Updates[question-1].Item, question
+		kind, r.ID, r.ReplyTo = KindPaneAnswer, tx.update(question).Item, question
 	}
-	u := st.update(a, r, kind, r.Body, s.now())
+	u := tx.AppendUpdate(a, r, kind, r.Body, s.now())
 	out := Response{Updates: []Update{u}}
 	if question > 0 {
-		out.Updates = append(out.Updates, s.release(st.LegacyTx(), a, st.Updates[question-1])...)
+		out.Updates = append(out.Updates, s.release(tx, a, tx.update(question))...)
 	}
 	if doubts := paneDoubts(at, r.Key, r.Body, vouch); len(doubts) > 0 {
 		outcome := "resolved nothing"
@@ -82,12 +82,12 @@ func (s Service) paneInput(st *State, a Actor, r Request) (Response, error) {
 			outcome = fmt.Sprintf("resolved question %d", question)
 		}
 		stop := "engine task stop " + item
-		if st.Items[item].Kind == "plan" {
+		if tx.item(item).Kind == "plan" {
 			stop = "engine plan stop " + item + " --version <n>"
 		}
 		note := fmt.Sprintf("Pane input %d on %s may not be the operator's: %s. It is recorded and %s. If you did not type it, stop it (%s) or tell its session your answer (engine tell %s).",
 			u.ID, item, strings.Join(doubts, ", and "), outcome, stop, item)
-		out.Updates = append(out.Updates, st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{ID: item, Recipient: "operator"}, "say", note, s.now()))
+		out.Updates = append(out.Updates, tx.AppendUpdate(Actor{Name: "coordinator", Role: "coordinator"}, Request{ID: item, Recipient: "operator"}, "say", note, s.now()))
 	}
 	return out, nil
 }
@@ -106,10 +106,10 @@ const clockSkew = 30 * time.Second
 // oldest the session asked itself, else the oldest. A plan's planner never
 // answers a question one of its tasks asked on the plan. A question asked after
 // the text was typed is not its answer. A zero at bounds nothing.
-func paneQuestion(st *State, a Actor, item string, at time.Time) int {
+func paneQuestion(tx *Tx, a Actor, item string, at time.Time) int {
 	other := 0
-	for _, u := range st.Updates {
-		if !u.RequiresReply || u.Item != item && u.Task != item || u.Task != "" && u.Task != item || st.LegacyTx().Resolution(u.ID) > 0 {
+	for u := range tx.QuestionsAbout(item) {
+		if u.Task != "" && u.Task != item || tx.Resolution(u.ID) > 0 {
 			continue // a task's question on its plan holds that task, not the plan's planner
 		}
 		if !at.IsZero() && u.At.After(at.Add(clockSkew)) {
