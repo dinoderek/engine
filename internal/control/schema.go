@@ -34,7 +34,6 @@ CREATE TABLE attempts (
 CREATE INDEX attempts_item ON attempts(item);
 CREATE INDEX attempts_state ON attempts(state);
 CREATE INDEX attempts_host ON attempts(host);
-CREATE INDEX attempts_limited ON attempts(host) WHERE json_extract(data, '$.limited')=1;
 CREATE TABLE updates (
  id INTEGER PRIMARY KEY, item TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, author TEXT NOT NULL DEFAULT '',
  reply_to INTEGER NOT NULL DEFAULT 0, recipient TEXT NOT NULL DEFAULT '', task TEXT NOT NULL DEFAULT '',
@@ -57,7 +56,11 @@ CREATE TABLE hosts (name TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);
 INSERT INTO counters(name, value) VALUES('next', 1);
 CREATE TABLE marks (name TEXT PRIMARY KEY, data TEXT NOT NULL);
-`
+` + currentIndexes
+
+// currentIndexes creates, when absent, the indexes added to version 7 after
+// databases of it existed; a current database runs it on open.
+const currentIndexes = "CREATE INDEX IF NOT EXISTS attempts_limited ON attempts(host) WHERE json_extract(data, '$.limited')=1;\n"
 
 // snapshotFields are the fields of an item an update's snapshot keeps: what
 // its readers use. A held task's state before needs-human comes from the

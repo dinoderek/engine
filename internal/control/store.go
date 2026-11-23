@@ -71,7 +71,9 @@ func (s *Store) initialize() error {
 		return fmt.Errorf("control database schema %d is newer than this server's %d", version, schemaVersion)
 	}
 	if version == schemaVersion {
-		return nil
+		// A database made before an index was added to the version gets it.
+		_, err := s.writer.Exec(currentIndexes)
+		return err
 	}
 	var records int
 	if err := s.writer.QueryRow("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='records'").Scan(&records); err != nil {

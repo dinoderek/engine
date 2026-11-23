@@ -5,7 +5,7 @@
 ## Shape
 
 - **No agent.** The coordinator, inside `engine serve`, never edits code.
-- **Stateless.** Each pass derives everything from the server's records, read per plan (its tasks, attempts, questions, updates and repository queue), and each host's tmux sessions, observations, run directories and readiness.
+- **Stateless.** Each pass derives everything from the server's records, read per plan and repository, and each host's tmux sessions, observations, run directories and readiness.
 - **One pass** runs every 30 seconds and once at start, reading every host's `status` in parallel (`internal/reconcile`). Passes run the queues first; the session view's observer reuses those reads (`dashboard.md`). Stopping coordination leaves sessions running; plans move only to `planned` and `done`.
 
 For harness scoring and host eligibility, load `hosts-and-sessions.md`, "Placement". For session liveness, stalls, vanishes, early deaths and limits, load `session-signals.md`.
@@ -16,7 +16,7 @@ Plans serialize against fresh fleet capacity. A dispatch records its attempt, ho
 
 The host serializes dispatches by run ID and returns an existing run on replay. A spawn failing before its window opens removes what it made (the run directory; the worktree and branch unless reused), naming any leftover; a run directory with no `run.json` and no window is reused. It uses the host's Git credentials and identity, with isolated clones under `~/.local/share/engine/control-repos`. Credentials travel over SSH stdin into an owner-only run file whose path the window command exports; hooks recover their connection from the worktree's server-session record. Credential files are never collected.
 
-A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`, "Vanish" and "Early death").
+A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`).
 
 A task the operator moved (`control-server.md`) waits until a pass's `release --moved` of its old run, window open or gone, succeeds, and while the old host is unread, unless it was moved blind; a wait on an unread host tells the operator once. Releasing work `origin` lacks tells the operator, unless the move stayed on that host. A blind move's old run is released when its host answers, a done plan's too. Until then, each kickoff warns that the old session may still push: before each push, the new session fetches and asks the operator if `origin`'s branch has commits it lacks.
 
@@ -26,9 +26,9 @@ Operator-only `engine attempt reconcile <id> <evidence>` applies the vanish and 
 
 Each repository has one merge queue across its plans. `engine task merge-ready`, for the in-review PR at its reviewed, pushed head, queues the task; a later request keeps its place.
 
-Only the queue's head is called: the first eligible entry in request order (in-review, coordinated, no unresolved question of its own). It stays head until it merges or leaves. An entry that stops being eligible waits, keeping its place, and is not called. The head is called through its task host's `merge` op, since the server has no GitHub credential: at once when it becomes head or requests again, then once per `CheckEvery` (`internal/reconcile/queue.go`). A merge marks the task done with its PR. A head that is behind, conflicting or moved gets `merge-turn`, waking the executor to refresh and request again. A closed or branch-ruled head ends `merge-refused` and tells the operator; a red head ends `merge-refused` without a notice. A PR merged elsewhere is done, and the operator told.
+Only the queue's head is called: the first eligible entry in request order (in-review, coordinated, no unresolved question of its own). It stays head until it merges or leaves. An entry that stops being eligible waits, keeping its place, and is not called. The head is called through its task host's `merge` op, since the server has no GitHub credential: at once when it becomes head or requests again, then once per `CheckEvery` (`internal/reconcile/queue.go`). A restart adds no call. A merge marks the task done with its PR. A head that is behind, conflicting or moved gets `merge-turn`, waking the executor to refresh and request again. A closed or branch-ruled head ends `merge-refused` and tells the operator; a red head ends `merge-refused` without a notice. A PR merged elsewhere is done, and the operator told.
 
-**After the merge**, the `merged` update gives the session a cleanup turn, ending in `engine task cleaned`. Idle after it, the session is released (`--left` tells the operator); without a cleanup, once idle `CleanupWait` after the merge, or at once if its window is gone, telling the operator where it ran. Busy at `CleanupCap`, it is released if cleaned, else noticed (`internal/reconcile/session.go`). Releasing a running background job is a notice.
+**After the merge**, the `merged` update gives the session a cleanup turn, ending in `engine task cleaned`. Idle after it, the session is released (`--left` tells the operator); without a cleanup, once idle `CleanupWait` after the merge, or at once if its window is gone, telling the operator where it ran. Busy at `CleanupCap`, it is released if cleaned, else noticed (`internal/reconcile/session.go`). Other done tasks' sessions go once idle 10 minutes. Releasing a running background job is a notice.
 
 Every wait is bounded. A head outstaying its bound, failing `gh` repeatedly, or whose host is not in `hosts.toml` ends `merge-refused`, telling the operator why; the executor fixes it and requests again. Leaving in-review except for `needs-human` withdraws the entry (`merge-withdrawn`); a vanished task resumes in-review, keeping its entry. A lost merge result reads as merged.
 
