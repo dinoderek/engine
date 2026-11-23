@@ -2,9 +2,12 @@ package control
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -210,5 +213,76 @@ func TestARecordThatCannotBeEncodedFailsItsWrite(t *testing.T) {
 	}
 	if got := mustSnapshot(t, s).Attempts; len(got) != 0 {
 		t.Fatalf("it stored %+v", got)
+	}
+}
+
+func TestAnItemsDependenciesAndCapabilitiesFollowItsLatestPutAndItsDelete(t *testing.T) {
+	tx := blank(t)
+	rows := func() string {
+		var out []string
+		tx.rows(func(r *sql.Rows) error {
+			var item, value string
+			err := r.Scan(&item, &value)
+			out = append(out, item+":"+value)
+			return err
+		}, "SELECT item, depends FROM item_deps UNION ALL SELECT item, 'cap ' || cap FROM item_requires ORDER BY 1, 2")
+		return strings.Join(out, " ")
+	}
+	tx.PutItem(Item{ID: "t2", Kind: "task", Depends: []string{"t9", "t8"}, Requires: []string{"linux", "gpu"}})
+	tx.PutItem(Item{ID: "t3", Kind: "task", Depends: []string{"t2"}, Requires: []string{"gpu"}})
+	tx.PutItem(Item{ID: "t2", Kind: "task", Depends: []string{"t8"}, Requires: []string{"gpu"}})
+	if got, want := rows(), "t2:cap gpu t2:t8 t3:cap gpu t3:t2"; got != want {
+		t.Fatalf("after a replace: %q, want %q", got, want)
+	}
+	tx.DeleteItem("t3")
+	if got, want := rows(), "t2:cap gpu t2:t8"; got != want || tx.err != nil {
+		t.Fatalf("after a delete: %q, want %q (%v)", got, want, tx.err)
+	}
+}
+
+// TestReadersSeeOnlyCommittedStates moves a count between two attempts in
+// each write; a reader beside them must never see it part moved.
+func TestReadersSeeOnlyCommittedStates(t *testing.T) {
+	s := service(t)
+	edit(t, s.Store, func(tx *Tx) {
+		tx.PutAttempt(Attempt{ID: "a1", Seen: 50})
+		tx.PutAttempt(Attempt{ID: "a2"})
+	})
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+	for range 4 {
+		wg.Go(func() {
+			for {
+				err := s.Store.Read(context.Background(), func(tx *Tx) error {
+					if sum := tx.attempt("a1").Seen + tx.attempt("a2").Seen; sum != 50 {
+						return fmt.Errorf("a reader saw a sum of %d", sum)
+					}
+					return nil
+				})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				select {
+				case <-done:
+					return
+				default:
+				}
+			}
+		})
+	}
+	for range 20 {
+		edit(t, s.Store, func(tx *Tx) {
+			a, b := tx.attempt("a1"), tx.attempt("a2")
+			a.Seen--
+			b.Seen++
+			tx.PutAttempt(a)
+			tx.PutAttempt(b)
+		})
+	}
+	close(done)
+	wg.Wait()
+	if got := mustSnapshot(t, s).Attempts["a2"].Seen; got != 20 {
+		t.Fatalf("writes were lost: a2 saw %d", got)
 	}
 }
