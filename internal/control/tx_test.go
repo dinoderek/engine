@@ -15,8 +15,7 @@ var bg = context.Background()
 
 func TestReadSeesAConsistentSnapshotWhileWritesRun(t *testing.T) {
 	s := service(t)
-	repo, plan := repoPlan(t, s)
-	_ = repo
+	_, plan := repoPlan(t, s)
 	const writes = 40
 	var wg sync.WaitGroup
 	wg.Go(func() {

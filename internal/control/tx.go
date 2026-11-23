@@ -36,7 +36,8 @@ func (s *Store) Write(ctx context.Context, fn func(*Tx) error) error {
 
 // LegacyTx lets a function not yet moved onto Tx call one that has. It
 // shares the State, so both see each other's changes. It exists only while
-// *State functions remain; moving the last one deletes it.
+// *State functions remain; moving the last one deletes it. The Tx it
+// returns is writable even inside a Read.
 func (s *State) LegacyTx() *Tx { return &Tx{st: s, write: true} }
 
 // LegacyState hands a function not yet moved onto Tx the records it works
@@ -74,7 +75,8 @@ func (t *Tx) ItemsOfPlan(plan string) []Item {
 }
 
 // ItemsByKindUnder are the items of a kind that belong to repo or plan
-// parent, in no order. An empty kind or parent matches every one.
+// parent, in no order. An empty kind or parent matches every one: the
+// list operation relies on that scan, and an indexed query must not.
 func (t *Tx) ItemsByKindUnder(kind, parent string) []Item {
 	var out []Item
 	for _, item := range t.st.Items {
@@ -93,7 +95,8 @@ func (t *Tx) Attempt(id string) (Attempt, bool) {
 }
 
 // AttemptsFor are the attempts of item, in no order. An empty item matches
-// every attempt.
+// every attempt: the attempts operation relies on that scan, and an indexed
+// query must not.
 func (t *Tx) AttemptsFor(item string) []Attempt {
 	var out []Attempt
 	for _, at := range t.st.Attempts {
