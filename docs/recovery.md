@@ -4,14 +4,14 @@
 
 Engine has three layers. The server (`engine serve`) runs the coordinator. Each host runs one tmux server with one session, `engine`. Each task gets one window in it, running its agent session. A lost window and a lost session look the same to engine; only what killed it differs. A failure ends the work of the layer it hits: one window ends one task, a host's tmux server or reboot ends every task on that host, and a server failure ends nothing but cuts sessions off from their records.
 
-Engine never asks before it resumes a dead task. It asks only when a choice belongs to you: a host unreachable for 15 minutes, a server down, a session at its usage limit, or a hung session (a notice only).
+Engine never asks before it resumes a dead task. It asks only when a choice belongs to you: a host unreachable for 15 minutes, or a session at its usage limit. A server down is reported by message, and a hung session by a notice; neither is a question.
 
 ## The failures
 
 ### 1. The server crashes
 
 - **Detected:** systemd restarts the unit (`Restart=on-failure`). Sessions notice because their `engine` commands fail.
-- **Engine does:** a session's command retries connect errors, timeouts and 5xx for 90 seconds under its request key (`control-server.md`). Once the server answers, each idle session of a running task is woken once for the gap and told to retry the commands that failed. Stall timers restart from that pass (`session-signals.md`, "Server outage"). Sessions on the server's host run in their own tmux scope, so the unit's restart does not end them (`tmux.md`).
+- **Engine does:** a session's command retries connect errors, timeouts and 5xx for 90 seconds under its request key (`control-server.md`). An outage long enough to count wakes each idle session of a running task once and restarts stall timers (`session-signals.md`, "Server outage"). A shorter one gets only the retry. Sessions on the server's host run in their own tmux scope, so the unit's restart does not end them (`tmux.md`).
 - **Run:** nothing, if it comes back. If it does not, go to 8.
 
 ### 2. The server is upgraded or restarted
@@ -23,12 +23,12 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
   2. `engine upgrade`, from any host in `hosts.toml`.
   3. For a host it reports, `engine setup --host <name>`, then rerun the upgrade.
 
-  Database migrations run forward only. Rolling back means restoring the backup, which loses writes made since; that stays manual.
+  Rolling back the database is manual. The backup and the rules for an older database are in `control-server.md`.
 
 ### 3. One window or session is lost
 
 - **Detected:** the next successful host read shows the window gone or its command exited.
-- **Engine does:** it applies the vanish rules (`session-signals.md`, "Vanish"). A claimed task keeps its PR and queue place and resumes on its own branch. Three such deaths in a row (`control.DeathCap`) end the task `failed`, with a notice carrying the last two pane-log tails. An unclaimed death is an early death: the first returns the task to `todo`, the second fails it. A death at a limit or after a stop does not count.
+- **Engine does:** it applies the vanish rules (`session-signals.md`, "Vanish"). A claimed task keeps its PR and queue place and resumes on its own branch. Three such deaths in a row (`control.DeathCap`) end the task `failed`, with a notice carrying the last two pane-log tails. An unclaimed death is an early death: the first returns the task to `todo`, the second fails it. A death at a limit, or after coordination stopped, does not count.
 - **Run:**
   1. `engine updates <task>` and `engine attach <task>` to read why it died.
   2. Nothing, for a resumed task. For a `failed` task, fix the cause and retry it as `control-server.md` describes.
@@ -36,13 +36,13 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 ### 4. The tmux server dies, or the host reboots
 
 - **Detected:** the first successful read after the host is back. Its tmux start time has changed, and every window last seen live is gone (or no tmux server runs). Until then, the host is unreachable (7).
-- **Engine does:** this is one host-wide loss, not one death per task. It sends one notice, "`<host>`'s tmux restarted; `<n>` tasks will resume". Claimed tasks resume and unclaimed ones return to `todo`, neither counting toward a cap or strike. A stale `.git/index.lock` in a kept worktree is removed before the resume (`hosts-and-sessions.md`). `tmux kill-session -t engine` is not a loss while another tmux session keeps the server running; each task counts its own death.
+- **Engine does:** it reads this as one host-wide loss, not one death per task, and sends one notice for the host (`session-signals.md`, "Host-wide loss"). The attempts it ends resume or return to `todo` without counting toward a cap or strike. A stale `.git/index.lock` in a kept worktree is removed before the resume (`hosts-and-sessions.md`). A `tmux kill-session -t engine` that leaves the server running counts each task's death instead.
 - **Run:** nothing, if the host comes back. For a planned reboot, see "Planned reboot" below.
 
 ### 5. A session reaches its usage limit
 
 - **Detected:** the harness's limit marker and state: `limited`, or waiting with a reset time.
-- **Engine does:** a live limited session gets `continue` after the reset plus 2 minutes, or every 30 minutes when the reset is unknown (`session-signals.md`, "Limit recovery"). When another host or harness has room, the operator gets one question: wait, or move the task (or, for several sessions on one harness, the host's harness). A session that died at its limit ends `vanished`, uncounted, and its host and harness take nothing until the reset.
+- **Engine does:** a live limited session gets `continue` after the reset plus 2 minutes, or every 30 minutes when the reset is unknown (`session-signals.md`, "Limit recovery"). When another host or harness has room, the operator gets one question with the wait and move choices (`session-signals.md`, "Limit choice"). A session that died at its limit ends `vanished`, uncounted. Its host and harness take nothing new until the reset, or one task per 30 minutes if the reset is unknown; another host or harness may take the task sooner (`session-signals.md`, "Death at a limit").
 - **Run:** answer the question in `engine inbox --operator`, or run the move yourself:
   - `engine task move <task> --harness <h> --host <h>`
   - `engine host move <host> --harness <h>` for several tasks on one harness
@@ -61,13 +61,13 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 ### 7. A host is unreachable for long
 
 - **Detected:** its `status` call fails (ssh exit 255 is an unreachable host). The host shows as unreachable on the dashboard.
-- **Engine does:** its sessions are unknown, never dead: nothing is ended or moved, since they may still run. New tasks go to other hosts, and a merge-queue head there ends `merge-refused`. After 15 minutes with live tasks there, the operator gets one question, with three choices (`coordinator.md`, "An unreachable host is asked about"): wait, which is the default; move its tasks; or stop each. If the host returns first, the question resolves itself, and one note lists what happened to each task.
+- **Engine does:** its sessions are unknown, never dead: nothing is ended or moved, since they may still run. New tasks go to other hosts, and a merge-queue head there ends `merge-refused` after a bounded wait (`coordinator.md`, "Merge queue"). After 15 minutes with live tasks there, the operator gets one question, with three choices (`coordinator.md`, "An unreachable host is asked about"): wait, which is the default; move its tasks; or stop each. If the host returns first, the question resolves itself, and one note lists what happened to each task.
 - **Run:**
   - `engine host pause <host>`, to stop new placement there while you decide.
   - `engine host move <host>`, to move every task off it.
   - `engine task stop <task>`, for each task you want stopped.
 
-  Moving off an unread host asks for confirmation, since the old session may still push. Its credential is revoked, so it cannot write to the server or request a merge. The new session refuses a branch that has diverged from `origin`. When the old host returns, its window is released, keeping the worktree, and you are told what was left unpushed.
+  Moving off an unread host asks for confirmation, since the old session may still push. The old session's credential is revoked, so it cannot write to the server or request a merge (`control-server.md`, "Moving a task"). Each kickoff warns that it may still push, and before any push the new session asks you if `origin`'s branch holds commits it lacks (`coordinator.md`, "Dispatch and recovery"). When the old host returns, its window is released, keeping the worktree, and you are told what was left unpushed.
 
 ### 8. The server is down and not coming back
 
