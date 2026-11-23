@@ -75,7 +75,7 @@ func TestAWriteErrorLeavesRecordsUnchangedInMemoryAndOnDisk(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("Write returned %v, want the function's error", err)
 	}
-	check := func(where string, st state) {
+	check := func(where string, st records) {
 		t.Helper()
 		if st.Items[plan.ID].Title != plan.Title || len(st.Updates) != len(before.Updates) {
 			t.Errorf("%s: title %q with %d updates after a failed write; want %q with %d",

@@ -3,6 +3,7 @@ package control
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -30,18 +31,10 @@ func migrateFrom(t *testing.T, version int) {
 	call(t, s, a, ready(holder.ID, good()))
 	// Version 1 had no queue: the requests were bare updates, and a lock row.
 	lock, _ := json.Marshal(map[string]any{"repo": repo.ID, "attempt": holding.Attempt.ID, "token": "secret", "acquired": "2026-11-07T09:00:00Z"})
-	if err := s.Store.write([]change{{key: "lock/" + repo.ID, data: string(lock)}}, "DELETE FROM records WHERE key LIKE 'queue/%'; "+"UPDATE records SET data=json_set(data,'$.state','executing') WHERE key='item/"+plan.ID+"';"+fmt.Sprintf("PRAGMA user_version=%d;", version)); err != nil {
-		t.Fatal(err)
-	}
-	path := s.Store.path
-	if err := s.Store.Close(); err != nil {
-		t.Fatal(err)
-	}
-	store, err := Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = store.Close() }()
+	path := toRecords(t, s, version)
+	rawSQL(t, path, "INSERT INTO records VALUES('lock/"+repo.ID+"', '"+string(lock)+"'); DELETE FROM records WHERE key LIKE 'queue/%'; "+
+		"UPDATE records SET data=json_set(data,'$.state','executing') WHERE key='item/"+plan.ID+"';")
+	store := openAt(t, path)
 	st, err := store.snapshot()
 	if err != nil {
 		t.Fatal(err)
@@ -62,29 +55,31 @@ func migrateFrom(t *testing.T, version int) {
 	if !told[holder.ID] || !told[waiter.ID] || told[idle.ID] || len(told) != 2 {
 		t.Fatalf("lock-retired notices on %v", told)
 	}
-	out, err := store.sql("SELECT count(*) AS n FROM records WHERE key LIKE 'lock/%'; PRAGMA user_version;")
+	out, err := store.sql("SELECT count(*) AS n FROM sqlite_schema WHERE name='records'; PRAGMA user_version;")
 	if err != nil || !strings.Contains(string(out), `"n":0`) || !strings.Contains(string(out), fmt.Sprintf(`"user_version":%d`, schemaVersion)) {
 		t.Fatalf("after migration: %s %v", out, err)
 	}
 }
 
 func TestMigrationTellsTheLockHolderEvenWhenIdle(t *testing.T) {
-	st := emptyState()
+	st := newRecords()
 	st.Items["t1"] = Item{ID: "t1", Kind: "task", State: "todo", Attempt: "a2"}
 	st.Attempts["a2"] = Attempt{ID: "a2", Item: "t1", State: "ended"}
-	retire(&st, []legacyLock{{Repo: "r1", Attempt: "a2"}}, time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC))
-	if len(st.Updates) != 1 || st.Updates[0].Item != "t1" || st.Updates[0].Kind != LockRetired {
-		t.Fatalf("updates %+v", st.Updates)
+	tx := st.load(t)
+	retire(tx, []legacyLock{{Repo: "r1", Attempt: "a2"}}, time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC))
+	if got := slices.Collect(tx.UpdatesAfter(0, "")); len(got) != 1 || got[0].Item != "t1" || got[0].Kind != LockRetired {
+		t.Fatalf("updates %+v", got)
 	}
 }
 
 func TestMigrationQueuesOnlyUnfinishedTasks(t *testing.T) {
-	st := emptyState()
+	st := newRecords()
 	st.Items["t1"] = Item{ID: "t1", Kind: "task", State: "failed", Attempt: "a2"}
 	st.Attempts["a2"] = Attempt{ID: "a2", Item: "t1", State: "ended"}
 	st.Updates = []Update{{ID: 1, Item: "t1", Author: "a2", Kind: "merge-request", Merge: &MergeRequest{PR: "p", Head: head}}}
-	retire(&st, nil, time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC))
-	if len(st.Queue) != 0 {
-		t.Fatalf("a failed task was queued: %+v", st.Queue)
+	tx := st.load(t)
+	retire(tx, nil, time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC))
+	if q := tx.QueueEntries(); len(q) != 0 {
+		t.Fatalf("a failed task was queued: %+v", q)
 	}
 }

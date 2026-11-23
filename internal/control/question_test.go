@@ -162,7 +162,7 @@ func TestHeldFromIsTheNewestStateBeforeNeedsHuman(t *testing.T) {
 		{"not active", []Update{{Item: "t1", Snapshot: snap("todo")}, {Item: "t1", RequiresReply: true, Snapshot: snap("needs-human")}}, ""},
 	}
 	for _, tc := range cases {
-		if got := heldFrom((&state{Updates: tc.updates}).tx(), "t1"); got != tc.want {
+		if got := heldFrom(records{Updates: tc.updates}.load(t), "t1"); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
 		}
 	}

@@ -198,14 +198,7 @@ func TestAVanishedTaskKeepsItsPlace(t *testing.T) {
 	s := service(t)
 	task, a, claimed := reviewed(t, s)
 	call(t, s, a, ready(task.ID, good()))
-	if err := s.Store.modify(func(st *state) error {
-		at := st.Attempts[claimed.Attempt.ID]
-		at.LiveAt = time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC)
-		st.Attempts[at.ID] = at
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	editAttempt(t, s.Store, claimed.Attempt.ID, func(at *Attempt) { at.LiveAt = time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC) })
 	if at, err := s.EndDead(claimed.Attempt.ID, "window gone", ""); err != nil || at.Reason != EndVanished {
 		t.Fatal(at, err)
 	}

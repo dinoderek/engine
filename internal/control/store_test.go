@@ -61,7 +61,7 @@ func TestSQLiteFailureRollsBackStateAndHistory(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
 	before, _ := s.Store.snapshot()
-	if _, err := s.Store.writer.Exec("CREATE TRIGGER fail_insert BEFORE INSERT ON records WHEN new.key LIKE 'receipt/%' BEGIN SELECT RAISE(ABORT, 'disk full'); END;"); err != nil {
+	if _, err := s.Store.writer.Exec("CREATE TRIGGER fail_insert BEFORE INSERT ON receipts BEGIN SELECT RAISE(ABORT, 'disk full'); END;"); err != nil {
 		t.Fatal(err)
 	}
 	_, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "not committed", Key: "retry"})
@@ -114,11 +114,5 @@ func TestStoreRefusesUnknownSchemaAndCorruption(t *testing.T) {
 	}
 	if _, err := Open(invalid); err == nil {
 		t.Fatal("corrupt database accepted")
-	}
-	for _, key := range []string{"unknown/x", "item/x", "attempt/x", "update/x", "auth/x", "receipt/x", "queue/x", "next"} {
-		st := emptyState()
-		if err := loadRecord(&st, key, []byte("invalid")); err == nil {
-			t.Fatalf("%s corruption accepted", key)
-		}
 	}
 }

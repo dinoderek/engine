@@ -26,14 +26,7 @@ func TestPlanQuestionBlocksOnlyNewDispatches(t *testing.T) {
 	// A task that never started is held; one that did is dispatched again.
 	other := newTask(t, s, repo.ID, plan.ID)
 	reject(t, s, op, Request{Op: "claim", ID: other.ID, Body: "devbox", State: "claude"}, 409)
-	if err := s.Store.modify(func(st *state) error {
-		at := st.Attempts[claimed.Attempt.ID]
-		at.LiveAt = time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC)
-		st.Attempts[at.ID] = at
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	editAttempt(t, s.Store, claimed.Attempt.ID, func(at *Attempt) { at.LiveAt = time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC) })
 	if at, err := s.EndDead(claimed.Attempt.ID, "window gone", ""); err != nil || at.Reason != EndVanished {
 		t.Fatal(at, err)
 	}
@@ -66,13 +59,4 @@ func TestPlanQuestionLeavesAnotherTasksStateAndMergeAlone(t *testing.T) {
 		t.Fatal("a sibling's merge request was refused under a plan question")
 	}
 	call(t, s, op, Request{Op: "state", ID: two.ID, Version: review.Version, State: "done"})
-}
-
-func mustSnapshot(t *testing.T, s Service) state {
-	t.Helper()
-	st, err := s.Store.snapshot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return st
 }

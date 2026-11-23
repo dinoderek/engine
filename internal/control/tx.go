@@ -2,43 +2,90 @@ package control
 
 import (
 	"context"
-	"iter"
-	"maps"
-	"slices"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 )
 
 // Tx is the typed access to the control records inside one Store.Read or
 // Store.Write. Domain code reaches records only through its methods, each
-// named by what it fetches and shaped as one indexed query, so a storage
-// engine can answer it without loading anything else. A Tx is valid only
-// inside the function it is given to.
+// one indexed query. A Tx is valid only inside the function it is given to.
+//
+// A failed query leaves the Tx failed: every later accessor returns the zero
+// value, and the Read or Write returns the first error, a Write rolling back.
 type Tx struct {
-	st    *state
+	ctx   context.Context
+	q     querier
 	write bool
+	err   error
 }
 
-// Read runs fn on a consistent snapshot and commits nothing. Reads run beside
-// each other and see every earlier commit whole or not at all.
+// querier is what a Tx runs its queries on: a database transaction, or a
+// database for a test's unscoped reads.
+type querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// txTimeout bounds one transaction, a write holding the one writer.
+const txTimeout = 15 * time.Second
+
+// Read runs fn in a WAL read transaction on the reader pool, and commits
+// nothing. Reads run beside each other and beside the writer, and see every
+// earlier commit whole or not at all.
 func (s *Store) Read(ctx context.Context, fn func(*Tx) error) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return s.view(func(st *state) error { return fn(&Tx{st: st}) })
+	return s.run(ctx, false, fn)
 }
 
-// Write runs fn in the one writing transaction: every change it makes commits
-// together, and an error from fn leaves the records as they were.
+// Write runs fn in BEGIN IMMEDIATE on the one writer connection: every
+// change it makes commits together, and an error from fn rolls it back.
+// Writes queue for that connection in Go, never on SQLITE_BUSY.
 func (s *Store) Write(ctx context.Context, fn func(*Tx) error) error {
+	return s.run(ctx, true, fn)
+}
+
+func (s *Store) run(ctx context.Context, write bool, fn func(*Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return s.modify(func(st *state) error { return fn(&Tx{st: st, write: true}) })
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.lock == nil {
+		return errors.New("store is closed")
+	}
+	db := s.readers
+	if write {
+		db = s.writer
+	}
+	ctx, cancel := context.WithTimeout(ctx, txTimeout)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	t := &Tx{ctx: ctx, q: tx, write: write}
+	if !write {
+		// A WAL read transaction takes its snapshot at its first read: take
+		// it now, so fn sees the records as they were when Read began.
+		var n int
+		t.fail(tx.QueryRowContext(ctx, "SELECT value FROM counters WHERE name='next'").Scan(&n))
+	}
+	err = fn(t)
+	if t.err != nil {
+		return t.err
+	}
+	if err != nil {
+		return err
+	}
+	if !write {
+		return tx.Commit()
+	}
+	return s.commit(tx)
 }
-
-// tx is a writable Tx on s, for the code and tests of this package that hold
-// a state outside a Store.Read or Store.Write.
-func (s *state) tx() *Tx { return &Tx{st: s, write: true} }
 
 func (t *Tx) mustWrite() {
 	if !t.write {
@@ -46,10 +93,90 @@ func (t *Tx) mustWrite() {
 	}
 }
 
+func (t *Tx) fail(err error) {
+	if err != nil && t.err == nil {
+		t.err = err
+	}
+}
+
+func (t *Tx) exec(query string, args ...any) {
+	if t.err != nil {
+		return
+	}
+	_, err := t.q.ExecContext(t.ctx, query, args...)
+	t.fail(err)
+}
+
+// encode is v as a data column.
+func (t *Tx) encode(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.fail(fmt.Errorf("control record: %w", err))
+	}
+	return string(b)
+}
+
+// fetch is the record in the data column of the row query finds, if any.
+func fetch[T any](t *Tx, query string, args ...any) (T, bool) {
+	var v T
+	if t.err != nil {
+		return v, false
+	}
+	var data string
+	err := t.q.QueryRowContext(t.ctx, query, args...).Scan(&data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return v, false
+	}
+	if err == nil {
+		err = json.Unmarshal([]byte(data), &v)
+	}
+	t.fail(err)
+	return v, err == nil
+}
+
+// fetchAll are the records in the data column of every row query finds, in its
+// order. The rows are closed before it returns, so a caller can query again
+// while it walks them.
+func fetchAll[T any](t *Tx, query string, args ...any) []T {
+	var out []T
+	t.rows(func(rows *sql.Rows) error {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return err
+		}
+		var v T
+		if err := json.Unmarshal([]byte(data), &v); err != nil {
+			return err
+		}
+		out = append(out, v)
+		return nil
+	}, query, args...)
+	return out
+}
+
+// rows runs scan on each row query finds.
+func (t *Tx) rows(scan func(*sql.Rows) error, query string, args ...any) {
+	if t.err != nil {
+		return
+	}
+	rows, err := t.q.QueryContext(t.ctx, query, args...)
+	if err != nil {
+		t.fail(err)
+		return
+	}
+	for rows.Next() && err == nil {
+		err = scan(rows)
+	}
+	t.fail(errors.Join(err, rows.Err(), rows.Close()))
+}
+
+// byNumber orders items and attempts by the number in their IDs, which
+// follows creation.
+const byNumber = " ORDER BY CAST(substr(id, 2) AS INTEGER), id"
+
 // Item is the item with this ID.
 func (t *Tx) Item(id string) (Item, bool) {
-	item, ok := t.st.Items[id]
-	return item, ok
+	return fetch[Item](t, "SELECT data FROM items WHERE id=?", id)
 }
 
 // item is the item with this ID, the zero Item when there is none.
@@ -64,114 +191,128 @@ func (t *Tx) attempt(id string) Attempt {
 	return at
 }
 
-// update is the update with this sequence, the zero Update when there is none.
-func (t *Tx) update(id int) Update {
-	u, _ := t.Update(id)
-	return u
-}
-
 // PutItem stores item under its ID.
 func (t *Tx) PutItem(item Item) {
 	t.mustWrite()
-	t.st.Items[item.ID] = item
+	t.exec("INSERT OR REPLACE INTO items(id,kind,repo,plan,state,coordinating,attempt,slug,version,data) VALUES(?,?,?,?,?,?,?,?,?,?)",
+		item.ID, item.Kind, item.Repo, item.Plan, item.State, item.Coordinating, item.Attempt, item.Slug, item.Version, t.encode(item))
+	t.exec("DELETE FROM item_deps WHERE item=?", item.ID)
+	for _, d := range item.Depends {
+		t.exec("INSERT OR IGNORE INTO item_deps(item,depends) VALUES(?,?)", item.ID, d)
+	}
+	t.exec("DELETE FROM item_requires WHERE item=?", item.ID)
+	for _, c := range item.Requires {
+		t.exec("INSERT OR IGNORE INTO item_requires(item,cap) VALUES(?,?)", item.ID, c)
+	}
 }
 
 // DeleteItem removes the item with this ID.
 func (t *Tx) DeleteItem(id string) {
 	t.mustWrite()
-	delete(t.st.Items, id)
+	t.exec("DELETE FROM items WHERE id=?", id)
+	t.exec("DELETE FROM item_deps WHERE item=?", id)
+	t.exec("DELETE FROM item_requires WHERE item=?", id)
 }
 
-// CoordinatedItems are the items whose coordination intent is set, in no
-// order.
+// CoordinatedItems are the items whose coordination intent is set, by ID.
 func (t *Tx) CoordinatedItems() []Item {
-	var out []Item
-	for _, item := range t.st.Items {
-		if item.Coordinating {
-			out = append(out, item)
-		}
-	}
-	return out
+	return fetchAll[Item](t, "SELECT data FROM items WHERE coordinating"+byNumber)
 }
 
-// ItemsOfPlan are the tasks of plan, in no order.
+// ItemsOfPlan are the tasks of plan, by ID.
 func (t *Tx) ItemsOfPlan(plan string) []Item {
-	var out []Item
-	for _, item := range t.st.Items {
-		if item.Plan == plan {
-			out = append(out, item)
-		}
-	}
-	return out
+	return fetchAll[Item](t, "SELECT data FROM items WHERE plan=?"+byNumber, plan)
 }
 
 // ItemsByKindUnder are the items of a kind that belong to repo or plan
-// parent, in no order. An empty kind or parent matches every one: the
-// list operation relies on that scan, and an indexed query must not.
+// parent, by ID. An empty kind or parent matches every one.
 func (t *Tx) ItemsByKindUnder(kind, parent string) []Item {
-	var out []Item
-	for _, item := range t.st.Items {
-		if kind != "" && item.Kind != kind || parent != "" && item.Repo != parent && item.Plan != parent {
-			continue
-		}
-		out = append(out, item)
+	return fetchAll[Item](t, "SELECT data FROM items WHERE (?1='' OR kind=?1) AND (?2='' OR repo=?2 OR plan=?2)"+byNumber, kind, parent)
+}
+
+// RepoBySlug is the repository item with this owner/name slug.
+func (t *Tx) RepoBySlug(slug string) (Item, bool) {
+	return fetch[Item](t, "SELECT data FROM items WHERE kind='repo' AND slug=?"+byNumber+" LIMIT 1", slug)
+}
+
+// NextID is the next unused ID of an item or attempt, with prefix.
+func (t *Tx) NextID(prefix string) string {
+	t.mustWrite()
+	var n int
+	if t.err == nil {
+		t.fail(t.q.QueryRowContext(t.ctx, "UPDATE counters SET value=value+1 WHERE name='next' RETURNING value-1").Scan(&n))
 	}
-	return out
+	return fmt.Sprintf("%s%d", prefix, n)
 }
 
 // Attempt is the attempt with this ID.
 func (t *Tx) Attempt(id string) (Attempt, bool) {
-	at, ok := t.st.Attempts[id]
-	return at, ok
+	return fetch[Attempt](t, "SELECT data FROM attempts WHERE id=?", id)
 }
 
-// AttemptsFor are the attempts of item, in no order. An empty item matches
-// every attempt: the attempts operation relies on that scan, and an indexed
-// query must not.
+// PutAttempt stores at under its ID.
+func (t *Tx) PutAttempt(at Attempt) {
+	t.mustWrite()
+	t.exec("INSERT OR REPLACE INTO attempts(id,item,state,host,data) VALUES(?,?,?,?,?)", at.ID, at.Item, at.State, at.Host, t.encode(at))
+}
+
+// AttemptsFor are the attempts of item, by ID. An empty item matches every
+// attempt.
 func (t *Tx) AttemptsFor(item string) []Attempt {
-	var out []Attempt
-	for _, at := range t.st.Attempts {
-		if item == "" || at.Item == item {
-			out = append(out, at)
-		}
-	}
-	return out
+	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE ?1='' OR item=?1"+byNumber, item)
 }
 
-// CurrentAttempts are the attempts that are their item's current one, in no
-// order, ended or not.
+// CurrentAttempts are the attempts that are their item's current one, by
+// ID, ended or not.
 func (t *Tx) CurrentAttempts() []Attempt {
-	var out []Attempt
-	for _, at := range t.st.Attempts {
-		if item, ok := t.st.Items[at.Item]; ok && item.Attempt == at.ID {
-			out = append(out, at)
-		}
-	}
-	return out
+	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.attempt=a.id AND i.id=a.item"+
+		" ORDER BY CAST(substr(a.id, 2) AS INTEGER), a.id")
 }
 
-// QueueEntry is task's place in its repository's merge queue.
-func (t *Tx) QueueEntry(task string) (QueueEntry, bool) {
-	e, ok := t.st.Queue[task]
-	return e, ok
+// UnendedAttempts are the attempts not yet ended, by ID.
+func (t *Tx) UnendedAttempts() []Attempt {
+	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE state!='ended'"+byNumber)
+}
+
+// AttemptsOnHost are the attempts that ran or run on host, by ID.
+func (t *Tx) AttemptsOnHost(host string) []Attempt {
+	return fetchAll[Attempt](t, "SELECT data FROM attempts WHERE host=?"+byNumber, host)
+}
+
+// HostedTaskAttempts are the attempts of tasks that name both their host and
+// their harness, by ID.
+func (t *Tx) HostedTaskAttempts() []Attempt {
+	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.id=a.item AND i.kind='task'"+
+		" WHERE a.host!='' AND json_extract(a.data, '$.harness')!=''"+
+		" ORDER BY CAST(substr(a.id, 2) AS INTEGER), a.id")
 }
 
 // Credential is the actor an execution credential's digest names.
 func (t *Tx) Credential(hash string) (Actor, bool) {
-	a, ok := t.st.Auth[hash]
-	return a, ok
+	return fetch[Actor](t, "SELECT data FROM credentials WHERE hash=?", hash)
+}
+
+// PutCredential stores the actor an execution credential's digest names.
+func (t *Tx) PutCredential(hash string, a Actor) {
+	t.mustWrite()
+	t.exec("INSERT OR REPLACE INTO credentials(hash,attempt,data) VALUES(?,?,?)", hash, a.Attempt, t.encode(a))
 }
 
 // Receipt is the stored result of a request key's fingerprint.
 func (t *Tx) Receipt(key string) (receipt, bool) {
-	r, ok := t.st.Receipts[key]
-	return r, ok
+	return fetch[receipt](t, "SELECT data FROM receipts WHERE key=?", key)
 }
 
-// PutReceipt stores the result of a request key's fingerprint.
+// PutReceipt stores the result of a request key's fingerprint. A receipt
+// that hands out a credential is its attempt's dispatch receipt.
 func (t *Tx) PutReceipt(key string, r receipt) {
 	t.mustWrite()
-	t.st.Receipts[key] = r
+	attempt := ""
+	if r.Response.Attempt != nil && r.Response.Credential != "" {
+		attempt = r.Response.Attempt.ID
+	}
+	t.exec("INSERT INTO receipts(key,attempt,data) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET attempt=excluded.attempt, data=excluded.data",
+		key, attempt, t.encode(r))
 }
 
 // DispatchTokens are the credentials a dispatch of attempt id left in its
@@ -179,280 +320,39 @@ func (t *Tx) PutReceipt(key string, r receipt) {
 // only and never part of an API response.
 func (t *Tx) DispatchTokens(id string) []string {
 	var tokens []string
-	for _, receipt := range t.st.Receipts {
-		if receipt.Response.Attempt != nil && receipt.Response.Attempt.ID == id && receipt.Response.Credential != "" {
-			tokens = append(tokens, receipt.Response.Credential)
-		}
-	}
+	t.rows(func(rows *sql.Rows) error {
+		var token string
+		err := rows.Scan(&token)
+		tokens = append(tokens, token)
+		return err
+	}, "SELECT json_extract(data, '$.response.credential') FROM receipts WHERE attempt=? ORDER BY key", id)
 	return tokens
 }
 
-// Update is the update with this sequence.
-func (t *Tx) Update(id int) (Update, bool) {
-	if id < 1 || id > len(t.st.Updates) {
-		return Update{}, false
-	}
-	return t.st.Updates[id-1], true
-}
-
-// AppendUpdate records the next update and returns it, with the item it is
-// about as it stands.
-func (t *Tx) AppendUpdate(a Actor, r Request, kind, body string, now time.Time) Update {
-	t.mustWrite()
-	return t.st.update(a, r, kind, body, now)
-}
-
-// PutUpdate replaces an update, which keeps its sequence.
-func (t *Tx) PutUpdate(u Update) {
-	t.mustWrite()
-	t.st.Updates[u.ID-1] = u
-}
-
-// UpdatesAfter are the updates numbered above after, oldest first, about
-// item, or about any when item is empty.
-func (t *Tx) UpdatesAfter(after int, item string) iter.Seq[Update] {
-	return func(yield func(Update) bool) {
-		for _, u := range t.st.Updates {
-			if u.ID <= after || item != "" && u.Item != item {
-				continue
-			}
-			if !yield(u) {
-				return
-			}
-		}
-	}
-}
-
-// answers are the questions an update resolved and the updates an
-// acknowledgement answered.
-func (t *Tx) answers() (resolved, acked map[int]bool) {
-	resolved, acked = map[int]bool{}, map[int]bool{}
-	for _, u := range t.st.Updates {
-		switch u.Kind {
-		case "resolved", KindPaneAnswer:
-			resolved[u.ReplyTo] = true
-		case "acknowledged":
-			acked[u.ReplyTo] = true
-		}
-	}
-	return resolved, acked
-}
-
-// InboxAfter are the operator's inbox entries numbered above after, oldest
-// first, about item or about any when item is empty: updates to the
-// operator that no resolution answers, and, unless they ask for a reply,
-// no acknowledgement either.
-func (t *Tx) InboxAfter(after int, item string) iter.Seq[Update] {
-	return func(yield func(Update) bool) {
-		resolved, acked := t.answers()
-		for u := range t.UpdatesAfter(after, item) {
-			if u.Recipient != "operator" || resolved[u.ID] || !u.RequiresReply && acked[u.ID] {
-				continue
-			}
-			if !yield(u) {
-				return
-			}
-		}
-	}
-}
-
-// NoticesBefore are the messages to the operator that need no reply and
-// that neither a resolution nor an acknowledgement answered, oldest first,
-// numbered below before; a before of 0 is no bound.
-func (t *Tx) NoticesBefore(before int) iter.Seq[Update] {
-	return func(yield func(Update) bool) {
-		resolved, acked := t.answers()
-		for _, u := range t.st.Updates {
-			if before > 0 && u.ID >= before {
-				return
-			}
-			if u.Recipient != "operator" || u.RequiresReply || acked[u.ID] || resolved[u.ID] {
-				continue
-			}
-			if !yield(u) {
-				return
-			}
-		}
-	}
-}
-
-// UpdatesAboutNewestFirst are the updates about item, or about a question
-// item asked on its plan, newest first.
-func (t *Tx) UpdatesAboutNewestFirst(item string) iter.Seq[Update] {
-	return func(yield func(Update) bool) {
-		for i := len(t.st.Updates) - 1; i >= 0; i-- {
-			if u := t.st.Updates[i]; u.Item == item || u.Task == item {
-				if !yield(u) {
-					return
-				}
-			}
-		}
-	}
-}
-
-// QuestionsAbout are the questions asked on item, or by item on its plan,
-// oldest first, resolved or not.
-func (t *Tx) QuestionsAbout(item string) iter.Seq[Update] {
-	return func(yield func(Update) bool) {
-		for _, u := range t.st.Updates {
-			if u.RequiresReply && (u.Item == item || u.Task == item) {
-				if !yield(u) {
-					return
-				}
-			}
-		}
-	}
-}
-
-// Resolution is the update that resolved question id, by the operator or
-// by their answer typed into the asking session's pane, or 0.
-func (t *Tx) Resolution(id int) int {
-	for _, u := range t.st.Updates {
-		if u.ReplyTo == id && (u.Kind == "resolved" || u.Kind == KindPaneAnswer) {
-			return u.ID
-		}
-	}
-	return 0
-}
-
-// NextID is the next unused ID of an item or attempt, with prefix.
-func (t *Tx) NextID(prefix string) string {
-	t.mustWrite()
-	return t.st.id(prefix)
-}
-
-// RepoBySlug is the repository item with this owner/name slug.
-func (t *Tx) RepoBySlug(slug string) (Item, bool) {
-	for _, item := range t.st.Items {
-		if item.Kind == "repo" && item.Slug == slug {
-			return item, true
-		}
-	}
-	return Item{}, false
-}
-
-// PutAttempt stores at under its ID.
-func (t *Tx) PutAttempt(at Attempt) {
-	t.mustWrite()
-	t.st.Attempts[at.ID] = at
-}
-
-// UnendedAttempts are the attempts not yet ended, in no order.
-func (t *Tx) UnendedAttempts() []Attempt {
-	var out []Attempt
-	for _, at := range t.st.Attempts {
-		if at.State != "ended" {
-			out = append(out, at)
-		}
-	}
-	return out
-}
-
-// AttemptsOnHost are the attempts that ran or run on host, in no order.
-func (t *Tx) AttemptsOnHost(host string) []Attempt {
-	var out []Attempt
-	for _, at := range t.st.Attempts {
-		if at.Host == host {
-			out = append(out, at)
-		}
-	}
-	return out
-}
-
-// HostedTaskAttempts are the attempts of tasks that name both their host and
-// their harness, in no order.
-func (t *Tx) HostedTaskAttempts() []Attempt {
-	var out []Attempt
-	for _, at := range t.st.Attempts {
-		if at.Host != "" && at.Harness != "" && t.st.Items[at.Item].Kind == "task" {
-			out = append(out, at)
-		}
-	}
-	return out
-}
-
-// PutCredential stores the actor an execution credential's digest names.
-func (t *Tx) PutCredential(hash string, a Actor) {
-	t.mustWrite()
-	t.st.Auth[hash] = a
+// QueueEntry is task's place in its repository's merge queue.
+func (t *Tx) QueueEntry(task string) (QueueEntry, bool) {
+	return fetch[QueueEntry](t, "SELECT data FROM queue WHERE task=?", task)
 }
 
 // QueueOf is repo's merge queue in order.
 func (t *Tx) QueueOf(repo string) []QueueEntry {
-	var out []QueueEntry
-	for _, e := range t.st.Queue {
-		if e.Repo == repo {
-			out = append(out, e)
-		}
-	}
-	slices.SortFunc(out, func(a, b QueueEntry) int { return a.Seq - b.Seq })
-	return out
+	return fetchAll[QueueEntry](t, "SELECT data FROM queue WHERE repo=? ORDER BY seq, task", repo)
 }
 
-// QueueEntries are the entries of every repository's merge queue, in no
-// order.
+// QueueEntries are the entries of every repository's merge queue, by
+// repository, each in its order.
 func (t *Tx) QueueEntries() []QueueEntry {
-	return slices.Collect(maps.Values(t.st.Queue))
+	return fetchAll[QueueEntry](t, "SELECT data FROM queue ORDER BY repo, seq, task")
 }
 
 // PutQueueEntry stores e under its task, in its repository's merge queue.
 func (t *Tx) PutQueueEntry(e QueueEntry) {
 	t.mustWrite()
-	t.st.Queue[e.Task] = e
+	t.exec("INSERT OR REPLACE INTO queue(task,repo,seq,data) VALUES(?,?,?,?)", e.Task, e.Repo, e.Seq, t.encode(e))
 }
 
 // DeleteQueueEntry takes task out of its repository's merge queue.
 func (t *Tx) DeleteQueueEntry(task string) {
 	t.mustWrite()
-	delete(t.st.Queue, task)
-}
-
-// Host is what the coordinator saved of host; the zero record when nothing.
-func (t *Tx) Host(name string) HostRecord { return t.st.Hosts[name] }
-
-// PutHost saves rec as what the coordinator knows of host.
-func (t *Tx) PutHost(name string, rec HostRecord) {
-	t.mustWrite()
-	t.st.Hosts[name] = rec
-}
-
-// HostRecords are the saved host records by name, as a copy.
-func (t *Tx) HostRecords() map[string]HostRecord { return maps.Clone(t.st.Hosts) }
-
-// PassAt is the last time the coordinator was known to run, zero before the
-// first pass.
-func (t *Tx) PassAt() time.Time { return t.st.PassAt }
-
-// SetPassAt saves the last time the coordinator was known to run.
-func (t *Tx) SetPassAt(at time.Time) {
-	t.mustWrite()
-	t.st.PassAt = at
-}
-
-// Upgrade is the newest `engine upgrade` run's start and end.
-func (t *Tx) Upgrade() UpgradeRecord { return t.st.Upgrade }
-
-// SetUpgrade replaces the newest `engine upgrade` run's record.
-func (t *Tx) SetUpgrade(u UpgradeRecord) {
-	t.mustWrite()
-	t.st.Upgrade = u
-}
-
-// Authors are the names that wrote an update.
-func (t *Tx) Authors() map[string]bool {
-	out := map[string]bool{}
-	for _, u := range t.st.Updates {
-		out[u.Author] = true
-	}
-	return out
-}
-
-// LatestUpdate is the newest update of kind about item.
-func (t *Tx) LatestUpdate(item, kind string) (Update, bool) {
-	for i := len(t.st.Updates) - 1; i >= 0; i-- {
-		if u := t.st.Updates[i]; u.Item == item && u.Kind == kind {
-			return u, true
-		}
-	}
-	return Update{}, false
+	t.exec("DELETE FROM queue WHERE task=?", task)
 }

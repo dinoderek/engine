@@ -32,13 +32,10 @@ func TestStartPassSavesTheStartAndMarksOnlyAGapOverTheThreshold(t *testing.T) {
 func TestAnOutageClearsTheStallTimersOfLiveAttemptsOnly(t *testing.T) {
 	store := service(t).Store
 	t0 := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
-	if err := store.modify(func(st *state) error {
-		st.Attempts["a1"] = Attempt{ID: "a1", State: "running", WaitingSince: t0, IdleSince: t0}
-		st.Attempts["a2"] = Attempt{ID: "a2", State: "ended", WaitingSince: t0, IdleSince: t0}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	edit(t, store, func(tx *Tx) {
+		tx.PutAttempt(Attempt{ID: "a1", State: "running", WaitingSince: t0, IdleSince: t0})
+		tx.PutAttempt(Attempt{ID: "a2", State: "ended", WaitingSince: t0, IdleSince: t0})
+	})
 	for _, at := range []time.Time{t0, t0.Add(10 * time.Minute)} {
 		if _, _, err := store.StartPass(at, 5*time.Minute); err != nil {
 			t.Fatal(err)
@@ -88,5 +85,5 @@ func TestEndPassMovesTheSavedTimeForwardOnly(t *testing.T) {
 	if _, outage, err := store.StartPass(t0.Add(8*time.Minute), 5*time.Minute); err != nil || outage {
 		t.Errorf("pass a minute after a long pass ended: outage %v, err %v; want none", outage, err)
 	}
-	durable(t, store)
+
 }

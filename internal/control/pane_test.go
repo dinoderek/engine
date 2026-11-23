@@ -38,7 +38,7 @@ func vouched(priv ed25519.PrivateKey, attempt, text string, at time.Time) Reques
 }
 
 // notes are the coordinator's notes to the operator on item.
-func notes(st state, item string) []Update {
+func notes(st records, item string) []Update {
 	var out []Update
 	for _, u := range st.Updates {
 		if u.Item == item && u.Author == "coordinator" && u.Kind == "say" && u.Recipient == "operator" {
@@ -277,15 +277,12 @@ func TestAPlannersPaneInputNeverAnswersATasksPlanQuestion(t *testing.T) {
 	asker, _ := dispatch(t, s, task)
 	theirs := call(t, s, asker, Request{Op: "ask", ID: plan.ID, Body: "Is main red?"}).Updates[0]
 	planner := Actor{Name: "a99", Role: "worker", Attempt: "a99"}
-	if err := s.Store.modify(func(st *state) error {
-		st.Attempts[planner.Attempt] = Attempt{ID: planner.Attempt, Item: plan.ID, State: "running"}
-		p := st.Items[plan.ID]
+	edit(t, s.Store, func(tx *Tx) {
+		tx.PutAttempt(Attempt{ID: planner.Attempt, Item: plan.ID, State: "running"})
+		p := tx.item(plan.ID)
 		p.Attempt = planner.Attempt
-		st.Items[plan.ID] = p
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+		tx.PutItem(p)
+	})
 	out := call(t, s, planner, Request{Op: "pane-input", Body: "Unrelated note"})
 	if out.Updates[0].Kind != KindPaneMessage {
 		t.Errorf("the planner's pane input %+v answered the task's question %d", out.Updates[0], theirs.ID)
