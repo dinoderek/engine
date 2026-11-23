@@ -165,8 +165,8 @@ func TestUpdatesCarryQuestionStatuses(t *testing.T) {
 	if got := statuses(w.running.ID, decision.ID); !reflect.DeepEqual(got, want) {
 		t.Fatalf("after the cursor = %+v, want every question of the item: %+v", got, want)
 	}
-	if got := statuses(w.plan.ID, 0); got != nil {
-		t.Fatalf("plan statuses = %+v, want none: its tasks' questions are theirs", got)
+	if got := statuses(w.plan.ID, 0); got == nil || len(got) != 0 {
+		t.Fatalf("plan statuses = %#v, want an empty list: its tasks' questions are theirs", got)
 	}
 	if got := statuses("", 0); got != nil {
 		t.Fatalf("an updates read of every item carried statuses %+v", got)

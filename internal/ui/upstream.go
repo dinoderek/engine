@@ -252,8 +252,9 @@ func (u *upstream) thread(ctx context.Context, id string, after, anchor int) (En
 // control server is one from before them.
 var errNoStatuses = errors.New("the control server sends no question statuses")
 
-// settlesQuestions reports whether an update asks a question on its item or
-// settles one asked there, which a server with question statuses reports.
+// settlesQuestions reports whether an update asks a question or answers an
+// update. A server with question statuses sends them, an empty list when the
+// item has no question, with every page; one without them sends none.
 func settlesQuestions(u control.Update) bool {
 	return u.RequiresReply || u.ReplyTo > 0 && slices.Contains([]string{"reply", "acknowledged", "resolved", control.KindPaneAnswer}, u.Kind)
 }
@@ -294,7 +295,7 @@ func (u *upstream) threadAfter(ctx context.Context, id string, after, anchor int
 		if err != nil {
 			return Thread{}, err
 		}
-		if len(page.Questions) == 0 && slices.ContainsFunc(page.Updates, settlesQuestions) {
+		if page.Questions == nil && slices.ContainsFunc(page.Updates, settlesQuestions) {
 			return Thread{}, errNoStatuses
 		}
 		msgs = append(msgs, messagesOf(id, page.Updates)...)

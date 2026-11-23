@@ -153,6 +153,26 @@ func TestAThreadRefreshReadsOnlyAfterItsCursor(t *testing.T) {
 	}
 }
 
+func TestAnAcknowledgedMessageDoesNotMakeTheServerLookOlder(t *testing.T) {
+	ack := upd(2, "t7", "acknowledged", "")
+	ack.ReplyTo = 1
+	reply := upd(3, "t7", "reply", "ok")
+	reply.ReplyTo = 1
+	pc := &pagedCaller{updates: []control.Update{upd(1, "t7", "say", "hi"), ack, reply}, questions: []control.QuestionStatus{}}
+	d := newDashboard(pc)
+	if res, body := d.get(t, "GET", "127.0.0.1:7332", "/api/items/t7/thread?after=0"); res.StatusCode != 200 || !strings.Contains(body, `"questions":[]`) {
+		t.Fatalf("thread = %d %s", res.StatusCode, body)
+	}
+	d.get(t, "GET", "127.0.0.1:7332", "/api/overview")
+	var got []string
+	for _, r := range pc.reads {
+		got = append(got, fmt.Sprintf("%s:%d", r.Op, r.After))
+	}
+	if want := []string{"updates:0"}; !slices.Equal(got, want) {
+		t.Fatalf("reads %v, want %v: a server that sends statuses stays on the aggregate reads", got, want)
+	}
+}
+
 func TestIncrementalThreadWindowsAndCursor(t *testing.T) {
 	var all []control.Update
 	for i := 1; i <= 450; i++ {

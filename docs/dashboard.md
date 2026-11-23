@@ -8,9 +8,9 @@ For the records it reads, load `control-server.md`; to change its writes, `dashb
 
 `engine ui` serves a dashboard on `127.0.0.1:7332`; `--listen` takes another loopback address. It uses the CLI's server configuration and operator credential, never sent to the browser. Any local user reaching the port has operator rights; run it only on a single-user machine.
 
-Reads forward only `list`, `plan-view`, `attempts`, `get`, `updates`, `session-view`, `inbox`, `overview` and `plan-detail`, for GET and HEAD to a loopback host name on any port, so an SSH tunnel works. When the control server fails, the page keeps its last data, marked stale.
+Reads forward only `list`, `plan-view`, `attempts`, `get`, `updates`, `session-view`, `inbox`, `overview` and `plan-detail`, for GET and HEAD to a loopback host name on any port, so an SSH tunnel works. It sends `Cache-Control: no-store`. When the control server fails, the page keeps its last data, marked stale.
 
-A refresh reads three things together: `overview` (inbox, sessions and plan list, at `/api/overview`), `plan-detail` and the open thread's `updates` after its cursor. A server without them (a 400 or 404, learned once, retried after ten minutes) gets the earlier reads. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text; the CSP allows only its scripts.
+A refresh reads three things together: `overview` (inbox, sessions and plan list, at `/api/overview`), `plan-detail` and the open thread's `updates` after its cursor. A server without them (a 400 or 404, learned once, retried after ten minutes) gets the earlier reads. Descriptions render as CommonMark plus tables: raw HTML stays text, images show alt text, and only absolute http, https and mailto links act. Messages are text.
 
 The per-plan view lists unfinished prerequisites, including other plans' tasks. A todo task waiting to start has the plan's question as feedback. On Plans and Sessions, "Needs feedback" opens the question's thread at its update over it, on the plan's thread when it asked (`internal/ui/static/sessions.js`).
 

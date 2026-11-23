@@ -26,7 +26,7 @@ func itemFake(t *testing.T) *fakeControl {
 			}
 			return control.Response{}, false
 		case "updates":
-			var out control.Response
+			out := control.Response{Questions: []control.QuestionStatus{}}
 			for _, u := range updates {
 				if u.Item == r.ID && u.ID > r.After {
 					out.Updates = append(out.Updates, u)

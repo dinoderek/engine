@@ -242,8 +242,9 @@ type Response struct {
 	Queue    []QueueEntry `json:"queue,omitempty"`
 	Sessions []SessionRow `json:"sessions,omitempty"`
 	// Questions are the statuses of an item's questions, as an updates read
-	// of one item returns them.
-	Questions  []QuestionStatus `json:"questions,omitempty"`
+	// of one item returns them. It is present, even empty, in every such
+	// read, which tells a client the server sends statuses.
+	Questions  []QuestionStatus `json:"questions,omitzero"`
 	Credential string           `json:"credential,omitempty"`
 	// Fleet is the host-status op's reply.
 	Fleet *HostStatus `json:"fleet,omitempty"`

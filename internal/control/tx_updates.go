@@ -146,7 +146,7 @@ func (t *Tx) reply(id int, kinds string) int {
 // item, oldest first: resolved once a resolution or pane answer replies to
 // it, acknowledged once an acknowledgement does, and the replies counted.
 func (t *Tx) QuestionStatuses(item string) []QuestionStatus {
-	var out []QuestionStatus
+	out := []QuestionStatus{}
 	t.rows(func(rows *sql.Rows) error {
 		var id int
 		var kind sql.NullString
