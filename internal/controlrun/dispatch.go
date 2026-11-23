@@ -213,9 +213,6 @@ func (c *Coordinator) reconcileDispatches(root string, fleet reconcile.Fleet, cf
 				if h.Name != at.Host || h.Unreachable != "" || h.Status.RunsError != "" {
 					continue
 				}
-				if err := tx.Err(); err != nil {
-					return err
-				}
 				if err := c.reconcileDispatch(tx, item, at, h, cfg); err != nil {
 					return err
 				}

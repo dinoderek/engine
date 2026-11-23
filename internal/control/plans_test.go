@@ -55,6 +55,16 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 		for range seq {
 		}
 	}
+	// uses are the indexes an accessor must search: without one, SQLite may
+	// still search, walking the whole table by its key.
+	uses := map[string][]string{
+		"CoordinatedItems": {"items_coordinating"}, "ItemsOfPlan": {"items_plan"}, "RepoBySlug": {"items_kind"},
+		"AttemptsFor": {"attempts_item"}, "UnendedAttempts": {"attempts_state"}, "AttemptsOnHost": {"attempts_host"},
+		"DispatchTokens": {"receipts_attempt"}, "QueueOf": {"queue_repo"},
+		"UpdatesAfter": {"updates_item"}, "InboxAfter": {"updates_recipient", "updates_reply"},
+		"NoticesBefore": {"updates_recipient", "updates_reply"}, "UpdatesAboutNewestFirst": {"updates_item", "updates_task"},
+		"QuestionsAbout": {"updates_item", "updates_task"}, "Resolution": {"updates_reply"}, "LatestUpdate": {"updates_item"},
+	}
 	for name, read := range map[string]func(){
 		"Item":             func() { tx.Item("t3") },
 		"CoordinatedItems": func() { tx.CoordinatedItems() },
@@ -93,6 +103,11 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 		for _, step := range e.plans {
 			if strings.HasPrefix(step, "SCAN ") {
 				t.Errorf("%s scans: %v", name, e.plans)
+			}
+		}
+		for _, index := range uses[name] {
+			if !strings.Contains(strings.Join(e.plans, "\n"), "INDEX "+index+" ") {
+				t.Errorf("%s does not search %s: %v", name, index, e.plans)
 			}
 		}
 	}

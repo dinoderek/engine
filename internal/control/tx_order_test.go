@@ -198,3 +198,17 @@ func TestOnlyAWriteIsBoundedInTime(t *testing.T) {
 		t.Fatalf("a read beside a short write bound: %v", err)
 	}
 }
+
+func TestARecordThatCannotBeEncodedFailsItsWrite(t *testing.T) {
+	s := service(t)
+	err := s.Store.Write(context.Background(), func(tx *Tx) error {
+		tx.PutAttempt(Attempt{ID: "a1", State: "running", Started: time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)})
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "control record") {
+		t.Fatalf("a write of an unencodable record: %v", err)
+	}
+	if got := mustSnapshot(t, s).Attempts; len(got) != 0 {
+		t.Fatalf("it stored %+v", got)
+	}
+}

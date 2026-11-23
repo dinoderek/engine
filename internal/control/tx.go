@@ -10,8 +10,8 @@ import (
 )
 
 // Tx is the typed access to the control records inside one Store.Read or
-// Store.Write. Domain code reaches records only through its methods, each
-// one indexed query. A Tx is valid only inside the function it is given to.
+// Store.Write. Domain code reaches records only through its methods: each
+// that selects by a key, state or reply is one indexed query. A Tx is valid only inside the function it is given to.
 //
 // A failed query leaves the Tx failed: every later accessor returns the zero
 // value, and the Read or Write returns the first error, a Write rolling back.
@@ -78,7 +78,9 @@ func (s *Store) run(ctx context.Context, write bool, fn func(*Tx) error) error {
 		// A WAL read transaction takes its snapshot at its first read: take
 		// it now, so fn sees the records as they were when Read began.
 		var n int
-		t.fail(tx.QueryRowContext(ctx, "SELECT value FROM counters WHERE name='next'").Scan(&n))
+		if err = tx.QueryRowContext(ctx, "SELECT value FROM counters WHERE name='next'").Scan(&n); err != nil {
+			return err
+		}
 	}
 	err = fn(t)
 	if t.err != nil {

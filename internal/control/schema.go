@@ -61,11 +61,10 @@ CREATE TABLE marks (name TEXT PRIMARY KEY, data TEXT NOT NULL);
 // snapshotFields are the fields of an item an update's snapshot keeps: what
 // its readers use. A held task's state before needs-human comes from the
 // state; a Telegram message names the item by its title.
-const snapshotFields = "'id', json_extract(data, '$.snapshot.id'), 'kind', json_extract(data, '$.snapshot.kind'), " +
-	"'version', json_extract(data, '$.snapshot.version'), 'title', json_extract(data, '$.snapshot.title'), " +
+const snapshotFields = "'version', json_extract(data, '$.snapshot.version'), 'title', json_extract(data, '$.snapshot.title'), " +
 	"'state', json_extract(data, '$.snapshot.state')"
 
 // slim is the item snapshot an update keeps (snapshotFields).
 func slim(item Item) *Item {
-	return &Item{ID: item.ID, Kind: item.Kind, Version: item.Version, Title: item.Title, State: item.State}
+	return &Item{Version: item.Version, Title: item.Title, State: item.State}
 }

@@ -23,9 +23,8 @@ const (
 )
 
 // scan yields the updates query finds, page by page. query's first argument
-// is the cursor, the ID it walks from, and its last the page size; desc
-// walks down from the newest.
-func (t *Tx) scan(query string, from int, desc bool, args ...any) iter.Seq[Update] {
+// is the cursor, the ID it walks from, and its last the page size.
+func (t *Tx) scan(query string, from int, args ...any) iter.Seq[Update] {
 	return func(yield func(Update) bool) {
 		cursor := from
 		for {
@@ -83,9 +82,9 @@ func (t *Tx) PutUpdate(u Update) {
 // item, or about any when item is empty.
 func (t *Tx) UpdatesAfter(after int, item string) iter.Seq[Update] {
 	if item == "" {
-		return t.scan("SELECT data FROM updates WHERE id>? ORDER BY id LIMIT ?", after, false)
+		return t.scan("SELECT data FROM updates WHERE id>? ORDER BY id LIMIT ?", after)
 	}
-	return t.scan("SELECT data FROM updates WHERE id>? AND item=? ORDER BY id LIMIT ?", after, false, item)
+	return t.scan("SELECT data FROM updates WHERE id>? AND item=? ORDER BY id LIMIT ?", after, item)
 }
 
 // InboxAfter are the operator's inbox entries numbered above after, oldest
@@ -99,7 +98,7 @@ func (t *Tx) InboxAfter(after int, item string) iter.Seq[Update] {
 	}
 	return t.scan("SELECT data FROM updates u WHERE u.id>?1 AND u.recipient='operator'"+about+
 		" AND NOT "+answered(resolvedKinds)+" AND (u.requires_reply OR NOT "+answered(ackedKinds)+")"+
-		" ORDER BY u.id LIMIT ?3", after, false, item)
+		" ORDER BY u.id LIMIT ?3", after, item)
 }
 
 // NoticesBefore are the messages to the operator that need no reply and
@@ -110,19 +109,19 @@ func (t *Tx) NoticesBefore(before int) iter.Seq[Update] {
 		before = math.MaxInt64
 	}
 	return t.scan("SELECT data FROM updates u WHERE u.id>? AND u.id<? AND u.recipient='operator' AND NOT u.requires_reply"+
-		" AND NOT "+answered(resolvedKinds+","+ackedKinds)+" ORDER BY u.id LIMIT ?", 0, false, before)
+		" AND NOT "+answered(resolvedKinds+","+ackedKinds)+" ORDER BY u.id LIMIT ?", 0, before)
 }
 
 // UpdatesAboutNewestFirst are the updates about item, or about a question
 // item asked on its plan, newest first.
 func (t *Tx) UpdatesAboutNewestFirst(item string) iter.Seq[Update] {
-	return t.scan("SELECT data FROM updates WHERE id<? AND (item=?2 OR task=?2) ORDER BY id DESC LIMIT ?", math.MaxInt64, true, item)
+	return t.scan("SELECT data FROM updates WHERE id<? AND (item=?2 OR task=?2) ORDER BY id DESC LIMIT ?", math.MaxInt64, item)
 }
 
 // QuestionsAbout are the questions asked on item, or by item on its plan,
 // oldest first, resolved or not.
 func (t *Tx) QuestionsAbout(item string) iter.Seq[Update] {
-	return t.scan("SELECT data FROM updates WHERE id>? AND requires_reply AND (item=?2 OR task=?2) ORDER BY id LIMIT ?", 0, false, item)
+	return t.scan("SELECT data FROM updates WHERE id>? AND requires_reply AND (item=?2 OR task=?2) ORDER BY id LIMIT ?", 0, item)
 }
 
 // Resolution is the update that resolved question id, by the operator or

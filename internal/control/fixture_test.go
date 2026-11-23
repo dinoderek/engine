@@ -174,14 +174,18 @@ func TestTheMigrationSlimsEveryUpdatesSnapshot(t *testing.T) {
 	store := openAt(t, fixtureDB(t))
 	s := Service{Store: store, Now: fixtureNow}
 	call(t, s, op, Request{Op: "say", ID: "t3", Body: "after the migration"})
-	out, err := store.sql("SELECT count(*) AS n FROM updates WHERE json_type(data, '$.snapshot') = 'object';" +
-		"SELECT DISTINCT j.key FROM updates, json_each(data, '$.snapshot') j ORDER BY j.key")
-	if err != nil {
-		t.Fatal(err)
+	snapshots := 0
+	for _, u := range mustSnapshot(t, s).Updates {
+		if u.Snapshot == nil {
+			continue
+		}
+		snapshots++
+		if want := slim(*u.Snapshot); !reflect.DeepEqual(u.Snapshot, want) || u.Snapshot.State == "" || u.Snapshot.Version == 0 {
+			t.Errorf("update %d keeps %+v; want only a version, title and state", u.ID, *u.Snapshot)
+		}
 	}
-	if !strings.Contains(string(out), `[{"key":"id"},{"key":"kind"},{"key":"state"},{"key":"title"},{"key":"version"}]`) ||
-		strings.Contains(string(out), `"n":0`) {
-		t.Fatalf("snapshots keep %s; want only id, kind, state, title and version", out)
+	if snapshots == 0 {
+		t.Fatal("no update kept a snapshot")
 	}
 }
 
@@ -274,5 +278,84 @@ func TestACurrentDatabaseOpensWithoutReadingARecordsTable(t *testing.T) {
 	}
 	if _, err := os.Stat(path + backupSuffix); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a current open wrote a migration backup: %v", err)
+	}
+}
+
+// columnsOf are, per table, the rows whose columns differ from what their
+// record says: a query on such a column would miss or misfile the row.
+const columnsOf = `
+SELECT 'item ' || id AS row FROM items WHERE id != json_extract(data, '$.id') OR kind != json_extract(data, '$.kind')
+ OR repo != COALESCE(json_extract(data, '$.repo'), '') OR plan != COALESCE(json_extract(data, '$.plan'), '')
+ OR state != COALESCE(json_extract(data, '$.state'), '') OR coordinating != COALESCE(json_extract(data, '$.coordinating'), 0)
+ OR attempt != COALESCE(json_extract(data, '$.attempt'), '') OR slug != COALESCE(json_extract(data, '$.slug'), '')
+ OR version != COALESCE(json_extract(data, '$.version'), 0)
+UNION ALL SELECT 'deps ' || id FROM items i WHERE (SELECT group_concat(depends) FROM (SELECT depends FROM item_deps WHERE item = i.id ORDER BY depends))
+ IS NOT (SELECT group_concat(value) FROM (SELECT value FROM json_each(i.data, '$.depends') ORDER BY value))
+UNION ALL SELECT 'requires ' || id FROM items i WHERE (SELECT group_concat(cap) FROM (SELECT cap FROM item_requires WHERE item = i.id ORDER BY cap))
+ IS NOT (SELECT group_concat(value) FROM (SELECT value FROM json_each(i.data, '$.requires') ORDER BY value))
+UNION ALL SELECT 'attempt ' || id FROM attempts WHERE id != json_extract(data, '$.id') OR item != COALESCE(json_extract(data, '$.item'), '')
+ OR state != COALESCE(json_extract(data, '$.state'), '') OR host != COALESCE(json_extract(data, '$.host'), '')
+UNION ALL SELECT 'update ' || id FROM updates WHERE id != json_extract(data, '$.id') OR item != COALESCE(json_extract(data, '$.item'), '')
+ OR kind != COALESCE(json_extract(data, '$.kind'), '') OR author != COALESCE(json_extract(data, '$.author'), '')
+ OR reply_to != COALESCE(json_extract(data, '$.reply_to'), 0) OR recipient != COALESCE(json_extract(data, '$.recipient'), '')
+ OR task != COALESCE(json_extract(data, '$.task'), '') OR requires_reply != COALESCE(json_extract(data, '$.requires_reply'), 0)
+UNION ALL SELECT 'queue ' || task FROM queue WHERE task != json_extract(data, '$.task') OR repo != json_extract(data, '$.repo')
+ OR seq != json_extract(data, '$.seq')
+UNION ALL SELECT 'credential ' || hash FROM credentials WHERE attempt != COALESCE(json_extract(data, '$.attempt'), '')
+UNION ALL SELECT 'receipt ' || key FROM receipts WHERE attempt != CASE WHEN COALESCE(json_extract(data, '$.response.credential'), '') != ''
+ THEN COALESCE(json_extract(data, '$.response.attempt.id'), '') ELSE '' END
+`
+
+func TestTheMigrationFilesEveryRowUnderItsRecordsColumns(t *testing.T) {
+	store := openAt(t, fixtureDB(t))
+	out, err := store.sql(columnsOf)
+	if err != nil || string(out) != "null" {
+		t.Fatalf("rows whose columns differ from their records: %s %v", out, err)
+	}
+	// The same rows through the accessors that select by those columns.
+	st := mustSnapshot(t, Service{Store: store})
+	tx := st.tx()
+	var coordinating, unended, onHost []string
+	var tokens int
+	for _, item := range st.Items {
+		if item.Coordinating {
+			coordinating = append(coordinating, item.ID)
+		}
+	}
+	for _, at := range st.Attempts {
+		if at.State != "ended" {
+			unended = append(unended, at.ID)
+		}
+		if at.Host == "devbox" {
+			onHost = append(onHost, at.ID)
+		}
+	}
+	for _, r := range st.Receipts {
+		if r.Response.Credential != "" && r.Response.Attempt != nil {
+			tokens++
+		}
+	}
+	got := 0
+	for id := range st.Attempts {
+		got += len(tx.DispatchTokens(id))
+	}
+	byNumber := func(ids []string) []string {
+		slices.SortFunc(ids, func(a, b string) int { return Number(a) - Number(b) })
+		return ids
+	}
+	repo, ok := tx.RepoBySlug("owner/demo")
+	switch {
+	case !slices.Equal(itemIDs(tx.CoordinatedItems()), byNumber(coordinating)) || len(coordinating) == 0:
+		t.Errorf("coordinated %v, want %v", itemIDs(tx.CoordinatedItems()), coordinating)
+	case !slices.Equal(attemptIDs(tx.UnendedAttempts()), byNumber(unended)) || len(unended) == 0:
+		t.Errorf("unended %v, want %v", attemptIDs(tx.UnendedAttempts()), unended)
+	case !slices.Equal(attemptIDs(tx.AttemptsOnHost("devbox")), byNumber(onHost)) || len(onHost) == 0:
+		t.Errorf("on devbox %v, want %v", attemptIDs(tx.AttemptsOnHost("devbox")), onHost)
+	case got != tokens || tokens == 0:
+		t.Errorf("%d dispatch tokens, want %d", got, tokens)
+	case !ok || repo.ID != "r1":
+		t.Errorf("repository by slug %+v %v", repo, ok)
+	case len(tx.QueueOf("r1")) != len(st.Queue) || len(st.Queue) == 0:
+		t.Errorf("queue %+v, want %d entries", tx.QueueOf("r1"), len(st.Queue))
 	}
 }
