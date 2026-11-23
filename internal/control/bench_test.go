@@ -39,7 +39,7 @@ func benchStore(b *testing.B) Service {
 			u := Update{ID: i + 1, Item: item.ID, Author: "operator", At: at, Kind: "say", Body: strings.Repeat("progress ", 20), Snapshot: slim(item)}
 			tx.PutUpdate(u)
 			if i%10 == 0 {
-				tx.PutReceipt(fmt.Sprintf("%064d", i), receipt{Digest: "d", Response: Response{Item: &item, Updates: []Update{u}}}, time.Time{})
+				tx.PutReceipt(fmt.Sprintf("%064d", i), receipt{Digest: "d", Response: Response{Item: &item, Updates: []Update{u}}}, at)
 			}
 		}
 		tx.exec("UPDATE counters SET value=2000 WHERE name='next'")
