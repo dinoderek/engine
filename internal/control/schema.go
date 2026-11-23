@@ -34,6 +34,7 @@ CREATE TABLE attempts (
 CREATE INDEX attempts_item ON attempts(item);
 CREATE INDEX attempts_state ON attempts(state);
 CREATE INDEX attempts_host ON attempts(host);
+CREATE INDEX attempts_limited ON attempts(host) WHERE json_extract(data, '$.limited')=1;
 CREATE TABLE updates (
  id INTEGER PRIMARY KEY, item TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, author TEXT NOT NULL DEFAULT '',
  reply_to INTEGER NOT NULL DEFAULT 0, recipient TEXT NOT NULL DEFAULT '', task TEXT NOT NULL DEFAULT '',

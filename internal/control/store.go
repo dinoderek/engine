@@ -23,6 +23,8 @@ type Store struct {
 	writer  *sql.DB
 	readers *sql.DB
 	commit  func(*sql.Tx) error
+	// trace, when set, sees every query (Trace).
+	trace func(query string, args []any)
 	// writeTimeout bounds each Store.Write.
 	writeTimeout time.Duration
 }

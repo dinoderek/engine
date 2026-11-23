@@ -93,15 +93,16 @@ func Vanished(tx *Tx, item Item) bool {
 // Claimed reports whether at's session claimed its task: it wrote to the
 // server, or its window was seen live for ClaimWait.
 func Claimed(tx *Tx, at Attempt) bool {
-	return claimedBy(tx.Authors(), at)
+	return claimedBy(tx.Wrote, at)
 }
 
 // claimed is Claimed.
 func claimed(tx *Tx, at Attempt) bool { return Claimed(tx, at) }
 
-// claimedBy is Claimed, given the authors of every update.
-func claimedBy(wrote map[string]bool, at Attempt) bool {
-	return !at.LiveAt.IsZero() && at.LiveAt.Sub(at.Started) >= ClaimWait || wrote[at.ID]
+// claimedBy is Claimed, given whether an author wrote an update. The window
+// test comes first, so most attempts need no query.
+func claimedBy(wrote func(author string) bool, at Attempt) bool {
+	return !at.LiveAt.IsZero() && at.LiveAt.Sub(at.Started) >= ClaimWait || wrote(at.ID)
 }
 
 // earlyDeaths counts the earlier attempts of at's task that died before

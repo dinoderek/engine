@@ -2,6 +2,7 @@ package control
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -79,7 +80,8 @@ func TestAttemptAccessorsSelectByHostStateAndKind(t *testing.T) {
 			"on devbox":         {tx.AttemptsOnHost("devbox"), []string{"a1", "a2", "a4"}},
 			"on a host no run":  {tx.AttemptsOnHost("nowhere"), nil},
 			"unended":           {tx.UnendedAttempts(), []string{"a1", "a3", "a4"}},
-			"hosted task, both": {tx.HostedTaskAttempts(), []string{"a1", "a2"}},
+			"hosted task, both": {tx.HostedTaskAttemptsOf("devbox", "claude"), []string{"a1", "a2"}},
+			"other harness":     {tx.HostedTaskAttemptsOf("devbox", "codex"), nil},
 		} {
 			if got := attemptIDs(c.got); !slices.Equal(got, c.want) {
 				t.Errorf("%s: %v, want %v", name, got, c.want)
@@ -183,8 +185,10 @@ func TestUpdateQueriesFindAuthorsAndTheNewestOfAKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = s.Store.Read(bg, func(tx *Tx) error {
-		if wrote := tx.Authors(); len(wrote) != 3 || !wrote["a1"] || !wrote["a2"] || !wrote["a3"] || wrote["a4"] {
-			t.Errorf("authors %v", wrote)
+		for author, want := range map[string]bool{"a1": true, "a2": true, "a3": true, "a4": false, "": false} {
+			if got := tx.Wrote(author); got != want {
+				t.Errorf("Wrote(%q) = %v, want %v", author, got, want)
+			}
 		}
 		if u, ok := tx.LatestUpdate("t1", "merged"); !ok || u.Body != "newest" {
 			t.Errorf("latest merged of t1 = %+v, %v", u, ok)
@@ -283,6 +287,97 @@ func TestQueueEntriesAreEveryRepositorysQueue(t *testing.T) {
 		slices.Sort(tasks)
 		if !slices.Equal(tasks, []string{"t1", "t2"}) {
 			t.Errorf("QueueEntries = %v, want t1 and t2", tasks)
+		}
+		return nil
+	})
+}
+
+func TestLimitedPairsAreWhereAHostedTaskAttemptEndedAtALimit(t *testing.T) {
+	s := service(t)
+	err := s.Store.Write(bg, func(tx *Tx) error {
+		tx.PutItem(Item{ID: "t1", Kind: "task"})
+		tx.PutItem(Item{ID: "p2", Kind: "plan"})
+		for _, at := range []Attempt{
+			{ID: "a1", Item: "t1", Host: "devbox", Harness: "claude", State: "ended", Limited: true},
+			{ID: "a2", Item: "t1", Host: "devbox", Harness: "claude", State: "ended", Limited: true},
+			{ID: "a3", Item: "t1", Host: "mac", Harness: "codex", State: "ended"},
+			{ID: "a4", Item: "t1", Host: "mac", Harness: "claude", State: "running", Limited: true},
+			{ID: "a5", Item: "p2", Host: "box", Harness: "claude", State: "ended", Limited: true},
+			{ID: "a6", Item: "t1", Host: "", Harness: "claude", State: "ended", Limited: true},
+			{ID: "a7", Item: "t1", Host: "box", Harness: "", State: "ended", Limited: true},
+			{ID: "a8", Item: "t1", Host: "box", Harness: "codex", State: "ended", Limited: true},
+		} {
+			tx.PutAttempt(at)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Store.Read(bg, func(tx *Tx) error {
+		if got := tx.LimitedPairs(); fmt.Sprint(got) != "[[box codex] [devbox claude]]" {
+			t.Errorf("LimitedPairs = %v", got)
+		}
+		return nil
+	})
+}
+
+func TestActiveAttemptsAreTheCurrentOnesNotEnded(t *testing.T) {
+	s := service(t)
+	err := s.Store.Write(bg, func(tx *Tx) error {
+		tx.PutItem(Item{ID: "t1", Kind: "task", Attempt: "a3"})
+		tx.PutItem(Item{ID: "t2", Kind: "task", Attempt: "a4"})
+		tx.PutItem(Item{ID: "t3", Kind: "task", Attempt: "a5"})
+		tx.PutItem(Item{ID: "t4", Kind: "task"})
+		for _, at := range []Attempt{
+			{ID: "a1", Item: "t1", State: "running"}, // an older attempt of t1, not its current one
+			{ID: "a3", Item: "t1", State: "running"},
+			{ID: "a4", Item: "t2", State: "ended"},
+			{ID: "a5", Item: "t3", State: "dispatching"},
+			{ID: "a10", Item: "t4", State: "running"}, // its item names no attempt
+		} {
+			tx.PutAttempt(at)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Store.Read(bg, func(tx *Tx) error {
+		var ids []string
+		for _, at := range tx.ActiveAttempts() {
+			ids = append(ids, at.ID)
+		}
+		if !slices.Equal(ids, []string{"a3", "a5"}) {
+			t.Errorf("ActiveAttempts = %v, want a3 and a5", ids)
+		}
+		return nil
+	})
+}
+
+func TestQueuedReposAreTheRepositoriesWithEntriesByNumber(t *testing.T) {
+	s := service(t)
+	err := s.Store.Write(bg, func(tx *Tx) error {
+		tx.PutQueueEntry(QueueEntry{Task: "t1", Repo: "r10"})
+		tx.PutQueueEntry(QueueEntry{Task: "t2", Repo: "r2"})
+		tx.PutQueueEntry(QueueEntry{Task: "t3", Repo: "r2"})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Store.Read(bg, func(tx *Tx) error {
+		if got := tx.QueuedRepos(); !slices.Equal(got, []string{"r2", "r10"}) {
+			t.Errorf("QueuedRepos = %v, want r2 then r10", got)
+		}
+		return nil
+	})
+	_ = s.Store.Write(bg, func(tx *Tx) error {
+		tx.DeleteQueueEntry("t1")
+		tx.DeleteQueueEntry("t2")
+		tx.DeleteQueueEntry("t3")
+		if got := tx.QueuedRepos(); len(got) != 0 {
+			t.Errorf("QueuedRepos of an empty queue = %v", got)
 		}
 		return nil
 	})

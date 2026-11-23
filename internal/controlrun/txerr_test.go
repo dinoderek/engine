@@ -61,7 +61,8 @@ func TestAPassActsOnNoViewAQueryFailedToRead(t *testing.T) {
 }
 
 // TestRecoveryStopsAtAnAttemptItFailedToRead corrupts the middle one of three
-// dispatching attempts: recovery adopts the first and, every read after a
+// dispatching attempts, to valid JSON that is not an attempt, as the index on
+// limited attempts refuses invalid JSON: recovery adopts the first and, every read after a
 // failed one finding nothing, leaves the last alone.
 func TestRecoveryStopsAtAnAttemptItFailedToRead(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "db")
@@ -93,7 +94,7 @@ func TestRecoveryStopsAtAnAttemptItFailedToRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	if _, err = db.Exec("UPDATE attempts SET data='not json' WHERE id='a4'"); err != nil {
+	if _, err = db.Exec("UPDATE attempts SET data='[]' WHERE id='a4'"); err != nil {
 		t.Fatal(err)
 	}
 	c := &Coordinator{Service: control.Service{Store: store}, Logf: t.Logf}
