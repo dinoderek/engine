@@ -191,6 +191,31 @@ func TestAnAnsweredQuestionCoversItsSessionsUntilTheirLimitEnds(t *testing.T) {
 	}
 }
 
+// movedOne checks that the answer moved t1 alone, to claude on spare.
+func movedOne(t *testing.T, st State, ts []Item) {
+	at := st.Attempts[st.Items[ts[0].ID].Attempt]
+	if at.Reason != EndMoved || at.MoveHost != "spare" || at.MoveHarness != "claude" || at.MovedBlind {
+		t.Errorf("t1's attempt %+v", at)
+	}
+	if st.Hosts["devbox"].Paused || st.Attempts[st.Items[ts[1].ID].Attempt].State == "ended" {
+		t.Errorf("moved more than t1")
+	}
+}
+
+// movedSeveral checks that the answer paused devbox and moved its claude
+// task, t1, off it: t2 runs codex on devbox and t3 claude on spare.
+func movedSeveral(t *testing.T, st State, ts []Item) {
+	at := st.Attempts[st.Items[ts[0].ID].Attempt]
+	if at.Reason != EndMoved || at.MoveHost != "" || !st.Hosts["devbox"].Paused {
+		t.Errorf("t1's attempt %+v, devbox %+v", at, st.Hosts["devbox"])
+	}
+	for _, other := range ts[1:] {
+		if st.Attempts[st.Items[other.ID].Attempt].State == "ended" {
+			t.Errorf("%s moved", other.ID)
+		}
+	}
+}
+
 func TestEachAnswerToALimitQuestionRunsOnce(t *testing.T) {
 	for name, c := range map[string]struct {
 		read   func([]Item) LimitRead
@@ -203,31 +228,11 @@ func TestEachAnswerToALimitQuestionRunsOnce(t *testing.T) {
 		"free text": {read: func(ts []Item) LimitRead { return one(ts[0].ID, true) }, answer: "let me look first",
 			check: waited},
 		"move one": {read: func(ts []Item) LimitRead { return one(ts[0].ID, true) }, answer: "Move to claude on spare\nnow please",
-			check: func(t *testing.T, st State, ts []Item) {
-				at := st.Attempts[st.Items[ts[0].ID].Attempt]
-				if at.Reason != EndMoved || at.MoveHost != "spare" || at.MoveHarness != "claude" || at.MovedBlind {
-					t.Errorf("t1's attempt %+v", at)
-				}
-				if st.Hosts["devbox"].Paused || st.Attempts[st.Items[ts[1].ID].Attempt].State == "ended" {
-					t.Errorf("moved more than t1")
-				}
-			},
-			note: "As answered in update %d, the coordinator moved %s to claude on spare."},
+			check: movedOne,
+			note:  "As answered in update %d, the coordinator moved %s to claude on spare."},
 		"move several": {read: func(ts []Item) LimitRead { return several(ts[0].ID, ts[2].ID) }, answer: "Move them to other hosts",
-			check: func(t *testing.T, st State, ts []Item) {
-				at := st.Attempts[st.Items[ts[0].ID].Attempt]
-				if at.Reason != EndMoved || at.MoveHost != "" || !st.Hosts["devbox"].Paused {
-					t.Errorf("t1's attempt %+v, devbox %+v", at, st.Hosts["devbox"])
-				}
-				// t2 runs codex on devbox, t3 claude on spare: neither is a
-				// claude task of devbox.
-				for _, other := range ts[1:] {
-					if st.Attempts[st.Items[other.ID].Attempt].State == "ended" {
-						t.Errorf("%s moved", other.ID)
-					}
-				}
-			},
-			note: "As answered in update %d, the coordinator moved %s on devbox. devbox is paused until `engine host resume devbox`."},
+			check: movedSeveral,
+			note:  "As answered in update %d, the coordinator moved %s on devbox. devbox is paused until `engine host resume devbox`."},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s, tasks := onHosts(t)

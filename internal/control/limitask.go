@@ -154,10 +154,14 @@ func (s Service) askLimit(st *State, read LimitRead) LimitAsk {
 	} else {
 		ask.MoveHost, ask.MoveHarness = read.MoveHost, read.MoveHarness
 		move = fmt.Sprintf("Move to %s on %s", read.MoveHarness, read.MoveHost)
+		from := "keeping its worktree"
+		if read.MoveHost != read.Host {
+			from = "from what its branch has on origin, once its window here pushes it"
+		}
 		body = fmt.Sprintf("%s is at %s's limit on %s until %s.\n\n"+
 			"Wait: it resumes on its own after the reset, as with no answer. "+
-			"Move: `engine task move %s --harness %s --host %s` resumes it there now, on its own branch.",
-			read.Tasks[0], read.Harness, read.Host, until, read.Tasks[0], read.MoveHarness, read.MoveHost)
+			"Move: `engine task move %s --harness %s --host %s` resumes it there now, %s.",
+			read.Tasks[0], read.Harness, read.Host, until, read.Tasks[0], read.MoveHarness, read.MoveHost, from)
 	}
 	recommended := 1
 	if read.Wait {
