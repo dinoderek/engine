@@ -18,7 +18,7 @@ import (
 
 // Protocol is the version of the ops' wire format. A caller refuses a reply
 // that carries another.
-const Protocol = 11
+const Protocol = 12
 
 // The executor's modes. The kickoff names one, and a hands-off session is
 // marked unattended.

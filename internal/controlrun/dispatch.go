@@ -59,7 +59,7 @@ func (c *Coordinator) launch(st control.State, at control.Attempt, credential st
 	req := hostops.ControlRequest{URL: c.URL, Credential: credential, Attempt: at.ID, Remote: repo.Remote,
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Title: session.Title(item.ID, item.Title), Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
-			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model, resume)}}
+			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model, resume) + movedKickoff(st, at)}}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
 	var refused *hostops.RefusedError
 	if errors.As(err, &refused) {
@@ -162,6 +162,37 @@ func kickoff(item control.Item, at control.Attempt, reviewer string, resume bool
 	if resume {
 		text += " This is a resume: an earlier attempt already worked on this " + item.Kind + ". Its branch holds the work it pushed; " +
 			"read the updates since it started, check what the branch already has, and continue from there."
+	}
+	return text
+}
+
+// movedKickoff is what the kickoff adds when at follows the operator's move:
+// the attempt just before it ended moved. While an earlier blind move's
+// window is not yet released, its old session may still push to the task's
+// branch, so the new one checks origin's branch before each push and asks
+// the operator once it holds commits the new one lacks, rather than merging
+// or overwriting them.
+func movedKickoff(st control.State, at control.Attempt) string {
+	var prev, blind control.Attempt
+	for _, o := range st.Attempts {
+		if o.Item != at.Item || control.Number(o.ID) >= control.Number(at.ID) {
+			continue
+		}
+		if control.Number(o.ID) > control.Number(prev.ID) {
+			prev = o
+		}
+		if o.Reason == control.EndMoved && o.MovedBlind && !o.MoveReleased {
+			blind = o
+		}
+	}
+	text := ""
+	if prev.Reason == control.EndMoved {
+		text = " The operator moved this task here from host " + prev.Host + "."
+	}
+	if blind.ID != "" {
+		text += " The operator moved it off host " + blind.Host + " while that host could not be reached, so its old session may still be running and pushing to the task's branch. " +
+			"Before each push, fetch: if origin's branch has commits your branch lacks, do not merge, rebase over or overwrite them; " +
+			"ask the operator (engine ask, class drift) what to keep."
 	}
 	return text
 }

@@ -216,9 +216,10 @@ func (c *Coordinator) now() time.Time {
 
 // release closes a finished session's window and worktree on its host, and
 // ends its attempt. A stopped task's keeps the worktree and branch, and its
-// attempt has ended already. A release with a Key tells the operator, once,
-// and so does a done task's release whose host replied with a note, such as
-// the repo's own worktree release failing.
+// attempt has ended already; so does a moved one's, after pushing its
+// branch. A release with a Key tells the operator, once, and so does a done
+// task's release whose host replied with a note, such as the repo's own
+// worktree release failing, and a moved one's that left work origin lacks.
 func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 	outcome := hostops.RunEnded
 	switch {
@@ -226,10 +227,18 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 		outcome = hostops.RunDone
 	case a.Stopped:
 		outcome = hostops.RunStopped
+	case a.Moved:
+		outcome = hostops.RunMoved
 	}
 	reply, err := c.Client(cfg.Hosts[a.Session.Host]).Release(a.Session.Name, outcome, a.Head)
 	if err != nil {
 		return err
+	}
+	if a.Moved {
+		if err := c.movedLeft(a, reply); err != nil {
+			return err
+		}
+		return c.Service.MovedReleased(a.Attempt)
 	}
 	if a.Key != "" {
 		if err := c.notice(a.Item, a.Key, a.Text); err != nil {
@@ -245,6 +254,25 @@ func (c *Coordinator) release(a reconcile.Action, cfg *hosts.Config) error {
 		return nil
 	}
 	return c.Service.SetAttempt(a.Attempt, "ended", "")
+}
+
+// movedLeft tells the operator, once per moved attempt, what releasing its
+// window left that origin lacks. A move back onto the same host is told
+// nothing: its resume opens on the kept worktree and branch.
+func (c *Coordinator) movedLeft(a reconcile.Action, reply hostops.Released) error {
+	if reply.Unpushed == "" {
+		return nil
+	}
+	st, err := c.Service.Store.Snapshot()
+	if err != nil {
+		return err
+	}
+	if st.Attempts[a.Attempt].MoveHost == a.Session.Host {
+		return nil
+	}
+	return c.notice(a.Item, "moved-left/"+a.Attempt, fmt.Sprintf(
+		"The moved task's old session %s on host %s was released, keeping its worktree there. What origin lacks: %s. A resume on another host starts without it.",
+		a.Session.Name, a.Session.Host, reply.Unpushed))
 }
 
 // stop clears root's coordination intent. Completed and failed intent stays

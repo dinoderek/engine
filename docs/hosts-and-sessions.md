@@ -123,6 +123,9 @@ placement's alone.
 
 **Preflight:** `engine start --check` runs `gh auth status`, then a hands-off light-tier session exercising the skill, `gh`, `engine` and `/tmp`; it exits 1 if gh failed or the session was denied, stalled or skipped a step.
 
+A moved task resumes on its old host from the kept worktree, uncommitted
+work too, and elsewhere from `origin`'s branch (`coordinator.md`).
+
 ## Seeing and reaching sessions
 
 | Where | How |

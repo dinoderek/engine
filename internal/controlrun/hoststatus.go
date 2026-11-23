@@ -64,6 +64,7 @@ func hostRow(st control.State, attempts []control.Attempt, h reconcile.HostLoad)
 		return row
 	}
 	s := h.Status
+	row.RunsError = s.RunsError
 	row.Slots, row.FreeSlots, row.HeavySlots, row.FreeHeavySlots = s.Slots, s.FreeSlots, s.HeavySlots, s.FreeHeavySlots
 	row.Unready, row.SignedOut = h.Unready(), s.SignedOut
 	harness := map[string]string{}

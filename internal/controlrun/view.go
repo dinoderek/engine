@@ -67,6 +67,7 @@ func record(st control.State, item control.Item) reconcile.Item {
 // attempt has no session to observe.
 func withSession(st control.State, item control.Item, fleet reconcile.Fleet) reconcile.Item {
 	t := record(st, item)
+	t.Strays, t.StrayUnknown = strays(st, item, fleet)
 	at, ok := st.Attempts[item.Attempt]
 	if !ok || t.Vanished {
 		return t
@@ -84,6 +85,36 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 	sess.StuckNoted = at.StuckFor == sess.ResetsAt && sess.ResetsAt > 0
 	t.Session = &sess
 	return t
+}
+
+// strays are item's attempts that ended moved, and were not yet released,
+// whose run is still their host's newest of its name on a host that
+// answered, oldest first: their window, live, dead or already gone, is
+// released, pushing the branch. Only such a run's window is the attempt's,
+// as a later session there may reuse its tmux id. unknown is set when such
+// an attempt's host could not be read; a host gone from hosts.toml has
+// nothing left to release.
+func strays(st control.State, item control.Item, fleet reconcile.Fleet) (out []reconcile.Stray, unknown bool) {
+	for _, at := range st.Attempts {
+		if _, configured := fleet.Host(at.Host); at.Item != item.ID || at.Reason != control.EndMoved || at.Window == "" || at.MoveReleased || !configured {
+			continue
+		}
+		s := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))
+		switch {
+		case s.Unknown:
+			unknown = true
+		case newestRun(fleet, at, s.Name):
+			out = append(out, reconcile.Stray{Attempt: at, Session: s})
+		}
+	}
+	slices.SortFunc(out, func(a, b reconcile.Stray) int { return control.Number(a.Attempt.ID) - control.Number(b.Attempt.ID) })
+	return out, unknown
+}
+
+// newestRun reports whether at's host shows at's run as its newest of name.
+func newestRun(fleet reconcile.Fleet, at control.Attempt, name string) bool {
+	h, ok := fleet.Host(at.Host)
+	return ok && slices.ContainsFunc(h.Status.Runs, func(r hostops.Run) bool { return r.Name == name && r.Record.RunID == at.RunID })
 }
 
 // observe is what the fleet shows of an attempt's session, on the host that

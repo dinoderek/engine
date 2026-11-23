@@ -18,6 +18,8 @@ The host serializes dispatches by run ID and returns an existing run on replay. 
 
 A window gone from a host that answered ends its attempt by the vanish and early-death rules (`session-signals.md`, "Vanish" and "Early death").
 
+A task the operator moved (`control-server.md`) waits until a pass's `release --moved` of its old run, window open or gone, succeeds, and while the old host is unread, unless it was moved blind; a wait on an unread host tells the operator once. Releasing work `origin` lacks tells the operator, unless the move stayed on that host. A blind move's old run is released when its host answers, a done plan's too. Until then, each kickoff warns that the old session may still push: before each push, the new session fetches and asks the operator if `origin`'s branch has commits it lacks.
+
 Operator-only `engine attempt reconcile <id> <evidence>` applies the vanish and early-death rules once a successful host read shows a started attempt's window gone with its run recorded, or a `dispatching` attempt's with no window of its name and no run record (ending it vanished, its task back in `todo`). Otherwise, a planner's dispatch included, it refuses (`control-server.md`); unknown dispatch outcomes stay reserved. A spawn still in flight shows neither and may then open an orphan window, which blocks the next dispatch until removed.
 
 ## Merge queue
@@ -44,7 +46,7 @@ A host does its own work through `engine host <op> --json`: one job, one JSON ob
 | `merge` | Merges a PR pinned to the reviewed head once it is open, green (no checks is green), mergeable, unblocked by branch rules and not behind its base. Per check name, the latest start counts. Pending waits; failure refuses. Commit subject: PR title plus number; body: PR body. |
 | `ready` | Probes a repo's readiness (`readiness.md`). |
 | `typed` | Logs a text's hash before the coordinator types it (`pane-input.md`). |
-| `release` | Closes the window and deletes its harness files. For a done task, runs the repo's `dev worktree release <branch>` if provided. Removes the worktree unless the run failed or was stopped, hit a usage limit again, or has changes; deletes the local branch if its tip is the merged head (`--head`) or in `origin`'s default branch after a fetch, else notes the unmerged commits. Other releases keep the branch. |
+| `release` | Closes the window and deletes its harness files. For a done task, runs the repo's `dev worktree release <branch>` if provided. Removes the worktree unless the run failed, was stopped or moved, hit a usage limit again, or has changes; a moved run's branch is first pushed, without force, and the reply says what `origin` lacks; deletes the local branch if its tip is the merged head (`--head`) or in `origin`'s default branch after a fetch, else notes the unmerged commits. Other releases keep the branch. |
 
 **The envelope.** Every reply, a failure too, carries `protocol`, `engine` (the build) and `host`. A failure is `{"error": …, "refused": true|false}`; `refused` means the op changed nothing. Over SSH, exit 255 is an unreachable host. A caller refuses a reply on another protocol, or not an engine's, and tells the operator to run `engine setup --host <name>`.
 

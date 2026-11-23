@@ -196,6 +196,9 @@ type Want struct {
 	Requires []string
 	// Harness is the item's pinned harness, or "" to follow the ratio.
 	Harness string
+	// Host, when set, is the only host the item may start on; Avoid is a
+	// host it may not. A move sets them.
+	Host, Avoid string
 	// Invalid, when set, is why the item's harness cannot be read: it waits.
 	Invalid error
 }
@@ -254,6 +257,10 @@ func (f Fleet) fits(w Want, harness string, probed map[pair]bool) (fits []HostLo
 		missing := slices.DeleteFunc(slices.Clone(w.Requires), h.has)
 		ready := h.readiness(w.Repo)
 		switch {
+		case w.Host != "" && h.Name != w.Host:
+			continue
+		case h.Name == w.Avoid:
+			lacks = append(lacks, "the task was moved off "+h.Name)
 		case !slices.Contains(h.Harnesses, harness):
 			lacks = append(lacks, fmt.Sprintf("%s does not run %s", h.Name, harness))
 		case h.Unready() != "":
@@ -279,6 +286,9 @@ func (f Fleet) fits(w Want, harness string, probed map[pair]bool) (fits []HostLo
 	}
 	if len(lacks) == 0 && len(waits) == 0 {
 		lacks = []string{"hosts.toml has no host"}
+		if w.Host != "" {
+			lacks = []string{"hosts.toml has no host " + w.Host + ", which the task was moved to"}
+		}
 	}
 	return nil, strings.Join(append(waits, lacks...), "; "), len(waits) > 0
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,8 +29,9 @@ type host struct {
 	released  []string
 	outcomes  []hostops.Outcome
 	heads     []string
-	// note is what each release replies with in its note.
-	note string
+	// note is what each release replies with in its note, and unpushed
+	// what a moved one says origin lacks.
+	note, unpushed string
 	// refuse, when set, is the reason the host refuses a new dispatch.
 	refuse string
 	// unresolved makes a dispatch fail with no reply and no effect, with
@@ -64,7 +66,7 @@ func (h *host) Release(name string, outcome hostops.Outcome, mergedHead string) 
 			break
 		}
 	}
-	return hostops.Released{Name: name, Note: h.note}, nil
+	return hostops.Released{Name: name, Note: h.note, Unpushed: h.unpushed}, nil
 }
 func (h *host) Status() (hostops.Status, error) {
 	if h.outage {
@@ -97,6 +99,8 @@ func (h *host) ControlSpawn(r hostops.ControlRequest) (hostops.Spawned, error) {
 		}
 	}
 	h.launches[r.Spawn.RunID] = r
+	// As status does, only the newest run of each name is shown.
+	h.status.Runs = slices.DeleteFunc(h.status.Runs, func(run hostops.Run) bool { return run.Name == name })
 	h.status.Windows = append(h.status.Windows, hostops.Window{Name: name, ID: "@1", Alive: true, State: session.StateWorking})
 	h.status.Runs = append(h.status.Runs, hostops.Run{Name: name, Record: session.Record{RunID: r.Spawn.RunID, Name: name, Tmux: "engine:@1", Harness: r.Spawn.Harness, Spawned: time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)}})
 	h.status.FreeSlots--

@@ -59,7 +59,7 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 			return problem(400, "a request key of 1–200 characters is required")
 		}
 		key := fingerprint([]string{a.Name, a.Attempt, r.Key})
-		hash := fingerprint(r)
+		hash := fingerprint(digested(r))
 		if prev, ok := st.Receipts[key]; write && ok {
 			if prev.Digest != hash {
 				return problem(409, "request key was already used for a different command")
@@ -125,6 +125,9 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 	if err := questionFields(r); err != nil {
 		return Response{}, err
 	}
+	if r.Move != nil && r.Op != "task-move" {
+		return Response{}, problem(400, "only task-move takes a move")
+	}
 	switch r.Op {
 	case "plan-view":
 		return planView(st, a, r.ID)
@@ -154,6 +157,8 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return s.stopTask(st, a, r)
 	case "task-resume":
 		return s.resumeTask(st, a, r)
+	case "task-move":
+		return s.moveTask(st, a, r)
 	case "merge-request":
 		return s.mergeRequest(st, a, r)
 	case "merge-queue":

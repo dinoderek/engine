@@ -32,6 +32,9 @@ type Env struct {
 	// Retry is the clock and sleep of a command's retry of an unreachable
 	// server; nil is the real ones.
 	Retry *Retry
+	// Terminal reports whether In is a terminal an operator can answer a
+	// confirmation at; nil checks In.
+	Terminal func() bool
 }
 
 const Usage = "engine serve\n" +
@@ -47,6 +50,7 @@ const Usage = "engine serve\n" +
 	"engine task merge-ready <task-id> --pr <url> --head <sha> --method squash|merge|rebase --verdict APPROVED\n" +
 	"engine task cleaned <task-id> [--left <text>]\n" +
 	"engine task stop|resume <task-id>\n" +
+	"engine task move <task-id> [--host <host>] [--harness <harness>] [--yes]\n" +
 	"engine ps\nengine run <plan-id>\nengine updates <id> [--after <sequence>]\n" +
 	"engine tell <id> <text> [--operator]\n" +
 	"engine ask <id> <text> [--choice <text>]... [--recommend <index from 0>] [--class <hard-stop class>]\n" +
@@ -100,6 +104,10 @@ func Main(args []string, e Env) int {
 		ctx = context.Background()
 	}
 	out, err := call(ctx, client, req)
+	if err != nil {
+		send := func(ctx context.Context, r control.Request) (control.Response, error) { return call(ctx, client, r) }
+		out, err = confirmMove(ctx, e, send, req, err)
+	}
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine:", err)
 		return 1
@@ -183,6 +191,9 @@ func Parse(args []string, e Env) (control.Request, error) {
 	questionFlags(fs, &r)
 	all := fs.Bool("all", false, "")
 	fs.IntVar(&r.Before, "before", 0, "")
+	var move control.MoveRequest
+	fs.StringVar(&move.Host, "host", "", "")
+	fs.BoolVar(&move.Confirm, "yes", false, "")
 	// Go flag parsing stops at a positional; allow IDs and text before flags.
 	flags, position := splitFlags(rest)
 	if err = fs.Parse(flags); err != nil {
@@ -200,6 +211,9 @@ func Parse(args []string, e Env) (control.Request, error) {
 	if r.Op == "merge-request" {
 		merge.PR, r.Item.PR = r.Item.PR, ""
 		r.Merge = &merge
+	}
+	if err = moveFlags(&r, move); err != nil {
+		return r, err
 	}
 	if left != "" && r.Op != "cleaned" {
 		return r, fmt.Errorf("--left is only for task cleaned")
@@ -241,7 +255,7 @@ var taskOps = map[string]string{"complete-external": "complete-external", "merge
 
 // lifecycleOps are the request ops of the operator's approve, stop and
 // resume, by what they act on.
-var lifecycleOps = map[string]string{"plan approve": "approve", "plan stop": "stop", "task stop": "task-stop", "task resume": "task-resume"}
+var lifecycleOps = map[string]string{"plan approve": "approve", "plan stop": "stop", "task stop": "task-stop", "task resume": "task-resume", "task move": "task-move"}
 
 func operation(args []string) (control.Request, []string, error) {
 	r := control.Request{}
@@ -277,9 +291,9 @@ func operation(args []string) (control.Request, []string, error) {
 				return r, nil, fmt.Errorf("%s requires a task", op)
 			}
 			r.Op = taskOps[op]
-		case "approve", "stop", "resume":
+		case "approve", "stop", "resume", "move":
 			if r.Op = lifecycleOps[head+" "+op]; r.Op == "" {
-				return r, nil, fmt.Errorf("%s requires %s", op, map[string]string{"approve": "a plan", "stop": "a plan or a task", "resume": "a task"}[op])
+				return r, nil, fmt.Errorf("%s requires %s", op, map[string]string{"approve": "a plan", "stop": "a plan or a task", "resume": "a task", "move": "a task"}[op])
 			}
 		case "edit", "state":
 			r.Op = op
@@ -348,7 +362,7 @@ func splitFlags(args []string) ([]string, []string) {
 			continue
 		}
 		flags = append(flags, a)
-		if strings.Contains(a, "=") || a == "--operator" || a == "--all" || a == "--json" || a == "--server" {
+		if strings.Contains(a, "=") || a == "--operator" || a == "--all" || a == "--json" || a == "--server" || a == "--yes" {
 			continue
 		}
 		if i+1 < len(args) {

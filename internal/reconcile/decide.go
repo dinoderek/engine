@@ -27,6 +27,8 @@ func Decide(v View) []Action {
 	acts = append(acts, dead...)
 	v.Fleet = v.Fleet.dyingAtLimit(v, dead)
 	acts = append(acts, releaseStopped(v)...)
+	acts = append(acts, releaseMoved(v)...)
+	acts = append(acts, moveWaits(v)...)
 	acts = append(acts, stalls(v)...)
 	acts = append(acts, quiets(v)...)
 	acts = append(acts, reaps(v)...)
@@ -189,6 +191,49 @@ func releaseStopped(v View) []Action {
 	for _, t := range v.Tasks {
 		if s := t.Session; s != nil && t.Stopped && (s.Live || s.DeadWindow) {
 			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: t.Current.ID, Session: *s, Stopped: true, Text: "the operator stopped its task"})
+		}
+	}
+	return acts
+}
+
+// moveWaits tells the operator, once per move, that a moved task waits for
+// its old host, which could not be read, to release its old session.
+func moveWaits(v View) []Action {
+	var acts []Action
+	for _, t := range v.Tasks {
+		if t.open() && len(t.Strays) == 0 && t.Current.Reason == control.EndMoved && v.moveHeld(t) {
+			acts = append(acts, notice(t, "move-wait/"+t.Current.ID, fmt.Sprintf(
+				"%s waits for host %s, which could not be read, to release its old session before it resumes elsewhere. "+
+					"`%s` sends it on without waiting; the old session may then still push.", t.ID, t.Current.Host, moveCommand(t))))
+		}
+	}
+	return acts
+}
+
+// moveCommand is the command that moves t again to where its move sends it,
+// confirmed.
+func moveCommand(t Item) string {
+	text := "engine task move " + t.ID
+	if h := t.Current.MoveHost; h != "" {
+		text += " --host " + h
+	}
+	if h := t.Current.MoveHarness; h != "" {
+		text += " --harness " + h
+	}
+	return text + " --yes"
+}
+
+// releaseMoved releases each window a moved attempt left on a host that
+// answered, pushing its branch first and keeping the worktree and branch. It
+// repeats each pass until the release succeeds, so the task's next dispatch
+// waits for it (moveHeld). A done task's is only closed, as Stopped: its
+// merged branch is not pushed again.
+func releaseMoved(v View) []Action {
+	var acts []Action
+	for _, t := range v.Tasks {
+		for _, s := range t.Strays {
+			acts = append(acts, Action{Kind: Release, Item: t.ID, Attempt: s.Attempt.ID, Session: s.Session, Moved: true,
+				Stopped: t.State == "done", Text: "the operator moved its task"})
 		}
 	}
 	return acts
