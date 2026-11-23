@@ -23,9 +23,19 @@ type recorder struct {
 	mu    sync.Mutex
 	calls []control.Request
 	reply func(control.Request) (control.Response, error)
+	// aggregates makes it a server that has the aggregate reads.
+	aggregates bool
 }
 
+// aggregateOp is an operation a control server older than the aggregate reads
+// refuses. The fakes that stand for one answer it so and keep it out of
+// what they record: the tests count the reads the dashboard needs.
+func aggregateOp(op string) bool { return op == "overview" || op == "plan-detail" }
+
 func (c *recorder) Call(_ context.Context, r control.Request) (control.Response, error) {
+	if aggregateOp(r.Op) && !c.aggregates {
+		return control.Response{}, &control.Problem{Status: 400, Message: "unknown operation " + strconv.Quote(r.Op)}
+	}
 	c.mu.Lock()
 	c.calls = append(c.calls, r)
 	c.mu.Unlock()

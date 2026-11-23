@@ -3,7 +3,7 @@
 // responses and checks the item panel's keyboard and focus behaviour.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { boot, Event } = require("./dom_shim.js");
+const { boot, Event, withOverview } = require("./dom_shim.js");
 
 const STATIC = path.join(__dirname, "..", "static");
 const AT = "2026-11-07T09:00:00Z";
@@ -48,6 +48,8 @@ const BASE = [
 // page runs a scenario against fixtures it can change as it goes.
 async function page(hash, fx, body, opts) {
   fx.log = [];
+  fx.requests = [];
+  fx.plan = fx.plan || PLAN;
   fx.items = fx.items || { p24: item("p24", "plan", DESCRIPTION), t30: item("t30", "task", "") };
   fx.questions = fx.questions || [{ id: 2, state: "open", acknowledged: true, replies: 1 }];
   fx.thread = fx.thread || ((id, after) => ({ item: id, messages: BASE.filter((m) => m.id > after), questions: fx.questions, next: 4, more: false }));
@@ -58,7 +60,7 @@ async function page(hash, fx, body, opts) {
     if (fx.down) throw new TypeError("fetch failed");
     let m;
     if (u.pathname === "/api/plans") return reply(200, PLANS);
-    if (u.pathname === "/api/plans/p24") return reply(200, PLAN);
+    if (u.pathname === "/api/plans/p24") return reply(200, fx.plan);
     if ((m = u.pathname.match(/^\/api\/items\/([pt]\d+)\/thread$/))) {
       return reply(200, { data: fx.thread(m[1], Number(u.searchParams.get("after")), Number(u.searchParams.get("anchor"))), fetched: AT });
     }
@@ -67,7 +69,7 @@ async function page(hash, fx, body, opts) {
     }
     return reply(404, { error: "not found" });
   };
-  const p = boot(STATIC, hash, fetchImpl, opts);
+  const p = boot(STATIC, hash, withOverview(fetchImpl, fx.requests), opts);
   const $ = (id) => p.doc.getElementById(id);
   const t = {
     p, $, fx,
@@ -236,6 +238,46 @@ const scenarios = {
       assert.ok(t.$("update-5").textContent.includes("Decision"));
       assert.ok(fx.log.some((u) => u === "/api/items/p24/thread?after=4"), "the refresh asks after the cursor");
       assert.equal(t.$("panel").hidden, false);
+    });
+  },
+
+  async "a refresh over the plan on Communications makes three reads and takes the item from the plan"() {
+    const fx = {};
+    await page("#/plans/p24?panel=p24&tab=communications", fx, async (t) => {
+      fx.requests.length = 0;
+      fx.plan = { data: Object.assign({}, PLAN.data, { version: 9, actions: ["stop"], plan: Object.assign({}, PLAN.data.plan, { state: "blocked" }) }), fetched: "2026-11-07T09:05:00Z" };
+      await t.refresh();
+      assert.deepEqual(fx.requests.sort(), ["/api/items/p24/thread?after=4", "/api/overview", "/api/plans/p24"]);
+      assert.equal(t.text("panel-state"), "Blocked");
+      assert.ok(t.$("panel-actions").querySelector('[data-key="act-panel-p24-stop"]'), "the plan's actions come from the plan on show");
+      assert.equal(t.text("view-description").includes("Outcome"), true, "the description is kept");
+    });
+  },
+
+  async "a task panel over its plan takes its state and actions from the task row"() {
+    const fx = {};
+    await page("#/plans/p24?panel=t30&tab=communications", fx, async (t) => {
+      fx.requests.length = 0;
+      const tasks = PLAN.data.tasks.map((x) => (x.id === "t30" ? Object.assign({}, x, { state: "in-review", held: false, version: 4, actions: ["task-stop"] }) : x));
+      fx.plan = { data: Object.assign({}, PLAN.data, { tasks }), fetched: AT };
+      await t.refresh();
+      assert.equal(fx.requests.some((u) => u.startsWith("/api/items/t30") && !u.includes("thread")), false, "no item read");
+      assert.equal(t.text("panel-state"), "In review");
+      assert.ok(t.$("panel-actions").querySelector('[data-key="act-panel-t30-task-stop"]'));
+    });
+  },
+
+  async "the Description tab, and an item outside the plan, are read again on a refresh"() {
+    await page("#/plans/p24?panel=p24", {}, async (t) => {
+      t.fx.requests.length = 0;
+      await t.refresh();
+      assert.ok(t.fx.requests.includes("/api/items/p24"));
+    });
+    const fx = { items: { t99: item("t99", "task", "") } };
+    await page("#/plans/p24?panel=t99&tab=communications", fx, async (t) => {
+      fx.requests.length = 0;
+      await t.refresh();
+      assert.ok(fx.requests.includes("/api/items/t99"));
     });
   },
 

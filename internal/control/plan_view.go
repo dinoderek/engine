@@ -14,8 +14,10 @@ func planView(tx *Tx, a Actor, id string) (Response, error) {
 	out := Response{Items: []Item{withStatus(tx, item), repo}}
 	seen := map[string]bool{}
 	var pending []string
+	own := map[string]Item{}
 	for _, t := range tx.ItemsOfPlan(id) {
 		pending = append(pending, t.ID)
+		own[t.ID] = t
 	}
 	for len(pending) > 0 {
 		next := pending[len(pending)-1]
@@ -27,7 +29,10 @@ func planView(tx *Tx, a Actor, id string) (Response, error) {
 		if !readable(tx, a, next) {
 			return Response{}, problem(403, "dependency is outside this execution's read scope")
 		}
-		task, _ := tx.Item(next)
+		task, ok := own[next]
+		if !ok {
+			task, _ = tx.Item(next)
+		}
 		out.Items = append(out.Items, task)
 		pending = append(pending, task.Depends...)
 	}

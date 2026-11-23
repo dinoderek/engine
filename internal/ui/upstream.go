@@ -12,7 +12,7 @@ import (
 )
 
 // readOps is every control operation the dashboard may forward. All are reads.
-var readOps = []string{"list", "plan-view", "attempts", "get", "updates", "session-view", "inbox"}
+var readOps = []string{"list", "plan-view", "attempts", "get", "updates", "session-view", "inbox", "overview", "plan-detail"}
 
 // Caller is the control client boundary; control.Client satisfies it.
 type Caller interface {
@@ -29,6 +29,8 @@ type upstream struct {
 	mu     sync.Mutex
 	last   map[string]snapshot
 	failed map[string]string // the latest failure of a view that has a snapshot
+
+	agg aggregates
 }
 
 // snapshot is the last successful result of one view.
@@ -118,10 +120,14 @@ func (u *upstream) failure(err error) (int, string) {
 // plans filters the plan list. A cached request, made when only the filter
 // changed, reuses the last list when there is one.
 func (u *upstream) plans(ctx context.Context, f Filter, cached bool) (Envelope, int) {
+	return u.plansFrom(ctx, u.newRead(), f, cached)
+}
+
+func (u *upstream) plansFrom(ctx context.Context, read *overviewRead, f Filter, cached bool) (Envelope, int) {
 	env, ok := u.cached("plans")
 	status := 200
 	if !cached || !ok {
-		env, status = u.load(ctx)
+		env, status = u.view(ctx, "plans", func(ctx context.Context) (any, error) { return u.loadPlans(ctx, read) })
 	}
 	if loaded, ok := env.Data.([2][]control.Item); ok {
 		env.Data = planList(loaded[0], loaded[1], f)
@@ -129,22 +135,48 @@ func (u *upstream) plans(ctx context.Context, f Filter, cached bool) (Envelope, 
 	return env, status
 }
 
-func (u *upstream) load(ctx context.Context) (Envelope, int) {
-	return u.view(ctx, "plans", func(ctx context.Context) (any, error) {
-		repos, err := u.call(ctx, control.Request{Op: "list", State: "repo"})
+// loadPlans reads the repositories and plans, from the overview when the
+// server has one.
+func (u *upstream) loadPlans(ctx context.Context, read *overviewRead) (any, error) {
+	if got, ok, err := read.get(ctx); err != nil || ok {
 		if err != nil {
 			return nil, err
 		}
-		plans, err := u.call(ctx, control.Request{Op: "list", State: "plan"})
-		if err != nil {
-			return nil, err
-		}
-		return [2][]control.Item{repos.Items, plans.Items}, nil
-	})
+		repos, rest := splitRepos(got.Items)
+		return [2][]control.Item{repos, slices.DeleteFunc(rest, func(it control.Item) bool { return it.Kind != "plan" })}, nil
+	}
+	repos, err := u.call(ctx, control.Request{Op: "list", State: "repo"})
+	if err != nil {
+		return nil, err
+	}
+	plans, err := u.call(ctx, control.Request{Op: "list", State: "plan"})
+	if err != nil {
+		return nil, err
+	}
+	return [2][]control.Item{repos.Items, plans.Items}, nil
 }
 
+// splitRepos separates the repositories from the other items, in order.
+func splitRepos(items []control.Item) (repos, rest []control.Item) {
+	for _, it := range items {
+		if it.Kind == "repo" {
+			repos = append(repos, it)
+		} else {
+			rest = append(rest, it)
+		}
+	}
+	return repos, rest
+}
+
+// plan loads a plan's task pane, from plan-detail when the server has it.
 func (u *upstream) plan(ctx context.Context, id string) (Envelope, int) {
 	return u.view(ctx, "plan "+id, func(ctx context.Context) (any, error) {
+		if got, ok, err := u.planDetailRead(ctx, id); err != nil || ok {
+			if err != nil {
+				return nil, err
+			}
+			return planDetail(id, got.Items, got.Attempts, got.Sessions), nil
+		}
 		view, err := u.call(ctx, control.Request{Op: "plan-view", ID: id})
 		if err != nil {
 			return nil, err
@@ -199,27 +231,85 @@ func (u *upstream) item(ctx context.Context, id string) (Envelope, int) {
 // maxThreadReads bounds how many 200-update reads one thread request makes.
 const maxThreadReads = 100
 
-// thread loads a window of an item's messages. It reads the item's updates
-// from the start, because the status of a question depends on updates after it.
+// thread loads a window of an item's messages after a cursor. A server with
+// question statuses is read only after the cursor. An older one, which a
+// page that settles a question without any status shows, is read from the
+// start, because a question's status depends on updates after it.
 func (u *upstream) thread(ctx context.Context, id string, after, anchor int) (Envelope, int) {
 	return u.fresh(ctx, func(ctx context.Context) (any, error) {
-		if _, err := u.call(ctx, control.Request{Op: "get", ID: id}); err != nil {
-			return nil, err
+		if u.ask() {
+			th, err := u.threadAfter(ctx, id, after, anchor)
+			if !errors.Is(err, errNoStatuses) {
+				return th, err
+			}
+			u.learn(false)
 		}
-		var all []control.Update
-		for cursor, reads := 0, 0; ; reads++ {
-			if reads == maxThreadReads {
-				return nil, &control.Problem{Status: 502, Message: "thread too long to show"}
-			}
-			page, err := u.call(ctx, control.Request{Op: "updates", ID: id, After: cursor})
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, page.Updates...)
-			if len(page.Updates) < 200 {
-				return threadWindow(id, all, after, anchor), nil
-			}
+		return u.threadFromStart(ctx, id, after, anchor)
+	})
+}
+
+// errNoStatuses says a page carried question updates and no statuses, so the
+// control server is one from before them.
+var errNoStatuses = errors.New("the control server sends no question statuses")
+
+// settlesQuestions reports whether an update asks a question or answers an
+// update. A server with question statuses sends them, an empty list when the
+// item has no question, with every page; one without them sends none.
+func settlesQuestions(u control.Update) bool {
+	return u.RequiresReply || u.ReplyTo > 0 && slices.Contains([]string{"reply", "acknowledged", "resolved", control.KindPaneAnswer}, u.Kind)
+}
+
+// threadFromStart reads every update of the item and settles its questions
+// from them.
+func (u *upstream) threadFromStart(ctx context.Context, id string, after, anchor int) (Thread, error) {
+	if _, err := u.call(ctx, control.Request{Op: "get", ID: id}); err != nil {
+		return Thread{}, err
+	}
+	var all []control.Update
+	for cursor, reads := 0, 0; ; reads++ {
+		if reads == maxThreadReads {
+			return Thread{}, &control.Problem{Status: 502, Message: "thread too long to show"}
+		}
+		page, err := u.call(ctx, control.Request{Op: "updates", ID: id, After: cursor})
+		if err != nil {
+			return Thread{}, err
+		}
+		all = append(all, page.Updates...)
+		if len(page.Updates) < 200 {
+			return threadWindow(id, all, after, anchor), nil
+		}
+		cursor = page.Updates[len(page.Updates)-1].ID
+	}
+}
+
+// threadAfter reads the updates after the cursor until the window is full,
+// the anchor is in it, or none remain. The server's question statuses cover
+// every question of the item, so earlier updates are never read again.
+func (u *upstream) threadAfter(ctx context.Context, id string, after, anchor int) (Thread, error) {
+	var msgs []Message
+	for cursor, reads := after, 0; ; reads++ {
+		if reads == maxThreadReads {
+			return Thread{}, &control.Problem{Status: 502, Message: "thread too long to show"}
+		}
+		page, err := u.call(ctx, control.Request{Op: "updates", ID: id, After: cursor})
+		if err != nil {
+			return Thread{}, err
+		}
+		if page.Questions == nil && slices.ContainsFunc(page.Updates, settlesQuestions) {
+			return Thread{}, errNoStatuses
+		}
+		msgs = append(msgs, messagesOf(id, page.Updates)...)
+		if len(page.Updates) > 0 {
 			cursor = page.Updates[len(page.Updates)-1].ID
 		}
-	})
+		full := len(page.Updates) == 200
+		if full && (len(msgs) <= windowSize(msgs, anchor) || anchor > cursor) {
+			continue
+		}
+		th := windowOf(id, msgs, statusesOf(page.Questions), after, anchor)
+		if !th.More {
+			th.Next = max(th.Next, cursor)
+		}
+		return th, nil
+	}
 }

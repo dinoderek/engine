@@ -67,6 +67,10 @@ func BenchmarkStore(b *testing.B) {
 		"list":         {Op: "list"},
 		"updates":      {Op: "updates", ID: "t3", After: 19000},
 		"session-view": {Op: "session-view"},
+		"plan-view":    {Op: "plan-view", ID: "p2"},
+		"inbox":        {Op: "inbox"},
+		"overview":     {Op: "overview"},
+		"plan-detail":  {Op: "plan-detail", ID: "p2"},
 	}
 	for name, r := range reads {
 		b.Run("read/"+name, func(b *testing.B) {

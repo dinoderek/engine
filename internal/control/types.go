@@ -234,14 +234,18 @@ type Request struct {
 
 // Response contains one operation's result. Credentials are only returned at dispatch.
 type Response struct {
-	Item       *Item        `json:"item,omitempty"`
-	Items      []Item       `json:"items,omitempty"`
-	Updates    []Update     `json:"updates,omitempty"`
-	Attempt    *Attempt     `json:"attempt,omitempty"`
-	Attempts   []Attempt    `json:"attempts,omitempty"`
-	Queue      []QueueEntry `json:"queue,omitempty"`
-	Sessions   []SessionRow `json:"sessions,omitempty"`
-	Credential string       `json:"credential,omitempty"`
+	Item     *Item        `json:"item,omitempty"`
+	Items    []Item       `json:"items,omitempty"`
+	Updates  []Update     `json:"updates,omitempty"`
+	Attempt  *Attempt     `json:"attempt,omitempty"`
+	Attempts []Attempt    `json:"attempts,omitempty"`
+	Queue    []QueueEntry `json:"queue,omitempty"`
+	Sessions []SessionRow `json:"sessions,omitempty"`
+	// Questions are the statuses of an item's questions, as an updates read
+	// of one item returns them. It is present, even empty, in every such
+	// read, which tells a client the server sends statuses.
+	Questions  []QuestionStatus `json:"questions,omitzero"`
+	Credential string           `json:"credential,omitempty"`
 	// Fleet is the host-status op's reply.
 	Fleet *HostStatus `json:"fleet,omitempty"`
 	// Host is a host-pause, host-resume or host-move's reply.

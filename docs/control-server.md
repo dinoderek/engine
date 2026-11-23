@@ -2,7 +2,7 @@
 
 # Control server
 
-`engine serve` owns plans, tasks, updates, attempts and merge queue entries, and runs the coordinator. GitHub supplies code, PRs and CI. For dispatch, recovery and merges, load `coordinator.md`.
+`engine serve` owns plans, tasks, updates, attempts and merge queue entries, and runs the coordinator. For dispatch, recovery and merges, load `coordinator.md`.
 
 ## Start
 
@@ -24,7 +24,7 @@ For backup, stop the server, run `engine serve --backup <new-path>`, restart it,
 
 ## Records and commands
 
-IDs are global across repositories, plans, tasks and attempts. Every task belongs to one plan; creating a task without `--plan` fails. `engine help` lists commands.
+IDs are global across repositories, plans, tasks and attempts. Every task belongs to one plan; creating a task without `--plan` fails.
 
 Edits, approvals and workflow changes require the current `--version`. A plan's edit invalidates its approval; an active execution, a plan's children included, prevents an edit. Approve, run and stop take a plan and persist its coordination intent (`coordinator.md`). `get`, `list` and `plan-view` add a plan's derived, unstored `status` (`execution-protocol.md`).
 
@@ -40,11 +40,13 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 ## API and storage
 
-`POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors carry an HTTP status and sometimes a stable `reason`; storage details stay in server logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`; the CLI never retries it.
+`POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Storage details stay in logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`.
 
-Every write has a request key; reusing one for another command fails. Writes delete receipts 7 days old (up to 100 each), so a key reused later is a new request; a dispatch receipt stays until its attempt ends. A call retries uncertain delivery once with the same key. A session's command (one with `ENGINE_ATTEMPT_ID`) also retries connect errors, timeouts and 5xx for 90 seconds, under that key, and its first retry prints one stderr line naming the key; a 4xx never retries. `ENGINE_RETRY_FOR` (a Go duration, `0` for none) sets the window for every server command but `engine attach`; the operator's default is none; the prompt hook and the dashboard keep their own behaviour. An edit invalidates a placement decision before any execution is reserved or launched.
+Every write has a request key; reusing one for another command fails. Writes delete receipts 7 days old, so a key reused later is a new request; a dispatch receipt stays until its attempt ends. A call retries uncertain delivery once with the same key. A session's command (one with `ENGINE_ATTEMPT_ID`) also retries connect errors, timeouts and 5xx for 90 seconds, under that key, and its first retry prints one stderr line naming the key; a 4xx never retries. `ENGINE_RETRY_FOR` (a Go duration, `0` for none) sets the window for every server command but `engine attach`; the operator's default is none; the prompt hook and the dashboard keep their own behaviour. An edit invalidates a placement decision before any execution is reserved or launched.
 
-The server alone writes its database, in process (`modernc.org/sqlite`), a table per record kind. Reads are WAL transactions beside one writer. An older schema is first copied to `<db>.pre-v7`, owner-only (an existing copy stops it), then migrated in one transaction; newer is refused.
+The server alone writes its database, in process (`modernc.org/sqlite`), a table per record kind; reads are WAL transactions beside one writer. An older schema is first copied to `<db>.pre-v7`, owner-only (an existing copy stops it), then migrated in one transaction; newer is refused.
+
+Operator-only `overview` (inbox, repositories, plans, sessions) and `plan-detail` (a plan's view, attempts, sessions) each read in one transaction; an `updates` read of one item also returns its questions' statuses (`internal/control/aggregate.go`).
 
 The operator credential is an owner-only regular file. Every dispatch creates a separate execution credential, scoped to that plan or task; workers cannot approve, start coordination or read the operator inbox. Ending an attempt revokes its credential. Credentials are hashed for lookup; a dispatch receipt keeps its token privately, for recovery.
 

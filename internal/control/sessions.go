@@ -64,8 +64,14 @@ func (s Service) sessionView(tx *Tx, a Actor) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
 	}
-	out := Response{}
-	for _, at := range tx.CurrentAttempts() {
+	return Response{Sessions: s.sessionRows(tx, tx.CurrentAttempts())}, nil
+}
+
+// sessionRows are the session rows of the given current attempts, by item
+// number: an ended attempt is listed only while its item has vanished.
+func (s Service) sessionRows(tx *Tx, attempts []Attempt) []SessionRow {
+	var rows []SessionRow
+	for _, at := range attempts {
 		item, _ := tx.Item(at.Item)
 		if at.State == "ended" && !Vanished(tx, item) {
 			continue
@@ -74,10 +80,10 @@ func (s Service) sessionView(tx *Tx, a Actor) (Response, error) {
 		if at.State == "ended" {
 			row.Observed = "exited"
 		}
-		out.Sessions = append(out.Sessions, row)
+		rows = append(rows, row)
 	}
-	slices.SortFunc(out.Sessions, func(x, y SessionRow) int { return Number(x.Item) - Number(y.Item) })
-	return out, nil
+	slices.SortFunc(rows, func(x, y SessionRow) int { return Number(x.Item) - Number(y.Item) })
+	return rows
 }
 
 func (s Service) sessionRow(tx *Tx, item Item, at Attempt) SessionRow {

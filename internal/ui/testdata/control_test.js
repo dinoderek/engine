@@ -5,7 +5,7 @@
 // says when the server refuses or does not answer.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { boot, Event } = require("./dom_shim.js");
+const { boot, Event, withOverview } = require("./dom_shim.js");
 
 const STATIC = path.join(__dirname, "..", "static");
 const AT = "2026-11-07T09:00:00Z";
@@ -43,7 +43,7 @@ async function page(hash, fx, body) {
     if ((m = u.pathname.match(/^\/api\/items\/([pt]\d+)$/))) return fx.items[m[1]] ? reply(200, fx.items[m[1]]) : reply(404, { error: "unknown item" });
     return reply(404, { error: "not found" });
   };
-  const p = boot(STATIC, hash, fetchImpl);
+  const p = boot(STATIC, hash, withOverview(fetchImpl));
   const $ = (id) => p.doc.getElementById(id);
   const t = {
     p, $, fx,

@@ -45,6 +45,10 @@ func handler(up *upstream, host string) http.Handler {
 		}
 		mux.HandleFunc(pattern, asset)
 	}
+	mux.HandleFunc("GET /api/overview", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		reply(w, 200, up.overview(r.Context(), Filter{Repo: q.Get("repo"), State: q.Get("state"), Query: q.Get("q")}))
+	})
 	mux.HandleFunc("GET /api/plans", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		env, status := up.plans(r.Context(), Filter{Repo: q.Get("repo"), State: q.Get("state"), Query: q.Get("q")}, q.Get("cached") == "1")

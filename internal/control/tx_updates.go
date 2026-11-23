@@ -142,6 +142,38 @@ func (t *Tx) reply(id int, kinds string) int {
 	return n
 }
 
+// QuestionStatuses are the statuses, as of now, of every question asked on
+// item, oldest first: resolved once a resolution or pane answer replies to
+// it, acknowledged once an acknowledgement does, and the replies counted.
+func (t *Tx) QuestionStatuses(item string) []QuestionStatus {
+	out := []QuestionStatus{}
+	t.rows(func(rows *sql.Rows) error {
+		var id int
+		var kind sql.NullString
+		var reply sql.NullInt64
+		if err := rows.Scan(&id, &kind, &reply); err != nil {
+			return err
+		}
+		if len(out) == 0 || out[len(out)-1].ID != id {
+			out = append(out, QuestionStatus{ID: id, State: "open"})
+		}
+		q := &out[len(out)-1]
+		switch kind.String {
+		case "reply":
+			q.Replies++
+		case "acknowledged":
+			q.Acknowledged = true
+		case "resolved", KindPaneAnswer:
+			if q.Resolution == 0 {
+				q.State, q.Resolution = "resolved", int(reply.Int64)
+			}
+		}
+		return nil
+	}, "SELECT q.id, r.kind, r.id FROM updates q LEFT JOIN updates r ON r.reply_to=q.id AND r.kind IN ('reply','acknowledged',"+resolvedKinds+")"+
+		" WHERE q.item=? AND q.requires_reply ORDER BY q.id, r.id", item)
+	return out
+}
+
 // Wrote reports whether author wrote any update: one indexed lookup.
 func (t *Tx) Wrote(author string) bool {
 	var n int

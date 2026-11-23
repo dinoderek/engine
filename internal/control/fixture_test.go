@@ -68,6 +68,10 @@ func TestMigratingTheVersion6FixtureAnswersEveryReadAsBefore(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%+v: %v", r.Request, err)
 		}
+		if r.Request.Op == "updates" && r.Request.ID != "" {
+			checkQuestionStatuses(t, r, got)
+			got.Questions = nil // statuses came after the recording
+		}
 		if r.Request.Op == "plan-view" {
 			// A version 6 server listed a plan's tasks in map order.
 			byID := func(a, b Item) int { return cmp.Compare(a.ID, b.ID) }
@@ -81,9 +85,71 @@ func TestMigratingTheVersion6FixtureAnswersEveryReadAsBefore(t *testing.T) {
 		}
 	}
 	for _, name := range readOps {
-		if !ops[name] {
+		if !ops[name] && name != "overview" && name != "plan-detail" {
 			t.Errorf("the fixture has no %s read", name)
 		}
+	}
+	checkAggregates(t, s, reads)
+}
+
+// checkQuestionStatuses checks the statuses an updates read of one item
+// carries against the questions its recorded updates hold.
+func checkQuestionStatuses(t *testing.T, r fixtureRead, got Response) {
+	t.Helper()
+	var asked []int
+	for _, u := range r.Response.Updates {
+		if u.RequiresReply && u.Item == r.Request.ID {
+			asked = append(asked, u.ID)
+		}
+	}
+	var have []int
+	for _, q := range got.Questions {
+		have = append(have, q.ID)
+		resolved := slices.ContainsFunc(r.Response.Updates, func(u Update) bool {
+			return u.ReplyTo == q.ID && (u.Kind == "resolved" || u.Kind == KindPaneAnswer)
+		})
+		if resolved != (q.State == "resolved") {
+			t.Errorf("%s question %d is %s, but the recorded updates say resolved is %t", r.Request.ID, q.ID, q.State, resolved)
+		}
+	}
+	if !slices.Equal(asked, have) {
+		t.Errorf("%s statuses cover questions %v, want %v", r.Request.ID, have, asked)
+	}
+}
+
+// checkAggregates compares the reads added after the recording with the
+// recorded separate reads they combine.
+func checkAggregates(t *testing.T, s Service, reads []fixtureRead) {
+	t.Helper()
+	recorded := func(op, id string) Response {
+		for _, r := range reads {
+			if r.Request.Op == op && r.Request.ID == id && r.Request.State == "" && r.Request.After == 0 {
+				return r.Response
+			}
+		}
+		t.Fatalf("the fixture has no %s read of %q", op, id)
+		return Response{}
+	}
+	overview, err := s.Execute(op, Request{Op: "overview"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, w := fingerprint(overview.Sessions), fingerprint(recorded("session-view", "").Sessions); g != w {
+		t.Errorf("overview sessions %s, want the recorded session view %s", g, w)
+	}
+	if g, w := fingerprint(overview.Updates), fingerprint(recorded("inbox", "").Updates); g != w {
+		t.Errorf("overview inbox %s, want the recorded inbox %s", g, w)
+	}
+	detail, err := s.Execute(op, Request{Op: "plan-detail", ID: "p2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := func(a, b Item) int { return cmp.Compare(a.ID, b.ID) }
+	want := recorded("plan-view", "p2").Items
+	slices.SortFunc(detail.Items, byID)
+	slices.SortFunc(want, byID)
+	if g, w := fingerprint(detail.Items), fingerprint(want); g != w {
+		t.Errorf("plan detail items %s, want the recorded plan view %s", g, w)
 	}
 }
 

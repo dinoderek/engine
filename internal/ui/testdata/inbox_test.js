@@ -4,7 +4,7 @@
 // that survive a reload, and a conflict that keeps the typed text.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { boot, Event } = require("./dom_shim.js");
+const { boot, Event, withOverview } = require("./dom_shim.js");
 
 const STATIC = path.join(__dirname, "..", "static");
 const AT = "2026-11-07T09:00:00Z";
@@ -53,7 +53,7 @@ async function page(hash, fx, body) {
     return reply(404, { error: "not found" });
   };
   const navigator = { setAppBadge: async (n) => { fx.badge.push(n); }, clearAppBadge: async () => { fx.badge.push(0); } };
-  const p = boot(STATIC, hash, fetchImpl, { localStorage: fx.storage, navigator });
+  const p = boot(STATIC, hash, withOverview(fetchImpl), { localStorage: fx.storage, navigator });
   const $ = (id) => p.doc.getElementById(id);
   const t = {
     p, $, fx,

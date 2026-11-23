@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -177,9 +178,18 @@ type pagedCaller struct {
 	updates []control.Update
 	reads   []control.Request
 	fail    error
+	// questions are the statuses a server with the aggregate reads returns
+	// with each page; nil makes it an older server, which has neither.
+	questions []control.QuestionStatus
 }
 
 func (p *pagedCaller) Call(_ context.Context, r control.Request) (control.Response, error) {
+	if aggregateOp(r.Op) {
+		if p.questions == nil {
+			return control.Response{}, &control.Problem{Status: 400, Message: "unknown operation " + strconv.Quote(r.Op)}
+		}
+		return control.Response{}, nil
+	}
 	p.reads = append(p.reads, r)
 	if p.fail != nil {
 		return control.Response{}, p.fail
@@ -187,7 +197,7 @@ func (p *pagedCaller) Call(_ context.Context, r control.Request) (control.Respon
 	if r.Op == "get" {
 		return control.Response{Item: &control.Item{ID: r.ID, Kind: "task", Title: "T", Body: "body"}}, nil
 	}
-	var out control.Response
+	out := control.Response{Questions: p.questions}
 	for _, u := range p.updates {
 		if u.ID > r.After && u.Item == r.ID && len(out.Updates) < 200 {
 			out.Updates = append(out.Updates, u)
@@ -196,13 +206,21 @@ func (p *pagedCaller) Call(_ context.Context, r control.Request) (control.Respon
 	return out, nil
 }
 
-func TestThreadReadsEveryPageOfUpdates(t *testing.T) {
+// olderUpstream is an upstream that has learned its control server is one
+// from before the aggregate reads, so threads are read from the start.
+func olderUpstream(pc *pagedCaller) *upstream {
+	up := newUpstream(pc, func() time.Time { return t0 }, nil)
+	up.learn(false)
+	return up
+}
+
+func TestAnOlderServersThreadIsReadFromTheStart(t *testing.T) {
 	var all []control.Update
 	for i := 1; i <= 450; i++ {
 		all = append(all, upd(i, "t7", "say", "m"))
 	}
 	pc := &pagedCaller{updates: all}
-	env, status := newUpstream(pc, func() time.Time { return t0 }, nil).thread(context.Background(), "t7", 100, 0)
+	env, status := olderUpstream(pc).thread(context.Background(), "t7", 100, 0)
 	th, _ := env.Data.(Thread)
 	if status != 200 || len(th.Messages) != pageSize || th.Messages[0].ID != 101 || !th.More {
 		t.Fatalf("thread = %d %d messages from %d", status, len(th.Messages), th.Messages[0].ID)
@@ -218,13 +236,37 @@ func TestThreadReadsEveryPageOfUpdates(t *testing.T) {
 	}
 }
 
+func TestAPageThatSettlesQuestionsWithoutStatusesMeansAnOlderServer(t *testing.T) {
+	answer := upd(3, "t7", "resolved", "Go")
+	answer.ReplyTo = 1
+	pc := &pagedCaller{updates: []control.Update{ask(1, "t7"), upd(2, "t7", "say", "x"), answer}}
+	up := newUpstream(pc, func() time.Time { return t0 }, nil)
+	env, status := up.thread(context.Background(), "t7", 2, 0)
+	th, _ := env.Data.(Thread)
+	if want := []Question{{ID: 1, State: "resolved", Resolution: 3}}; status != 200 || !reflect.DeepEqual(th.Questions, want) || !reflect.DeepEqual(messageIDs(th), []int{3}) {
+		t.Fatalf("thread = %d %+v, want the decision after the cursor and the question it settled %+v", status, th, want)
+	}
+	var ops []string
+	for _, r := range pc.reads {
+		ops = append(ops, fmt.Sprintf("%s:%d", r.Op, r.After))
+	}
+	if want := []string{"updates:2", "get:0", "updates:0"}; !reflect.DeepEqual(ops, want) {
+		t.Fatalf("reads %v, want %v: the page showed the server sends no statuses, so the thread is read again from the start", ops, want)
+	}
+	pc.reads = nil
+	up.thread(context.Background(), "t7", 3, 0)
+	if len(pc.reads) != 2 || pc.reads[0].Op != "get" {
+		t.Fatalf("reads %+v, want the older server remembered and read from the start", pc.reads)
+	}
+}
+
 func TestThreadTooLongToReadIsAnError(t *testing.T) {
 	var all []control.Update
 	for i := 1; i <= 200*maxThreadReads+1; i++ {
 		all = append(all, upd(i, "t7", "say", "m"))
 	}
 	pc := &pagedCaller{updates: all}
-	env, status := newUpstream(pc, func() time.Time { return t0 }, nil).thread(context.Background(), "t7", 0, 0)
+	env, status := olderUpstream(pc).thread(context.Background(), "t7", 0, 0)
 	if status != 502 || env.Data != nil || !strings.Contains(env.Error, "too long") {
 		t.Fatalf("overlong thread = %d %+v, want an error rather than a partial thread", status, env)
 	}

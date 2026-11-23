@@ -1,7 +1,6 @@
 package control
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"slices"
@@ -35,7 +34,7 @@ func (s Service) now() time.Time {
 }
 
 // readOps change no record: each runs on a view, beside the others.
-var readOps = []string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view", "host-status"}
+var readOps = []string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view", "host-status", "overview", "plan-detail"}
 
 // Execute deduplicates successful writes by actor and caller-supplied request key.
 func (s Service) Execute(a Actor, r Request) (Response, error) {
@@ -153,6 +152,10 @@ func (s Service) apply(tx *Tx, a Actor, r Request) (Response, error) {
 		return planView(tx, a, r.ID)
 	case "session-view":
 		return s.sessionView(tx, a)
+	case "overview":
+		return s.overview(tx, a)
+	case "plan-detail":
+		return s.planDetail(tx, a, r.ID)
 	case "host-status":
 		return s.hostStatus(a)
 	case "get", "list", "attempts":
@@ -226,8 +229,7 @@ func read(tx *Tx, a Actor, r Request) (Response, error) {
 				out.Attempts = append(out.Attempts, at)
 			}
 		}
-		// Oldest first; attempts started in the same instant by their number.
-		slices.SortFunc(out.Attempts, func(a, b Attempt) int { return cmp.Or(a.Started.Compare(b.Started), Number(a.ID)-Number(b.ID)) })
+		oldestFirst(out.Attempts)
 		return out, nil
 	}
 	for _, item := range tx.ItemsByKindUnder(r.State, r.ID) {
