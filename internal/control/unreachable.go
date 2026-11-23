@@ -91,7 +91,7 @@ func (s Service) reachedAgain(st *State, host string, alive func(*State, Attempt
 	}
 	if rec.Question > 0 && !resolved(st, rec.Question) {
 		st.update(coordinatorActor, Request{ReplyTo: rec.Question}, "resolved", ResolutionReturned, s.now())
-		st.update(coordinatorActor, Request{Recipient: "operator"}, "say", returnedNote(st, host, rec, alive), s.now())
+		s.hostNote(st, host, returnedNote(st, host, rec, alive))
 	}
 	rec.UnreachableSince, rec.Question, rec.Tasks, rec.Acted = time.Time{}, 0, nil, false
 	st.Hosts[host] = rec
@@ -152,8 +152,15 @@ func (s Service) actOnAnswer(st *State, host string) error {
 	default:
 		return nil
 	}
-	st.update(coordinatorActor, Request{Recipient: "operator"}, "say", answerNote(host, answer, by, moved, left), s.now())
+	s.hostNote(st, host, answerNote(host, answer, by, moved, left))
 	return nil
+}
+
+// hostNote tells the operator body about host, with no item.
+func (s Service) hostNote(st *State, host, body string) {
+	u := st.update(coordinatorActor, Request{Recipient: "operator"}, "say", body, s.now())
+	u.Host = host
+	st.Updates[u.ID-1] = u
 }
 
 // stopHost stops every task running on host, as the operator's task stop

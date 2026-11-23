@@ -138,3 +138,18 @@ func TestTheOperatorsAnswerRunsOnTheNextPassAndOnce(t *testing.T) {
 		t.Fatalf("the move ran %d times, with %d notes", moves, notes)
 	}
 }
+
+// Nobody reads the host while the server is down: its stretch counts again
+// from the first failed read after the outage.
+func TestAServerOutageRestartsTheUnreachableCount(t *testing.T) {
+	c, _, _, now, start := runningUnreachable(t)
+	passAt(t, c, now, start, 0, 4*time.Minute, 8*time.Minute, 20*time.Minute, 24*time.Minute, 28*time.Minute, 32*time.Minute, 34*time.Minute+59*time.Second)
+	if got := hostQuestions(c); len(got) != 0 {
+		t.Fatalf("asked within 15 minutes of passes after the outage: %+v", got)
+	}
+	passAt(t, c, now, start, 35*time.Minute)
+	got := hostQuestions(c)
+	if len(got) != 1 || !strings.Contains(got[0].Body, "unreachable since 2026-11-07 09:20 UTC") {
+		t.Fatalf("questions %+v", got)
+	}
+}

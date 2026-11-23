@@ -230,7 +230,7 @@ window.engine.inbox = function (ctx) {
   function create(c) {
     const e = { card: c, json: "", busy: false, gone: false, choices: [] };
     e.statics = el("div", { class: "card-static" });
-    e.note = el("textarea", { rows: "3", class: "note", "aria-label": "Note for " + c.item, placeholder: c.kind === "question" ? "Note, or an answer" : "Note" });
+    e.note = el("textarea", { rows: "3", class: "note", "aria-label": "Note for " + (c.item || c.title), placeholder: c.kind === "question" ? "Note, or an answer" : "Note" });
     e.note.value = draftOf(c.update);
     e.note.addEventListener("input", () => {
       keepDraft(c.update, e.note.value);

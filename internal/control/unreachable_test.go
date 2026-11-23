@@ -36,15 +36,44 @@ func fleetQuestions(st State) []Update {
 	return out
 }
 
-// coordinatorNotes are the coordinator's messages to the operator.
+// coordinatorNotes are the coordinator's messages to the operator, each
+// about devbox.
 func coordinatorNotes(st State) []string {
 	var out []string
 	for _, u := range st.Updates {
 		if u.Author == "coordinator" && u.Kind == "say" && u.Recipient == "operator" {
 			out = append(out, u.Body)
+			if u.Host != "devbox" || u.Item != "" {
+				out = append(out, "a note not about devbox alone: "+u.Host+u.Item)
+			}
 		}
 	}
 	return out
+}
+
+// An outage keeps a stretch already asked about, and restarts one that was
+// not.
+func TestAServerOutageKeepsOnlyAStretchAskedAbout(t *testing.T) {
+	s, _ := onHosts(t)
+	unreachableFor(t, &s, stretch, UnreachableAsk)
+	now := stretch
+	s.Now = func() time.Time { return now }
+	if err := s.SawReach("mac", false, everyWindowAlive); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Store.StartPass(stretch, 5*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, gap, err := s.Store.StartPass(stretch.Add(time.Hour), 5*time.Minute); err != nil || !gap {
+		t.Fatalf("no outage: %v", err)
+	}
+	st := mustSnapshot(t, s)
+	if rec := st.Hosts["devbox"]; rec.Question == 0 || !rec.UnreachableSince.Equal(stretch) {
+		t.Errorf("the asked stretch was restarted: %+v", rec)
+	}
+	if rec := st.Hosts["mac"]; !rec.UnreachableSince.IsZero() {
+		t.Errorf("the unasked stretch was kept: %+v", rec)
+	}
 }
 
 var stretch = time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)
