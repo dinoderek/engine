@@ -12,26 +12,25 @@ doc comments are the contract. What each answer drives:
 | a session's launch: config, trust, flags, kickoff | runs the host's line with them; `release` asks every adapter to delete its per-session files |
 | whether a session joins the remote-control daemon | joins only when allowed; a down daemon never refuses a spawn |
 | one observation per `status`: quota, signed out, window state | unknown is never dead; a window's own exit decides that; a wait at a dialog is never typed into |
-| optionally, a run's usage limit marker | a window that died with it set ends resumable (`session-signals.md`) |
+| optionally, a usage limit marker | a window that died with it set ends resumable (`session-signals.md`) |
 | hook events in engine's terms, its denial, its unattended policy | runs the core hooks: `pre-tool-use` is the merge guard, `permission` applies the policy, `state` writes the run's state file, `prompt` records the operator's pane input |
 | the prompts in a session's transcript, marking each turn the harness injected, as the text its prompt hook received | lets the prompt hook check a pane input was submitted there, and drop one only the harness injected |
 | its own hook entries | resolves `engine hook <entry> --harness <name>`; an unknown name or entry exits 1 and blocks nothing |
 | `engine setup` steps, preflight failure advice, the user's plugin update | runs the steps after the host's, on hosts that list the harness; `engine upgrade` runs the update on the caller first |
 | the preflight kickoff, and whether state comes from hooks alone | fails a check whose window stayed open, skipped a step, or wrote no state file |
 
-A harness runs its hooks in the session's folder, so a session never removes
-its own worktree: with the folder gone, no hook runs, and the state they
-reported stays as it was. Its release removes the worktree.
+A session never removes its own worktree: its hooks run in that folder, so
+with it gone none runs and their last state stays. Release removes it.
 
-What each harness answers today:
+Each harness today:
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| unattended permission request | denied, naming the Permission hard stop | left to Codex's auto-review, which never prompts |
-| session state | its own session list; a run still missing from it a minute after launch is held at a startup dialog | the hooks' state file; a missing file is unknown |
+| unattended permission request | denied, naming the Permission hard stop | Codex's auto-review, which never prompts |
+| session state | its own session list; a run missing from it a minute after launch is at a startup dialog | the hooks' state file; a missing file is unknown |
 | a limit's reset | the hook's, the quota reading's, else the stop message's `resets <time>`, the next such time in the host's zone | the state file's, else the quota reading's |
 | a limit marker | the run's `limit.json` | none |
-| folder trust | `.claude.json`, under Claude Code's lock: worktree, clone, plugin directory | the session's profile, or engine's `config.toml` when joined |
+| folder trust | worktree, clone, plugin directory in `.claude.json`, under its lock | its profile; joined, engine's `config.toml` |
 | an old plugin version | Claude keeps it while a session runs it | setup keeps it in engine's home while an older window lives |
 
 **Adding a harness:** a package under `internal/harness/` that passes
