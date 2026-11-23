@@ -166,8 +166,8 @@ and stays open for each fault, or a state it cannot read: the unit is not `enabl
 (`systemctl --user enable`); `Restart` is `no` (`systemctl --user edit`, set
 `Restart=on-failure`); linger is off (`loginctl enable-linger <user>`); or
 host status reports `tmux_unit`, a session tmux inside the unit that a stop
-would end (restart it with the command status gives, once its sessions are
-finished). A server host that records no `services` gets a note: its server
+would end (move it out, ending nothing: `recovery.md`, "2. The server is
+upgraded or restarted"). A server host that records no `services` gets a note: its server
 will not return after a reboot.
 
 ## Watching a run
