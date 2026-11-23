@@ -65,7 +65,7 @@ func serveMain(args []string, e Env) int {
 		fmt.Fprintf(e.Err, "engine serve: operator credential %s: %v\n", *tokenPath, err)
 		return 1
 	}
-	store, err := control.Open(*db, nil)
+	store, err := control.Open(*db)
 	if err != nil {
 		fmt.Fprintln(e.Err, "engine serve:", err)
 		return 1

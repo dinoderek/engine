@@ -67,11 +67,11 @@ type LimitAsk struct {
 //     move` does. A resolution that is not the move, like a wait, runs
 //     nothing.
 func (s Service) SawLimits(host string, reads []LimitRead) error {
-	return s.Store.Transaction(func(st *State) error {
-		rec := st.Hosts[host]
+	return s.write(func(tx *Tx) error {
+		rec := tx.Host(host)
 		harnesses := slices.Sorted(maps.Keys(rec.Limits))
 		for _, harness := range harnesses {
-			if err := s.actOnLimit(st, host, harness); err != nil {
+			if err := s.actOnLimit(tx, host, harness); err != nil {
 				return err
 			}
 		}
@@ -84,9 +84,9 @@ func (s Service) SawLimits(host string, reads []LimitRead) error {
 			i := slices.IndexFunc(reads, func(r LimitRead) bool { return r.Harness == harness })
 			read := LimitRead{Host: host, Harness: harness}
 			if i >= 0 {
-				read = current(st, reads[i])
+				read = current(tx, reads[i])
 			}
-			s.limitStretch(st, host, read)
+			s.limitStretch(tx, host, read)
 		}
 		return nil
 	})
@@ -96,9 +96,9 @@ func (s Service) SawLimits(host string, reads []LimitRead) error {
 // its host × harness, since the pass read them, as an answer just run may
 // have done. A read that lost a task asks nothing new: the next pass reads
 // afresh.
-func current(st *State, read LimitRead) LimitRead {
+func current(tx *Tx, read LimitRead) LimitRead {
 	kept := slices.DeleteFunc(slices.Clone(read.Tasks), func(id string) bool {
-		at := st.Attempts[st.Items[id].Attempt]
+		at := tx.attempt(tx.item(id).Attempt)
 		return at.State == "ended" || at.Host != read.Host || at.Harness != read.Harness
 	})
 	if len(kept) < len(read.Tasks) {
@@ -108,13 +108,13 @@ func current(st *State, read LimitRead) LimitRead {
 }
 
 // limitStretch keeps host × harness's limit question to what read shows.
-func (s Service) limitStretch(st *State, host string, read LimitRead) {
-	rec := st.Hosts[host]
+func (s Service) limitStretch(tx *Tx, host string, read LimitRead) {
+	rec := tx.Host(host)
 	ask := rec.Limits[read.Harness]
-	open := ask.Question > 0 && !resolved(st, ask.Question)
+	open := ask.Question > 0 && tx.Resolution(ask.Question) == 0
 	ask.Tasks = slices.DeleteFunc(ask.Tasks, func(id string) bool { return !slices.Contains(read.Tasks, id) })
 	if open && len(ask.Tasks) == 0 {
-		st.update(coordinatorActor, Request{ReplyTo: ask.Question}, "resolved", ResolutionNoLimit, s.now())
+		tx.AppendUpdate(coordinatorActor, Request{ReplyTo: ask.Question}, "resolved", ResolutionNoLimit, s.now())
 		open = false
 	}
 	covered := !slices.ContainsFunc(read.Tasks, func(id string) bool { return !slices.Contains(ask.Tasks, id) })
@@ -129,9 +129,9 @@ func (s Service) limitStretch(st *State, host string, read LimitRead) {
 		ask.Tasks = slices.Clone(read.Tasks)
 		rec.Limits = setLimit(rec.Limits, read.Harness, ask)
 	default:
-		next := s.askLimit(st, read)
+		next := s.askLimit(tx, read)
 		if open {
-			st.update(coordinatorActor, Request{ReplyTo: ask.Question}, "resolved",
+			tx.AppendUpdate(coordinatorActor, Request{ReplyTo: ask.Question}, "resolved",
 				fmt.Sprintf("%s\nby question %d, which covers %s", ResolutionSuperseded, next.Question, strings.Join(read.Tasks, ", ")), s.now())
 		}
 		rec.Limits = setLimit(rec.Limits, read.Harness, next)
@@ -139,7 +139,7 @@ func (s Service) limitStretch(st *State, host string, read LimitRead) {
 	if len(rec.Limits) == 0 {
 		rec.Limits = nil
 	}
-	st.Hosts[host] = rec
+	tx.PutHost(host, rec)
 }
 
 // setLimit is limits with harness's question set to ask.
@@ -153,7 +153,7 @@ func setLimit(limits map[string]LimitAsk, harness string, ask LimitAsk) map[stri
 
 // askLimit asks the operator about read's limited sessions, which have room
 // elsewhere.
-func (s Service) askLimit(st *State, read LimitRead) LimitAsk {
+func (s Service) askLimit(tx *Tx, read LimitRead) LimitAsk {
 	ask := LimitAsk{Tasks: slices.Clone(read.Tasks), Group: len(read.Tasks) > 1}
 	until := "an unknown reset"
 	if read.ResetsAt > 0 {
@@ -183,10 +183,10 @@ func (s Service) askLimit(st *State, read LimitRead) LimitAsk {
 	if read.Wait {
 		recommended = 0
 	}
-	u := st.update(coordinatorActor, Request{Recipient: "operator", RequiresReply: true,
+	u := tx.AppendUpdate(coordinatorActor, Request{Recipient: "operator", RequiresReply: true,
 		Choices: []string{ChoiceWaitReset, move}, Recommended: &recommended, Class: "environment"}, "ask", body, s.now())
 	u.Host = read.Host
-	st.Updates[u.ID-1] = u
+	tx.PutUpdate(u)
 	ask.Question = u.ID
 	return ask
 }
@@ -194,18 +194,18 @@ func (s Service) askLimit(st *State, read LimitRead) LimitAsk {
 // actOnLimit runs the operator's answer to host × harness's limit question
 // once: the question's move is its second choice, and the answer the first
 // line of its resolution.
-func (s Service) actOnLimit(st *State, host, harness string) error {
-	rec := st.Hosts[host]
+func (s Service) actOnLimit(tx *Tx, host, harness string) error {
+	rec := tx.Host(host)
 	ask := rec.Limits[harness]
-	by := resolution(st, ask.Question)
+	by := tx.Resolution(ask.Question)
 	if ask.Acted || by == 0 || len(ask.Tasks) == 0 {
 		return nil
 	}
 	ask.Acted = true
 	rec.Limits[harness] = ask
-	st.Hosts[host] = rec
-	q := st.Updates[ask.Question-1]
-	answer, _, _ := strings.Cut(st.Updates[by-1].Body, "\n")
+	tx.PutHost(host, rec)
+	q := tx.update(ask.Question)
+	answer, _, _ := strings.Cut(tx.update(by).Body, "\n")
 	if len(q.Choices) < 2 || answer != q.Choices[1] {
 		return nil
 	}
@@ -214,7 +214,7 @@ func (s Service) actOnLimit(st *State, host, harness string) error {
 	as := Actor{Name: coordinatorActor.Name, Role: "operator"}
 	var note string
 	if ask.Group {
-		out, err := s.moveHost(st, as, Request{Op: "host-move", ID: host, Move: &MoveRequest{Harness: harness, Confirm: true}})
+		out, err := s.moveHost(tx, as, Request{Op: "host-move", ID: host, Move: &MoveRequest{Harness: harness, Confirm: true}})
 		if note, err = refusedNote(err, by, "move the "+harness+" tasks of "+host); err != nil {
 			return err
 		}
@@ -223,11 +223,11 @@ func (s Service) actOnLimit(st *State, host, harness string) error {
 		}
 	} else {
 		id := ask.Tasks[0]
-		if at := st.Attempts[st.Items[id].Attempt]; at.State == "ended" || at.Host != host || at.Harness != harness {
-			s.hostNote(st, host, fmt.Sprintf("As answered in update %d, the coordinator would move %s, but it no longer runs %s on %s: nothing was moved.", by, id, harness, host))
+		if at := tx.attempt(tx.item(id).Attempt); at.State == "ended" || at.Host != host || at.Harness != harness {
+			s.hostNote(tx, host, fmt.Sprintf("As answered in update %d, the coordinator would move %s, but it no longer runs %s on %s: nothing was moved.", by, id, harness, host))
 			return nil
 		}
-		_, err := s.moveTask(st, as, Request{Op: "task-move", ID: id, Move: &MoveRequest{Host: ask.MoveHost, Harness: ask.MoveHarness, Confirm: true}})
+		_, err := s.moveTask(tx, as, Request{Op: "task-move", ID: id, Move: &MoveRequest{Host: ask.MoveHost, Harness: ask.MoveHarness, Confirm: true}})
 		if note, err = refusedNote(err, by, "move "+id); err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func (s Service) actOnLimit(st *State, host, harness string) error {
 			note = fmt.Sprintf("As answered in update %d, the coordinator moved %s to %s on %s.", by, id, ask.MoveHarness, ask.MoveHost)
 		}
 	}
-	s.hostNote(st, host, note)
+	s.hostNote(tx, host, note)
 	return nil
 }
 

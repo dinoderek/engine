@@ -17,21 +17,23 @@ func TestDeathDuringUnresolvedQuestionParksTheTaskUntilAnswered(t *testing.T) {
 	pass(t, c) // the coordinator sees the session live
 	claim(t, c, task)
 	execute(t, c.Service, control.Request{Op: "ask", ID: task.ID, Body: "Need an operator decision"})
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Items[task.ID].Attempt
 	h.status.Windows[0].Alive = false
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if at := st.Attempts[first]; at.State != "ended" || at.Reason != control.EndVanished || st.Items[task.ID].State != "needs-human" {
 		t.Fatalf("a session that died during a question failed its task: %+v %s", at, st.Items[task.ID].State)
 	}
 	if h.calls != 1 || st.Items[task.ID].Attempt != first {
 		t.Fatal("a task parked on an operator question was dispatched again")
 	}
-	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.OwnQuestion(&st, task.ID), Body: "Take the first option."})
+	var question int
+	inTx(t, c.Service.Store, func(tx *control.Tx) { question = control.OwnQuestion(tx, task.ID) })
+	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: question, Body: "Take the first option."})
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	resumed := st.Attempts[st.Items[task.ID].Attempt]
 	if resumed.ID == first || st.Items[task.ID].State != "running" || !h.launches[resumed.RunID].Spawn.Resume {
 		t.Fatalf("the answered task was not dispatched again as a resume: %+v", resumed)
@@ -50,7 +52,7 @@ func TestPlaceholderRunCannotEndOrCompleteDispatch(t *testing.T) {
 		t.Fatal("incomplete dispatch treated as ended")
 	}
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Attempts[out.Attempt.ID].Window == "" || st.Items[task.ID].State != "running" {
 		t.Fatal("placeholder was adopted")
 	}
@@ -69,11 +71,11 @@ func TestWaitingMessagesAndCompletedSessionCleanup(t *testing.T) {
 	if wakes != 1 {
 		t.Fatalf("woke %d times", wakes)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	execute(t, c.Service, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "done"})
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if st.Items[plan.ID].Coordinating || st.Attempts[st.Items[task.ID].Attempt].State != "ended" || len(h.status.Windows) != 0 {
 		t.Fatal("completed sessions not cleaned up")
 	}
@@ -96,7 +98,7 @@ func TestQuotaMarkersAreIndependentForEachReset(t *testing.T) {
 	}
 	now = now.Add(11 * time.Minute)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	if at.StuckFor != h.status.Windows[0].ResetsAt {
 		t.Fatal("stuck alert suppressed")
@@ -116,7 +118,7 @@ func TestRetriedTaskDispatchesAsAResume(t *testing.T) {
 	}
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	retry := st.Attempts[st.Items[task.ID].Attempt]
 	if retry.ID == first.ID {
 		t.Fatal("the retried task was not dispatched again")
@@ -127,18 +129,25 @@ func TestRetriedTaskDispatchesAsAResume(t *testing.T) {
 }
 
 func TestOnlyAnEarlierAttemptThatRanMakesAResume(t *testing.T) {
-	st := control.State{Attempts: map[string]control.Attempt{
-		"a1": {ID: "a1", Item: "t1", State: "ended"},
-		"a2": {ID: "a2", Item: "t1", State: "dispatching"},
-		"a3": {ID: "a3", Item: "t2", State: "ended", Window: "@3"},
-	}}
-	if hadEarlierAttempt(st, "t1", "a2") {
-		t.Error("an attempt that never opened a window, such as a refused one, made a resume")
-	}
-	st.Attempts["a1"] = control.Attempt{ID: "a1", Item: "t1", State: "ended", Window: "@1"}
-	if !hadEarlierAttempt(st, "t1", "a2") || hadEarlierAttempt(st, "t1", "a1") {
-		t.Error("only another attempt of the same task that ran makes a resume")
-	}
+	store := seeded(t, nil, []control.Attempt{
+		{ID: "a1", Item: "t1", State: "ended"},
+		{ID: "a2", Item: "t1", State: "dispatching"},
+		{ID: "a3", Item: "t2", State: "ended", Window: "@3"},
+	})
+	inTx(t, store, func(tx *control.Tx) {
+		if hadEarlierAttempt(tx, "t1", "a2") {
+			t.Error("an attempt that never opened a window, such as a refused one, made a resume")
+		}
+	})
+	mutate(t, store, func(tx *control.Tx) error {
+		tx.PutAttempt(control.Attempt{ID: "a1", Item: "t1", State: "ended", Window: "@1"})
+		return nil
+	})
+	inTx(t, store, func(tx *control.Tx) {
+		if !hadEarlierAttempt(tx, "t1", "a2") || hadEarlierAttempt(tx, "t1", "a1") {
+			t.Error("only another attempt of the same task that ran makes a resume")
+		}
+	})
 }
 
 func TestRebootWhileThePlanIsStoppedLeavesTheTaskResumable(t *testing.T) {
@@ -147,7 +156,7 @@ func TestRebootWhileThePlanIsStoppedLeavesTheTaskResumable(t *testing.T) {
 	c.Service.Now = func() time.Time { return now }
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Attempts[st.Items[task.ID].Attempt]
 	now = now.Add(time.Minute)
 	execute(t, c.Service, control.Request{Op: "stop", ID: plan.ID})
@@ -155,12 +164,12 @@ func TestRebootWhileThePlanIsStoppedLeavesTheTaskResumable(t *testing.T) {
 	now = now.Add(time.Hour)
 	execute(t, c.Service, control.Request{Op: "run", ID: plan.ID})
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if at := st.Attempts[first.ID]; at.Reason != control.EndVanished || st.Items[task.ID].State != "running" {
 		t.Fatalf("a window lost while the plan was stopped failed its task: %+v %s", at, st.Items[task.ID].State)
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	resumed := st.Attempts[st.Items[task.ID].Attempt]
 	if resumed.ID == first.ID || !h.launches[resumed.RunID].Spawn.Resume {
 		t.Fatalf("the resumable task was not dispatched again as a resume: %+v", resumed)
@@ -180,7 +189,7 @@ func TestDeathAfterCoordinationRestartedCounts(t *testing.T) {
 	h.status.Windows[0].Alive = false
 	now = now.Add(time.Minute)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	if at.Reason != control.EndVanished || !at.Crashed || st.Items[task.ID].State != "running" || h.calls != 1 {
 		t.Fatalf("a session that died after coordination restarted was not a counted death: %+v %s", at, st.Items[task.ID].State)
@@ -190,13 +199,13 @@ func TestDeathAfterCoordinationRestartedCounts(t *testing.T) {
 func TestAPlanQuestionDoesNotStopTheRecoveryOfAVanishedTask(t *testing.T) {
 	c, m, task, _ := requested(t, nil)
 	pass(t, c) // the coordinator sees the session live
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Items[task.ID].Attempt
 	execute(t, c.Service, control.Request{Op: "ask", ID: st.Items[task.ID].Plan, Body: "Is the plan still right?"})
 	m.status.Windows = nil
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	resumed := st.Attempts[st.Items[task.ID].Attempt]
 	if st.Attempts[first].Reason != control.EndVanished || resumed.ID == first || !m.launches[resumed.RunID].Spawn.Resume {
 		t.Fatalf("the vanished task was not resumed under an open plan question: %+v", resumed)

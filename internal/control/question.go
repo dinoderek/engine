@@ -75,21 +75,10 @@ func validChoice(c string) error {
 	return nil
 }
 
-// resolution is the update that resolved question id, by the operator or
-// by their answer typed into the asking session's pane, or 0.
-func resolution(st *State, id int) int {
-	for _, u := range st.Updates {
-		if u.ReplyTo == id && (u.Kind == "resolved" || u.Kind == KindPaneAnswer) {
-			return u.ID
-		}
-	}
-	return 0
-}
-
 // alreadyResolved refuses a resolution of question id once an update has
 // resolved it, naming that update.
-func alreadyResolved(st *State, id int) error {
-	by := resolution(st, id)
+func alreadyResolved(tx *Tx, id int) error {
+	by := tx.Resolution(id)
 	if by == 0 {
 		return nil
 	}

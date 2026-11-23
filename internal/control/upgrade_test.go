@@ -14,7 +14,7 @@ func TestTheUpgradeOpMarksStartAndEndForTheOperatorOnly(t *testing.T) {
 	reject(t, s, op, Request{Op: "upgrade", State: "begin"}, 400)
 
 	call(t, s, op, Request{Op: "upgrade", State: UpgradeEnd})
-	if st, _ := s.Store.Snapshot(); !st.Upgrade.Start.IsZero() || !st.Upgrade.End.IsZero() {
+	if st, _ := s.Store.snapshot(); !st.Upgrade.Start.IsZero() || !st.Upgrade.End.IsZero() {
 		t.Fatalf("an end with no start recorded %+v", st.Upgrade)
 	}
 	call(t, s, op, Request{Op: "upgrade", State: UpgradeStart})
@@ -22,14 +22,14 @@ func TestTheUpgradeOpMarksStartAndEndForTheOperatorOnly(t *testing.T) {
 	call(t, s, op, Request{Op: "upgrade", State: UpgradeEnd})
 	now = t0.Add(20 * time.Minute)
 	call(t, s, op, Request{Op: "upgrade", State: UpgradeEnd})
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if !st.Upgrade.Start.Equal(t0) || !st.Upgrade.End.Equal(t0.Add(10*time.Minute)) {
 		t.Fatalf("upgrade %+v, want the start and the first end", st.Upgrade)
 	}
 
 	now = t0.Add(time.Hour)
 	call(t, s, op, Request{Op: "upgrade", State: UpgradeStart})
-	if st, _ := s.Store.Snapshot(); !st.Upgrade.Start.Equal(now) || !st.Upgrade.End.IsZero() {
+	if st, _ := s.Store.snapshot(); !st.Upgrade.Start.Equal(now) || !st.Upgrade.End.IsZero() {
 		t.Fatalf("a new start left %+v, want it alone, running", st.Upgrade)
 	}
 }
@@ -42,12 +42,12 @@ func TestTheUpgradeRecordSurvivesAStoreReopen(t *testing.T) {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(path, nil)
+	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
-	st, _ := reopened.Snapshot()
+	st, _ := reopened.snapshot()
 	if want := s.Now(); !st.Upgrade.Start.Equal(want) || !st.Upgrade.End.Equal(want) {
 		t.Errorf("upgrade %+v after reopen, want start and end %v", st.Upgrade, want)
 	}
@@ -80,10 +80,11 @@ func TestDuringUpgrade(t *testing.T) {
 		{"seen live while one runs", running, start.Add(-time.Hour), start.Add(30 * time.Minute), start.Add(31 * time.Minute), true},
 		{"seen live after an unended one's bound", running, start.Add(-time.Hour), start.Add(UpgradeMax + time.Second), start.Add(2 * UpgradeMax), false},
 	} {
-		st := emptyState()
+		st := newRecords()
 		st.Upgrade = c.upgrade
 		at := Attempt{Started: c.started, LiveAt: c.live}
-		if got := duringUpgrade(&st, at, c.readAt); got != c.upgraded {
+		tx := st.load(t)
+		if got := duringUpgrade(tx, at, c.readAt); got != c.upgraded {
 			t.Errorf("%s: during the upgrade %v, want %v", c.name, got, c.upgraded)
 		}
 	}
@@ -118,10 +119,11 @@ func TestADeathDuringAnUpgradeResumesUncountedWithItsTail(t *testing.T) {
 			c.at.ID, c.at.Item, c.at.State, c.at.Window, c.at.Tail = "a99", "t2", "running", "@1", "the tail"
 			st.Attempts[c.at.ID] = c.at
 			s := Service{Now: func() time.Time { return c.readAt }}
-			at := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
-			if at.Reason != c.reason || at.Upgraded != c.upgraded || at.Early != c.early || st.Items["t2"].State != c.state {
+			tx := st.load(t)
+			at := s.endDead(tx, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
+			if at.Reason != c.reason || at.Upgraded != c.upgraded || at.Early != c.early || tx.item("t2").State != c.state {
 				t.Fatalf("ended %s upgraded %v early %v, task %s; want %s upgraded %v early %v, task %s",
-					at.Reason, at.Upgraded, at.Early, st.Items["t2"].State, c.reason, c.upgraded, c.early, c.state)
+					at.Reason, at.Upgraded, at.Early, tx.item("t2").State, c.reason, c.upgraded, c.early, c.state)
 			}
 			if c.upgraded && (at.Crashed || at.Tail != "the tail") {
 				t.Errorf("an upgrade death crashed %v with tail %q; want no crash, its tail kept", at.Crashed, at.Tail)
@@ -138,7 +140,8 @@ func TestAnUpgradeDeathNeitherCountsNorResetsTheCap(t *testing.T) {
 		at := Attempt{ID: "a99", Item: "t2", State: "running", Window: "@1", Started: start, LiveAt: start.Add(time.Hour)}
 		st.Attempts[at.ID] = at
 		s := Service{Now: func() time.Time { return start.Add(2 * time.Hour) }}
-		if got := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, at, "gone"); got.Reason != EndFailed {
+		tx := st.load(t)
+		if got := s.endDead(tx, Actor{Name: "coordinator", Role: "coordinator"}, at, "gone"); got.Reason != EndFailed {
 			t.Errorf("with %+v between two crashes the third ended %s, want failed", between, got.Reason)
 		}
 	}
@@ -147,7 +150,7 @@ func TestAnUpgradeDeathNeitherCountsNorResetsTheCap(t *testing.T) {
 func TestAPlannerDeadDuringAnUpgradeIsUncounted(t *testing.T) {
 	start := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
 	for _, wrote := range []bool{true, false} {
-		st := emptyState()
+		st := newRecords()
 		st.Items["p1"] = Item{ID: "p1", Kind: "plan", State: "approved", Attempt: "a2", Coordinating: true}
 		if wrote {
 			st.Items["t1"] = Item{ID: "t1", Kind: "task", Plan: "p1", State: "todo"}
@@ -157,13 +160,14 @@ func TestAPlannerDeadDuringAnUpgradeIsUncounted(t *testing.T) {
 		st.Attempts[at.ID] = at
 		st.Upgrade = UpgradeRecord{Start: start}
 		s := Service{Now: func() time.Time { return start.Add(2 * time.Minute) }}
-		got := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, at, "gone")
+		tx := st.load(t)
+		got := s.endDead(tx, Actor{Name: "coordinator", Role: "coordinator"}, at, "gone")
 		want := EndVanished
 		if !wrote {
 			want = EndEarlyDeath
 		}
-		if got.Reason != want || !got.Upgraded || got.Crashed || got.Early || !st.Items["p1"].Coordinating {
-			t.Errorf("wrote tasks %v: ended %+v, coordinating %v; want %s, upgraded, uncounted", wrote, got, st.Items["p1"].Coordinating, want)
+		if got.Reason != want || !got.Upgraded || got.Crashed || got.Early || !tx.item("p1").Coordinating {
+			t.Errorf("wrote tasks %v: ended %+v, coordinating %v; want %s, upgraded, uncounted", wrote, got, tx.item("p1").Coordinating, want)
 		}
 	}
 }

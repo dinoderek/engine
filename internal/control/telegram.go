@@ -1,10 +1,9 @@
 package control
 
 import (
-	"encoding/json"
+	"context"
+	"database/sql"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -28,73 +27,69 @@ const telegramSchema = `CREATE TABLE IF NOT EXISTS telegram_deliveries (
 
 // TelegramState reads delivery state independently of command records.
 func (s *Store) TelegramState() ([]TelegramDelivery, int64, time.Time, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.lock == nil {
 		return nil, 0, time.Time{}, errors.New("store is closed")
 	}
-	out, err := s.sql("SELECT update_id,message_id,text,status,settled FROM telegram_deliveries ORDER BY update_id;")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	tx, err := s.readers.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, 0, time.Time{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.Query("SELECT update_id,message_id,text,status,settled FROM telegram_deliveries ORDER BY update_id")
 	if err != nil {
 		return nil, 0, time.Time{}, err
 	}
 	var deliveries []TelegramDelivery
-	// SQLite encodes booleans as integers.
-	var rows []struct {
-		Update  int   `json:"update_id"`
-		Message int64 `json:"message_id"`
-		Text    string
-		Status  string
-		Settled int
-	}
-	if len(strings.TrimSpace(string(out))) > 0 {
-		if err = json.Unmarshal(out, &rows); err != nil {
+	for rows.Next() {
+		var d TelegramDelivery
+		if err = rows.Scan(&d.Update, &d.Message, &d.Text, &d.Status, &d.Settled); err != nil {
+			_ = rows.Close()
 			return nil, 0, time.Time{}, err
 		}
+		deliveries = append(deliveries, d)
 	}
-	for _, r := range rows {
-		deliveries = append(deliveries, TelegramDelivery{Update: r.Update, Message: r.Message, Text: r.Text, Status: r.Status, Settled: r.Settled != 0})
-	}
-	out, err = s.sql("SELECT offset,digest_at FROM telegram_state WHERE id=1;")
+	err = errors.Join(rows.Err(), rows.Close())
 	if err != nil {
 		return nil, 0, time.Time{}, err
 	}
-	var meta []struct {
-		Offset int64
-		Digest string `json:"digest_at"`
-	}
-	if err = json.Unmarshal(out, &meta); err != nil {
+	var offset int64
+	var digest string
+	if err = tx.QueryRow("SELECT offset,digest_at FROM telegram_state WHERE id=1").Scan(&offset, &digest); err != nil {
 		return nil, 0, time.Time{}, err
 	}
-	if len(meta) != 1 {
-		return nil, 0, time.Time{}, errors.New("missing Telegram state")
-	}
 	var at time.Time
-	if meta[0].Digest != "" {
-		if at, err = time.Parse(time.RFC3339Nano, meta[0].Digest); err != nil {
+	if digest != "" {
+		if at, err = time.Parse(time.RFC3339Nano, digest); err != nil {
 			return nil, 0, time.Time{}, err
 		}
 	}
-	return deliveries, meta[0].Offset, at, nil
+	return deliveries, offset, at, tx.Commit()
 }
 
 // SaveTelegram atomically records deliveries and, when nonzero, the poll offset
 // and digest time. Offset never moves backwards when the two loops save.
 func (s *Store) SaveTelegram(deliveries []TelegramDelivery, offset int64, digest time.Time) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.lock == nil {
 		return errors.New("store is closed")
 	}
-	var sql strings.Builder
-	sql.WriteString("BEGIN IMMEDIATE;\n")
-	for _, d := range deliveries {
-		fmt.Fprintf(&sql, "INSERT INTO telegram_deliveries(update_id,message_id,text,status,settled) VALUES(%d,%d,%s,%s,%t) ON CONFLICT(update_id) DO UPDATE SET message_id=excluded.message_id,text=excluded.text,status=excluded.status,settled=excluded.settled;\n", d.Update, d.Message, literal(d.Text), literal(d.Status), d.Settled)
-	}
-	fmt.Fprintf(&sql, "UPDATE telegram_state SET offset=max(offset,%d)", offset)
-	if !digest.IsZero() {
-		fmt.Fprintf(&sql, ",digest_at=%s", literal(digest.UTC().Format(time.RFC3339Nano)))
-	}
-	sql.WriteString(" WHERE id=1; COMMIT;")
-	_, err := s.sql(sql.String())
-	return err
+	return s.transaction(func(tx *sql.Tx) error {
+		for _, d := range deliveries {
+			_, err := tx.Exec("INSERT INTO telegram_deliveries(update_id,message_id,text,status,settled) VALUES(?,?,?,?,?) ON CONFLICT(update_id) DO UPDATE SET message_id=excluded.message_id,text=excluded.text,status=excluded.status,settled=excluded.settled", d.Update, d.Message, d.Text, d.Status, d.Settled)
+			if err != nil {
+				return err
+			}
+		}
+		if digest.IsZero() {
+			_, err := tx.Exec("UPDATE telegram_state SET offset=max(offset,?) WHERE id=1", offset)
+			return err
+		}
+		_, err := tx.Exec("UPDATE telegram_state SET offset=max(offset,?),digest_at=? WHERE id=1", offset, digest.UTC().Format(time.RFC3339Nano))
+		return err
+	})
 }

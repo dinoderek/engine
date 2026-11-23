@@ -65,9 +65,10 @@ func TestTheVanishRule(t *testing.T) {
 				st.Updates = append(st.Updates, Update{ID: 1, Item: "t2", Kind: "ask", RequiresReply: true})
 			}
 			s := Service{Now: func() time.Time { return live.Add(time.Hour) }}
-			at := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
-			if at.Reason != c.reason || at.Crashed != c.crashed || at.Early && c.at.HostLost || st.Items["t2"].State != c.state {
-				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, st.Items["t2"].State, c.reason, c.crashed, c.state)
+			tx := st.load(t)
+			at := s.endDead(tx, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
+			if at.Reason != c.reason || at.Crashed != c.crashed || at.Early && c.at.HostLost || tx.item("t2").State != c.state {
+				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, tx.item("t2").State, c.reason, c.crashed, c.state)
 			}
 		})
 	}
@@ -75,10 +76,10 @@ func TestTheVanishRule(t *testing.T) {
 
 // vanishState holds plan p1 and its running task t2, whose current attempt
 // is a99, after the earlier attempts before, oldest first.
-func vanishState(task, plan Item, before []prior) State {
+func vanishState(task, plan Item, before []prior) records {
 	plan.ID, plan.Kind = "p1", "plan"
 	task.ID, task.Kind, task.Plan, task.State, task.Attempt = "t2", "task", "p1", "running", "a99"
-	st := emptyState()
+	st := newRecords()
 	st.Items[plan.ID], st.Items[task.ID] = plan, task
 	for i, p := range before {
 		id := fmt.Sprintf("a%d", i+1)
@@ -184,14 +185,7 @@ func launched(t *testing.T, s Service, id string) {
 // seenLive records that a coordinator pass saw attempt id's window live.
 func seenLive(t *testing.T, s Service, id string) {
 	t.Helper()
-	if err := s.Store.Transaction(func(st *State) error {
-		at := st.Attempts[id]
-		at.LiveAt = s.now()
-		st.Attempts[id] = at
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	editAttempt(t, s.Store, id, func(at *Attempt) { at.LiveAt = s.now() })
 }
 
 // The operator's reconcile of a dispatch that never launched, which its host

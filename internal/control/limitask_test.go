@@ -52,7 +52,7 @@ func sawLimits(t *testing.T, s Service, reads ...LimitRead) {
 }
 
 // resolutions are the bodies of the updates resolving question q.
-func resolutions(st State, q int) []string {
+func resolutions(st records, q int) []string {
 	var out []string
 	for _, u := range st.Updates {
 		if u.ReplyTo == q && u.Kind == "resolved" {
@@ -213,7 +213,7 @@ func TestAnAnsweredQuestionCoversItsSessionsUntilTheirLimitEnds(t *testing.T) {
 }
 
 // movedOne checks that the answer moved t1 alone, to claude on spare.
-func movedOne(t *testing.T, st State, ts []Item) {
+func movedOne(t *testing.T, st records, ts []Item) {
 	at := st.Attempts[st.Items[ts[0].ID].Attempt]
 	if at.Reason != EndMoved || at.MoveHost != "spare" || at.MoveHarness != "claude" || at.MovedBlind {
 		t.Errorf("t1's attempt %+v", at)
@@ -226,7 +226,7 @@ func movedOne(t *testing.T, st State, ts []Item) {
 // movedSeveral checks that the answer paused devbox and moved its claude
 // tasks, t1, t4 and t5, off it, and only those: t2 runs codex on devbox and
 // t3 claude on spare.
-func movedSeveral(t *testing.T, st State, ts []Item) {
+func movedSeveral(t *testing.T, st records, ts []Item) {
 	if !st.Hosts["devbox"].Paused {
 		t.Errorf("devbox %+v", st.Hosts["devbox"])
 	}
@@ -242,7 +242,7 @@ func TestEachAnswerToALimitQuestionRunsOnce(t *testing.T) {
 	for name, c := range map[string]struct {
 		read   func([]Item) LimitRead
 		answer string
-		check  func(*testing.T, State, []Item)
+		check  func(*testing.T, records, []Item)
 		note   string
 	}{
 		"wait": {read: func(ts []Item) LimitRead { return one(ts[0].ID, true) }, answer: ChoiceWaitReset,

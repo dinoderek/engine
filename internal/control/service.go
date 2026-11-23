@@ -1,7 +1,7 @@
 package control
 
 import (
-	"cmp"
+	"context"
 	"encoding/json"
 	"slices"
 	"sort"
@@ -21,6 +21,11 @@ type Service struct {
 	Hosts func() HostStatus
 }
 
+// write runs fn in the store's one writing transaction.
+func (s Service) write(fn func(*Tx) error) error {
+	return s.Store.Write(context.Background(), fn)
+}
+
 func (s Service) now() time.Time {
 	if s.Now != nil {
 		return s.Now().UTC()
@@ -29,7 +34,7 @@ func (s Service) now() time.Time {
 }
 
 // readOps change no record: each runs on a view, beside the others.
-var readOps = []string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view", "host-status"}
+var readOps = []string{"get", "list", "plan-view", "updates", "inbox", "attempts", "merge-queue", "session-view", "host-status", "overview", "plan-detail"}
 
 // Execute deduplicates successful writes by actor and caller-supplied request key.
 func (s Service) Execute(a Actor, r Request) (Response, error) {
@@ -42,42 +47,52 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 	}
 	var out Response
 	write := !slices.Contains(readOps, r.Op)
-	run := s.Store.Transaction
+	run := s.Store.Write
 	if !write {
-		run = s.Store.View
+		run = s.Store.Read
 	}
-	err := run(func(st *State) error {
-		if err := authorizeExecution(st, a); err != nil {
-			return err
-		}
-		if r.Op == "attempt-reconcile" {
-			if err := stillChecked(st, r.ID, checked); err != nil {
-				return err
-			}
-		}
-		if write && (r.Key == "" || len(r.Key) > 200) {
-			return problem(400, "a request key of 1–200 characters is required")
-		}
-		key := fingerprint([]string{a.Name, a.Attempt, r.Key})
-		hash := fingerprint(digested(r))
-		if prev, ok := st.Receipts[key]; write && ok {
-			if prev.Digest != hash {
-				return problem(409, "request key was already used for a different command")
-			}
-			out = prev.Response
-			return nil
-		}
+	err := run(context.Background(), func(tx *Tx) error {
 		var err error
-		out, err = s.apply(st, a, r)
-		if err != nil {
-			return err
-		}
-		if write {
-			st.Receipts[key] = receipt{Digest: hash, Response: out}
-		}
-		return nil
+		out, err = s.executeIn(tx, a, r, checked)
+		return err
 	})
 	return out, err
+}
+
+// executeIn runs r in tx: a write first sweeps the expired receipts, then
+// replays its request key's receipt or applies the command and stores one.
+func (s Service) executeIn(tx *Tx, a Actor, r Request, checked string) (Response, error) {
+	write := !slices.Contains(readOps, r.Op)
+	if err := authorizeExecution(tx, a); err != nil {
+		return Response{}, err
+	}
+	if r.Op == "attempt-reconcile" {
+		if err := stillChecked(tx, r.ID, checked); err != nil {
+			return Response{}, err
+		}
+	}
+	if write && (r.Key == "" || len(r.Key) > 200) {
+		return Response{}, problem(400, "a request key of 1–200 characters is required")
+	}
+	if write {
+		s.sweepReceipts(tx)
+	}
+	key := fingerprint([]string{a.Name, a.Attempt, r.Key})
+	hash := fingerprint(digested(r))
+	if prev, ok := tx.Receipt(key); write && ok {
+		if prev.Digest != hash {
+			return Response{}, problem(409, "request key was already used for a different command")
+		}
+		return prev.Response, nil
+	}
+	out, err := s.apply(tx, a, r)
+	if err != nil {
+		return Response{}, err
+	}
+	if write {
+		tx.PutReceipt(key, receipt{Digest: hash, Response: out}, s.now())
+	}
+	return out, nil
 }
 
 // checkReconcile runs the operator's attempt reconcile's host check and
@@ -90,19 +105,23 @@ func (s Service) checkReconcile(a Actor, r Request) (string, error) {
 	if s.Reconcile == nil || r.Body == "" {
 		return "", &Problem{Status: 409, Reason: ReasonReconcileRefused, Message: "host reconciliation and evidence are required"}
 	}
-	st, err := s.Store.Snapshot()
+	var state string
+	err := s.Store.Read(context.Background(), func(tx *Tx) error {
+		at, _ := tx.Attempt(r.ID)
+		state = at.State
+		return nil
+	})
 	if err != nil {
 		return "", err
 	}
-	state := st.Attempts[r.ID].State
 	return state, s.Reconcile(r.ID)
 }
 
 // stillChecked refuses a reconcile whose attempt moved on after its host
 // check, such as a dispatch a coordinator pass launched meanwhile: the check
 // never confirmed the state it is in now.
-func stillChecked(st *State, id, checked string) error {
-	at, ok := st.Attempts[id]
+func stillChecked(tx *Tx, id, checked string) error {
+	at, ok := tx.Attempt(id)
 	if !ok || at.State == checked || at.State == "ended" {
 		return nil
 	}
@@ -110,18 +129,18 @@ func stillChecked(st *State, id, checked string) error {
 		Message: "execution moved from " + checked + " to " + at.State + " while its host was checked; reconcile again"}
 }
 
-func authorizeExecution(st *State, a Actor) error {
+func authorizeExecution(tx *Tx, a Actor) error {
 	if a.Role != "worker" {
 		return nil
 	}
-	at, ok := st.Attempts[a.Attempt]
-	if !ok || at.State == "ended" || st.Items[at.Item].Attempt != at.ID {
+	at, ok := tx.Attempt(a.Attempt)
+	if item, _ := tx.Item(at.Item); !ok || at.State == "ended" || item.Attempt != at.ID {
 		return problem(403, "execution credential is no longer active")
 	}
 	return nil
 }
 
-func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
+func (s Service) apply(tx *Tx, a Actor, r Request) (Response, error) {
 	if err := questionFields(r); err != nil {
 		return Response{}, err
 	}
@@ -130,112 +149,105 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 	}
 	switch r.Op {
 	case "plan-view":
-		return planView(st, a, r.ID)
+		return planView(tx, a, r.ID)
 	case "session-view":
-		return s.sessionView(st, a)
+		return s.sessionView(tx, a)
+	case "overview":
+		return s.overview(tx, a)
+	case "plan-detail":
+		return s.planDetail(tx, a, r.ID)
 	case "host-status":
 		return s.hostStatus(a)
 	case "get", "list", "attempts":
-		return read(st, a, r)
-	case "create":
-		return s.create(st, a, r)
-	case "edit":
-		return s.edit(st, a, r)
-	case "complete-external":
-		return s.completeExternal(st, a, r)
-	case "approve", "run", "stop", "state":
-		return s.transition(st, a, r)
+		return read(tx, a, r)
 	case "updates", "inbox", "say", "ask", "reply", "ack", "resolve":
-		return s.messages(st, a, r)
+		return s.messages(tx, a, r)
 	case "ack-all":
-		return s.ackAll(st, a, r)
+		return s.ackAll(tx, a, r)
+	case "create":
+		return s.create(tx, a, r)
+	case "edit":
+		return s.edit(tx, a, r)
+	case "complete-external":
+		return s.completeExternal(tx, a, r)
+	case "approve", "run", "stop", "state":
+		return s.transition(tx, a, r)
 	case "claim":
-		return s.reserve(st, a, r)
+		return s.reserve(tx, a, r)
 	case "attempt-reconcile":
-		return s.endAttempt(st, a, r)
+		return s.endAttempt(tx, a, r)
 	case "task-stop":
-		return s.stopTask(st, a, r)
+		return s.stopTask(tx, a, r)
 	case "task-resume":
-		return s.resumeTask(st, a, r)
+		return s.resumeTask(tx, a, r)
 	case "task-move":
-		return s.moveTask(st, a, r)
+		return s.moveTask(tx, a, r)
 	case "host-pause", "host-resume":
-		return s.pauseHost(st, a, r)
+		return s.pauseHost(tx, a, r)
 	case "host-move":
-		return s.moveHost(st, a, r)
+		return s.moveHost(tx, a, r)
 	case "merge-request":
-		return s.mergeRequest(st, a, r)
+		return s.mergeRequest(tx, a, r)
 	case "merge-queue":
-		return mergeQueue(st, a, r.ID)
+		return mergeQueue(tx, a, r.ID)
 	case "cleaned":
-		return s.cleaned(st, a, r)
+		return s.cleaned(tx, a, r)
 	case "pane-input":
-		return s.paneInput(st, a, r)
+		return s.paneInput(tx, a, r)
 	case "upgrade":
-		return s.upgrade(st, a, r)
+		return s.upgrade(tx, a, r)
 	default:
 		return Response{}, problem(400, "unknown operation %q", r.Op)
 	}
 }
 
 // get is one item, with its merge queue entry if it has one.
-func get(st *State, id string) (Response, error) {
-	item, ok := st.Items[id]
+func get(tx *Tx, id string) (Response, error) {
+	item, ok := tx.Item(id)
 	if !ok {
 		return Response{}, problem(404, "unknown item %s", id)
 	}
-	item = withStatus(st, item)
+	item = withStatus(tx, item)
 	out := Response{Item: &item}
-	if e, queued := st.Queue[item.ID]; queued {
+	if e, queued := tx.QueueEntry(item.ID); queued {
 		out.Queue = []QueueEntry{e}
 	}
 	return out, nil
 }
 
-func read(st *State, a Actor, r Request) (Response, error) {
-	if r.ID != "" && !readable(st, a, r.ID) {
+func read(tx *Tx, a Actor, r Request) (Response, error) {
+	if r.ID != "" && !readable(tx, a, r.ID) {
 		return Response{}, problem(403, "item is outside this execution's read scope")
 	}
 	if r.Op == "get" {
-		return get(st, r.ID)
+		return get(tx, r.ID)
 	}
 	out := Response{}
 	if r.Op == "attempts" {
-		for _, at := range st.Attempts {
-			if !readable(st, a, at.Item) {
-				continue
-			}
-			if r.ID == "" || at.Item == r.ID {
+		for _, at := range tx.AttemptsFor(r.ID) {
+			if readable(tx, a, at.Item) {
 				out.Attempts = append(out.Attempts, at)
 			}
 		}
-		// Oldest first; attempts started in the same instant by their number.
-		slices.SortFunc(out.Attempts, func(a, b Attempt) int { return cmp.Or(a.Started.Compare(b.Started), Number(a.ID)-Number(b.ID)) })
+		oldestFirst(out.Attempts)
 		return out, nil
 	}
-	for _, item := range st.Items {
-		if !readable(st, a, item.ID) {
-			continue
+	for _, item := range tx.ItemsByKindUnder(r.State, r.ID) {
+		if readable(tx, a, item.ID) {
+			out.Items = append(out.Items, withStatus(tx, item))
 		}
-		if r.State != "" && item.Kind != r.State {
-			continue
-		}
-		if r.ID != "" && item.Repo != r.ID && item.Plan != r.ID {
-			continue
-		}
-		out.Items = append(out.Items, withStatus(st, item))
 	}
 	sort.Slice(out.Items, func(i, j int) bool { return Number(out.Items[i].ID) < Number(out.Items[j].ID) })
 	return out, nil
 }
 
-func workerItem(st *State, a Actor, id string) bool {
+func workerItem(tx *Tx, a Actor, id string) bool {
 	if a.Role == "operator" || a.Role == "coordinator" {
 		return true
 	}
-	at := st.Attempts[a.Attempt]
-	owner := st.Items[at.Item]
-	item := st.Items[id]
+	at := tx.attempt(a.Attempt)
+	owner := tx.item(at.Item)
+	item := tx.item(id)
 	return id == owner.ID || owner.Kind == "plan" && item.Plan == owner.ID
 }
 
@@ -246,7 +258,7 @@ func operator(a Actor) error {
 	return nil
 }
 
-func (s Service) create(st *State, a Actor, r Request) (Response, error) {
+func (s Service) create(tx *Tx, a Actor, r Request) (Response, error) {
 	item := r.Item
 	if strings.TrimSpace(item.Title) == "" {
 		return Response{}, problem(400, "title is required")
@@ -254,22 +266,22 @@ func (s Service) create(st *State, a Actor, r Request) (Response, error) {
 	if item.ID != "" || item.Version != 0 || item.Attempt != "" || item.Coordinating || item.ApprovedVersion != 0 || item.State != "" || item.Status != "" || item.Question != nil || item.Held {
 		return Response{}, problem(400, "server-owned fields cannot be set on creation")
 	}
-	if err := validateCreation(st, a, item); err != nil {
+	if err := validateCreation(tx, a, item); err != nil {
 		return Response{}, err
 	}
-	item.ID = st.id(map[string]string{"repo": "r", "plan": "p", "task": "t"}[item.Kind])
+	item.ID = tx.NextID(map[string]string{"repo": "r", "plan": "p", "task": "t"}[item.Kind])
 	item.Version = 1
 	item.State = map[string]string{"repo": "active", "plan": "prepare", "task": "todo"}[item.Kind]
-	st.Items[item.ID] = item
-	if err := validateGraph(st, item); err != nil {
+	tx.PutItem(item)
+	if err := validateGraph(tx, item); err != nil {
 		return Response{}, err
 	}
 	r.ID = item.ID
-	st.update(a, r, "created", item.Title, s.now())
+	tx.AppendUpdate(a, r, "created", item.Title, s.now())
 	return Response{Item: &item}, nil
 }
 
-func validateCreation(st *State, a Actor, item Item) error {
+func validateCreation(tx *Tx, a Actor, item Item) error {
 	switch item.Kind {
 	case "repo":
 		if err := operator(a); err != nil {
@@ -278,13 +290,11 @@ func validateCreation(st *State, a Actor, item Item) error {
 		if !validSlug(item.Slug) || item.Remote == "" || strings.HasPrefix(item.Remote, "-") {
 			return problem(400, "repository requires an owner/name slug and a remote")
 		}
-		for _, v := range st.Items {
-			if v.Kind == "repo" && v.Slug == item.Slug {
-				return problem(409, "repository slug already exists")
-			}
+		if _, taken := tx.RepoBySlug(item.Slug); taken {
+			return problem(409, "repository slug already exists")
 		}
 	case "plan", "task":
-		return validateWork(st, a, item)
+		return validateWork(tx, a, item)
 	default:
 		return problem(400, "kind must be repo, plan or task")
 	}
@@ -293,8 +303,8 @@ func validateCreation(st *State, a Actor, item Item) error {
 
 // validateWork checks a new plan or task: a task belongs to an unfinished
 // plan in its repository, and a worker creates only its own plan's tasks.
-func validateWork(st *State, a Actor, item Item) error {
-	repo, ok := st.Items[item.Repo]
+func validateWork(tx *Tx, a Actor, item Item) error {
+	repo, ok := tx.Item(item.Repo)
 	if !ok || repo.Kind != "repo" {
 		return problem(400, "unknown repository")
 	}
@@ -302,23 +312,23 @@ func validateWork(st *State, a Actor, item Item) error {
 		return problem(400, "a task requires its plan; build one task outside a plan with the build skill")
 	}
 	if item.Plan != "" {
-		parent, ok := st.Items[item.Plan]
+		parent, ok := tx.Item(item.Plan)
 		if !ok || parent.Kind != "plan" || parent.Repo != item.Repo || item.Kind != "task" || parent.State == "done" {
 			return problem(400, "invalid parent plan")
 		}
 	}
-	if a.Role == "worker" && (item.Kind != "task" || !workerItem(st, a, item.Plan)) {
+	if a.Role == "worker" && (item.Kind != "task" || !workerItem(tx, a, item.Plan)) {
 		return problem(403, "worker can only create tasks in its own plan")
 	}
 	return nil
 }
 
-func (s Service) edit(st *State, a Actor, r Request) (Response, error) {
-	old, ok := st.Items[r.ID]
+func (s Service) edit(tx *Tx, a Actor, r Request) (Response, error) {
+	old, ok := tx.Item(r.ID)
 	if !ok {
 		return Response{}, problem(404, "unknown item")
 	}
-	if !workerItem(st, a, r.ID) {
+	if !workerItem(tx, a, r.ID) {
 		return Response{}, problem(403, "cannot edit another execution's item")
 	}
 	if old.Kind == "repo" {
@@ -327,7 +337,7 @@ func (s Service) edit(st *State, a Actor, r Request) (Response, error) {
 	if r.Version != old.Version {
 		return Response{}, problem(409, "version is %d", old.Version)
 	}
-	if active(st, old) {
+	if active(tx, old) {
 		return Response{}, problem(409, "stop the active execution before editing its card")
 	}
 	item := r.Item
@@ -343,26 +353,24 @@ func (s Service) edit(st *State, a Actor, r Request) (Response, error) {
 		old.State = "prepare"
 		old.Coordinating = false
 	}
-	st.Items[old.ID] = old
-	if err := validateGraph(st, old); err != nil {
+	tx.PutItem(old)
+	if err := validateGraph(tx, old); err != nil {
 		return Response{}, err
 	}
-	st.update(a, r, "edited", old.Body, s.now())
+	tx.AppendUpdate(a, r, "edited", old.Body, s.now())
 	return Response{Item: &old}, nil
 }
 
-func active(st *State, item Item) bool {
-	at, ok := st.Attempts[item.Attempt]
+func active(tx *Tx, item Item) bool {
+	at, ok := tx.Attempt(item.Attempt)
 	if ok && at.State != "ended" {
 		return true
 	}
 	if item.Kind == "plan" {
-		for _, child := range st.Items {
-			if child.Plan == item.ID {
-				at, ok = st.Attempts[child.Attempt]
-				if ok && at.State != "ended" {
-					return true
-				}
+		for _, child := range tx.ItemsOfPlan(item.ID) {
+			at, ok = tx.Attempt(child.Attempt)
+			if ok && at.State != "ended" {
+				return true
 			}
 		}
 	}
@@ -405,7 +413,7 @@ func Number(id string) int {
 	return n
 }
 
-func validateGraph(st *State, item Item) error {
+func validateGraph(tx *Tx, item Item) error {
 	if item.Kind != "task" && len(item.Depends) > 0 {
 		return problem(400, "only tasks have dependencies")
 	}
@@ -421,7 +429,7 @@ func validateGraph(st *State, item Item) error {
 			continue
 		}
 		seen[id] = true
-		dep, ok := st.Items[id]
+		dep, ok := tx.Item(id)
 		if !ok || dep.Kind != "task" || dep.Repo != item.Repo {
 			return problem(400, "dependency must be a task in this repository")
 		}

@@ -33,7 +33,7 @@ func TestAMoveReleasesTheOldWindowThenResumesWhereItWasSent(t *testing.T) {
 	pass(t, c)
 	pass(t, c)
 	claim(t, c, task)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Items[task.ID].Attempt
 	launches := h.calls
 	c.Service.Hosts = readHosts(c, "devbox")
@@ -44,7 +44,7 @@ func TestAMoveReleasesTheOldWindowThenResumesWhereItWasSent(t *testing.T) {
 		t.Fatalf("first pass after the move: released %v with %v, %d launches, want %d", h.released, h.outcomes, h.calls, launches)
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	second := st.Items[task.ID].Attempt
 	at := st.Attempts[second]
 	if second == first || at.Host != "devbox" || st.Items[task.ID].State != "running" || h.calls != launches+1 {
@@ -75,7 +75,7 @@ func TestAMovedAttemptNeverClaimsALaterSessionsWindow(t *testing.T) {
 		t.Fatalf("the gone window's run was released %v", h.outcomes)
 	}
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason == control.EndMoved || at.Window != "@1" {
 		t.Fatalf("not dispatched again in a window reusing the id: %+v", at)
 	}
@@ -113,7 +113,7 @@ func TestABlindMoveStartsElsewhereAndReleasesTheOldWindowOnReturn(t *testing.T) 
 	pass(t, c)
 	pass(t, c)
 	claim(t, c, task)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Attempts[st.Items[task.ID].Attempt]
 	if first.Host != "devbox" {
 		t.Fatalf("dispatched on %s", first.Host)
@@ -128,7 +128,7 @@ func TestABlindMoveStartsElsewhereAndReleasesTheOldWindowOnReturn(t *testing.T) 
 	}
 	execute(t, c.Service, control.Request{Op: "task-move", ID: task.ID, Move: &control.MoveRequest{Confirm: true}})
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	second := st.Attempts[st.Items[task.ID].Attempt]
 	if second.ID == first.ID || second.Host != "mac" || len(mac.launches) != 1 {
 		t.Fatalf("the blind move did not start on mac: %+v", second)
@@ -181,33 +181,36 @@ func TestABlindMoveOffARebootedHostStillPushesOnReturn(t *testing.T) {
 // A moved attempt on a host gone from hosts.toml has nothing left to
 // release, so it holds no plan; one on a host that cannot be read may.
 func TestAStrayOnAHostGoneFromHostsTomlHoldsNothing(t *testing.T) {
-	st := control.State{Items: map[string]control.Item{"r1": {ID: "r1", Kind: "repo", Slug: "owner/demo"}},
-		Attempts: map[string]control.Attempt{"a2": {ID: "a2", Item: "t3", Host: "old", Window: "@1", Reason: control.EndMoved, State: "ended"}}}
+	store := seeded(t, []control.Item{{ID: "r1", Kind: "repo", Slug: "owner/demo"}},
+		[]control.Attempt{{ID: "a2", Item: "t3", Host: "old", Window: "@1", Reason: control.EndMoved, State: "ended"}})
 	task := control.Item{ID: "t3", Kind: "task", Repo: "r1"}
-	if out, unknown := strays(st, task, reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "devbox"}}}); len(out) != 0 || unknown {
-		t.Errorf("a host gone from hosts.toml: %+v, unknown %v", out, unknown)
-	}
-	if _, unknown := strays(st, task, reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "old", Unreachable: "ssh: exit 255"}}}); !unknown {
-		t.Error("an unreachable host's stray is not unknown")
-	}
+	inTx(t, store, func(tx *control.Tx) {
+		if out, unknown := strays(tx, task, reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "devbox"}}}); len(out) != 0 || unknown {
+			t.Errorf("a host gone from hosts.toml: %+v, unknown %v", out, unknown)
+		}
+		if _, unknown := strays(tx, task, reconcile.Fleet{Hosts: []reconcile.HostLoad{{Name: "old", Unreachable: "ssh: exit 255"}}}); !unknown {
+			t.Error("an unreachable host's stray is not unknown")
+		}
+	})
 }
 
 // The blind move's warning stays in every kickoff until its old window is
 // released, though a session started since has died; a plain move's note
 // is only for the dispatch right after it.
 func TestABlindMovesWarningOutlivesALaterDeath(t *testing.T) {
-	st := control.State{Attempts: map[string]control.Attempt{
-		"a2": {ID: "a2", Item: "t3", Host: "devbox", Reason: control.EndMoved, MovedBlind: true},
-		"a4": {ID: "a4", Item: "t3", Host: "mac", Reason: control.EndVanished, Limited: true},
-	}}
+	moved := control.Attempt{ID: "a2", Item: "t3", Host: "devbox", Reason: control.EndMoved, MovedBlind: true}
+	store := seeded(t, nil, []control.Attempt{moved, {ID: "a4", Item: "t3", Host: "mac", Reason: control.EndVanished, Limited: true}})
 	next := control.Attempt{ID: "a6", Item: "t3"}
-	if text := movedKickoff(st, next); !strings.Contains(text, "off host devbox") || !strings.Contains(text, "engine ask") || strings.Contains(text, "moved this task here") {
-		t.Errorf("after a death since the blind move: %q", text)
-	}
-	at := st.Attempts["a2"]
-	at.MoveReleased = true
-	st.Attempts["a2"] = at
-	if text := movedKickoff(st, next); text != "" {
-		t.Errorf("once the old window was released: %q", text)
-	}
+	inTx(t, store, func(tx *control.Tx) {
+		if text := movedKickoff(tx, next); !strings.Contains(text, "off host devbox") || !strings.Contains(text, "engine ask") || strings.Contains(text, "moved this task here") {
+			t.Errorf("after a death since the blind move: %q", text)
+		}
+	})
+	moved.MoveReleased = true
+	mutate(t, store, func(tx *control.Tx) error { tx.PutAttempt(moved); return nil })
+	inTx(t, store, func(tx *control.Tx) {
+		if text := movedKickoff(tx, next); text != "" {
+			t.Errorf("once the old window was released: %q", text)
+		}
+	})
 }

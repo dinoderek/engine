@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -113,10 +112,13 @@ func (h *host) ControlSpawn(r hostops.ControlRequest) (hostops.Spawned, error) {
 
 func setup(t *testing.T) (*Coordinator, *host, control.Item, control.Item, control.Item) {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 absent")
-	}
-	store, err := control.Open(filepath.Join(t.TempDir(), "db"), nil)
+	return setupAt(t, filepath.Join(t.TempDir(), "db"))
+}
+
+// setupAt is setup, its database at path.
+func setupAt(t *testing.T, path string) (*Coordinator, *host, control.Item, control.Item, control.Item) {
+	t.Helper()
+	store, err := control.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +155,7 @@ func execute(t *testing.T, s control.Service, r control.Request) control.Item {
 // started its work does.
 func claim(t *testing.T, c *Coordinator, task control.Item) {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	_, err := c.Service.Execute(control.Actor{Name: at.ID, Role: "worker", Attempt: at.ID}, control.Request{Op: "say", ID: task.ID, Body: "started", Key: control.Secret()})
 	if err != nil {
@@ -175,7 +177,7 @@ func TestCoordinatorDispatchesWithoutGitHubAndResumesAfterRestart(t *testing.T) 
 	if len(h.launches) != 1 {
 		t.Fatalf("launches: %v", h.launches)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	if at.State != "running" || st.Items[task.ID].State != "running" {
 		t.Fatal("claim not atomic")
@@ -191,7 +193,7 @@ func TestCoordinatorDispatchesWithoutGitHubAndResumesAfterRestart(t *testing.T) 
 	}
 	h.outage = true
 	pass(t, &resumed)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "running" || len(st.Attempts) != 1 {
 		t.Fatal("outage changed ownership")
 	}
@@ -202,7 +204,7 @@ func TestCoordinatorDispatchesWithoutGitHubAndResumesAfterRestart(t *testing.T) 
 	current := st.Items[task.ID]
 	execute(t, c.Service, control.Request{Op: "state", ID: task.ID, Version: current.Version, State: "done"})
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if st.Items[plan.ID].State != "done" {
 		t.Fatal(st.Items[plan.ID])
 	}
@@ -213,13 +215,13 @@ func TestUncertainDispatchIsAdoptedWithoutDuplicatingIt(t *testing.T) {
 	h.loseReply = true
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	id := st.Items[task.ID].Attempt
 	if st.Attempts[id].State != "dispatching" {
 		t.Fatal("uncertain dispatch was cleared")
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if h.calls != 1 || len(h.launches) != 1 || st.Attempts[id].State != "running" {
 		t.Fatal("dispatch not adopted")
 	}
@@ -233,7 +235,7 @@ func TestInterruptedBeforeDispatchReusesPersistedIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if h.calls != 1 || len(st.Attempts) != 1 || st.Items[task.ID].Attempt != out.Attempt.ID {
 		t.Fatal("interrupted dispatch duplicated")
 	}
@@ -244,9 +246,7 @@ func TestInterruptedBeforeDispatchReusesPersistedIdentity(t *testing.T) {
 
 func TestPlannerDispatchAndInvalidPlanBlock(t *testing.T) {
 	c, h, _, plan, task := setup(t)
-	if err := c.Service.Store.Transaction(func(st *control.State) error { delete(st.Items, task.ID); return nil }); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, c.Service.Store, func(tx *control.Tx) error { tx.DeleteItem(task.ID); return nil })
 	pass(t, c)
 	for _, req := range h.launches {
 		if req.Spawn.Tier != "deep" || req.Spawn.Task != control.Number(plan.ID) || req.Spawn.Title != plan.ID+" · Feature" {
@@ -276,17 +276,15 @@ func TestPlannerHarnessIsThePlansElseTheDefault(t *testing.T) {
 			c, h, _, plan, task := setup(t)
 			c.Config.Harnesses["codex"] = c.Config.Harnesses["claude"]
 			c.Config.Hosts["devbox"] = hosts.Host{Name: "devbox", Harnesses: tt.hostRuns, MaxSessions: 2}
-			if err := c.Service.Store.Transaction(func(st *control.State) error {
-				delete(st.Items, task.ID)
-				p := st.Items[plan.ID]
+			mutate(t, c.Service.Store, func(tx *control.Tx) error {
+				tx.DeleteItem(task.ID)
+				p, _ := tx.Item(plan.ID)
 				p.Harness = tt.harness
-				st.Items[plan.ID] = p
+				tx.PutItem(p)
 				return nil
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
 			pass(t, c)
-			st, _ := c.Service.Store.Snapshot()
+			st, _ := snapshotOf(c.Service.Store)
 			if tt.want == "" {
 				if h.calls != 0 || st.Items[plan.ID].Attempt != "" || len(st.Updates) == 0 ||
 					!strings.Contains(st.Updates[len(st.Updates)-1].Body, "planner harness "+tt.harness+" is not one host devbox runs") {

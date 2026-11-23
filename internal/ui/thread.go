@@ -74,34 +74,61 @@ func itemDetail(it control.Item, active bool) ItemDetail {
 // messages after the cursor, at most pageSize of them, extended to include
 // the anchor update when it falls later in the thread.
 func threadWindow(item string, updates []control.Update, after, anchor int) Thread {
-	out := Thread{Item: item, Messages: []Message{}, Questions: []Question{}, Next: after}
-	var pending []Message
+	msgs := messagesOf(item, updates)
 	questions := map[int]*Question{}
-	for _, u := range updates {
-		if u.Item != item || !slices.Contains(messageKinds, u.Kind) {
-			continue
-		}
-		m := Message{ID: u.ID, Author: u.Author, At: u.At, Kind: u.Kind, Body: u.Body,
-			Recipient: u.Recipient, ReplyTo: u.ReplyTo, RequiresReply: u.RequiresReply}
+	var order []int
+	for _, m := range msgs {
 		if q, ok := questions[m.ReplyTo]; ok {
 			settle(q, m)
 		}
 		if m.RequiresReply {
 			questions[m.ID] = &Question{ID: m.ID, State: "open"}
-			out.Questions = append(out.Questions, Question{ID: m.ID})
-		}
-		if m.ID > after {
-			pending = append(pending, m)
+			order = append(order, m.ID)
 		}
 	}
-	for i := range out.Questions {
-		out.Questions[i] = *questions[out.Questions[i].ID]
+	settled := make([]Question, 0, len(order))
+	for _, id := range order {
+		settled = append(settled, *questions[id])
 	}
-	limit := pageSize
-	if i := slices.IndexFunc(pending, func(m Message) bool { return m.ID == anchor }); i >= limit {
-		limit = i + 1
+	return windowOf(item, msgs, settled, after, anchor)
+}
+
+// messagesOf are the updates a person reads as messages in item's thread.
+func messagesOf(item string, updates []control.Update) []Message {
+	var out []Message
+	for _, u := range updates {
+		if u.Item == item && slices.Contains(messageKinds, u.Kind) {
+			out = append(out, Message{ID: u.ID, Author: u.Author, At: u.At, Kind: u.Kind, Body: u.Body,
+				Recipient: u.Recipient, ReplyTo: u.ReplyTo, RequiresReply: u.RequiresReply})
+		}
 	}
-	if len(pending) > limit {
+	return out
+}
+
+// statusesOf are the server's question statuses as the thread carries them.
+func statusesOf(statuses []control.QuestionStatus) []Question {
+	out := make([]Question, 0, len(statuses))
+	for _, q := range statuses {
+		out = append(out, Question{ID: q.ID, State: q.State, Acknowledged: q.Acknowledged, Replies: q.Replies, Resolution: q.Resolution})
+	}
+	return out
+}
+
+// windowSize is how many messages the window holds: pageSize, or enough to
+// reach the anchor when it is one of msgs.
+func windowSize(msgs []Message, anchor int) int {
+	if i := slices.IndexFunc(msgs, func(m Message) bool { return m.ID == anchor }); i >= pageSize {
+		return i + 1
+	}
+	return pageSize
+}
+
+// windowOf is the thread's window: the messages after the cursor, at most
+// windowSize of them, with the questions as given.
+func windowOf(item string, msgs []Message, questions []Question, after, anchor int) Thread {
+	out := Thread{Item: item, Messages: []Message{}, Questions: questions, Next: after}
+	pending := slices.DeleteFunc(slices.Clone(msgs), func(m Message) bool { return m.ID <= after })
+	if limit := windowSize(pending, anchor); len(pending) > limit {
 		pending, out.More = pending[:limit], true
 	}
 	if len(pending) > 0 {
@@ -119,6 +146,8 @@ func settle(q *Question, m Message) {
 	case "acknowledged":
 		q.Acknowledged = true
 	case "resolved", control.KindPaneAnswer:
-		q.State, q.Resolution = "resolved", m.ID
+		if q.Resolution == 0 {
+			q.State, q.Resolution = "resolved", m.ID
+		}
 	}
 }

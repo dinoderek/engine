@@ -27,50 +27,50 @@ type HostChange struct {
 // a pass that read the record earlier is refused (reserve). Sessions already
 // running there carry on. Pausing a paused host, or resuming one that is not,
 // changes nothing.
-func (s Service) pauseHost(st *State, a Actor, r Request) (Response, error) {
+func (s Service) pauseHost(tx *Tx, a Actor, r Request) (Response, error) {
 	resume := r.Op == "host-resume"
-	if err := s.hostTarget(st, a, r, resume); err != nil {
+	if err := s.hostTarget(tx, a, r, resume); err != nil {
 		return Response{}, err
 	}
-	change := s.setPaused(st, r.ID, !resume)
+	change := s.setPaused(tx, r.ID, !resume)
 	return Response{Host: &change}, nil
 }
 
 // hostTarget checks that an operator names a host hosts.toml has. A resume
 // also takes a paused host the file no longer has, so its pause can be lifted.
-func (s Service) hostTarget(st *State, a Actor, r Request, resume bool) error {
+func (s Service) hostTarget(tx *Tx, a Actor, r Request, resume bool) error {
 	if err := operator(a); err != nil {
 		return err
 	}
 	if r.ID == "" {
 		return problem(400, "%s names a host", r.Op)
 	}
-	if resume && st.Hosts[r.ID].Paused {
+	if resume && tx.Host(r.ID).Paused {
 		return nil
 	}
 	return knownHost(s.fleet(), r.ID)
 }
 
 // setPaused sets host's pause, keeping the time of one already set.
-func (s Service) setPaused(st *State, host string, paused bool) HostChange {
-	rec := st.Hosts[host]
+func (s Service) setPaused(tx *Tx, host string, paused bool) HostChange {
+	rec := tx.Host(host)
 	if rec.Paused != paused {
 		rec.Paused, rec.PausedAt = paused, time.Time{}
 		if paused {
 			rec.PausedAt = s.now()
 		}
-		st.Hosts[host] = rec
+		tx.PutHost(host, rec)
 	}
 	return HostChange{Name: host, Paused: rec.Paused, PausedAt: rec.PausedAt}
 }
 
 // dispatchTarget refuses a dispatch of item to a paused host, or anywhere its
 // move does not send it.
-func dispatchTarget(st *State, item Item, host, harness string) error {
-	if st.Hosts[host].Paused {
+func dispatchTarget(tx *Tx, item Item, host, harness string) error {
+	if tx.Host(host).Paused {
 		return problem(409, "host %s is paused", host)
 	}
-	return moveDestination(st, item, host, harness)
+	return moveDestination(tx, item, host, harness)
 }
 
 // moveHost is the operator's evacuation of a host, in one transaction: the
@@ -81,22 +81,22 @@ func dispatchTarget(st *State, item Item, host, harness string) error {
 // until the request confirms it, once for the host, and each task is then
 // moved blind. Tasks already moved are not moved again, so a repeat moves only
 // what started since.
-func (s Service) moveHost(st *State, a Actor, r Request) (Response, error) {
-	if err := s.hostTarget(st, a, r, false); err != nil {
+func (s Service) moveHost(tx *Tx, a Actor, r Request) (Response, error) {
+	if err := s.hostTarget(tx, a, r, false); err != nil {
 		return Response{}, err
 	}
 	if r.Move == nil || r.Move.Host != "" {
 		return Response{}, problem(400, "a host move names its harness filter, even if empty, and no destination")
 	}
-	tasks := hostTasks(st, r.ID, r.Move.Harness)
+	tasks := hostTasks(tx, r.ID, r.Move.Harness)
 	if len(tasks) > 0 && !r.Move.Confirm && !s.fleet().read(r.ID) {
 		return Response{}, &Problem{Status: 409, Reason: ReasonMoveUnconfirmed, Message: fmt.Sprintf(
 			"the coordinator's latest pass did not read host %s: the sessions of its %d tasks (%s) may still be running and pushing to their branches, "+
 				"though their credentials are revoked; confirm to move them anyway", r.ID, len(tasks), strings.Join(tasks, ", "))}
 	}
-	change := s.setPaused(st, r.ID, true)
+	change := s.setPaused(tx, r.ID, true)
 	for _, id := range tasks {
-		_, err := s.moveTask(st, a, Request{Op: "task-move", ID: id, Move: &MoveRequest{Confirm: true}})
+		_, err := s.moveTask(tx, a, Request{Op: "task-move", ID: id, Move: &MoveRequest{Confirm: true}})
 		var p *Problem
 		switch {
 		case err == nil:
@@ -112,11 +112,11 @@ func (s Service) moveHost(st *State, a Actor, r Request) (Response, error) {
 
 // hostTasks lists, in task order, the tasks whose current attempt is a live
 // or starting session on host, only those of harness when it is set.
-func hostTasks(st *State, host, harness string) []string {
+func hostTasks(tx *Tx, host, harness string) []string {
 	var out []string
-	for _, at := range st.Attempts {
-		item := st.Items[at.Item]
-		if at.Host == host && at.State != "ended" && item.Kind == "task" && item.Attempt == at.ID && (harness == "" || at.Harness == harness) {
+	for _, at := range tx.AttemptsOnHost(host) {
+		item := tx.item(at.Item)
+		if at.State != "ended" && item.Kind == "task" && item.Attempt == at.ID && (harness == "" || at.Harness == harness) {
 			out = append(out, item.ID)
 		}
 	}

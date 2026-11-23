@@ -13,7 +13,7 @@ import (
 // wakeMessages points each idle session at the updates it has not been
 // woken for: one waiting for input, or one only a background job keeps
 // busy. A session busy in a turn, limited, or at a hard stop is left alone.
-func (c *Coordinator) wakeMessages(st control.State, v reconcile.View, cfg *hosts.Config) error {
+func (c *Coordinator) wakeMessages(tx *control.Tx, v reconcile.View, cfg *hosts.Config) error {
 	if c.Wake == nil {
 		return nil
 	}
@@ -23,7 +23,7 @@ func (c *Coordinator) wakeMessages(st control.State, v reconcile.View, cfg *host
 			continue
 		}
 		at := t.Current
-		last := pendingMessage(st, t.Item, at)
+		last := pendingMessage(tx, t.Item, at)
 		if last == 0 {
 			continue
 		}
@@ -38,11 +38,11 @@ func (c *Coordinator) wakeMessages(st control.State, v reconcile.View, cfg *host
 		if err := c.Wake(sess, text); err != nil {
 			return err
 		}
-		if err := c.Service.Store.Transaction(func(s *control.State) error {
-			current := s.Attempts[at.ID]
+		if err := write(c.Service.Store, func(tx *control.Tx) error {
+			current, _ := tx.Attempt(at.ID)
 			if current.Seen < last {
 				current.Seen = last
-				s.Attempts[at.ID] = current
+				tx.PutAttempt(current)
 			}
 			return nil
 		}); err != nil {
@@ -56,14 +56,19 @@ func (c *Coordinator) wakeMessages(st control.State, v reconcile.View, cfg *host
 // message on its own item, or a message or resolution on its task's plan
 // that is addressed to the plan's sessions rather than the operator. A session's
 // own updates and the coordinator's notices never wake it.
-func pendingMessage(st control.State, item control.Item, at control.Attempt) int {
+func pendingMessage(tx *control.Tx, item control.Item, at control.Attempt) int {
 	last := 0
-	for _, u := range st.Updates {
-		if u.ID <= at.Seen || u.Author == at.ID {
-			continue
+	for u := range tx.UpdatesAfter(at.Seen, item.ID) {
+		if u.Author != at.ID && slices.Contains(itemWakeKinds, u.Kind) {
+			last = max(last, u.ID)
 		}
-		if u.Item == item.ID && slices.Contains(itemWakeKinds, u.Kind) || planWake(item, u) {
-			last = u.ID
+	}
+	if item.Kind != "task" || item.Plan == "" {
+		return last
+	}
+	for u := range tx.UpdatesAfter(at.Seen, item.Plan) {
+		if u.Author != at.ID && planWake(item, u) {
+			last = max(last, u.ID)
 		}
 	}
 	return last

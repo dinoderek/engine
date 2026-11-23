@@ -35,34 +35,33 @@ func TestADoneRootNeverStopsAfterAFailedRelease(t *testing.T) {
 	pass(t, c)
 	pass(t, c)
 	name := fmt.Sprintf("demo-%d", control.Number(second.ID))
-	if err := c.Service.Store.Transaction(func(st *control.State) error {
-		first := st.Attempts[st.Items[task.ID].Attempt]
+	mutate(t, c.Service.Store, func(tx *control.Tx) error {
+		current, _ := tx.Item(task.ID)
+		first, _ := tx.Attempt(current.Attempt)
 		other := first
 		other.ID, other.Item, other.Window, other.RunID = "a900", second.ID, "@2", "demo-a900"
-		st.Attempts[other.ID] = other
+		tx.PutAttempt(other)
 		for id, at := range map[string]string{task.ID: first.ID, second.ID: other.ID, plan.ID: ""} {
-			item := st.Items[id]
+			item, _ := tx.Item(id)
 			item.State, item.Version = "done", item.Version+1
 			if at != "" {
 				item.Attempt = at
 			}
-			st.Items[id] = item
+			tx.PutItem(item)
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	h.status.Windows[0].State = session.StateWaiting
 	h.status.Windows = append(h.status.Windows, hostops.Window{Name: name, ID: "@2", Alive: true, State: session.StateWaiting})
 	f := &flaky{host: h, fails: 1}
 	c.Client = func(hosts.Host) remote.Client { return f }
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if !st.Items[plan.ID].Coordinating || len(h.status.Windows) != 1 || st.Attempts["a900"].State != "ended" {
 		t.Fatalf("coordinating %v, windows %v, second attempt %s", st.Items[plan.ID].Coordinating, h.status.Windows, st.Attempts["a900"].State)
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if st.Items[plan.ID].Coordinating || len(h.status.Windows) != 0 {
 		t.Fatalf("coordinating %v, windows %v after the retry", st.Items[plan.ID].Coordinating, h.status.Windows)
 	}

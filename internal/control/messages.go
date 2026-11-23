@@ -1,38 +1,26 @@
 package control
 
 import (
+	"context"
 	"fmt"
 	"slices"
 )
 
-// resolved reports whether question id was resolved: by the operator, or
-// by their answer typed into the asking session's pane.
-func resolved(st *State, id int) bool { return resolution(st, id) > 0 }
-
-func acknowledged(st *State, id int) bool {
-	for _, u := range st.Updates {
-		if u.ReplyTo == id && u.Kind == "acknowledged" {
-			return true
-		}
-	}
-	return false
-}
-
-func (s Service) messages(st *State, a Actor, r Request) (Response, error) {
+func (s Service) messages(tx *Tx, a Actor, r Request) (Response, error) {
 	if r.Op == "updates" || r.Op == "inbox" {
 		if r.Op == "inbox" && a.Role == "worker" {
 			return Response{}, problem(403, "operator inbox requires operator access")
 		}
-		return messageListing(st, a, r), nil
+		return messageListing(tx, a, r), nil
 	}
-	if err := messageTarget(st, a, r); err != nil {
+	if err := messageTarget(tx, a, r); err != nil {
 		return Response{}, err
 	}
 	kind, asker := r.Op, ""
 	switch r.Op {
 	case "ack", "resolve", "reply":
 		var err error
-		r, kind, err = replyCommand(st, a, r)
+		r, kind, err = replyCommand(tx, a, r)
 		if err != nil {
 			return Response{}, err
 		}
@@ -40,7 +28,7 @@ func (s Service) messages(st *State, a Actor, r Request) (Response, error) {
 		r.Recipient = "operator"
 		r.RequiresReply = true
 		var err error
-		if asker, err = pauseForQuestion(st, a, r.ID); err != nil {
+		if asker, err = pauseForQuestion(tx, a, r.ID); err != nil {
 			return Response{}, err
 		}
 	case "say":
@@ -54,25 +42,27 @@ func (s Service) messages(st *State, a Actor, r Request) (Response, error) {
 	if r.Recipient != "" && r.Recipient != "operator" && r.Recipient != "task" {
 		return Response{}, problem(400, "recipient must be operator or task")
 	}
-	u := st.update(a, r, kind, r.Body, s.now())
+	u := tx.AppendUpdate(a, r, kind, r.Body, s.now())
 	if asker != "" {
 		u.Task = asker
-		st.Updates[u.ID-1] = u
+		tx.PutUpdate(u)
 	}
 	out := Response{Updates: []Update{u}}
 	if kind == "resolved" {
-		out.Updates = append(out.Updates, s.release(st, a, st.Updates[r.ReplyTo-1])...)
+		question, _ := tx.Update(r.ReplyTo)
+		out.Updates = append(out.Updates, s.release(tx, a, question)...)
 	}
 	return out, nil
 }
 
 // messageTarget checks the item a message is about and where it may publish.
-func messageTarget(st *State, a Actor, r Request) error {
+func messageTarget(tx *Tx, a Actor, r Request) error {
 	if r.ID != "" {
-		if _, ok := st.Items[r.ID]; !ok {
+		target, ok := tx.Item(r.ID)
+		if !ok {
 			return problem(404, "unknown item")
 		}
-		if a.Role == "worker" && st.Items[r.ID].Repo != st.Items[st.Attempts[a.Attempt].Item].Repo {
+		if a.Role == "worker" && target.Repo != executionOwner(tx, a).Repo {
 			return problem(403, "cannot message another repository")
 		}
 	}
@@ -82,16 +72,14 @@ func messageTarget(st *State, a Actor, r Request) error {
 	return nil
 }
 
-func messageListing(st *State, a Actor, r Request) Response {
+func messageListing(tx *Tx, a Actor, r Request) Response {
 	out := Response{}
-	for _, u := range st.Updates {
-		if !readableUpdate(st, a, u) {
-			continue
-		}
-		if u.ID <= r.After || r.ID != "" && u.Item != r.ID {
-			continue
-		}
-		if r.Op == "inbox" && (u.Recipient != "operator" || resolved(st, u.ID) || !u.RequiresReply && acknowledged(st, u.ID)) {
+	updates := tx.UpdatesAfter(r.After, r.ID)
+	if r.Op == "inbox" {
+		updates = tx.InboxAfter(r.After, r.ID)
+	}
+	for u := range updates {
+		if !readableUpdate(tx, a, u) {
 			continue
 		}
 		out.Updates = append(out.Updates, u)
@@ -99,20 +87,23 @@ func messageListing(st *State, a Actor, r Request) Response {
 			break
 		}
 	}
+	if r.Op == "updates" && r.ID != "" && readable(tx, a, r.ID) {
+		out.Questions = tx.QuestionStatuses(r.ID)
+	}
 	return out
 }
 
-func replyCommand(st *State, a Actor, r Request) (Request, string, error) {
-	if r.ReplyTo < 1 || r.ReplyTo > len(st.Updates) {
+func replyCommand(tx *Tx, a Actor, r Request) (Request, string, error) {
+	parent, ok := tx.Update(r.ReplyTo)
+	if !ok {
 		return r, "", problem(404, "unknown update")
 	}
-	parent := st.Updates[r.ReplyTo-1]
 	if parent.Recipient == "operator" {
 		if err := operator(a); err != nil {
 			return r, "", err
 		}
 	}
-	if parent.Item != "" && !workerItem(st, a, parent.Item) {
+	if parent.Item != "" && !workerItem(tx, a, parent.Item) {
 		return r, "", problem(403, "cannot reply for another execution")
 	}
 	r.ID = parent.Item
@@ -127,7 +118,7 @@ func replyCommand(st *State, a Actor, r Request) (Request, string, error) {
 		if r.Body == "" {
 			return r, "", problem(400, "resolution must record the decision")
 		}
-		if err := alreadyResolved(st, r.ReplyTo); err != nil {
+		if err := alreadyResolved(tx, r.ReplyTo); err != nil {
 			return r, "", err
 		}
 		kind = "resolved"
@@ -138,18 +129,18 @@ func replyCommand(st *State, a Actor, r Request) (Request, string, error) {
 // pauseForQuestion holds the task a question stops in needs-human: the task
 // asked on, or the asking task when a task's session asks on its own plan.
 // It returns that asking task, which the plan question records.
-func pauseForQuestion(st *State, a Actor, id string) (string, error) {
+func pauseForQuestion(tx *Tx, a Actor, id string) (string, error) {
 	if id == "" {
 		return "", nil
 	}
 	held, asker := id, ""
-	owner := st.Items[st.Attempts[a.Attempt].Item]
+	owner := executionOwner(tx, a)
 	if a.Role == "worker" && owner.Kind == "task" && owner.Plan == id {
 		held, asker = owner.ID, owner.ID
-	} else if !workerItem(st, a, id) {
+	} else if !workerItem(tx, a, id) {
 		return "", problem(403, "cannot stop another execution")
 	}
-	item := st.Items[held]
+	item, _ := tx.Item(held)
 	if item.Kind != "task" {
 		return "", nil
 	}
@@ -158,7 +149,7 @@ func pauseForQuestion(st *State, a Actor, id string) (string, error) {
 	}
 	item.State = "needs-human"
 	item.Version++
-	st.Items[held] = item
+	tx.PutItem(item)
 	return asker, nil
 }
 
@@ -168,30 +159,28 @@ func pauseForQuestion(st *State, a Actor, id string) (string, error) {
 // task alone while another question holds it, once its state changed
 // meanwhile, when its execution ended (the coordinator then resumes it), or
 // when no question held it.
-func (s Service) release(st *State, a Actor, question Update) []Update {
+func (s Service) release(tx *Tx, a Actor, question Update) []Update {
 	ids := []string{question.Task, question.Item}
-	if st.Items[question.Item].Kind == "plan" {
-		for _, t := range st.Items {
-			if t.Plan == question.Item {
-				ids = append(ids, t.ID)
-			}
+	if qi, _ := tx.Item(question.Item); qi.Kind == "plan" {
+		for _, t := range tx.ItemsOfPlan(question.Item) {
+			ids = append(ids, t.ID)
 		}
 	}
 	slices.SortFunc(ids, func(x, y string) int { return Number(x) - Number(y) })
 	var out []Update
 	for _, id := range slices.Compact(ids) {
-		item, ok := st.Items[id]
-		if !ok || item.Kind != "task" || item.State != "needs-human" || !active(st, item) || OwnQuestion(st, id) > 0 {
+		item, ok := tx.Item(id)
+		if !ok || item.Kind != "task" || item.State != "needs-human" || !active(tx, item) || OwnQuestion(tx, id) > 0 {
 			continue
 		}
-		prior := heldFrom(st, id)
+		prior := heldFrom(tx, id)
 		if prior == "" {
 			continue
 		}
 		item.State = prior
 		item.Version++
-		st.Items[id] = item
-		out = append(out, st.update(a, Request{ID: id}, "state", fmt.Sprintf("%s (version %d)", item.State, item.Version), s.now()))
+		tx.PutItem(item)
+		out = append(out, tx.AppendUpdate(a, Request{ID: id}, "state", fmt.Sprintf("%s (version %d)", item.State, item.Version), s.now()))
 	}
 	return out
 }
@@ -199,11 +188,10 @@ func (s Service) release(st *State, a Actor, question Update) []Update {
 // heldFrom is the state a task held by a question had before needs-human:
 // the state in its newest update snapshot that is not needs-human, provided
 // a question on it, or one it asked, came after that snapshot.
-func heldFrom(st *State, id string) string {
+func heldFrom(tx *Tx, id string) string {
 	asked := false
-	for i := len(st.Updates) - 1; i >= 0; i-- {
-		u := st.Updates[i]
-		if u.RequiresReply && (u.Item == id || u.Task == id) {
+	for u := range tx.UpdatesAboutNewestFirst(id) {
+		if u.RequiresReply {
 			asked = true
 		}
 		if u.Item != id || u.Snapshot == nil || u.Snapshot.State == "needs-human" {
@@ -225,19 +213,20 @@ func (s Service) Authenticate(token, operatorToken string) (Actor, error) {
 	if sameSecret(token, operatorToken) && operatorToken != "" {
 		return Actor{Name: "operator", Role: "operator"}, nil
 	}
-	st, err := s.Store.Snapshot()
-	if err != nil {
-		return Actor{}, err
-	}
-	a, ok := st.Auth[digest([]byte(token))]
-	if !ok {
-		return Actor{}, problem(401, "invalid credential")
-	}
-	at := st.Attempts[a.Attempt]
-	if at.State == "ended" || st.Items[at.Item].Attempt != at.ID {
-		return Actor{}, problem(403, "execution credential has ended")
-	}
-	return a, nil
+	var actor Actor
+	err := s.Store.Read(context.Background(), func(tx *Tx) error {
+		a, ok := tx.Credential(digest([]byte(token)))
+		if !ok {
+			return problem(401, "invalid credential")
+		}
+		at, _ := tx.Attempt(a.Attempt)
+		if item, _ := tx.Item(at.Item); at.State == "ended" || item.Attempt != at.ID {
+			return problem(403, "execution credential has ended")
+		}
+		actor = a
+		return nil
+	})
+	return actor, err
 }
 
 // Dispatch recovers the same attempt and credential for a retried dispatch request.
@@ -248,9 +237,9 @@ func (s Service) Dispatch(item Item, host, harness, key string) (Response, error
 // OwnQuestion is the first open question that holds item id: one asked on
 // it, or asked by its session on its plan. It is 0 when none is open. A
 // plan's question holds the task that asked it, not the plan's other tasks.
-func OwnQuestion(st *State, id string) int {
-	for _, u := range st.Updates {
-		if u.RequiresReply && (u.Item == id || u.Task == id) && !resolved(st, u.ID) {
+func OwnQuestion(tx *Tx, id string) int {
+	for u := range tx.QuestionsAbout(id) {
+		if tx.Resolution(u.ID) == 0 {
 			return u.ID
 		}
 	}
@@ -259,17 +248,12 @@ func OwnQuestion(st *State, id string) int {
 
 // PlanQuestion is an open question on the plan of task id, or 0. It blocks
 // only the first dispatch of a task in that plan.
-func PlanQuestion(st *State, id string) int {
-	parent := st.Items[id].Plan
-	if parent == "" {
+func PlanQuestion(tx *Tx, id string) int {
+	item, _ := tx.Item(id)
+	if item.Plan == "" {
 		return 0
 	}
-	for _, u := range st.Updates {
-		if u.RequiresReply && u.Item == parent && !resolved(st, u.ID) {
-			return u.ID
-		}
-	}
-	return 0
+	return OwnQuestion(tx, item.Plan)
 }
 
 // Recovery marks an execution ended only after the caller has checked its host.
@@ -278,16 +262,4 @@ func (s Service) Recovery(id, evidence string) error {
 		return fmt.Errorf("reconciliation evidence is required")
 	}
 	return s.SetAttempt(id, "ended", "")
-}
-
-// ReceiptsForDispatch supplies the persisted credential to an interrupted dispatch.
-// It is server-side only and is never part of a snapshot API response.
-func (s State) ReceiptsForDispatch(id string) []string {
-	var tokens []string
-	for _, receipt := range s.Receipts {
-		if receipt.Response.Attempt != nil && receipt.Response.Attempt.ID == id && receipt.Response.Credential != "" {
-			tokens = append(tokens, receipt.Response.Credential)
-		}
-	}
-	return tokens
 }

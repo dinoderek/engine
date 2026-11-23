@@ -44,7 +44,7 @@ func TestStoppedCoordinationCannotReserveNewAttempt(t *testing.T) {
 	if _, err := s.Dispatch(task, "devbox", "claude", "stale-action"); err == nil {
 		t.Fatal("stopped plan dispatched")
 	}
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if len(st.Attempts) != 0 {
 		t.Fatal("stopped plan reserved execution")
 	}

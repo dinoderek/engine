@@ -2,7 +2,6 @@ package control
 
 import (
 	"errors"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -16,10 +15,7 @@ var op = Actor{Name: "operator", Role: "operator"}
 
 func service(t *testing.T) Service {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 is absent")
-	}
-	store, err := Open(filepath.Join(t.TempDir(), "control.db"), nil)
+	store, err := Open(filepath.Join(t.TempDir(), "control.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,11 +191,11 @@ func TestRequestDeduplicationAndConcurrentClaims(t *testing.T) {
 	if successes != 1 {
 		t.Fatalf("%d claims succeeded", successes)
 	}
-	st, err := s.Store.Snapshot()
+	st, err := s.Store.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(st.Attempts) != 1 || len(st.ReceiptsForDispatch(st.Items[task.ID].Attempt)) != 1 {
+	if len(st.Attempts) != 1 || len(st.tx().DispatchTokens(st.Items[task.ID].Attempt)) != 1 {
 		t.Fatal("dispatch identity missing")
 	}
 }
@@ -207,7 +203,7 @@ func TestRequestDeduplicationAndConcurrentClaims(t *testing.T) {
 func TestInvalidCommandsDoNotChangeHistory(t *testing.T) {
 	s := service(t)
 	repo, plan := repoPlan(t, s)
-	before, _ := s.Store.Snapshot()
+	before, _ := s.Store.snapshot()
 	cases := []Request{
 		{Op: "unknown"}, {Op: "create", Item: Item{Kind: "task", Repo: repo.ID}},
 		{Op: "create", Item: Item{Kind: "unknown", Title: "x"}},
@@ -229,7 +225,7 @@ func TestInvalidCommandsDoNotChangeHistory(t *testing.T) {
 			}
 		})
 	}
-	after, _ := s.Store.Snapshot()
+	after, _ := s.Store.snapshot()
 	if len(before.Updates) != len(after.Updates) || len(before.Items) != len(after.Items) {
 		t.Fatal("failed transaction changed state")
 	}

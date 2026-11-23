@@ -21,7 +21,7 @@ func fleetQuestion(t *testing.T, l *Loop, plan string) control.Update {
 	if _, err := l.Service.Dispatch(*task, "mac", "claude", "dispatch"); err != nil {
 		t.Fatal(err)
 	}
-	gone := func(*control.State, control.Attempt) bool { return false }
+	gone := func(*control.Tx, control.Attempt) bool { return false }
 	for _, at := range []time.Time{now, now.Add(control.UnreachableAsk)} {
 		now = at
 		if err := l.Service.SawReach("mac", false, gone); err != nil {

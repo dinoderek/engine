@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var everyWindowAlive = func(*State, Attempt) bool { return true }
+var everyWindowAlive = func(*Tx, Attempt) bool { return true }
 
 // unreachableFor has every read of devbox fail, at its start and then after
 // each of the waits, on a clock the service reads.
@@ -26,7 +26,7 @@ func unreachableFor(t *testing.T, s *Service, start time.Time, waits ...time.Dur
 }
 
 // fleetQuestions are the questions about a host, oldest first.
-func fleetQuestions(st State) []Update {
+func fleetQuestions(st records) []Update {
 	var out []Update
 	for _, u := range st.Updates {
 		if u.Host != "" && u.RequiresReply {
@@ -38,7 +38,7 @@ func fleetQuestions(st State) []Update {
 
 // coordinatorNotes are the coordinator's messages to the operator, each
 // about devbox.
-func coordinatorNotes(st State) []string {
+func coordinatorNotes(st records) []string {
 	var out []string
 	for _, u := range st.Updates {
 		if u.Author == "coordinator" && u.Kind == "say" && u.Recipient == "operator" {
@@ -101,7 +101,7 @@ func TestAnUnreachableHostIsAskedAboutOnceItsTasksWaitedFifteenMinutes(t *testin
 	}
 	// It holds no task: each keeps its state, and can still change it.
 	for _, task := range tasks {
-		if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
+		if st.Items[task.ID].State != "running" || OwnQuestion(st.tx(), task.ID) != 0 {
 			t.Fatalf("%s is held: %+v", task.ID, st.Items[task.ID])
 		}
 	}
@@ -128,7 +128,7 @@ func TestAnUnreachableHostWithNoTasksIsNotAsked(t *testing.T) {
 }
 
 // waited checks that a wait answer changed nothing.
-func waited(t *testing.T, st State, tasks []Item) {
+func waited(t *testing.T, st records, tasks []Item) {
 	if st.Hosts["devbox"].Paused || st.Items[tasks[0].ID].State != "running" || st.Attempts[st.Items[tasks[0].ID].Attempt].State == "ended" {
 		t.Errorf("a wait changed something: %+v", st.Items[tasks[0].ID])
 	}
@@ -136,7 +136,7 @@ func waited(t *testing.T, st State, tasks []Item) {
 
 // moved checks that a move answer paused devbox and moved its two tasks,
 // and only those.
-func moved(t *testing.T, st State, tasks []Item) {
+func moved(t *testing.T, st records, tasks []Item) {
 	for _, task := range tasks[:2] {
 		if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != EndMoved || st.Items[task.ID].State != "running" {
 			t.Errorf("%s was not moved: %+v", task.ID, at)
@@ -149,7 +149,7 @@ func moved(t *testing.T, st State, tasks []Item) {
 
 // stopped checks that a stop answer held devbox's two tasks, leaving the
 // host unpaused.
-func stopped(t *testing.T, st State, tasks []Item) {
+func stopped(t *testing.T, st records, tasks []Item) {
 	for _, task := range tasks[:2] {
 		if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != EndStopped || !st.Items[task.ID].Held || st.Items[task.ID].State != "todo" {
 			t.Errorf("%s was not stopped: %+v %+v", task.ID, at, st.Items[task.ID])
@@ -163,7 +163,7 @@ func stopped(t *testing.T, st State, tasks []Item) {
 func TestEachAnswerToAFleetQuestionRunsOnce(t *testing.T) {
 	for name, c := range map[string]struct {
 		answer string
-		check  func(*testing.T, State, []Item)
+		check  func(*testing.T, records, []Item)
 		// note is the operator's note, given the answer's update and the
 		// moved or stopped tasks; empty is none.
 		note string
@@ -208,14 +208,14 @@ func TestAHostThatAnswersFirstResolvesItsQuestionAsReturned(t *testing.T) {
 	unreachableFor(t, &s, stretch, UnreachableAsk)
 	q := fleetQuestions(mustSnapshot(t, s))[0]
 	first := tasks[0].ID
-	alive := func(_ *State, at Attempt) bool { return at.Item == first }
+	alive := func(_ *Tx, at Attempt) bool { return at.Item == first }
 	for range 2 {
 		if err := s.SawReach("devbox", true, alive); err != nil {
 			t.Fatal(err)
 		}
 	}
 	st := mustSnapshot(t, s)
-	by := resolution(&st, q.ID)
+	by := st.tx().Resolution(q.ID)
 	if by == 0 || st.Updates[by-1].Body != ResolutionReturned || st.Updates[by-1].Author != "coordinator" {
 		t.Fatalf("question %d is not resolved as returned", q.ID)
 	}

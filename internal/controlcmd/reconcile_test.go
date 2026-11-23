@@ -3,7 +3,6 @@ package controlcmd
 import (
 	"bytes"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -33,10 +32,7 @@ func TestAttemptReconcileTakesItsEvidenceEitherWay(t *testing.T) {
 
 // A host refusal prints the 409's reason and exits non-zero.
 func TestAttemptReconcilePrintsTheHostsRefusal(t *testing.T) {
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 absent")
-	}
-	st, err := control.Open(filepath.Join(t.TempDir(), "db"), nil)
+	st, err := control.Open(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}

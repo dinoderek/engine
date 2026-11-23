@@ -47,22 +47,22 @@ type TmuxRead struct {
 // A server with no saved time to compare, and a host with no attempt last
 // seen live, are no loss: tmux exits after its last window. It returns how
 // many attempts the loss marked.
-func (s Service) SawTmux(host string, read TmuxRead, alive func(*State, Attempt) bool) (int, error) {
+func (s Service) SawTmux(host string, read TmuxRead, alive func(*Tx, Attempt) bool) (int, error) {
 	marked := 0
-	err := s.Store.Transaction(func(st *State) error {
-		saved := st.Hosts[host].TmuxStart
-		for _, at := range hostLoss(st, host, read, saved, alive) {
+	err := s.write(func(tx *Tx) error {
+		saved := tx.Host(host).TmuxStart
+		for _, at := range hostLoss(tx, host, read, saved, alive) {
 			at.HostLost = true
-			st.Attempts[at.ID] = at
+			tx.PutAttempt(at)
 			marked++
 		}
 		if read.Known && read.Start != saved {
-			rec := st.Hosts[host]
+			rec := tx.Host(host)
 			rec.TmuxStart = read.Start
-			st.Hosts[host] = rec
+			tx.PutHost(host, rec)
 		}
 		if marked > 0 {
-			st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{Recipient: "operator"}, "say",
+			tx.AppendUpdate(Actor{Name: "coordinator", Role: "coordinator"}, Request{Recipient: "operator"}, "say",
 				fmt.Sprintf("%s's tmux restarted; %d tasks will resume", host, marked), s.now())
 		}
 		return nil
@@ -74,17 +74,17 @@ func (s Service) SawTmux(host string, read TmuxRead, alive func(*State, Attempt)
 // server, none when it shows no host-wide loss. An attempt already marked
 // belongs to a loss settled before, and a dispatch still in flight has no
 // window to lose.
-func hostLoss(st *State, host string, read TmuxRead, saved int64, alive func(*State, Attempt) bool) []Attempt {
+func hostLoss(tx *Tx, host string, read TmuxRead, saved int64, alive func(*Tx, Attempt) bool) []Attempt {
 	if read.Known && (saved == 0 || read.Start == saved) {
 		return nil
 	}
 	var gone []Attempt
 	seen := false
-	for _, at := range st.Attempts {
-		if at.Host != host || at.State == "ended" || at.State == "dispatching" || at.Window == "" || at.HostLost || st.Items[at.Item].Attempt != at.ID {
+	for _, at := range tx.AttemptsOnHost(host) {
+		if at.State == "ended" || at.State == "dispatching" || at.Window == "" || at.HostLost || tx.item(at.Item).Attempt != at.ID {
 			continue
 		}
-		up := alive(st, at)
+		up := alive(tx, at)
 		switch {
 		case up && !at.LiveAt.IsZero():
 			return nil

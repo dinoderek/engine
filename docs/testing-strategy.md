@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Unit | a table-driven test of a pure function | parsing, matching, comparison or rendering |
 | Fake boundary | a fake `repo.Runner`, `session.RunFunc` or `dev.Tool` field returns canned output | how the code reacts to what git, go, Homebrew or the network say, especially their failures |
-| Real process | real `git`, `go`, `sqlite3`, `tmux`, `node` or a Chromium browser in `t.TempDir()` or on a private socket (`tmux -L <unique name>`, killed afterwards) | actual storage transactions, worktrees, formatting or session operations |
+| Real process | real `git`, `go`, `sqlite3`, `tmux`, `node` or a Chromium browser in `t.TempDir()` or on a private socket (`tmux -L <unique name>`, killed afterwards) | actual storage transactions (including the in-process SQLite driver), worktrees, formatting or session operations |
 | Command line | `cli.Run` or `dev.Tool.Main` with buffers | exit codes, usage text and verb dispatch |
 
 Pick the lowest layer that can prove the claim; use a real process only when
@@ -28,4 +28,7 @@ a fake would assume the behaviour under test.
 - **Race detector on:** the `unit` lane runs with `-race`.
 - **No sleeps or wall-clock assertions.** Test durations by rendering a fixed
   value. A real-process test may poll, against a deadline, for another
-  process's effect; it never asserts on a duration.
+  process's effect; it never asserts on a duration. One exception: the store's
+  performance gate (`internal/control/bench_test.go`) fails an operation over
+  10× its target. Under `-race` it checks answers only; the `coverage` lane
+  enforces the time.

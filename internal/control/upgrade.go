@@ -31,16 +31,17 @@ const (
 // upgrade is the upgrade op, the operator's only: UpgradeStart begins a run,
 // replacing the record of the last one, and UpgradeEnd ends the run that
 // started, once.
-func (s Service) upgrade(st *State, a Actor, r Request) (Response, error) {
+func (s Service) upgrade(tx *Tx, a Actor, r Request) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
 	}
 	switch r.State {
 	case UpgradeStart:
-		st.Upgrade = UpgradeRecord{Start: s.now()}
+		tx.SetUpgrade(UpgradeRecord{Start: s.now()})
 	case UpgradeEnd:
-		if !st.Upgrade.Start.IsZero() && st.Upgrade.End.IsZero() {
-			st.Upgrade.End = s.now()
+		if u := tx.Upgrade(); !u.Start.IsZero() && u.End.IsZero() {
+			u.End = s.now()
+			tx.SetUpgrade(u)
 		}
 	default:
 		return Response{}, problem(400, "upgrade takes state %q or %q", UpgradeStart, UpgradeEnd)
@@ -54,8 +55,8 @@ func (s Service) upgrade(st *State, a Actor, r Request) (Response, error) {
 // confirmed gone between its start and UpgradeLead after its end. A death on
 // a host that could not be read during the upgrade, as a host on the old
 // protocol is not, is confirmed only later; it still counts as during.
-func duringUpgrade(st *State, at Attempt, now time.Time) bool {
-	u := st.Upgrade
+func duringUpgrade(tx *Tx, at Attempt, now time.Time) bool {
+	u := tx.Upgrade()
 	end := u.End
 	if end.IsZero() {
 		end = u.Start.Add(UpgradeMax)

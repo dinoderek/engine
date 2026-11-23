@@ -1,11 +1,8 @@
 package control
 
 import (
-	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -14,7 +11,7 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 	repo, plan := repoPlan(t, s)
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "persisted"})
 	path := s.Store.path
-	if _, err := Open(path, nil); err == nil {
+	if _, err := Open(path); err == nil {
 		t.Fatal("second server opened database")
 	}
 	backup := filepath.Join(t.TempDir(), "copy.db")
@@ -27,27 +24,27 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Store.Snapshot(); err == nil {
+	if _, err := s.Store.snapshot(); err == nil {
 		t.Fatal("closed store accepted command")
 	}
-	reopened, err := Open(path, nil)
+	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = reopened.Close() }()
-	st, err := reopened.Snapshot()
+	st, err := reopened.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if st.Items[repo.ID].Slug != "owner/demo" || len(st.Updates) != 3 {
 		t.Fatalf("restart lost state: %+v", st)
 	}
-	copyStore, err := Open(backup, nil)
+	copyStore, err := Open(backup)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = copyStore.Close() }()
-	copied, err := copyStore.Snapshot()
+	copied, err := copyStore.snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,25 +60,23 @@ func TestStoreRestartBackupAndExclusiveOwnership(t *testing.T) {
 func TestSQLiteFailureRollsBackStateAndHistory(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
-	before, _ := s.Store.Snapshot()
-	fail := true
-	s.Store.run = func(ctx context.Context, path, sql string) ([]byte, error) {
-		if fail && strings.Contains(sql, "INSERT INTO records") {
-			return SQLite(ctx, path, strings.Replace(sql, "COMMIT;", "INVALID SQL; COMMIT;", 1))
-		}
-		return SQLite(ctx, path, sql)
+	before, _ := s.Store.snapshot()
+	if _, err := s.Store.writer.Exec("CREATE TRIGGER fail_insert BEFORE INSERT ON receipts BEGIN SELECT RAISE(ABORT, 'disk full'); END;"); err != nil {
+		t.Fatal(err)
 	}
 	_, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "not committed", Key: "retry"})
 	if err == nil {
 		t.Fatal("invalid transaction succeeded")
 	}
-	fail = false
-	after, _ := s.Store.Snapshot()
+	if _, err := s.Store.writer.Exec("DROP TRIGGER fail_insert"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := s.Store.snapshot()
 	if fingerprint(before) != fingerprint(after) {
 		t.Fatal("partial transaction committed")
 	}
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "not committed", Key: "retry"})
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if len(st.Updates) != len(before.Updates)+1 {
 		t.Fatal("failed request could not retry")
 	}
@@ -107,19 +102,53 @@ func TestStoreRefusesUnknownSchemaAndCorruption(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = s.Store.Close()
-	if _, err := Open(path, nil); err == nil {
+	if _, err := Open(path); err == nil {
 		t.Fatal("future schema accepted")
 	}
-	if _, err := Open("", nil); err == nil {
+	if _, err := Open(""); err == nil {
 		t.Fatal("empty database path accepted")
 	}
-	if _, err := Open(filepath.Join(t.TempDir(), "db"), func(context.Context, string, string) ([]byte, error) { return nil, errors.New("missing sqlite") }); err == nil {
-		t.Fatal("sqlite failure accepted")
+	invalid := filepath.Join(t.TempDir(), "db")
+	if err := os.WriteFile(invalid, []byte("not a database"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	for _, key := range []string{"unknown/x", "item/x", "attempt/x", "update/x", "auth/x", "receipt/x", "queue/x", "next"} {
-		st := emptyState()
-		if err := loadRecord(&st, key, []byte("invalid")); err == nil {
-			t.Fatalf("%s corruption accepted", key)
+	if _, err := Open(invalid); err == nil {
+		t.Fatal("corrupt database accepted")
+	}
+}
+
+// A current database made before an index was added gets it on open, and one
+// that has it is left as it is.
+func TestOpenAddsAnIndexAMadeDatabaseLacks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexes := func(s *Store) (n int) {
+		if err := s.writer.QueryRow("SELECT count(*) FROM sqlite_schema WHERE name='attempts_limited'").Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if indexes(s) != 1 {
+		t.Fatal("a new database lacks the index")
+	}
+	if _, err = s.writer.Exec("DROP INDEX attempts_limited"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if s, err = Open(path); err != nil {
+			t.Fatal(err)
+		}
+		if indexes(s) != 1 {
+			t.Error("a reopened database lacks the index")
+		}
+		if err = s.Close(); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

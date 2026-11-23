@@ -33,4 +33,4 @@ verb.
 ## Stack
 
 Go, one module, version pinned in `go.mod`. External tools: `git`, `gh`,
-`tmux`, `ssh`, `sqlite3` and the harnesses.
+`tmux`, `ssh`, the harnesses and `sqlite3` for the Codex reader.

@@ -61,7 +61,7 @@ type opsFleet struct {
 // repo with a planned, coordinated plan and no tasks yet.
 func newOpsFleet(t *testing.T, names ...string) *opsFleet {
 	t.Helper()
-	for _, tool := range []string{"sqlite3", "git"} {
+	for _, tool := range []string{"git"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Skip(tool + " is absent")
 		}
@@ -108,7 +108,7 @@ func (f *opsFleet) writeConfig() {
 func (f *opsFleet) start() {
 	f.t.Helper()
 	home := f.hosts[f.names[0]].home
-	store, err := control.Open(filepath.Join(home, controlcmd.ServerDBPath), nil)
+	store, err := control.Open(filepath.Join(home, controlcmd.ServerDBPath))
 	if err != nil {
 		f.t.Fatal(err)
 	}

@@ -17,17 +17,11 @@ import (
 // the task's host with that host's gh, as code: no agent's permission
 // classifier judges it.
 func (c *Coordinator) queues(cfg *hosts.Config) error {
-	st, err := c.Service.Store.Snapshot()
+	var repos []string
+	err := read(c.Service.Store, func(tx *control.Tx) error { repos = tx.QueuedRepos(); return nil })
 	if err != nil {
 		return err
 	}
-	var repos []string
-	for _, e := range st.Queue {
-		if !slices.Contains(repos, e.Repo) {
-			repos = append(repos, e.Repo)
-		}
-	}
-	slices.SortFunc(repos, func(a, b string) int { return control.Number(a) - control.Number(b) })
 	for _, repo := range repos {
 		if err := c.queue(repo, cfg); err != nil {
 			c.log("merge queue %s: %v", repo, err)
@@ -40,7 +34,7 @@ func (c *Coordinator) queues(cfg *hosts.Config) error {
 // step can at most promote one head, unhead one entry or end one, so the
 // loop ends within two rounds per entry.
 func (c *Coordinator) queue(repo string, cfg *hosts.Config) error {
-	for range 2*len(c.mustSnapshot().Queue) + 2 {
+	for range 2*c.queued(repo) + 2 {
 		v, err := c.queueView(repo)
 		if err != nil {
 			return err
@@ -63,9 +57,17 @@ func (c *Coordinator) queue(repo string, cfg *hosts.Config) error {
 	return nil
 }
 
-func (c *Coordinator) mustSnapshot() control.State {
-	st, _ := c.Service.Store.Snapshot()
-	return st
+// queued is how many entries repo's merge queue holds, 0 when the store
+// cannot be read.
+func (c *Coordinator) queued(repo string) (n int) {
+	_ = read(c.Service.Store, func(tx *control.Tx) error { n = len(tx.QueueOf(repo)); return nil })
+	return n
+}
+
+// slug is the owner/name of repository item id, empty when there is none.
+func (c *Coordinator) slug(id string) (slug string) {
+	_ = read(c.Service.Store, func(tx *control.Tx) error { repo, _ := tx.Item(id); slug = repo.Slug; return nil })
+	return slug
 }
 
 // steps applies the queue steps among acts, and reports whether any did.
@@ -98,8 +100,7 @@ func (c *Coordinator) call(repo string, a reconcile.Action, cfg *hosts.Config) e
 	}) {
 		return nil
 	}
-	st := c.mustSnapshot()
-	p := c.probe(st, a, cfg)
+	p := c.probe(c.slug(a.Entry.Repo), a, cfg)
 	if v, err = c.queueView(repo); err != nil {
 		return err
 	}
@@ -120,7 +121,7 @@ func (c *Coordinator) call(repo string, a reconcile.Action, cfg *hosts.Config) e
 
 // probe makes the host call: a failure or an unreachable host is what the
 // queue reads, never an error of its own.
-func (c *Coordinator) probe(st control.State, a reconcile.Action, cfg *hosts.Config) reconcile.Probe {
+func (c *Coordinator) probe(slug string, a reconcile.Action, cfg *hosts.Config) reconcile.Probe {
 	host, ok := cfg.Hosts[a.Host]
 	if !ok {
 		return reconcile.Probe{Missing: true}
@@ -129,7 +130,7 @@ func (c *Coordinator) probe(st control.State, a reconcile.Action, cfg *hosts.Con
 	if a.Request.Merge != nil {
 		method = a.Request.Merge.Method
 	}
-	got, err := remote.ControlMerge(c.Client(host), hostops.MergeRequest{Repo: st.Items[a.Entry.Repo].Slug,
+	got, err := remote.ControlMerge(c.Client(host), hostops.MergeRequest{Repo: slug,
 		PR: control.PRNumber(a.Entry.PR), Head: a.Entry.Head, Method: method})
 	var unreachable *remote.UnreachableError
 	switch {
@@ -143,19 +144,19 @@ func (c *Coordinator) probe(st control.State, a reconcile.Action, cfg *hosts.Con
 
 // queueView is repo's merge queue with the records it is decided on.
 func (c *Coordinator) queueView(repo string) (reconcile.QueueView, error) {
-	st, err := c.Service.Store.Snapshot()
-	if err != nil {
-		return reconcile.QueueView{}, err
-	}
 	v := reconcile.QueueView{Now: c.now()}
-	for _, e := range control.Queue(&st, repo) {
-		item := st.Items[e.Task]
-		q := reconcile.QueueItem{QueueEntry: e, State: item.State, Question: control.OwnQuestion(&st, item.ID),
-			Stopped: !coordinating(&st, item), Host: st.Attempts[item.Attempt].Host}
-		if u, ok := control.PendingMerge(&st, item.ID); ok {
-			q.Request = u
+	err := read(c.Service.Store, func(tx *control.Tx) error {
+		for _, e := range tx.QueueOf(repo) {
+			item, _ := tx.Item(e.Task)
+			at, _ := tx.Attempt(item.Attempt)
+			q := reconcile.QueueItem{QueueEntry: e, State: item.State, Question: control.OwnQuestion(tx, item.ID),
+				Stopped: !coordinating(tx, item), Host: at.Host}
+			if u, ok := control.PendingMerge(tx, item.ID); ok {
+				q.Request = u
+			}
+			v.Entries = append(v.Entries, q)
 		}
-		v.Entries = append(v.Entries, q)
-	}
-	return v, nil
+		return nil
+	})
+	return v, err
 }

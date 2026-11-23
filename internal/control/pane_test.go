@@ -38,7 +38,7 @@ func vouched(priv ed25519.PrivateKey, attempt, text string, at time.Time) Reques
 }
 
 // notes are the coordinator's notes to the operator on item.
-func notes(st State, item string) []Update {
+func notes(st records, item string) []Update {
 	var out []Update
 	for _, u := range st.Updates {
 		if u.Item == item && u.Author == "coordinator" && u.Kind == "say" && u.Recipient == "operator" {
@@ -61,8 +61,8 @@ func TestASignedPaneAnswerResolvesTheTasksQuestion(t *testing.T) {
 		t.Errorf("answer = %+v, want the text verbatim replying to %d", got, question.ID)
 	}
 	st := mustSnapshot(t, s)
-	if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
-		t.Errorf("task %s, open question %d; want it running with none", st.Items[task.ID].State, OwnQuestion(&st, task.ID))
+	if st.Items[task.ID].State != "running" || OwnQuestion(st.tx(), task.ID) != 0 {
+		t.Errorf("task %s, open question %d; want it running with none", st.Items[task.ID].State, OwnQuestion(st.tx(), task.ID))
 	}
 	if n := notes(st, task.ID); len(n) != 0 {
 		t.Errorf("notes = %+v, want none for a vouched answer", n)
@@ -123,8 +123,8 @@ func TestAPaneAnswerTheHookDidNotVouchForResolvesWithOneNote(t *testing.T) {
 				t.Fatalf("answer = %+v, want it recorded", out.Updates[0])
 			}
 			st := mustSnapshot(t, s)
-			if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
-				t.Errorf("task %s, open question %d; want it resolved all the same", st.Items[task.ID].State, OwnQuestion(&st, task.ID))
+			if st.Items[task.ID].State != "running" || OwnQuestion(st.tx(), task.ID) != 0 {
+				t.Errorf("task %s, open question %d; want it resolved all the same", st.Items[task.ID].State, OwnQuestion(st.tx(), task.ID))
 			}
 			n := notes(st, task.ID)
 			if len(n) != 1 || !strings.Contains(n[0].Body, tc.reason) || !strings.Contains(n[0].Body, fmt.Sprintf("resolved question %d", question.ID)) {
@@ -164,8 +164,8 @@ func TestAPaneAnswerResolvesAQuestionTheTaskAskedOnItsPlan(t *testing.T) {
 	if out.Updates[0].ReplyTo != question.ID || out.Updates[0].Item != plan.ID {
 		t.Fatalf("answer = %+v, want it on the plan, resolving %d", out.Updates[0], question.ID)
 	}
-	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" || PlanQuestion(&st, task.ID) != 0 {
-		t.Errorf("task %s, plan question %d", st.Items[task.ID].State, PlanQuestion(&st, task.ID))
+	if st := mustSnapshot(t, s); st.Items[task.ID].State != "running" || PlanQuestion(st.tx(), task.ID) != 0 {
+		t.Errorf("task %s, plan question %d", st.Items[task.ID].State, PlanQuestion(st.tx(), task.ID))
 	}
 }
 
@@ -277,15 +277,12 @@ func TestAPlannersPaneInputNeverAnswersATasksPlanQuestion(t *testing.T) {
 	asker, _ := dispatch(t, s, task)
 	theirs := call(t, s, asker, Request{Op: "ask", ID: plan.ID, Body: "Is main red?"}).Updates[0]
 	planner := Actor{Name: "a99", Role: "worker", Attempt: "a99"}
-	if err := s.Store.Transaction(func(st *State) error {
-		st.Attempts[planner.Attempt] = Attempt{ID: planner.Attempt, Item: plan.ID, State: "running"}
-		p := st.Items[plan.ID]
+	edit(t, s.Store, func(tx *Tx) {
+		tx.PutAttempt(Attempt{ID: planner.Attempt, Item: plan.ID, State: "running"})
+		p := tx.item(plan.ID)
 		p.Attempt = planner.Attempt
-		st.Items[plan.ID] = p
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+		tx.PutItem(p)
+	})
 	out := call(t, s, planner, Request{Op: "pane-input", Body: "Unrelated note"})
 	if out.Updates[0].Kind != KindPaneMessage {
 		t.Errorf("the planner's pane input %+v answered the task's question %d", out.Updates[0], theirs.ID)

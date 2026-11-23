@@ -14,7 +14,7 @@ func TestStopReleasesTheWindowKeepingItsWorkAndNoPassDispatchesTheHeldTask(t *te
 	pass(t, c)
 	pass(t, c)
 	claim(t, c, task)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Items[task.ID].Attempt
 	launches := h.calls
 	stopped := execute(t, c.Service, control.Request{Op: "task-stop", ID: task.ID})
@@ -32,7 +32,7 @@ func TestStopReleasesTheWindowKeepingItsWorkAndNoPassDispatchesTheHeldTask(t *te
 	for range 3 {
 		pass(t, c)
 	}
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	at := st.Attempts[first]
 	if h.calls != launches || st.Items[task.ID].Attempt != first || at.State != "ended" || at.Reason != control.EndStopped || len(h.released) != 1 {
 		t.Fatalf("held task: %d launches, attempt %s %+v, %d releases", h.calls, st.Items[task.ID].Attempt, at, len(h.released))
@@ -66,7 +66,7 @@ func TestResumeDispatchesAgainAsAResumeOfTheKeptBranch(t *testing.T) {
 	pass(t, c)
 	pass(t, c)
 	claim(t, c, task)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Items[task.ID].Attempt
 	execute(t, c.Service, control.Request{Op: "task-stop", ID: task.ID})
 	pass(t, c)
@@ -76,7 +76,7 @@ func TestResumeDispatchesAgainAsAResumeOfTheKeptBranch(t *testing.T) {
 		t.Fatalf("resume: %+v", resumed)
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	second := st.Items[task.ID].Attempt
 	if second == first || st.Attempts[second].State != "running" || st.Items[task.ID].State != "running" {
 		t.Fatalf("the task was not dispatched again: attempt %s, %+v", second, st.Items[task.ID])

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"regexp"
 	"slices"
 	"strings"
@@ -187,9 +188,10 @@ func TestUpgradeRunsWithTasksBusy(t *testing.T) {
 			t.Errorf("%s is %s after the upgrade; want %s", task.ID, task.State, state)
 		}
 	}
-	st, err := f.stack.service.Store.Snapshot()
-	if err != nil || st.Upgrade.Start.IsZero() || st.Upgrade.End.Before(st.Upgrade.Start) {
-		t.Errorf("the server's upgrade record is %+v (%v); want a start and an end", st.Upgrade, err)
+	var upgrade control.UpgradeRecord
+	err := f.stack.service.Store.Read(context.Background(), func(tx *control.Tx) error { upgrade = tx.Upgrade(); return nil })
+	if err != nil || upgrade.Start.IsZero() || upgrade.End.Before(upgrade.Start) {
+		t.Errorf("the server's upgrade record is %+v (%v); want a start and an end", upgrade, err)
 	}
 }
 

@@ -234,14 +234,18 @@ type Request struct {
 
 // Response contains one operation's result. Credentials are only returned at dispatch.
 type Response struct {
-	Item       *Item        `json:"item,omitempty"`
-	Items      []Item       `json:"items,omitempty"`
-	Updates    []Update     `json:"updates,omitempty"`
-	Attempt    *Attempt     `json:"attempt,omitempty"`
-	Attempts   []Attempt    `json:"attempts,omitempty"`
-	Queue      []QueueEntry `json:"queue,omitempty"`
-	Sessions   []SessionRow `json:"sessions,omitempty"`
-	Credential string       `json:"credential,omitempty"`
+	Item     *Item        `json:"item,omitempty"`
+	Items    []Item       `json:"items,omitempty"`
+	Updates  []Update     `json:"updates,omitempty"`
+	Attempt  *Attempt     `json:"attempt,omitempty"`
+	Attempts []Attempt    `json:"attempts,omitempty"`
+	Queue    []QueueEntry `json:"queue,omitempty"`
+	Sessions []SessionRow `json:"sessions,omitempty"`
+	// Questions are the statuses of an item's questions, as an updates read
+	// of one item returns them. It is present, even empty, in every such
+	// read, which tells a client the server sends statuses.
+	Questions  []QuestionStatus `json:"questions,omitzero"`
+	Credential string           `json:"credential,omitempty"`
 	// Fleet is the host-status op's reply.
 	Fleet *HostStatus `json:"fleet,omitempty"`
 	// Host is a host-pause, host-resume or host-move's reply.
@@ -251,46 +255,6 @@ type Response struct {
 type receipt struct {
 	Digest   string   `json:"digest"`
 	Response Response `json:"response"`
-}
-
-// State is a consistent database snapshot used by one transaction.
-type State struct {
-	Items    map[string]Item       `json:"items"`
-	Attempts map[string]Attempt    `json:"attempts"`
-	Updates  []Update              `json:"updates"`
-	Queue    map[string]QueueEntry `json:"queue"`
-	Auth     map[string]Actor      `json:"auth"`
-	Receipts map[string]receipt    `json:"receipts"`
-	// Hosts are what the coordinator saved of each host, by name.
-	Hosts map[string]HostRecord `json:"hosts"`
-	Next  int                   `json:"next"`
-	// PassAt is the last time the coordinator was known to run: the start of
-	// its newest pass, or the end of it once it finished; zero before the
-	// first pass.
-	PassAt time.Time `json:"pass_at,omitzero"`
-	// Upgrade is the newest `engine upgrade` run's start and end.
-	Upgrade UpgradeRecord `json:"upgrade,omitzero"`
-}
-
-func emptyState() State {
-	return State{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Queue: map[string]QueueEntry{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Hosts: map[string]HostRecord{}, Next: 1}
-}
-
-func (s *State) id(prefix string) string {
-	id := fmt.Sprintf("%s%d", prefix, s.Next)
-	s.Next++
-	return id
-}
-
-func (s *State) update(a Actor, r Request, kind, body string, now time.Time) Update {
-	u := Update{ID: len(s.Updates) + 1, Item: r.ID, Author: a.Name, At: now.UTC(), Kind: kind, Body: body,
-		Recipient: r.Recipient, ReplyTo: r.ReplyTo, RequiresReply: r.RequiresReply,
-		Choices: r.Choices, Recommended: r.Recommended, Class: r.Class}
-	if item, ok := s.Items[r.ID]; ok {
-		u.Snapshot = &item
-	}
-	s.Updates = append(s.Updates, u)
-	return u
 }
 
 // Secret generates an opaque credential.

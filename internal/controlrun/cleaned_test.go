@@ -19,7 +19,7 @@ func merged(t *testing.T) (*Coordinator, *merger, control.Item, control.Actor) {
 	m.status.Windows[0].State = "waiting"
 	m.status.Runs[0].Record.Worktree, m.status.Runs[0].Record.Branch = "/w/demo-3", "task/demo-3"
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "done" || len(m.released) != 0 {
 		t.Fatalf("task %s, released %v: want merged and kept for its cleanup turn", st.Items[task.ID].State, m.released)
 	}
@@ -50,7 +50,7 @@ func TestACleanedSessionIsReleasedAtOnce(t *testing.T) {
 	c, m, task, worker := merged(t)
 	reportCleaned(t, c, worker, task.ID, "")
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if !slices.Equal(m.outcomes, []hostops.Outcome{hostops.RunDone}) || st.Attempts[st.Items[task.ID].Attempt].State != "ended" {
 		t.Fatalf("outcomes %v, attempt %s", m.outcomes, st.Attempts[st.Items[task.ID].Attempt].State)
 	}

@@ -14,7 +14,7 @@ import (
 // quietNotices are the operator notices of item id about a quiet session.
 func quietNotices(t *testing.T, c *Coordinator, id string) []string {
 	t.Helper()
-	st, err := c.Service.Store.Snapshot()
+	st, err := snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestAQuietWorkingSessionIsToldOncePerQuietStretch(t *testing.T) {
 			t.Errorf("a pass logged %q", l)
 		}
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "running" || st.Attempts[st.Items[task.ID].Attempt].State != "running" {
 		t.Errorf("a notice stopped something: task %s", st.Items[task.ID].State)
 	}

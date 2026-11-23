@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -83,10 +82,7 @@ type observerFixture struct {
 
 func newObserverFixture(t *testing.T, names ...string) *observerFixture {
 	t.Helper()
-	if _, err := exec.LookPath("sqlite3"); err != nil {
-		t.Skip("sqlite3 absent")
-	}
-	store, err := control.Open(filepath.Join(t.TempDir(), "db"), nil)
+	store, err := control.Open(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +278,7 @@ func TestObserverReusesCoordinatorReads(t *testing.T) {
 	for range 3 {
 		pass(t, c)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	expectObservation(t, c.Observer, at, session.StateWorking, c.Service.Now())
 	if err := c.Observer.Refresh(); err != nil {
@@ -330,9 +326,10 @@ func TestSlowHostReadKeepsObservationsRecordedMeanwhile(t *testing.T) {
 		t.Fatal(err)
 	}
 	later, onMac := f.running(t, "mac", "@1")
-	st, _ := f.svc.Store.Snapshot()
 	mac := reconcile.HostLoad{Name: "mac", Status: hostops.Status{Windows: []hostops.Window{window(later, "@1", true, session.StateWaiting)}}}
-	f.obs.Record(st, reconcile.Fleet{Hosts: []reconcile.HostLoad{mac, {Name: "devbox", Unreachable: "busy"}}})
+	inTx(t, f.svc.Store, func(tx *control.Tx) {
+		f.obs.Record(tx, reconcile.Fleet{Hosts: []reconcile.HostLoad{mac, {Name: "devbox", Unreachable: "busy"}}})
+	})
 	t0 := f.clock.now()
 	close(gate)
 	f.obs.Settle()

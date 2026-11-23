@@ -85,26 +85,16 @@ func (c *Coordinator) Pass(ctx context.Context) error {
 }
 
 func (c *Coordinator) reconcilePass(ctx context.Context) error {
-	st, err := c.Service.Store.Snapshot()
-	if err != nil {
+	ids, repos, err := c.coordinated()
+	if err != nil || len(ids) == 0 {
 		return err
 	}
-	var ids []string
-	for id, item := range st.Items {
-		if item.Coordinating {
-			ids = append(ids, id)
-		}
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	sort.Slice(ids, func(i, j int) bool { return control.Number(ids[i]) < control.Number(ids[j]) })
 	cfg, local, err := c.configuration()
 	if err != nil {
 		return c.notice("", "configuration", err.Error())
 	}
 	if c.Ready != nil {
-		c.askReady(st, ids, cfg)
+		c.Ready.Ask(cfg, repos)
 		c.notesDue = true
 	}
 	if err = c.queues(cfg); err != nil {
@@ -117,6 +107,25 @@ func (c *Coordinator) reconcilePass(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// coordinated are the IDs of the items whose coordination runs, by number,
+// and the repository of each, once, in that order.
+func (c *Coordinator) coordinated() (ids []string, repos []control.Item, err error) {
+	err = read(c.Service.Store, func(tx *control.Tx) error {
+		roots := tx.CoordinatedItems()
+		sort.Slice(roots, func(i, j int) bool { return control.Number(roots[i].ID) < control.Number(roots[j].ID) })
+		seen := map[string]bool{}
+		for _, root := range roots {
+			ids = append(ids, root.ID)
+			if repo, _ := tx.Item(root.Repo); repo.ID != "" && !seen[repo.ID] {
+				seen[repo.ID] = true
+				repos = append(repos, repo)
+			}
+		}
+		return nil
+	})
+	return ids, repos, err
 }
 
 func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config, local hosts.Host) error {
@@ -137,22 +146,35 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 		c.sawLimits(fleet)
 		c.limitsDue = false
 	}
-	st, v, acts, err := c.decide(id, fleet)
-	if err != nil {
+	// The pass decides and applies on one view of the records, as of after
+	// the merge queue ran; each write inside it commits on its own.
+	return read(c.Service.Store, func(tx *control.Tx) error { return c.decideAndApply(ctx, tx, id, fleet, cfg) })
+}
+
+// decideAndApply decides root id's actions on tx and applies them.
+func (c *Coordinator) decideAndApply(ctx context.Context, tx *control.Tx, id string, fleet reconcile.Fleet, cfg *hosts.Config) error {
+	// A failed read leaves zero values: never record or decide on them.
+	root, _ := tx.Item(id)
+	if err := tx.Err(); err != nil {
 		return err
 	}
-	c.Observer.Record(st, fleet)
-	c.Board.Record(st, fleet, c.Ready)
-	if !st.Items[id].Coordinating {
+	c.Observer.Record(tx, fleet)
+	c.Board.Record(tx, fleet, c.Ready)
+	if !root.Coordinating {
 		return nil
 	}
-	if err = c.keepObservations(v); err != nil {
+	v := c.view(tx, id, fleet)
+	if err := tx.Err(); err != nil {
 		return err
 	}
-	if err = c.wakeMessages(st, v, cfg); err != nil {
+	acts := reconcile.Decide(v)
+	if err := c.keepObservations(v); err != nil {
+		return err
+	}
+	if err := c.wakeMessages(tx, v, cfg); err != nil {
 		c.log("wake messages: %v", err)
 	}
-	if err = c.wakeOutage(v, cfg); err != nil {
+	if err := c.wakeOutage(v, cfg); err != nil {
 		c.keepOutage = true
 		c.log("wake after outage: %v", err)
 	}
@@ -165,23 +187,12 @@ func (c *Coordinator) passItem(ctx context.Context, id string, cfg *hosts.Config
 		if act.Kind == reconcile.Stop && !released {
 			continue
 		}
-		if err = c.apply(st, act, cfg); err != nil {
+		if err := c.apply(tx, act, cfg); err != nil {
 			c.log("%s %s: %v", act.Kind, act.Item, err)
 			released = released && act.Kind != reconcile.Release
 		}
 	}
 	return nil
-}
-
-// decide is the pass's decision for root id, on the records after the
-// merge queue ran.
-func (c *Coordinator) decide(id string, fleet reconcile.Fleet) (control.State, reconcile.View, []reconcile.Action, error) {
-	st, err := c.Service.Store.Snapshot()
-	if err != nil || !st.Items[id].Coordinating {
-		return st, reconcile.View{}, nil, err
-	}
-	v := c.view(st, id, fleet)
-	return st, v, reconcile.Decide(v), nil
 }
 
 // fleet reads every host's status, one call per host, all at once.
