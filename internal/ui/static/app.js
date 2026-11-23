@@ -312,7 +312,7 @@
       if (n !== planPending) return;
       fetched.plan = env;
     }
-    panel.adopt(fetched.plan);
+    if (view.tab === "communications") panel.adopt(fetched.plan);
     renderPane();
     status();
     if (scroll && view.task) {

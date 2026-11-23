@@ -146,6 +146,8 @@ func settle(q *Question, m Message) {
 	case "acknowledged":
 		q.Acknowledged = true
 	case "resolved", control.KindPaneAnswer:
-		q.State, q.Resolution = "resolved", m.ID
+		if q.Resolution == 0 {
+			q.State, q.Resolution = "resolved", m.ID
+		}
 	}
 }

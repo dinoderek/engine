@@ -40,7 +40,7 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 ## API and storage
 
-`POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors carry a status and sometimes a stable `reason`; storage details stay in server logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`; the CLI never retries it.
+`POST /v1/command` accepts the Request in `internal/control/types.go`. Unknown fields, missing credentials and unknown operations fail; the credential sets authorship. Errors carry a status and sometimes a stable `reason`; storage details stay in logs. A refused `engine attempt reconcile` is a 409 with reason `reconcile-refused`; the CLI never retries it.
 
 Every write has a request key; reusing one for another command fails. A call retries uncertain delivery once, same key. A session's command (one with `ENGINE_ATTEMPT_ID`) also retries connect errors, timeouts and 5xx for 90 seconds, under that key (`internal/controlcmd/retry.go`), and its first retry prints one stderr line naming the key; a 4xx never retries. `ENGINE_RETRY_FOR` (a Go duration, `0` for none) sets the window for every server command but `engine attach`; the operator's default is none; the prompt hook and the dashboard keep their own behaviour. An edit invalidates a placement decision before any execution is reserved or launched.
 
@@ -48,7 +48,7 @@ The server alone writes its database, in process (`modernc.org/sqlite`), a table
 
 Operator-only `overview` (inbox, repositories, plans, sessions) and `plan-detail` (a plan's view, attempts, sessions) each answer in one read transaction. An `updates` read of one item also returns its questions' statuses (`internal/control/aggregate.go`).
 
-The operator credential is an owner-only regular file. Every dispatch a separate execution credential, scoped to that plan or task; workers cannot approve, start coordination or read the operator inbox. Ending an attempt revokes its credential. Credentials are hashed for lookup; dispatch receipts retain the token privately for interrupted dispatch recovery.
+The operator credential is an owner-only regular file. Every dispatch creates a separate execution credential, scoped to that plan or task; workers cannot approve, start coordination or read the operator inbox. Ending an attempt revokes its credential. Credentials are hashed for lookup; dispatch receipts retain the token privately for interrupted dispatch recovery.
 
 ## Updates and operator inbox
 

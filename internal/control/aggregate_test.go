@@ -1,6 +1,7 @@
 package control
 
 import (
+	"net/http/httptest"
 	"reflect"
 	"slices"
 	"testing"
@@ -195,5 +196,25 @@ func TestAPaneAnswerResolvesAQuestionStatus(t *testing.T) {
 	got := call(t, w.s, op, Request{Op: "updates", ID: w.running.ID, After: answer.ID}).Questions
 	if want := []QuestionStatus{{ID: w.question.ID, State: "resolved", Resolution: answer.ID}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("statuses = %+v, want %+v", got, want)
+	}
+}
+
+// A client tells a server that sends question statuses from an older one by
+// the field's presence, so an item with no question still sends it, empty.
+func TestAnUpdatesReadWithoutQuestionsSendsAnEmptyStatusList(t *testing.T) {
+	w := newAggregateWorld(t)
+	token := Secret()
+	server := httptest.NewServer(Handler(w.s, token, t.Logf))
+	defer server.Close()
+	client := Client{URL: server.URL, Token: token}
+	got, err := client.Call(t.Context(), Request{Op: "updates", ID: w.idle.ID})
+	if err != nil || got.Questions == nil || len(got.Questions) != 0 {
+		t.Fatalf("questions = %#v (%v), want an empty, non-nil list", got.Questions, err)
+	}
+	if got, err = client.Call(t.Context(), Request{Op: "updates"}); err != nil || got.Questions != nil {
+		t.Fatalf("an updates read of every item sent statuses %#v (%v)", got.Questions, err)
+	}
+	if got, err = client.Call(t.Context(), Request{Op: "inbox"}); err != nil || got.Questions != nil {
+		t.Fatalf("an inbox read sent statuses %#v (%v)", got.Questions, err)
 	}
 }
