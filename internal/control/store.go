@@ -31,7 +31,7 @@ type Store struct {
 
 // Open creates a private database and refuses a database already owned by a
 // server. It migrates an older schema (migrate) and refuses a newer one; a
-// current database opens without reading any record.
+// current database opens without reading any record once its indexes exist.
 func Open(path string) (*Store, error) {
 	if path == "" {
 		return nil, errors.New("a database path is required")
