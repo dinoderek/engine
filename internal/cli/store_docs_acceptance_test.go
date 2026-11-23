@@ -36,12 +36,26 @@ func persistentDocs(t *testing.T) map[string]string {
 }
 
 // sqlite3Reason is why block may name sqlite3: a Codex host's reader, the
-// tests' tools, or the offline status check that reads the database file
+// tests' tool lists, or the offline status check that reads the database file
 // when the server does not answer. Anything else would be a server
 // prerequisite, and the server needs none.
 func sqlite3Reason(doc, block string) bool {
-	return strings.Contains(block, "Codex") || doc == "docs/testing-strategy.md" ||
+	tools := doc == "docs/testing-strategy.md" && strings.Contains(block, "`tmux`, `node`")
+	return tools || strings.Contains(block, "Codex") ||
 		strings.Contains(block, "database check is unknown without `sqlite3` on the server")
+}
+
+// items are text's paragraphs, list items and table rows.
+func items(text string) []string {
+	var out []string
+	for _, block := range strings.Split(text, "\n\n") {
+		if strings.HasPrefix(block, "|") {
+			out = append(out, strings.Split(block, "\n")...)
+			continue
+		}
+		out = append(out, strings.Split(block, "\n- ")...)
+	}
+	return out
 }
 
 // No persistent doc lists sqlite3 as something the server needs: each
@@ -54,15 +68,13 @@ func TestNoDocListsSQLite3AsAServerPrerequisite(t *testing.T) {
 	}
 	named := 0
 	for doc, text := range docs {
-		for _, block := range strings.Split(text, "\n\n") {
-			for _, item := range strings.Split(block, "\n- ") {
-				if !strings.Contains(item, "sqlite3") {
-					continue
-				}
-				named++
-				if !sqlite3Reason(doc, item) {
-					t.Errorf("%s names sqlite3 outside a Codex host, the tests or the offline status check:\n%s", doc, item)
-				}
+		for _, item := range items(text) {
+			if !strings.Contains(item, "sqlite3") {
+				continue
+			}
+			named++
+			if !sqlite3Reason(doc, item) {
+				t.Errorf("%s names sqlite3 outside a Codex host, the tests' tools or the offline status check:\n%s", doc, item)
 			}
 		}
 	}

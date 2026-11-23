@@ -81,11 +81,7 @@ func scalar[T any](t *testing.T, path, query string) T {
 // noSQLite3 is a PATH of an empty directory: no sqlite3, nor any other tool.
 func noSQLite3(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	if _, err := exec.LookPath(filepath.Join(dir, "sqlite3")); err == nil {
-		t.Fatal("the empty PATH holds sqlite3")
-	}
-	return dir
+	return t.TempDir()
 }
 
 // serverProcess is a running `engine serve --foreground`, this test binary
@@ -238,7 +234,7 @@ func TestTheServerMigratesAVersion6DatabaseAndServesIt(t *testing.T) {
 	t.Run("every record answers as before", func(t *testing.T) { acceptReads(t, p) })
 	t.Run("snapshots hold only the kept fields", func(t *testing.T) { acceptSlimSnapshots(t, p, db) })
 	t.Run("reads proceed beside a held write", func(t *testing.T) { acceptReadsBesideAWrite(t, p, db) })
-	t.Run("writes and request keys", func(t *testing.T) { acceptWrites(t, p) })
+	t.Run("writes and request keys", func(t *testing.T) { acceptWrites(t, p, db) })
 	t.Run("receipts expire after seven days", func(t *testing.T) { acceptRetention(t, p, db) })
 	p.stop()
 	t.Run("backup and reopen", func(t *testing.T) { acceptBackupAndReopen(t, home, db) })
@@ -375,12 +371,12 @@ func acceptSlimSnapshots(t *testing.T, p *serverProcess, db string) {
 	check(t, snapshots > 0, "no update carries a snapshot")
 }
 
-// acceptReadsBesideAWrite holds a write transaction open on the database,
+// acceptReadsBesideAWrite holds a write transaction open on the WAL database,
 // as the server's writer does during a write, and reads through the server:
-// each read answers from the last commit while the write is still open. A
-// read that waited for the writer would never answer, since the write ends
-// only after the reads.
+// each read answers from the last commit while the write is still open, so
+// no read takes the write lock or sees what is uncommitted.
 func acceptReadsBesideAWrite(t *testing.T, p *serverProcess, db string) {
+	check(t, scalar[string](t, db, "PRAGMA journal_mode") == "wal", "the database is not in WAL mode")
 	before := p.call(t, control.Request{Op: "get", ID: "p2"}).Item
 	conn, err := openSQL(t, db, false).Conn(t.Context())
 	if err != nil {
@@ -403,9 +399,12 @@ func acceptReadsBesideAWrite(t *testing.T, p *serverProcess, db string) {
 	p.call(t, control.Request{Op: "say", ID: "p2", Body: "Written once the other writer let go"})
 }
 
-// acceptWrites creates records and messages through the server, and replays
-// and reuses a request key.
-func acceptWrites(t *testing.T, p *serverProcess) {
+// acceptWrites has a session write with the credential the version 6 server
+// issued it, creates records and messages, and replays and reuses a key.
+func acceptWrites(t *testing.T, p *serverProcess, db string) {
+	credential := scalar[string](t, db, "SELECT json_extract(data, '$.response.credential') FROM receipts WHERE attempt='a8' AND json_extract(data, '$.response.credential') IS NOT NULL")
+	sent, err := control.Client{URL: p.url(), Token: credential, HTTP: p.client}.Call(t.Context(), control.Request{Op: "say", ID: "t7", Body: "Still here", Key: control.Secret()})
+	check(t, err == nil && len(sent.Updates) == 1 && sent.Updates[0].Author == "a8", "a8's migrated credential: %v %+v", err, sent)
 	repo := p.call(t, control.Request{Op: "create", Item: control.Item{Kind: "repo", Title: "Other", Slug: "owner/other", Remote: "git@example.test:owner/other.git"}}).Item
 	plan := p.call(t, control.Request{Op: "create", Item: control.Item{Kind: "plan", Repo: repo.ID, Title: "Second", Body: "Requirements"}}).Item
 	check(t, p.call(t, control.Request{Op: "get", ID: plan.ID}).Item.Title == "Second", "the new plan does not read back")
@@ -414,7 +413,7 @@ func acceptWrites(t *testing.T, p *serverProcess) {
 	again := p.call(t, say)
 	check(t, len(first.Updates) == 1 && jsonText(first) == jsonText(again), "a replayed key answered %s, then %s", jsonText(first), jsonText(again))
 	say.Body = "Another message"
-	_, err := p.operator().Call(t.Context(), say)
+	_, err = p.operator().Call(t.Context(), say)
 	var problem *control.Problem
 	check(t, errors.As(err, &problem) && problem.Status == http.StatusConflict, "a reused key with another request: %v", err)
 	thread := p.call(t, control.Request{Op: "updates", ID: plan.ID}).Updates
