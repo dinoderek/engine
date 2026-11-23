@@ -222,6 +222,13 @@ type dashboard struct {
 // flags, such as --host.
 func startDashboard(t *testing.T, s *controlStack, extra ...string) *dashboard {
 	t.Helper()
+	return startDashboardOn(t, s.url(), s.token, extra...)
+}
+
+// startDashboardOn is startDashboard against the control server at url,
+// holding the operator credential token.
+func startDashboardOn(t *testing.T, url, token string, extra ...string) *dashboard {
+	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -231,8 +238,8 @@ func startDashboard(t *testing.T, s *controlStack, extra ...string) *dashboard {
 	if err = os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(dir, "config.toml"), "[server]\nurl = \""+s.url()+"\"\n")
-	writeFile(t, filepath.Join(dir, "server-token"), s.token+"\n")
+	writeFile(t, filepath.Join(dir, "config.toml"), "[server]\nurl = \""+url+"\"\n")
+	writeFile(t, filepath.Join(dir, "server-token"), token+"\n")
 	d := &dashboard{t: t, stderr: &syncBuffer{}}
 	d.cmd = exec.Command(self, append([]string{"ui", "--listen", "127.0.0.1:0"}, extra...)...)
 	d.cmd.Env = append(processEnv(), "HOME="+home, engineProcessVar+"=1")

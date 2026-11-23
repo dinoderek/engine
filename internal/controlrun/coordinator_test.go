@@ -129,13 +129,22 @@ func setupAt(t *testing.T, path string) (*Coordinator, *host, control.Item, cont
 	task := execute(t, svc, control.Request{Op: "create", Item: control.Item{Kind: "task", Title: "Task", Repo: repo.ID, Plan: plan.ID, Body: "## Outcome\nWorks\n## Tests\nProve it"}})
 	plan = execute(t, svc, control.Request{Op: "approve", ID: plan.ID, Version: plan.Version})
 	plan = execute(t, svc, control.Request{Op: "run", ID: plan.ID, Version: plan.Version})
+	c, h := coordinatorOn(t, store)
+	return c, h, repo, plan, task
+}
+
+// coordinatorOn is a coordinator of store, its time fixed, with one host,
+// devbox, that has room for two sessions.
+func coordinatorOn(t *testing.T, store *control.Store) (*Coordinator, *host) {
+	t.Helper()
+	svc := control.Service{Store: store, Now: func() time.Time { return time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC) }}
 	h := &host{status: hostops.Status{FreeSlots: 2, FreeHeavySlots: 2, TmuxKnown: true, TmuxStart: 1000}, launches: map[string]hostops.ControlRequest{}}
 	cfg := &hosts.Config{DefaultHarness: "claude", HarnessRatio: map[string]int{"claude": 1},
 		Harnesses: map[string]hosts.Harness{"claude": {MaxSessions: 2, Tiers: map[hosts.Tier]hosts.TierModel{
 			hosts.Standard: {Model: "executor", Effort: "high"}, hosts.Deep: {Model: "reviewer", Effort: "high"}}}},
 		Hosts: map[string]hosts.Host{"devbox": {Name: "devbox", Harnesses: []string{"claude"}, MaxSessions: 2}}}
 	c := &Coordinator{Service: svc, URL: "http://control.test", Config: cfg, Host: cfg.Hosts["devbox"], Client: func(hosts.Host) remote.Client { return h }, Logf: t.Logf}
-	return c, h, repo, plan, task
+	return c, h
 }
 
 func execute(t *testing.T, s control.Service, r control.Request) control.Item {
