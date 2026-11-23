@@ -331,3 +331,23 @@ func TestAReadThatAMoveOvertookAsksNothingStale(t *testing.T) {
 		t.Errorf("questions %+v", qs)
 	}
 }
+
+// An answer that finds its task moved already, as by the command its
+// question prints, moves nothing more.
+func TestAnAnswerAfterTheTaskMovedMovesNothing(t *testing.T) {
+	s, tasks := onClaude(t)
+	t1 := tasks[0].ID
+	sawLimits(t, s, one(t1, true))
+	q := fleetQuestions(mustSnapshot(t, s))[0]
+	call(t, s, op, Request{Op: "task-move", ID: t1, Move: &MoveRequest{Host: "devbox", Harness: "codex"}})
+	by := call(t, s, op, Request{Op: "resolve", ReplyTo: q.ID, Body: "Move to claude on spare"}).Updates[0].ID
+	sawLimits(t, s)
+	st := mustSnapshot(t, s)
+	if at := st.Attempts[st.Items[t1].Attempt]; at.MoveHost != "devbox" || at.MoveHarness != "codex" {
+		t.Errorf("the answer changed the move: %+v", at)
+	}
+	want := fmt.Sprintf("As answered in update %d, the coordinator would move %s, but it no longer runs claude on devbox: nothing was moved.", by, t1)
+	if notes := coordinatorNotes(st); !slices.Equal(notes, []string{want}) {
+		t.Errorf("notes %q", notes)
+	}
+}

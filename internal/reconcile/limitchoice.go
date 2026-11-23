@@ -19,11 +19,14 @@ const LimitWaitUnder = 2 * time.Hour
 //
 // A session counts while its task is open, neither stopped, held nor at a
 // hard stop, and its window is live and limited, or waiting with a limit
-// reset. Room is a host × harness that could start the task now, other than
-// a pair with a session at a limit, whether or not it counts here: for one task, any other pair it may run on,
-// which becomes the move; for several on one host × harness, another host
-// for at least one of them, as `engine host move` sends them anywhere but
-// their host. A task pinned to a harness keeps it.
+// reset.
+//
+// Room is a host × harness that could start the task now. A pair with any
+// session at a limit, counted here or not, is no room. For one task, room is
+// any other pair it may run on, which becomes the move. For several on one
+// host × harness, it is another host for at least one of them, as `engine
+// host move` sends them anywhere but their host. A task pinned to a harness
+// keeps it.
 func LimitChoices(f Fleet, tasks []Item) []control.LimitRead {
 	groups := map[pair][]Item{}
 	for _, t := range tasks {

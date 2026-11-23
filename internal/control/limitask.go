@@ -14,7 +14,7 @@ import (
 // covering more sessions replaces it.
 const (
 	ChoiceWaitReset      = "Wait for the reset"
-	ResolutionNoLimit    = "no longer limited"
+	ResolutionNoLimit    = "no longer limited or movable"
 	ResolutionSuperseded = "superseded"
 )
 
@@ -61,8 +61,8 @@ type LimitAsk struct {
 //   - A session limited while a question covering several is open joins it.
 //     One limited while a question about one session is open replaces it
 //     with a question covering both, resolving the first as superseded.
-//   - A question none of whose sessions is limited any more resolves as
-//     ResolutionNoLimit.
+//   - A question none of whose sessions the read still offers, limited and
+//     movable, resolves as ResolutionNoLimit.
 //   - An answer is run once: a move as `engine task move` or `engine host
 //     move` does. A resolution that is not the move, like a wait, runs
 //     nothing.
@@ -223,6 +223,10 @@ func (s Service) actOnLimit(st *State, host, harness string) error {
 		}
 	} else {
 		id := ask.Tasks[0]
+		if at := st.Attempts[st.Items[id].Attempt]; at.State == "ended" || at.Host != host || at.Harness != harness {
+			s.hostNote(st, host, fmt.Sprintf("As answered in update %d, the coordinator would move %s, but it no longer runs %s on %s: nothing was moved.", by, id, harness, host))
+			return nil
+		}
 		_, err := s.moveTask(st, as, Request{Op: "task-move", ID: id, Move: &MoveRequest{Host: ask.MoveHost, Harness: ask.MoveHarness, Confirm: true}})
 		if note, err = refusedNote(err, by, "move "+id); err != nil {
 			return err
