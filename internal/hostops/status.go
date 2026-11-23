@@ -100,6 +100,12 @@ type Window struct {
 	Denial *Denial `json:"denial,omitempty"`
 }
 
+// AtLimit reports whether the window's session is live and waits on a usage
+// limit: limited, or waiting with a limit reset.
+func (w Window) AtLimit() bool {
+	return w.Alive && (w.State == session.StateLimited || w.State == session.StateWaiting && w.ResetsAt > 0)
+}
+
 // Run is a run directory and its run.json.
 type Run struct {
 	Name   string         `json:"name"`

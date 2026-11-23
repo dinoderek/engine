@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
 )
 
 // LimitWaitUnder is how near a known reset must be for waiting to be the
@@ -19,7 +20,7 @@ const LimitWaitUnder = 2 * time.Hour
 // A session counts while its task is open, neither stopped, held nor at a
 // hard stop, and its window is live and limited, or waiting with a limit
 // reset. Room is a host × harness that could start the task now, other than
-// a pair with such a session: for one task, any other pair it may run on,
+// a pair with a session at a limit, whether or not it counts here: for one task, any other pair it may run on,
 // which becomes the move; for several on one host × harness, another host
 // for at least one of them, as `engine host move` sends them anywhere but
 // their host. A task pinned to a harness keeps it.
@@ -77,7 +78,7 @@ func latestReset(ts []Item) int64 {
 
 // room is the host × harness that could start limited task t now, as
 // placement would pick it: not t's own pair, nor one with a limited
-// session, nor, when offHost, any pair on t's host.
+// session, offered or not, nor, when offHost, any pair on t's host.
 func (f Fleet) room(t Item, offHost bool, limited map[pair][]Item) (host, harness string, ok bool) {
 	w := want(t)
 	if offHost {
@@ -100,11 +101,18 @@ func (f Fleet) room(t Item, offHost bool, limited map[pair][]Item) (host, harnes
 		fits, _, _ := f.fits(w, name, map[pair]bool{})
 		fits = slices.DeleteFunc(fits, func(h HostLoad) bool {
 			_, busy := limited[pair{h.Name, name}]
-			return busy || h.Name == t.Current.Host && name == t.Current.Harness
+			return busy || h.limited(name) || h.Name == t.Current.Host && name == t.Current.Harness
 		})
 		if best, found := pick(fits, free, f.heavy(w)); found {
 			return best.Name, name, true
 		}
 	}
 	return "", "", false
+}
+
+// limited reports whether a live window of the host shows harness at a
+// usage limit, whoever its session is: a planner's, a held task's or one of
+// a plan not coordinated.
+func (h HostLoad) limited(harness string) bool {
+	return slices.ContainsFunc(h.Status.Windows, func(w hostops.Window) bool { return w.Harness == harness && w.AtLimit() })
 }

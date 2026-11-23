@@ -23,6 +23,27 @@ func several(ids ...string) LimitRead {
 	return LimitRead{Host: "devbox", Harness: "claude", Tasks: ids, ResetsAt: resetIn(3 * time.Hour), Room: true}
 }
 
+// onClaude is onHosts with two more tasks running claude on devbox: t1, t4
+// and t5 claude on devbox, t2 codex on devbox, t3 claude on spare.
+func onClaude(t *testing.T) (Service, []Item) {
+	t.Helper()
+	s := service(t)
+	s.Hosts = func() HostStatus {
+		return HostStatus{At: stretch, Hosts: []HostRow{{Name: "devbox"}, {Name: "mac", Unreachable: "ssh: exit 255"}, {Name: "spare"}}}
+	}
+	repo, plan := repoPlan(t, s)
+	var tasks []Item
+	for range 5 {
+		tasks = append(tasks, newTask(t, s, repo.ID, plan.ID))
+	}
+	approve(t, s, plan)
+	for i, where := range [][2]string{{"devbox", "claude"}, {"devbox", "codex"}, {"spare", "claude"}, {"devbox", "claude"}, {"devbox", "claude"}} {
+		out := call(t, s, op, Request{Op: "claim", ID: tasks[i].ID, Body: where[0], State: where[1]})
+		launched(t, s, out.Attempt.ID)
+	}
+	return s, tasks
+}
+
 func sawLimits(t *testing.T, s Service, reads ...LimitRead) {
 	t.Helper()
 	if err := s.SawLimits("devbox", reads); err != nil {
@@ -42,7 +63,7 @@ func resolutions(st State, q int) []string {
 }
 
 func TestALimitedSessionWithRoomGetsOneQuestionHoldingNoTask(t *testing.T) {
-	s, tasks := onHosts(t)
+	s, tasks := onClaude(t)
 	s.Now = func() time.Time { return stretch }
 	t1 := tasks[0].ID
 	for range 3 {
@@ -72,7 +93,7 @@ func TestALimitedSessionWithRoomGetsOneQuestionHoldingNoTask(t *testing.T) {
 		t.Errorf("record %+v", ask)
 	}
 	// A far reset recommends the move.
-	s2, tasks2 := onHosts(t)
+	s2, tasks2 := onClaude(t)
 	sawLimits(t, s2, one(tasks2[0].ID, false))
 	if q := fleetQuestions(mustSnapshot(t, s2))[0]; *q.Recommended != 1 {
 		t.Errorf("recommended %d", *q.Recommended)
@@ -80,7 +101,7 @@ func TestALimitedSessionWithRoomGetsOneQuestionHoldingNoTask(t *testing.T) {
 }
 
 func TestALimitedSessionWithNoRoomIsNotAsked(t *testing.T) {
-	s, tasks := onHosts(t)
+	s, tasks := onClaude(t)
 	r := one(tasks[0].ID, true)
 	r.Room, r.MoveHost, r.MoveHarness = false, "", ""
 	sawLimits(t, s, r)
@@ -96,8 +117,8 @@ func TestALimitedSessionWithNoRoomIsNotAsked(t *testing.T) {
 }
 
 func TestSeveralLimitedSessionsOnOneHarnessGetOneGroupedQuestion(t *testing.T) {
-	s, tasks := onHosts(t)
-	ids := []string{tasks[0].ID, tasks[2].ID}
+	s, tasks := onClaude(t)
+	ids := []string{tasks[0].ID, tasks[3].ID}
 	sawLimits(t, s, several(ids...))
 	st := mustSnapshot(t, s)
 	qs := fleetQuestions(st)
@@ -120,8 +141,8 @@ func TestSeveralLimitedSessionsOnOneHarnessGetOneGroupedQuestion(t *testing.T) {
 // A session limited later joins an open grouped question, and replaces an
 // open question about one session with a grouped one.
 func TestALateLimitedSessionJoinsTheOpenQuestion(t *testing.T) {
-	s, tasks := onHosts(t)
-	t1, t2, t3 := tasks[0].ID, tasks[1].ID, tasks[2].ID
+	s, tasks := onClaude(t)
+	t1, t2, t3 := tasks[0].ID, tasks[4].ID, tasks[3].ID
 	sawLimits(t, s, one(t1, true))
 	first := fleetQuestions(mustSnapshot(t, s))[0]
 	sawLimits(t, s, several(t1, t3))
@@ -146,8 +167,8 @@ func TestALateLimitedSessionJoinsTheOpenQuestion(t *testing.T) {
 }
 
 func TestALimitQuestionResolvesOnceNoSessionIsLimited(t *testing.T) {
-	s, tasks := onHosts(t)
-	t1, t3 := tasks[0].ID, tasks[2].ID
+	s, tasks := onClaude(t)
+	t1, t3 := tasks[0].ID, tasks[3].ID
 	sawLimits(t, s, several(t1, t3))
 	q := fleetQuestions(mustSnapshot(t, s))[0]
 	// One resuming leaves the question open for the other.
@@ -174,8 +195,8 @@ func TestALimitQuestionResolvesOnceNoSessionIsLimited(t *testing.T) {
 // A session a wait covers is not asked about again while it stays limited;
 // a session limited after the answer is.
 func TestAnAnsweredQuestionCoversItsSessionsUntilTheirLimitEnds(t *testing.T) {
-	s, tasks := onHosts(t)
-	t1, t3 := tasks[0].ID, tasks[2].ID
+	s, tasks := onClaude(t)
+	t1, t3 := tasks[0].ID, tasks[3].ID
 	sawLimits(t, s, one(t1, true))
 	q := fleetQuestions(mustSnapshot(t, s))[0]
 	call(t, s, op, Request{Op: "resolve", ReplyTo: q.ID, Body: ChoiceWaitReset})
@@ -203,15 +224,16 @@ func movedOne(t *testing.T, st State, ts []Item) {
 }
 
 // movedSeveral checks that the answer paused devbox and moved its claude
-// task, t1, off it: t2 runs codex on devbox and t3 claude on spare.
+// tasks, t1, t4 and t5, off it, and only those: t2 runs codex on devbox and
+// t3 claude on spare.
 func movedSeveral(t *testing.T, st State, ts []Item) {
-	at := st.Attempts[st.Items[ts[0].ID].Attempt]
-	if at.Reason != EndMoved || at.MoveHost != "" || !st.Hosts["devbox"].Paused {
-		t.Errorf("t1's attempt %+v, devbox %+v", at, st.Hosts["devbox"])
+	if !st.Hosts["devbox"].Paused {
+		t.Errorf("devbox %+v", st.Hosts["devbox"])
 	}
-	for _, other := range ts[1:] {
-		if st.Attempts[st.Items[other.ID].Attempt].State == "ended" {
-			t.Errorf("%s moved", other.ID)
+	for i, task := range ts {
+		at := st.Attempts[st.Items[task.ID].Attempt]
+		if want := i == 0 || i > 2; (at.Reason == EndMoved && at.MoveHost == "") != want {
+			t.Errorf("%s's attempt %+v, want moved %v", task.ID, at, want)
 		}
 	}
 }
@@ -230,12 +252,12 @@ func TestEachAnswerToALimitQuestionRunsOnce(t *testing.T) {
 		"move one": {read: func(ts []Item) LimitRead { return one(ts[0].ID, true) }, answer: "Move to claude on spare\nnow please",
 			check: movedOne,
 			note:  "As answered in update %d, the coordinator moved %s to claude on spare."},
-		"move several": {read: func(ts []Item) LimitRead { return several(ts[0].ID, ts[2].ID) }, answer: "Move them to other hosts",
+		"move several": {read: func(ts []Item) LimitRead { return several(ts[0].ID, ts[3].ID) }, answer: "Move them to other hosts",
 			check: movedSeveral,
 			note:  "As answered in update %d, the coordinator moved %s on devbox. devbox is paused until `engine host resume devbox`."},
 	} {
 		t.Run(name, func(t *testing.T) {
-			s, tasks := onHosts(t)
+			s, tasks := onClaude(t)
 			read := c.read(tasks)
 			sawLimits(t, s, read)
 			q := fleetQuestions(mustSnapshot(t, s))[0]
@@ -247,12 +269,19 @@ func TestEachAnswerToALimitQuestionRunsOnce(t *testing.T) {
 			c.check(t, st, tasks)
 			var want []string
 			if c.note != "" {
-				want = []string{fmt.Sprintf(c.note, by, tasks[0].ID)}
+				moved := tasks[0].ID
+				if name == "move several" {
+					moved = tasks[0].ID + ", " + tasks[3].ID + ", " + tasks[4].ID
+				}
+				want = []string{fmt.Sprintf(c.note, by, moved)}
 			}
 			if notes := coordinatorNotes(st); !slices.Equal(notes, want) {
 				t.Errorf("notes %q, want %q", notes, want)
 			}
-			if got := fleetQuestions(st); len(got) != 1 || !st.Hosts["devbox"].Limits["claude"].Acted {
+			// A wait keeps the answered question covering its session; a move
+			// ends the stretch, its tasks gone from the host × harness.
+			ask, kept := st.Hosts["devbox"].Limits["claude"]
+			if got := fleetQuestions(st); len(got) != 1 || kept != (c.note == "") || kept && !ask.Acted {
 				t.Errorf("questions %d, record %+v", len(got), st.Hosts["devbox"])
 			}
 		})
@@ -260,7 +289,7 @@ func TestEachAnswerToALimitQuestionRunsOnce(t *testing.T) {
 }
 
 func TestARefusedMoveTellsTheOperator(t *testing.T) {
-	s, tasks := onHosts(t)
+	s, tasks := onClaude(t)
 	t1 := tasks[0].ID
 	read := one(t1, true)
 	read.MoveHost = "gone"
@@ -276,5 +305,29 @@ func TestARefusedMoveTellsTheOperator(t *testing.T) {
 	}
 	if st.Attempts[st.Items[t1].Attempt].State == "ended" {
 		t.Errorf("t1 moved")
+	}
+}
+
+// A read taken before an answer moved its task asks nothing about that
+// task: the move runs, the read loses it, and the next read asks afresh.
+func TestAReadThatAMoveOvertookAsksNothingStale(t *testing.T) {
+	s, tasks := onClaude(t)
+	t1, t4 := tasks[0].ID, tasks[3].ID
+	sawLimits(t, s, one(t1, true))
+	q := fleetQuestions(mustSnapshot(t, s))[0]
+	call(t, s, op, Request{Op: "resolve", ReplyTo: q.ID, Body: "Move to claude on spare"})
+	sawLimits(t, s, several(t1, t4))
+	st := mustSnapshot(t, s)
+	if qs := fleetQuestions(st); len(qs) != 1 {
+		t.Fatalf("asked on a stale read: %+v", qs[1:])
+	}
+	if at := st.Attempts[st.Items[t1].Attempt]; at.Reason != EndMoved {
+		t.Fatalf("t1 not moved: %+v", at)
+	}
+	r := one(t4, true)
+	sawLimits(t, s, r)
+	qs := fleetQuestions(mustSnapshot(t, s))
+	if len(qs) != 2 || !strings.HasPrefix(qs[1].Body, t4+" is at claude's limit") {
+		t.Errorf("questions %+v", qs)
 	}
 }

@@ -84,12 +84,27 @@ func (s Service) SawLimits(host string, reads []LimitRead) error {
 			i := slices.IndexFunc(reads, func(r LimitRead) bool { return r.Harness == harness })
 			read := LimitRead{Host: host, Harness: harness}
 			if i >= 0 {
-				read = reads[i]
+				read = current(st, reads[i])
 			}
 			s.limitStretch(st, host, read)
 		}
 		return nil
 	})
+}
+
+// current is read without the tasks whose attempt has ended, or moved off
+// its host × harness, since the pass read them, as an answer just run may
+// have done. A read that lost a task asks nothing new: the next pass reads
+// afresh.
+func current(st *State, read LimitRead) LimitRead {
+	kept := slices.DeleteFunc(slices.Clone(read.Tasks), func(id string) bool {
+		at := st.Attempts[st.Items[id].Attempt]
+		return at.State == "ended" || at.Host != read.Host || at.Harness != read.Harness
+	})
+	if len(kept) < len(read.Tasks) {
+		read.Tasks, read.Room = kept, false
+	}
+	return read
 }
 
 // limitStretch keeps host × harness's limit question to what read shows.
@@ -149,8 +164,9 @@ func (s Service) askLimit(st *State, read LimitRead) LimitAsk {
 		move = "Move them to other hosts"
 		body = fmt.Sprintf("%s are at %s's limit on %s until %s.\n\n"+
 			"Wait: each resumes on its own after the reset, as with no answer. "+
-			"Move: `engine host move %s --harness %s` pauses %s and resumes each of its %s tasks on another host now, from what its branch has on origin.",
-			strings.Join(read.Tasks, ", "), read.Harness, read.Host, until, read.Host, read.Harness, read.Host, read.Harness)
+			"Move: `engine host move %s --harness %s` pauses %s, every harness, until `engine host resume %s`, "+
+			"and resumes every %s task running there, limited or not, on another host now, from what its branch has on origin.",
+			strings.Join(read.Tasks, ", "), read.Harness, read.Host, until, read.Host, read.Harness, read.Host, read.Host, read.Harness)
 	} else {
 		ask.MoveHost, ask.MoveHarness = read.MoveHost, read.MoveHarness
 		move = fmt.Sprintf("Move to %s on %s", read.MoveHarness, read.MoveHost)

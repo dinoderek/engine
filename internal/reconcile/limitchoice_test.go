@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dinoderek/engine/internal/control"
+	"github.com/dinoderek/engine/internal/hostops"
 )
 
 // limitedOn is running task n whose live session on host, with harness, is
@@ -177,5 +178,28 @@ func TestALimitQuestionStandsInForTheFarResetNotice(t *testing.T) {
 	due.Session.LimitAsked = true
 	if got := shows(Decide(view(plan("planned"), due))); got != "resume t2 a2" {
 		t.Errorf("at the reset: %q", got)
+	}
+}
+
+// A window at a limit is no room whoever its session is: a planner's, a
+// held task's, or one of a plan this pass does not offer.
+func TestAnyLimitedWindowIsNoRoom(t *testing.T) {
+	for name, w := range map[string]hostops.Window{
+		"limited":                {Name: "demo-1", Alive: true, Harness: "claude", State: "limited"},
+		"waiting on a reset":     {Name: "demo-1", Alive: true, Harness: "claude", State: "waiting", ResetsAt: unix(time.Hour)},
+		"another harness":        {Name: "demo-1", Alive: true, Harness: "codex", State: "limited"},
+		"waiting with no reset":  {Name: "demo-1", Alive: true, Harness: "claude", State: "waiting"},
+		"dead with a limit seen": {Name: "demo-1", Harness: "claude", State: "limited"},
+	} {
+		f := moveHosts()
+		f.Now, f.HarnessRatio = t0, map[string]int{"claude": 1}
+		f.Hosts[1].Status.Windows = []hostops.Window{w}
+		want := "devbox claude t2 move claude on mac wait"
+		if name == "limited" || name == "waiting on a reset" {
+			want = "devbox claude t2 no room wait"
+		}
+		if got := showReads(LimitChoices(f, []Item{limitedOn(2, "devbox", "claude", time.Hour)})); got != want {
+			t.Errorf("%s: %q, want %q", name, got, want)
+		}
 	}
 }
