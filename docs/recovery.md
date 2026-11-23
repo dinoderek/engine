@@ -10,8 +10,8 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 
 ### 1. The server crashes
 
-- **Detected:** systemd restarts the unit (`Restart=on-failure`). Sessions notice because their `engine` commands fail.
-- **Engine does:** a session's command retries connect errors, timeouts and 5xx for 90 seconds under its request key (`control-server.md`). An outage long enough to count wakes each idle session of a running task once and restarts stall timers (`session-signals.md`, "Server outage"). A shorter one gets only the retry. Sessions on the server's host run in their own tmux scope, so the unit's restart does not end them (`tmux.md`).
+- **Detected:** on a host whose `hosts.toml` records a `services` unit, systemd restarts it (`Restart=on-failure`, `operator-setup.md`). Elsewhere nothing restarts the server. Sessions notice because their `engine` commands fail.
+- **Engine does:** a session's command retries connect errors, timeouts and 5xx for 90 seconds under its request key (`control-server.md`). An outage long enough to count wakes each idle session of a running task once and restarts stall timers (`session-signals.md`, "Server outage"). A shorter one gets only the retry. Sessions on the server's host run in their own tmux scope, so the unit's restart does not end them, unless host status reports `tmux_unit` (`tmux.md`, `operator-setup.md`).
 - **Run:** nothing, if it comes back. If it does not, go to 8.
 
 ### 2. The server is upgraded or restarted
@@ -31,12 +31,12 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 - **Engine does:** it applies the vanish rules (`session-signals.md`, "Vanish"). A claimed task keeps its PR and queue place and resumes on its own branch. Three such deaths in a row (`control.DeathCap`) end the task `failed`, with a notice carrying the last two pane-log tails. An unclaimed death is an early death: the first returns the task to `todo`, the second fails it. A death at a limit, or after coordination stopped, does not count.
 - **Run:**
   1. `engine updates <task>` and `engine attach <task>` to read why it died.
-  2. Nothing, for a resumed task. For a `failed` task, fix the cause and retry it as `control-server.md` describes.
+  2. Nothing, for a resumed task. For a `failed` task, fix the cause, then set it back to `todo` with `engine task state <task> --version <n> --state todo`. The dashboard's retry does the same (`dashboard-writes.md`).
 
 ### 4. The tmux server dies, or the host reboots
 
-- **Detected:** the first successful read after the host is back. Its tmux start time has changed, and every window last seen live is gone (or no tmux server runs). Until then, the host is unreachable (7).
-- **Engine does:** it reads this as one host-wide loss, not one death per task, and sends one notice for the host (`session-signals.md`, "Host-wide loss"). The attempts it ends resume or return to `todo` without counting toward a cap or strike. A stale `.git/index.lock` in a kept worktree is removed before the resume (`hosts-and-sessions.md`). A `tmux kill-session -t engine` that leaves the server running counts each task's death instead.
+- **Detected:** the first successful read after the host is back. Its tmux start time differs from the one saved, and every window last seen live is gone; or no tmux server runs at all (`session-signals.md`, "Host-wide loss"). Until then, the host is unreachable (7).
+- **Engine does:** it reads this as one host-wide loss, not one death per task, and sends one notice for the host. The attempts it ends resume or return to `todo` without counting toward a cap or strike. A stale `.git/index.lock` in a kept worktree is removed before the resume (`hosts-and-sessions.md`). A `tmux kill-session -t engine` that leaves the server running counts each task's death instead.
 - **Run:** nothing, if the host comes back. For a planned reboot, see "Planned reboot" below.
 
 ### 5. A session reaches its usage limit
@@ -61,13 +61,13 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 ### 7. A host is unreachable for long
 
 - **Detected:** its `status` call fails (ssh exit 255 is an unreachable host). The host shows as unreachable on the dashboard.
-- **Engine does:** its sessions are unknown, never dead: nothing is ended or moved, since they may still run. New tasks go to other hosts, and a merge-queue head there ends `merge-refused` after a bounded wait (`coordinator.md`, "Merge queue"). After 15 minutes with live tasks there, the operator gets one question, with three choices (`coordinator.md`, "An unreachable host is asked about"): wait, which is the default; move its tasks; or stop each. If the host returns first, the question resolves itself, and one note lists what happened to each task.
+- **Engine does:** its sessions are unknown, never dead: nothing is ended or moved, since they may still run. New tasks go to other hosts, and a merge-queue head there ends `merge-refused` after a bounded wait (`coordinator.md`, "Merge queue"). After 15 minutes with running tasks there, the operator gets one question, with three choices (`coordinator.md`, "An unreachable host is asked about"): wait, which is the default; move its tasks; or stop each. If the host returns first, the question resolves itself, and one note lists what happened to each task.
 - **Run:**
   - `engine host pause <host>`, to stop new placement there while you decide.
   - `engine host move <host>`, to move every task off it.
   - `engine task stop <task>`, for each task you want stopped.
 
-  Moving off an unread host asks for confirmation, since the old session may still push. The old session's credential is revoked, so it cannot write to the server or request a merge (`control-server.md`, "Moving a task"). Each kickoff warns that it may still push, and before any push the new session asks you if `origin`'s branch holds commits it lacks (`coordinator.md`, "Dispatch and recovery"). When the old host returns, its window is released, keeping the worktree, and you are told what was left unpushed.
+  Moving off an unread host asks for confirmation, since the old session may still push. The old session's credential is revoked, so it cannot write to the server or request a merge (`control-server.md`, "API and storage"). Each kickoff warns that it may still push, and before any push the new session asks you if `origin`'s branch holds commits it lacks (`coordinator.md`, "Dispatch and recovery"). When the old host returns, its window is released, keeping the worktree, and you are told what was left unpushed.
 
 ### 8. The server is down and not coming back
 
@@ -80,20 +80,7 @@ Engine never asks before it resumes a dead task. It asks only when a choice belo
 
 ## Planned reboot
 
-- **A session host:** run `engine host move <host>` first. It pauses the host and moves each of its tasks elsewhere. Reboot. Then run `engine host resume <host>`. Without the move, the reboot is still safe: the host-wide loss resumes its tasks without counting them (4).
+- **A session host:** run `engine host move <host>` first. It pauses the host and moves each of its tasks elsewhere. Once its windows are released and their branches pushed, reboot. Then run `engine host resume <host>`. Without the move, the reboot is still safe: the host-wide loss resumes its tasks without counting them (4).
 - **The server's host:** rebooting it also stops the server, so the server's outage rules (1) and the watcher (8) apply. Run `engine server status` once it is back.
 
-## Commands
-
-| Command | Does | Used for |
-| --- | --- | --- |
-| `engine task move <task> [--host <h>] [--harness <h>] [--yes]` | Ends the attempt `moved` and resumes the task on that host or harness | Off a bad host; onto another harness at a limit |
-| `engine task stop <task>` / `engine task resume <task>` | Holds a task in `todo` with its worktree kept / lifts the hold | Ending a hung session; restarting it later |
-| `engine host pause <host>` / `engine host resume <host>` | Stops or restarts new placement there; running sessions carry on | Maintenance, a flaky host |
-| `engine host move <host> [--harness <h>] [--yes]` | Pauses the host and moves its tasks, or one harness's | Evacuating a host or a harness at its limit |
-| `engine server status` / `engine server restart` | Shows, or restarts, the server's unit | A server that does not answer |
-| `engine upgrade [--dry-run]` | Upgrades every host, mid-plan too | Planned upgrades |
-| `engine attempt reconcile <id> <evidence>` | Applies the vanish rules to an attempt whose window a host read shows gone | An attempt the coordinator has not ended |
-| `engine attach <task>`, `engine tell <task> <text>`, `engine updates <task>` | Looks at a session, nudges it, reads its updates | Diagnosing any failure |
-
-Every write takes a request key, so a repeat after a lost reply is safe (`control-server.md`).
+Every command's flags and behaviour are in `control-server.md`, and every write takes a request key, so a repeat after a lost reply is safe.
