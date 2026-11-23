@@ -34,6 +34,7 @@ type InboxCard struct {
 	RepoSlug    string             `json:"repo_slug,omitempty"`
 	State       string             `json:"state,omitempty"`
 	Task        string             `json:"task,omitempty"` // the task whose session asked a plan question
+	Host        string             `json:"host,omitempty"` // the host a fleet question, which has no item, is about
 	Author      string             `json:"author"`
 	At          time.Time          `json:"at"`
 	Class       string             `json:"class,omitempty"`
@@ -82,6 +83,9 @@ func inboxList(updates []control.Update, items, repos []control.Item, rows []con
 			State: it.State, Task: u.Task, Author: u.Author, At: u.At, Body: u.Body}
 		if u.RequiresReply {
 			c.Kind, c.Class, c.Choices, c.Recommended = cardQuestion, u.Class, u.Choices, u.Recommended
+		}
+		if u.Host != "" {
+			c.Host, c.Title = u.Host, "Host "+u.Host
 		}
 		// A plan question a task's session asked belongs to that session.
 		session := u.Item

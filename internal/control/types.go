@@ -153,6 +153,9 @@ type Update struct {
 	Choices     []string `json:"choices,omitempty"`
 	Recommended *int     `json:"recommended,omitempty"`
 	Class       string   `json:"class,omitempty"`
+	// Host is the host a fleet question is about. A fleet question has no
+	// item, so it holds no task or plan (unreachable.go).
+	Host string `json:"host,omitempty"`
 }
 
 // QueueEntry is a task's place in its repository's merge queue, from its

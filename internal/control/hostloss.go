@@ -14,6 +14,15 @@ type HostRecord struct {
 	// TmuxStart is when the host's session tmux server started, in epoch
 	// seconds, as the last successful read that found a server saw it.
 	TmuxStart int64 `json:"tmux_start,omitempty"`
+	// UnreachableSince is the first failed read of the host's current
+	// unreachable stretch; zero while it answers (unreachable.go).
+	UnreachableSince time.Time `json:"unreachable_since,omitzero"`
+	// Question is the fleet question asked about that stretch, at most one,
+	// and Tasks the tasks it named. Acted is set once the coordinator has run
+	// the operator's answer to it.
+	Question int      `json:"question,omitempty"`
+	Tasks    []string `json:"tasks,omitempty"`
+	Acted    bool     `json:"acted,omitempty"`
 }
 
 // TmuxRead is what a successful read of a host showed of its tmux server.
