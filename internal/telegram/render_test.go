@@ -60,7 +60,8 @@ func TestAFleetQuestionNamesItsHostAndRendersThreeButtons(t *testing.T) {
 	}
 	if strings.Join(got, "|") != "★ "+control.ChoiceWait+"|"+control.ChoiceMove+"|"+control.ChoiceStop {
 		t.Fatalf("buttons %q", got)
-	}	if note := info(control.Update{Host: "mac", Body: "mac answers again"}); note != "Host mac\nmac answers again" {
+	}
+	if note := info(control.Update{Host: "mac", Body: "mac answers again"}); note != "Host mac\nmac answers again" {
 		t.Fatalf("a note on the host: %q", note)
 	}
 }
