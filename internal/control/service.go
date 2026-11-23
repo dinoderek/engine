@@ -125,8 +125,8 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 	if err := questionFields(r); err != nil {
 		return Response{}, err
 	}
-	if r.Move != nil && r.Op != "task-move" {
-		return Response{}, problem(400, "only task-move takes a move")
+	if r.Move != nil && r.Op != "task-move" && r.Op != "host-move" {
+		return Response{}, problem(400, "only task-move and host-move take a move")
 	}
 	switch r.Op {
 	case "plan-view":
@@ -159,6 +159,10 @@ func (s Service) apply(st *State, a Actor, r Request) (Response, error) {
 		return s.resumeTask(st, a, r)
 	case "task-move":
 		return s.moveTask(st, a, r)
+	case "host-pause", "host-resume":
+		return s.pauseHost(st, a, r)
+	case "host-move":
+		return s.moveHost(st, a, r)
 	case "merge-request":
 		return s.mergeRequest(st, a, r)
 	case "merge-queue":

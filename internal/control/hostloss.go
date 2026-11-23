@@ -1,9 +1,16 @@
 package control
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // HostRecord is what the coordinator saved of one host.
 type HostRecord struct {
+	// Paused is the operator's pause: placement starts nothing new on the
+	// host while it is set (hostpause.go). PausedAt is when it was set.
+	Paused   bool      `json:"paused,omitempty"`
+	PausedAt time.Time `json:"paused_at,omitzero"`
 	// TmuxStart is when the host's session tmux server started, in epoch
 	// seconds, as the last successful read that found a server saw it.
 	TmuxStart int64 `json:"tmux_start,omitempty"`
@@ -38,7 +45,9 @@ func (s Service) SawTmux(host string, read TmuxRead, alive func(*State, Attempt)
 			marked++
 		}
 		if read.Known && read.Start != saved {
-			st.Hosts[host] = HostRecord{TmuxStart: read.Start}
+			rec := st.Hosts[host]
+			rec.TmuxStart = read.Start
+			st.Hosts[host] = rec
 		}
 		if marked > 0 {
 			st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{Recipient: "operator"}, "say",

@@ -39,6 +39,9 @@ type HostLoad struct {
 	Harnesses    []string
 	Capabilities []string
 	FreeSlots    int
+	// Paused is the operator's pause: the host starts nothing new, though
+	// its running sessions carry on.
+	Paused bool
 	// FreeHeavySlots is how many heavy sessions the host can start now.
 	FreeHeavySlots int
 	// Sessions counts the live sessions of each harness on the host.
@@ -121,9 +124,9 @@ func signedOutText(host, harness string) string {
 }
 
 // free is how many slots the host has free now, and how many of them a heavy
-// task may take: none when it cannot be read.
+// task may take: none when it cannot be read or is paused.
 func (h HostLoad) free() slots {
-	if h.Unreachable != "" {
+	if h.Unreachable != "" || h.Paused {
 		return slots{}
 	}
 	all := max(0, h.FreeSlots)
@@ -261,6 +264,8 @@ func (f Fleet) fits(w Want, harness string, probed map[pair]bool) (fits []HostLo
 			continue
 		case h.Name == w.Avoid:
 			lacks = append(lacks, "the task was moved off "+h.Name)
+		case h.Paused:
+			waits = append(waits, h.Name+" is paused")
 		case !slices.Contains(h.Harnesses, harness):
 			lacks = append(lacks, fmt.Sprintf("%s does not run %s", h.Name, harness))
 		case h.Unready() != "":

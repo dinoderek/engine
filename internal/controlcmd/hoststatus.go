@@ -13,7 +13,7 @@ import (
 	"github.com/dinoderek/engine/internal/control"
 )
 
-const hostUsage = "usage: engine host status --all [--json]\n"
+const hostUsage = "usage: engine host status --all [--json]\n       engine host pause|resume <host>\n       engine host move <host> [--harness <harness>] [--yes]\n"
 
 // hostMain is `engine host status --all`: the fleet as the coordinator's
 // latest pass read it, a table or, with --json, the op's reply. It reads the
@@ -72,11 +72,15 @@ func renderHostStatus(w io.Writer, s control.HostStatus, now time.Time) error {
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "HOST\tREACHABLE\tFREE SLOTS\tQUOTA\tREADINESS")
 	for _, h := range s.Hosts {
+		name := h.Name
+		if h.Paused {
+			name += " (paused)"
+		}
 		if h.Unreachable != "" {
-			fmt.Fprintf(tw, "%s\tno: %s\t-\t-\t-\n", h.Name, oneLine(h.Unreachable))
+			fmt.Fprintf(tw, "%s\tno: %s\t-\t-\t-\n", name, oneLine(h.Unreachable))
 			continue
 		}
-		fmt.Fprintf(tw, "%s\tyes\t%d of %d (heavy %d of %d)\t%s\t%s\n", h.Name, h.FreeSlots, h.Slots, h.FreeHeavySlots, h.HeavySlots, quotaText(h), readinessText(h))
+		fmt.Fprintf(tw, "%s\tyes\t%d of %d (heavy %d of %d)\t%s\t%s\n", name, h.FreeSlots, h.Slots, h.FreeHeavySlots, h.HeavySlots, quotaText(h), readinessText(h))
 	}
 	if err := tw.Flush(); err != nil {
 		return err
