@@ -100,7 +100,7 @@ func replyCommand(tx *Tx, a Actor, r Request) (Request, string, error) {
 			return r, "", err
 		}
 	}
-	if parent.Item != "" && !workerItem(tx.LegacyState(), a, parent.Item) {
+	if parent.Item != "" && !workerItem(tx, a, parent.Item) {
 		return r, "", problem(403, "cannot reply for another execution")
 	}
 	r.ID = parent.Item
@@ -134,7 +134,7 @@ func pauseForQuestion(tx *Tx, a Actor, id string) (string, error) {
 	owner := executionOwner(tx, a)
 	if a.Role == "worker" && owner.Kind == "task" && owner.Plan == id {
 		held, asker = owner.ID, owner.ID
-	} else if !workerItem(tx.LegacyState(), a, id) {
+	} else if !workerItem(tx, a, id) {
 		return "", problem(403, "cannot stop another execution")
 	}
 	item, _ := tx.Item(held)
@@ -167,7 +167,7 @@ func (s Service) release(tx *Tx, a Actor, question Update) []Update {
 	var out []Update
 	for _, id := range slices.Compact(ids) {
 		item, ok := tx.Item(id)
-		if !ok || item.Kind != "task" || item.State != "needs-human" || !active(tx.LegacyState(), item) || OwnQuestion(tx, id) > 0 {
+		if !ok || item.Kind != "task" || item.State != "needs-human" || !active(tx, item) || OwnQuestion(tx, id) > 0 {
 			continue
 		}
 		prior := heldFrom(tx, id)

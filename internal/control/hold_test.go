@@ -28,7 +28,7 @@ func TestStopHoldsTheTaskAndEndsItsAttemptInOneTransaction(t *testing.T) {
 	if got := st.Attempts[at.ID]; got.State != "ended" || got.Reason != EndStopped || got.Ended.IsZero() {
 		t.Fatalf("stored attempt %+v", got)
 	}
-	if Vanished(&st, st.Items[task.ID]) {
+	if Vanished(st.LegacyTx(), st.Items[task.ID]) {
 		t.Error("a stopped attempt is not a vanished one: the task would be dispatched again as a resume")
 	}
 	// The stopped session cannot write, and nothing dispatches the held task.

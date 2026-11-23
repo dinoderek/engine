@@ -33,10 +33,11 @@ func (c *Coordinator) sawReach(f reconcile.Fleet) {
 
 // windowAlive reports whether an attempt's window runs on host h, as this
 // pass read it.
-func windowAlive(h reconcile.HostLoad) func(*control.State, control.Attempt) bool {
-	return func(st *control.State, at control.Attempt) bool {
-		item := st.Items[at.Item]
-		w, ok := matchWindow(at, h.Status, sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)))
+func windowAlive(h reconcile.HostLoad) func(*control.Tx, control.Attempt) bool {
+	return func(tx *control.Tx, at control.Attempt) bool {
+		item, _ := tx.Item(at.Item)
+		repo, _ := tx.Item(item.Repo)
+		w, ok := matchWindow(at, h.Status, sessionName(repo.Slug, control.Number(item.ID)))
 		return ok && w.Alive
 	}
 }

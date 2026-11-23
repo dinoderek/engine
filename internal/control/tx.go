@@ -3,6 +3,8 @@ package control
 import (
 	"context"
 	"iter"
+	"maps"
+	"slices"
 	"time"
 )
 
@@ -34,16 +36,11 @@ func (s *Store) Write(ctx context.Context, fn func(*Tx) error) error {
 	return s.Transaction(func(st *State) error { return fn(&Tx{st: st, write: true}) })
 }
 
-// LegacyTx lets a function not yet moved onto Tx call one that has. It
-// shares the State, so both see each other's changes. It exists only while
-// *State functions remain; moving the last one deletes it. The Tx it
-// returns is writable even inside a Read.
+// LegacyTx lets a caller outside this package that still holds a State call
+// the functions that take a Tx. It shares the State, so both see each
+// other's changes. It exists only while such callers remain; moving the last
+// one deletes it. The Tx it returns is writable even inside a Read.
 func (s *State) LegacyTx() *Tx { return &Tx{st: s, write: true} }
-
-// LegacyState hands a function not yet moved onto Tx the records it works
-// on. It exists only while *State functions remain; moving the last one
-// deletes it.
-func (t *Tx) LegacyState() *State { return t.st }
 
 func (t *Tx) mustWrite() {
 	if !t.write {
@@ -55,6 +52,24 @@ func (t *Tx) mustWrite() {
 func (t *Tx) Item(id string) (Item, bool) {
 	item, ok := t.st.Items[id]
 	return item, ok
+}
+
+// item is the item with this ID, the zero Item when there is none.
+func (t *Tx) item(id string) Item {
+	item, _ := t.Item(id)
+	return item
+}
+
+// attempt is the attempt with this ID, the zero Attempt when there is none.
+func (t *Tx) attempt(id string) Attempt {
+	at, _ := t.Attempt(id)
+	return at
+}
+
+// update is the update with this sequence, the zero Update when there is none.
+func (t *Tx) update(id int) Update {
+	u, _ := t.Update(id)
+	return u
 }
 
 // PutItem stores item under its ID.
@@ -282,4 +297,140 @@ func (t *Tx) Resolution(id int) int {
 		}
 	}
 	return 0
+}
+
+// NextID is the next unused ID of an item or attempt, with prefix.
+func (t *Tx) NextID(prefix string) string {
+	t.mustWrite()
+	return t.st.id(prefix)
+}
+
+// RepoBySlug is the repository item with this owner/name slug.
+func (t *Tx) RepoBySlug(slug string) (Item, bool) {
+	for _, item := range t.st.Items {
+		if item.Kind == "repo" && item.Slug == slug {
+			return item, true
+		}
+	}
+	return Item{}, false
+}
+
+// PutAttempt stores at under its ID.
+func (t *Tx) PutAttempt(at Attempt) {
+	t.mustWrite()
+	t.st.Attempts[at.ID] = at
+}
+
+// UnendedAttempts are the attempts not yet ended, in no order.
+func (t *Tx) UnendedAttempts() []Attempt {
+	var out []Attempt
+	for _, at := range t.st.Attempts {
+		if at.State != "ended" {
+			out = append(out, at)
+		}
+	}
+	return out
+}
+
+// AttemptsOnHost are the attempts that ran or run on host, in no order.
+func (t *Tx) AttemptsOnHost(host string) []Attempt {
+	var out []Attempt
+	for _, at := range t.st.Attempts {
+		if at.Host == host {
+			out = append(out, at)
+		}
+	}
+	return out
+}
+
+// HostedTaskAttempts are the attempts of tasks that name both their host and
+// their harness, in no order.
+func (t *Tx) HostedTaskAttempts() []Attempt {
+	var out []Attempt
+	for _, at := range t.st.Attempts {
+		if at.Host != "" && at.Harness != "" && t.st.Items[at.Item].Kind == "task" {
+			out = append(out, at)
+		}
+	}
+	return out
+}
+
+// PutCredential stores the actor an execution credential's digest names.
+func (t *Tx) PutCredential(hash string, a Actor) {
+	t.mustWrite()
+	t.st.Auth[hash] = a
+}
+
+// QueueOf is repo's merge queue in order.
+func (t *Tx) QueueOf(repo string) []QueueEntry {
+	var out []QueueEntry
+	for _, e := range t.st.Queue {
+		if e.Repo == repo {
+			out = append(out, e)
+		}
+	}
+	slices.SortFunc(out, func(a, b QueueEntry) int { return a.Seq - b.Seq })
+	return out
+}
+
+// PutQueueEntry stores e under its task, in its repository's merge queue.
+func (t *Tx) PutQueueEntry(e QueueEntry) {
+	t.mustWrite()
+	t.st.Queue[e.Task] = e
+}
+
+// DeleteQueueEntry takes task out of its repository's merge queue.
+func (t *Tx) DeleteQueueEntry(task string) {
+	t.mustWrite()
+	delete(t.st.Queue, task)
+}
+
+// Host is what the coordinator saved of host; the zero record when nothing.
+func (t *Tx) Host(name string) HostRecord { return t.st.Hosts[name] }
+
+// PutHost saves rec as what the coordinator knows of host.
+func (t *Tx) PutHost(name string, rec HostRecord) {
+	t.mustWrite()
+	t.st.Hosts[name] = rec
+}
+
+// HostRecords are the saved host records by name, as a copy.
+func (t *Tx) HostRecords() map[string]HostRecord { return maps.Clone(t.st.Hosts) }
+
+// PassAt is the last time the coordinator was known to run, zero before the
+// first pass.
+func (t *Tx) PassAt() time.Time { return t.st.PassAt }
+
+// SetPassAt saves the last time the coordinator was known to run.
+func (t *Tx) SetPassAt(at time.Time) {
+	t.mustWrite()
+	t.st.PassAt = at
+}
+
+// Upgrade is the newest `engine upgrade` run's start and end.
+func (t *Tx) Upgrade() UpgradeRecord { return t.st.Upgrade }
+
+// SetUpgrade replaces the newest `engine upgrade` run's record.
+func (t *Tx) SetUpgrade(u UpgradeRecord) {
+	t.mustWrite()
+	t.st.Upgrade = u
+}
+
+// Authors are the names that wrote an update.
+func (t *Tx) Authors() map[string]bool {
+	out := map[string]bool{}
+	for _, u := range t.st.Updates {
+		out[u.Author] = true
+	}
+	return out
+}
+
+// LatestUpdate is the newest update of kind about item.
+func (t *Tx) LatestUpdate(item, kind string) (Update, bool) {
+	for i := len(t.st.Updates) - 1; i >= 0; i-- {
+		if u := t.st.Updates[i]; u.Item == item && u.Kind == kind {
+			return u, true
+		}
+	}
+	return Update{}, false
 }

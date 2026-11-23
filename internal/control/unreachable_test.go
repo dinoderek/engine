@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var everyWindowAlive = func(*State, Attempt) bool { return true }
+var everyWindowAlive = func(*Tx, Attempt) bool { return true }
 
 // unreachableFor has every read of devbox fail, at its start and then after
 // each of the waits, on a clock the service reads.
@@ -208,7 +208,7 @@ func TestAHostThatAnswersFirstResolvesItsQuestionAsReturned(t *testing.T) {
 	unreachableFor(t, &s, stretch, UnreachableAsk)
 	q := fleetQuestions(mustSnapshot(t, s))[0]
 	first := tasks[0].ID
-	alive := func(_ *State, at Attempt) bool { return at.Item == first }
+	alive := func(_ *Tx, at Attempt) bool { return at.Item == first }
 	for range 2 {
 		if err := s.SawReach("devbox", true, alive); err != nil {
 			t.Fatal(err)

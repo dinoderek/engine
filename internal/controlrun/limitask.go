@@ -18,7 +18,7 @@ func (c *Coordinator) sawLimits(fleet reconcile.Fleet) {
 		return
 	}
 	f := fleet
-	f.Now, f.Limits, f.Hosts = c.now(), control.HarnessLimits(&st), pausedHosts(st, fleet.Hosts)
+	f.Now, f.Limits, f.Hosts = c.now(), control.HarnessLimits(st.LegacyTx()), pausedHosts(st, fleet.Hosts)
 	var tasks []reconcile.Item
 	for id, root := range st.Items {
 		if !root.Coordinating {

@@ -30,8 +30,8 @@ func newLossFixture(t *testing.T) lossFixture {
 }
 
 // windows says which attempts still have a window.
-func windows(ids ...string) func(*State, Attempt) bool {
-	return func(_ *State, at Attempt) bool {
+func windows(ids ...string) func(*Tx, Attempt) bool {
+	return func(_ *Tx, at Attempt) bool {
 		for _, id := range ids {
 			if at.ID == id {
 				return true
@@ -88,7 +88,7 @@ func TestSawTmuxMarksAHostWideLossOnceAndItsDeathsSkipTheCap(t *testing.T) {
 	if unclaimedEnd.Reason != EndEarlyDeath || unclaimedEnd.Early || unclaimedEnd.Tail != "unclaimed tail" || st.Items[f.t2.ID].State != "todo" {
 		t.Errorf("unclaimed: %+v, task %s", unclaimedEnd, st.Items[f.t2.ID].State)
 	}
-	if !Vanished(&st, st.Items[f.t1.ID]) || !Vanished(&st, st.Items[f.t2.ID]) {
+	if !Vanished(st.LegacyTx(), st.Items[f.t1.ID]) || !Vanished(st.LegacyTx(), st.Items[f.t2.ID]) {
 		t.Error("a host-wide death did not leave its task to be dispatched again")
 	}
 }
@@ -119,19 +119,19 @@ func TestSawTmuxIsNoLossWhenNothingSaysTheHostLostItsServer(t *testing.T) {
 		name  string
 		saved int64
 		read  TmuxRead
-		up    func(f lossFixture) func(*State, Attempt) bool
+		up    func(f lossFixture) func(*Tx, Attempt) bool
 		seen  bool
 	}{
 		{"every window gone but the start time unchanged: per-task deaths", 1000, TmuxRead{Known: true, Start: 1000},
-			func(lossFixture) func(*State, Attempt) bool { return windows() }, true},
+			func(lossFixture) func(*Tx, Attempt) bool { return windows() }, true},
 		{"a new start time with one window still up", 1000, TmuxRead{Known: true, Start: 2000},
-			func(f lossFixture) func(*State, Attempt) bool { return windows(f.a1) }, true},
+			func(f lossFixture) func(*Tx, Attempt) bool { return windows(f.a1) }, true},
 		{"no start time was saved to compare", 0, TmuxRead{Known: true, Start: 2000},
-			func(lossFixture) func(*State, Attempt) bool { return windows() }, true},
+			func(lossFixture) func(*Tx, Attempt) bool { return windows() }, true},
 		{"no tmux server and no attempt last seen live: tmux exits after its last window", 1000, TmuxRead{},
-			func(lossFixture) func(*State, Attempt) bool { return windows() }, false},
+			func(lossFixture) func(*Tx, Attempt) bool { return windows() }, false},
 		{"no tmux server but a window is up", 1000, TmuxRead{},
-			func(f lossFixture) func(*State, Attempt) bool { return windows(f.a2) }, true},
+			func(f lossFixture) func(*Tx, Attempt) bool { return windows(f.a2) }, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -49,7 +49,7 @@ func migrateFrom(t *testing.T, version int) {
 	if st.Items[plan.ID].State != "planned" {
 		t.Fatalf("plan state %s", st.Items[plan.ID].State)
 	}
-	queue := Queue(&st, repo.ID)
+	queue := st.LegacyTx().QueueOf(repo.ID)
 	if len(queue) != 2 || queue[0].Task != waiter.ID || queue[0].Seq != older.ID || queue[1].Task != holder.ID || queue[0].Phase != QueueWaiting {
 		t.Fatalf("queue %+v", queue)
 	}

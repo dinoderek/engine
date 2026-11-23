@@ -65,7 +65,7 @@ func TestTheVanishRule(t *testing.T) {
 				st.Updates = append(st.Updates, Update{ID: 1, Item: "t2", Kind: "ask", RequiresReply: true})
 			}
 			s := Service{Now: func() time.Time { return live.Add(time.Hour) }}
-			at := s.endDead(&st, Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
+			at := s.endDead(st.LegacyTx(), Actor{Name: "coordinator", Role: "coordinator"}, c.at, "gone")
 			if at.Reason != c.reason || at.Crashed != c.crashed || at.Early && c.at.HostLost || st.Items["t2"].State != c.state {
 				t.Fatalf("ended %s crashed %v, task %s; want %s crashed %v, task %s", at.Reason, at.Crashed, st.Items["t2"].State, c.reason, c.crashed, c.state)
 			}

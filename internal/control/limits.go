@@ -35,14 +35,12 @@ type HarnessLimit struct {
 
 // HarnessLimits are the host × harness pairs at a usage limit, by host, then
 // harness.
-func HarnessLimits(st *State) []HarnessLimit {
-	wrote := authors(st)
+func HarnessLimits(tx *Tx) []HarnessLimit {
+	wrote := tx.Authors()
 	pairs := map[[2]string][]Attempt{}
-	for _, at := range st.Attempts {
-		if at.Host != "" && at.Harness != "" && st.Items[at.Item].Kind == "task" {
-			key := [2]string{at.Host, at.Harness}
-			pairs[key] = append(pairs[key], at)
-		}
+	for _, at := range tx.HostedTaskAttempts() {
+		key := [2]string{at.Host, at.Harness}
+		pairs[key] = append(pairs[key], at)
 	}
 	var out []HarnessLimit
 	for key, attempts := range pairs {

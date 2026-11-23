@@ -5,8 +5,8 @@ import (
 	"slices"
 )
 
-func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
-	item, ok := st.Items[r.ID]
+func (s Service) transition(tx *Tx, a Actor, r Request) (Response, error) {
+	item, ok := tx.Item(r.ID)
 	if !ok {
 		return Response{}, problem(404, "unknown item")
 	}
@@ -31,18 +31,18 @@ func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
 		item.State = "approved"
 		item.ApprovedVersion = item.Version
 	case "run", "stop":
-		if err := s.coordinate(st, a, &item, r.Op); err != nil {
+		if err := s.coordinate(tx, a, &item, r.Op); err != nil {
 			return Response{}, err
 		}
 	case "state":
-		if !workerItem(st, a, item.ID) {
+		if !workerItem(tx, a, item.ID) {
 			return Response{}, problem(403, "cannot change another execution's state")
 		}
-		if err := stateChange(st, a, item, r.State); err != nil {
+		if err := stateChange(tx, a, item, r.State); err != nil {
 			return Response{}, err
 		}
 		if r.State != "in-review" && r.State != "needs-human" {
-			withdraw(st, a, item, "the task moved to "+r.State, s.now())
+			withdraw(tx, a, item, "the task moved to "+r.State, s.now())
 		}
 		item.State = r.State
 		if r.Item.PR != "" {
@@ -50,18 +50,18 @@ func (s Service) transition(st *State, a Actor, r Request) (Response, error) {
 		}
 	}
 	item.Version++
-	st.Items[item.ID] = item
-	st.update(a, r, r.Op, fmt.Sprintf("%s (version %d)", item.State, item.Version), s.now())
+	tx.PutItem(item)
+	tx.AppendUpdate(a, r, r.Op, fmt.Sprintf("%s (version %d)", item.State, item.Version), s.now())
 	return Response{Item: &item}, nil
 }
 
 // coordinate records a plan's run or stop intent; a stop records when
 // coordination stopped.
-func (s Service) coordinate(st *State, a Actor, item *Item, op string) error {
+func (s Service) coordinate(tx *Tx, a Actor, item *Item, op string) error {
 	if err := operator(a); err != nil {
 		return err
 	}
-	if op == "run" && (!approved(st, *item) || item.State == "done") {
+	if op == "run" && (!approved(tx, *item) || item.State == "done") {
 		return problem(409, "plan requires approval before coordination")
 	}
 	if op == "stop" && item.Coordinating {
@@ -72,22 +72,22 @@ func (s Service) coordinate(st *State, a Actor, item *Item, op string) error {
 }
 
 // approved reports whether item's plan, or the plan item itself, is approved.
-func approved(st *State, item Item) bool {
-	plan := Root(st, item)
+func approved(tx *Tx, item Item) bool {
+	plan := Root(tx, item)
 	return plan.ApprovedVersion > 0 && plan.State != "prepare"
 }
 
 // Root is the plan that approves and coordinates item: a task's plan, or a
 // plan itself.
-func Root(st *State, item Item) Item {
+func Root(tx *Tx, item Item) Item {
 	if item.Kind == "task" {
-		return st.Items[item.Plan]
+		return tx.item(item.Plan)
 	}
 	return item
 }
 
-func stateChange(st *State, a Actor, item Item, want string) error {
-	if item.Kind == "task" && (want == "running" || want == "in-review") && !active(st, item) {
+func stateChange(tx *Tx, a Actor, item Item, want string) error {
+	if item.Kind == "task" && (want == "running" || want == "in-review") && !active(tx, item) {
 		return problem(409, "running state requires a current execution")
 	}
 	allowed := map[string][]string{
@@ -108,12 +108,12 @@ func stateChange(st *State, a Actor, item Item, want string) error {
 	if item.State == "needs-human" && a.Role != "operator" && a.Role != "coordinator" {
 		return problem(403, "operator must resolve the hard stop")
 	}
-	if want != "failed" && OwnQuestion(st.LegacyTx(), item.ID) > 0 {
+	if want != "failed" && OwnQuestion(tx, item.ID) > 0 {
 		return problem(409, "operator question is unresolved")
 	}
 	if want == "done" && item.Kind == "plan" {
-		for _, t := range st.Items {
-			if t.Plan == item.ID && t.State != "done" {
+		for _, t := range tx.ItemsOfPlan(item.ID) {
+			if t.State != "done" {
 				return problem(409, "plan has unfinished tasks")
 			}
 		}
@@ -121,75 +121,73 @@ func stateChange(st *State, a Actor, item Item, want string) error {
 	return nil
 }
 
-func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
+func (s Service) reserve(tx *Tx, a Actor, r Request) (Response, error) {
 	if a.Role != "coordinator" && a.Role != "operator" {
 		return Response{}, problem(403, "only coordinator or operator can dispatch")
 	}
-	item, ok := st.Items[r.ID]
+	item, ok := tx.Item(r.ID)
 	if !ok || item.Kind == "repo" {
 		return Response{}, problem(404, "unknown task or plan")
 	}
 	if a.Role == "coordinator" && r.Version != item.Version {
 		return Response{}, problem(409, "card changed since placement; version is %d", item.Version)
 	}
-	if OwnQuestion(st.LegacyTx(), item.ID) > 0 || NewStartHold(st, item.ID) > 0 {
+	if OwnQuestion(tx, item.ID) > 0 || NewStartHold(tx, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	if item.Held {
 		return Response{}, problem(409, "task is held; resume it first")
 	}
-	if !approved(st, item) {
+	if !approved(tx, item) {
 		return Response{}, problem(409, "item is not approved")
 	}
-	if a.Role == "coordinator" && !dispatchIntent(st, item) {
+	if a.Role == "coordinator" && !dispatchIntent(tx, item) {
 		return Response{}, problem(409, "coordination was stopped")
 	}
-	if active(st, item) {
+	if active(tx, item) {
 		return Response{}, problem(409, "item already has an active execution")
 	}
-	if item.State == "done" || item.State == "failed" || item.State == "needs-human" && !Vanished(st, item) {
+	if item.State == "done" || item.State == "failed" || item.State == "needs-human" && !Vanished(tx, item) {
 		return Response{}, problem(409, "item is not dispatchable")
 	}
 	for _, id := range item.Depends {
-		if st.Items[id].State != "done" {
+		if tx.item(id).State != "done" {
 			return Response{}, problem(409, "blocked by %s", id)
 		}
 	}
 	if r.Body == "" || r.State == "" {
 		return Response{}, problem(400, "dispatch requires host and harness")
 	}
-	if err := dispatchTarget(st, item, r.Body, r.State); err != nil {
+	if err := dispatchTarget(tx, item, r.Body, r.State); err != nil {
 		return Response{}, err
 	}
-	id := st.id("a")
-	repo := st.Items[item.Repo]
+	id := tx.NextID("a")
+	repo := tx.item(item.Repo)
 	_, name, _ := cutSlug(repo.Slug)
 	at := Attempt{ID: id, Item: item.ID, Host: r.Body, Harness: r.State, RunID: fmt.Sprintf("%s-%d-%s", name, Number(item.ID), id), State: "dispatching", Started: s.now()}
 	secret := Secret()
-	st.Auth[digest([]byte(secret))] = Actor{Name: id, Role: "worker", Attempt: id}
-	st.Attempts[id] = at
+	tx.PutCredential(digest([]byte(secret)), Actor{Name: id, Role: "worker", Attempt: id})
+	tx.PutAttempt(at)
 	item.Attempt = id
 	item.Version++
 	// A resume of a task in the merge queue stays in-review, keeping its
 	// place and its turn's bound; any other task starts running.
-	if _, queued := st.Queue[item.ID]; item.Kind == "task" && (!queued || item.State != "in-review") {
+	if _, queued := tx.QueueEntry(item.ID); item.Kind == "task" && (!queued || item.State != "in-review") {
 		item.State = "running"
 	}
-	st.Items[item.ID] = item
-	st.update(a, r, "dispatch", id, s.now())
+	tx.PutItem(item)
+	tx.AppendUpdate(a, r, "dispatch", id, s.now())
 	return Response{Item: &item, Attempt: &at, Credential: secret}, nil
 }
 
 // NewStartHold is the open plan question that holds task id from starting,
 // or 0. A task with an earlier attempt is a recovery, not a new start, and
 // is never held by it.
-func NewStartHold(st *State, id string) int {
-	for _, at := range st.Attempts {
-		if at.Item == id {
-			return 0
-		}
+func NewStartHold(tx *Tx, id string) int {
+	if len(tx.AttemptsFor(id)) > 0 {
+		return 0
 	}
-	return PlanQuestion(st.LegacyTx(), id)
+	return PlanQuestion(tx, id)
 }
 
 func cutSlug(s string) (string, string, bool) {
@@ -208,8 +206,8 @@ func (s Service) SetAttempt(id, state, window string) error {
 
 // setAttempt is SetAttempt, also recording the run's pane key when given.
 func (s Service) setAttempt(id, state, window, paneKey string) error {
-	return s.Store.Transaction(func(st *State) error {
-		at, ok := st.Attempts[id]
+	return s.write(func(tx *Tx) error {
+		at, ok := tx.Attempt(id)
 		if !ok {
 			return problem(404, "unknown execution")
 		}
@@ -232,27 +230,27 @@ func (s Service) setAttempt(id, state, window, paneKey string) error {
 		if state == "ended" {
 			at.Ended = s.now()
 		}
-		st.Attempts[id] = at
-		st.update(Actor{Name: "coordinator", Role: "coordinator"}, Request{ID: at.Item}, "execution", id+": "+state, s.now())
+		tx.PutAttempt(at)
+		tx.AppendUpdate(Actor{Name: "coordinator", Role: "coordinator"}, Request{ID: at.Item}, "execution", id+": "+state, s.now())
 		return nil
 	})
 }
 
-func dispatchIntent(st *State, item Item) bool {
-	return Root(st, item).Coordinating
+func dispatchIntent(tx *Tx, item Item) bool {
+	return Root(tx, item).Coordinating
 }
 
 // CheckDispatch rechecks durable intent before a reserved dispatch reaches a host.
 func (s Service) CheckDispatch(id, attempt string) error {
-	return s.Store.Transaction(func(st *State) error {
-		item, ok := st.Items[id]
-		if !ok || item.Attempt != attempt || st.Attempts[attempt].State != "dispatching" {
+	return s.write(func(tx *Tx) error {
+		item, ok := tx.Item(id)
+		if !ok || item.Attempt != attempt || tx.attempt(attempt).State != "dispatching" {
 			return problem(409, "dispatch is no longer current")
 		}
-		if !dispatchIntent(st, item) {
+		if !dispatchIntent(tx, item) {
 			return problem(409, "coordination was stopped")
 		}
-		if OwnQuestion(st.LegacyTx(), item.ID) > 0 {
+		if OwnQuestion(tx, item.ID) > 0 {
 			return problem(409, "operator question is unresolved")
 		}
 		return nil
@@ -261,17 +259,17 @@ func (s Service) CheckDispatch(id, attempt string) error {
 
 // endAttempt is the operator's attempt reconcile, after the host read
 // confirmed the session gone (Service.Reconcile).
-func (s Service) endAttempt(st *State, a Actor, r Request) (Response, error) {
-	at, ok := st.Attempts[r.ID]
+func (s Service) endAttempt(tx *Tx, a Actor, r Request) (Response, error) {
+	at, ok := tx.Attempt(r.ID)
 	if !ok {
 		return Response{}, problem(404, "unknown execution")
 	}
 	switch at.State {
 	case "ended":
 	case "dispatching":
-		at = s.endUnlaunched(st, a, at, r.Body)
+		at = s.endUnlaunched(tx, a, at, r.Body)
 	default:
-		at = s.endDead(st, a, at, r.Body)
+		at = s.endDead(tx, a, at, r.Body)
 	}
 	return Response{Attempt: &at}, nil
 }

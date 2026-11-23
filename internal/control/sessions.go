@@ -67,7 +67,7 @@ func (s Service) sessionView(tx *Tx, a Actor) (Response, error) {
 	out := Response{}
 	for _, at := range tx.CurrentAttempts() {
 		item, _ := tx.Item(at.Item)
-		if at.State == "ended" && !Vanished(tx.LegacyState(), item) {
+		if at.State == "ended" && !Vanished(tx, item) {
 			continue
 		}
 		row := s.sessionRow(tx, item, at)

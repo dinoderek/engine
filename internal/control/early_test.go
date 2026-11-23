@@ -23,7 +23,7 @@ func TestClaimedByAWorkerWriteOrALongLife(t *testing.T) {
 	for _, c := range cases {
 		st := emptyState()
 		st.Updates = c.updates
-		if got := claimed(&st, c.at); got != c.want {
+		if got := claimed(st.LegacyTx(), c.at); got != c.want {
 			t.Errorf("%s: claimed = %v, want %v", c.name, got, c.want)
 		}
 	}
@@ -188,7 +188,7 @@ func TestAnEarlyDeathLeavesAHeldTaskInItsState(t *testing.T) {
 		t.Fatalf("an in-review task changed: %+v, %s", at, current.State)
 	}
 	st, _ := s.Store.Snapshot()
-	if !Vanished(&st, *current) {
+	if !Vanished(st.LegacyTx(), *current) {
 		t.Error("an early death did not leave the task ready to dispatch again")
 	}
 }
