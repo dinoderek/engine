@@ -158,7 +158,7 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	if r.Body == "" || r.State == "" {
 		return Response{}, problem(400, "dispatch requires host and harness")
 	}
-	if err := moveDestination(st, item, r.Body, r.State); err != nil {
+	if err := dispatchTarget(st, item, r.Body, r.State); err != nil {
 		return Response{}, err
 	}
 	id := st.id("a")

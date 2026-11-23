@@ -33,8 +33,10 @@ func (s Service) moveTask(st *State, a Actor, r Request) (Response, error) {
 		return Response{}, problem(409, "task %s's dispatch is still in flight; move it once its session has started", item.ID)
 	}
 	fleet := s.fleet()
-	if r.Move.Host != "" && !fleet.At.IsZero() && !slices.ContainsFunc(fleet.Hosts, func(h HostRow) bool { return h.Name == r.Move.Host }) {
-		return Response{}, problem(400, "host %s is not in hosts.toml", r.Move.Host)
+	if r.Move.Host != "" {
+		if err = knownHost(fleet, r.Move.Host); err != nil {
+			return Response{}, err
+		}
 	}
 	// A released window has no session left to warn about.
 	read := fleet.read(at.Host) || at.MoveReleased
@@ -92,6 +94,15 @@ func (s Service) fleet() HostStatus {
 		return HostStatus{}
 	}
 	return s.Hosts()
+}
+
+// knownHost refuses a host the latest pass did not find in hosts.toml. Before
+// any pass the server knows no hosts, and refuses none.
+func knownHost(f HostStatus, host string) error {
+	if !f.At.IsZero() && !slices.ContainsFunc(f.Hosts, func(h HostRow) bool { return h.Name == host }) {
+		return problem(400, "host %s is not in hosts.toml", host)
+	}
+	return nil
 }
 
 // read reports whether the latest pass read host, its run records included.

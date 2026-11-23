@@ -58,7 +58,7 @@ func (b *HostBoard) Status() control.HostStatus {
 }
 
 func hostRow(st control.State, attempts []control.Attempt, h reconcile.HostLoad) control.HostRow {
-	row := control.HostRow{Name: h.Name, Windows: []control.HostWindow{}}
+	row := control.HostRow{Name: h.Name, Paused: st.Hosts[h.Name].Paused, Windows: []control.HostWindow{}}
 	if h.Unreachable != "" {
 		row.Unreachable = h.Unreachable
 		return row

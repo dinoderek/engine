@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -59,6 +60,8 @@ const Usage = "engine serve\n" +
 	"engine ack --all [--repo <id>] [--before <sequence>]\n" +
 	"engine merge-queue <repo-id>\n" +
 	"engine host status --all [--json]\n" +
+	"engine host pause|resume <host> [--json]\n" +
+	"engine host move <host> [--harness <harness>] [--yes] [--json]\n" +
 	"engine attempt list [<task-id>]\n" +
 	"engine attempt reconcile <attempt-id> <evidence> | --body <evidence>\n" +
 	"All writes accept --request-key <key>; edits require --version. Output is JSON.\n"
@@ -81,7 +84,7 @@ func Main(args []string, e Env) int {
 	if args[0] == "attach" {
 		return attachMain(args[1:], e)
 	}
-	if args[0] == "host" {
+	if args[0] == "host" && (len(args) < 2 || !slices.Contains([]string{"pause", "resume", "move"}, args[1])) {
 		return hostMain(args[1:], e)
 	}
 	req, err := Parse(args, e)
@@ -300,6 +303,8 @@ func operation(args []string) (control.Request, []string, error) {
 		default:
 			return r, nil, fmt.Errorf("unknown %s operation %s", head, op)
 		}
+	case "host":
+		r.Op, rest = "host-"+rest[0], rest[1:]
 	case "tell":
 		r.Op = "say"
 	case "ps":
@@ -388,6 +393,9 @@ func positionals(r *control.Request, pos []string) error {
 		if len(pos) > 0 {
 			r.ID = pos[0]
 			pos = pos[1:]
+		}
+		if r.ID == "" && strings.HasPrefix(r.Op, "host-") {
+			return fmt.Errorf("%s requires a host", strings.TrimPrefix(r.Op, "host-"))
 		}
 		if r.ID == "" && r.Op != "list" && r.Op != "attempts" {
 			return fmt.Errorf("item ID is required")

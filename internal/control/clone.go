@@ -92,6 +92,7 @@ func (r Response) clone() Response {
 	}
 	r.Updates = cloneUpdates(r.Updates)
 	r.Attempt = clonePtr(r.Attempt)
+	r.Host = r.Host.clone()
 	r.Attempts = slices.Clone(r.Attempts)
 	r.Queue = slices.Clone(r.Queue)
 	if r.Sessions != nil {
@@ -117,6 +118,15 @@ func (h *HostStatus) clone() *HostStatus {
 		row.Quota = slices.Clone(row.Quota)
 		row.Readiness = slices.Clone(row.Readiness)
 		h.Hosts[i] = row
+	}
+	return h
+}
+
+func (h *HostChange) clone() *HostChange {
+	h = clonePtr(h)
+	if h != nil {
+		h.Moved = slices.Clone(h.Moved)
+		h.Left = slices.Clone(h.Left)
 	}
 	return h
 }

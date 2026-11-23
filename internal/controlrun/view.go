@@ -30,6 +30,7 @@ func Tasks(st control.State, id string) []control.Item {
 func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) reconcile.View {
 	root := st.Items[id]
 	fleet.Now, fleet.Limits = c.now(), control.HarnessLimits(&st)
+	fleet.Hosts = pausedHosts(st, fleet.Hosts)
 	v := reconcile.View{Now: fleet.Now, Fleet: fleet, Root: withSession(st, root, fleet)}
 	tasks := Tasks(st, id)
 	for _, t := range tasks {
@@ -41,6 +42,16 @@ func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) r
 		}
 	}
 	return v
+}
+
+// pausedHosts is hosts with the operator's pauses from st marked; the
+// pass's own list is left as it was.
+func pausedHosts(st control.State, hosts []reconcile.HostLoad) []reconcile.HostLoad {
+	out := slices.Clone(hosts)
+	for i := range out {
+		out[i].Paused = st.Hosts[out[i].Name].Paused
+	}
+	return out
 }
 
 // record is item as a pass reads it from st, without its session.

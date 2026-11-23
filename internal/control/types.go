@@ -218,7 +218,8 @@ type Request struct {
 	Merge *MergeRequest `json:"merge,omitempty"`
 	// Pane is how a pane-input post's prompt hook vouches for it.
 	Pane *PaneInput `json:"pane,omitempty"`
-	// Move is a task-move's destination; every other operation refuses it.
+	// Move is a task-move's destination, or a host-move's harness filter and
+	// confirmation; every other operation refuses it.
 	Move *MoveRequest `json:"move,omitempty"`
 	// Choices, Recommended and Class are an ask's (Update); every other
 	// operation refuses them.
@@ -239,6 +240,8 @@ type Response struct {
 	Credential string       `json:"credential,omitempty"`
 	// Fleet is the host-status op's reply.
 	Fleet *HostStatus `json:"fleet,omitempty"`
+	// Host is a host-pause, host-resume or host-move's reply.
+	Host *HostChange `json:"host,omitempty"`
 }
 
 type receipt struct {
