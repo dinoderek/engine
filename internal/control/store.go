@@ -25,7 +25,7 @@ type Store struct {
 	commit  func(*sql.Tx) error
 	// state never leaves the store: callers get clones, and a commit
 	// installs records decoded from what it wrote.
-	state State
+	state state
 }
 
 // Open creates a private database and refuses a database already owned by a server.
@@ -94,9 +94,9 @@ func (s *Store) Close() error {
 	return err
 }
 
-// Transaction commits all changed records together; an error leaves history
+// modify commits all changed records together; an error leaves history
 // unchanged, in memory and on disk. fn works on a copy of the state.
-func (s *Store) Transaction(fn func(*State) error) error {
+func (s *Store) modify(fn func(*state) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.lock == nil {
@@ -149,20 +149,20 @@ func (s *Store) write(changes []change, tail string) error {
 	})
 }
 
-// Snapshot returns a detached consistent view, without reading SQLite.
+// snapshot returns a detached consistent view, without reading SQLite.
 // Snapshots run beside each other, and wait only for a commit.
-func (s *Store) Snapshot() (State, error) {
+func (s *Store) snapshot() (state, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.lock == nil {
-		return State{}, errors.New("store is closed")
+		return state{}, errors.New("store is closed")
 	}
 	return s.state.clone(), nil
 }
 
-// View runs fn on a snapshot and commits nothing.
-func (s *Store) View(fn func(*State) error) error {
-	st, err := s.Snapshot()
+// view runs fn on a snapshot and commits nothing.
+func (s *Store) view(fn func(*state) error) error {
+	st, err := s.snapshot()
 	if err != nil {
 		return err
 	}

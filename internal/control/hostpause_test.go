@@ -146,7 +146,7 @@ func TestHostMoveMovesEveryTaskThereOrOnlyOneHarnesss(t *testing.T) {
 
 // checkMoved fails unless task's attempt ended moved, to anywhere, exactly
 // when it should have.
-func checkMoved(t *testing.T, st State, task string, moved bool) {
+func checkMoved(t *testing.T, st state, task string, moved bool) {
 	t.Helper()
 	at := st.Attempts[st.Items[task].Attempt]
 	if (at.Reason == EndMoved) != moved || moved && (at.MoveHost != "" || at.MoveHarness != "" || at.MovedBlind) {

@@ -21,14 +21,14 @@ func TestAPausedHostGetsNoDispatchUntilResumed(t *testing.T) {
 	for range 3 {
 		pass(t, c)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if len(st.Attempts) != 0 || h.calls != 0 || st.Items[task.ID].State != "todo" {
 		t.Fatalf("a paused host took work: %d attempts, %d launches, task %s", len(st.Attempts), h.calls, st.Items[task.ID].State)
 	}
 	hostOp(t, c, "resume")
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if h.calls != 1 || st.Items[task.ID].State != "running" {
 		t.Fatalf("a resumed host: %d launches, task %s", h.calls, st.Items[task.ID].State)
 	}
@@ -41,13 +41,13 @@ func TestPausingAHostLeavesItsRunningSessionsAlone(t *testing.T) {
 	pass(t, c)
 	pass(t, c)
 	claim(t, c, task)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Items[task.ID].Attempt
 	hostOp(t, c, "pause")
 	for range 3 {
 		pass(t, c)
 	}
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if got := st.Attempts[at]; st.Items[task.ID].Attempt != at || got.State != "running" || got.Reason != "" || h.calls != 1 || len(h.outcomes) != 0 {
 		t.Fatalf("pausing touched the session: %+v, %d launches, released %v", got, h.calls, h.outcomes)
 	}

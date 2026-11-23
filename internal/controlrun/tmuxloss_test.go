@@ -9,7 +9,7 @@ import (
 
 // hostNotices are the operator notices about no item: the host's.
 func hostNotices(c *Coordinator) []string {
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	var out []string
 	for _, u := range st.Updates {
 		if u.Item == "" && u.Recipient == "operator" {
@@ -32,7 +32,7 @@ func twoRunning(t *testing.T) (*Coordinator, *host, control.Item, control.Item) 
 	}
 	claim(t, c, claimed)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	for _, id := range []string{claimed.ID, unclaimed.ID} {
 		if at := st.Attempts[st.Items[id].Attempt]; at.State != "running" || at.LiveAt.IsZero() {
 			t.Fatalf("%s is not running and seen live: %+v", id, at)
@@ -43,11 +43,11 @@ func twoRunning(t *testing.T) (*Coordinator, *host, control.Item, control.Item) 
 
 func TestALostTmuxServerEndsEveryAttemptAsOneEventWithOneNotice(t *testing.T) {
 	c, h, claimed, unclaimed := twoRunning(t)
-	before, _ := c.Service.Store.Snapshot()
+	before, _ := snapshotOf(c.Service.Store)
 	a1, a2 := before.Items[claimed.ID].Attempt, before.Items[unclaimed.ID].Attempt
 	h.status.Windows, h.status.TmuxStart = nil, 2000
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	e1, e2 := st.Attempts[a1], st.Attempts[a2]
 	if e1.Reason != control.EndVanished || e1.Crashed || !e1.HostLost || st.Items[claimed.ID].State != "running" {
 		t.Errorf("the claimed attempt: %+v, task %s", e1, st.Items[claimed.ID].State)
@@ -66,7 +66,7 @@ func TestALostTmuxServerEndsEveryAttemptAsOneEventWithOneNotice(t *testing.T) {
 	h.status.FreeSlots = 2
 	pass(t, c)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if got := hostNotices(c); len(got) != 1 {
 		t.Fatalf("a later pass sent a second host notice: %q", got)
 	}
@@ -77,7 +77,7 @@ func TestALostTmuxServerEndsEveryAttemptAsOneEventWithOneNotice(t *testing.T) {
 
 func TestOneWindowGoneWithTheTmuxStartUnchangedFollowsThePerTaskRule(t *testing.T) {
 	c, h, claimed, unclaimed := twoRunning(t)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	a1, a2 := st.Items[claimed.ID].Attempt, st.Items[unclaimed.ID].Attempt
 	for i, w := range h.status.Windows {
 		if w.Name == fmt.Sprintf("demo-%d", control.Number(claimed.ID)) {
@@ -85,7 +85,7 @@ func TestOneWindowGoneWithTheTmuxStartUnchangedFollowsThePerTaskRule(t *testing.
 		}
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if e := st.Attempts[a1]; e.State != "ended" || e.HostLost || !e.Crashed {
 		t.Errorf("a single death was read as a host-wide loss: %+v", e)
 	}

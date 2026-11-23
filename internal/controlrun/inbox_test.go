@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dinoderek/engine/internal/control"
 	"github.com/dinoderek/engine/internal/reconcile"
@@ -17,7 +18,7 @@ func TestPlanUpdatesWakeTheWaitingTaskSession(t *testing.T) {
 	h.status.Windows[0].State = session.StateWaiting
 	var texts []string
 	c.Wake = func(_ reconcile.Session, text string) error { texts = append(texts, text); return nil }
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	attempt := st.Items[task.ID].Attempt
 	worker := control.Actor{Name: attempt, Role: "worker", Attempt: attempt}
 	quiet := []struct {
@@ -76,9 +77,22 @@ func TestPendingMessageCountsResolutionsOnlyForTheTasksPlan(t *testing.T) {
 		{"planner plan state", planner, control.Update{ID: 2, Item: "p2", Kind: "state", Author: "operator"}, 0},
 	}
 	for _, tc := range cases {
-		if got := pendingMessage(control.State{Updates: []control.Update{tc.u}}, tc.item, at); got != tc.want {
-			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
-		}
+		store := emptyStore(t)
+		mutate(t, store, func(tx *control.Tx) error {
+			// Update IDs are the history's positions: the first update of a case
+			// numbered 2 follows one that wakes nobody.
+			if tc.u.ID == 2 {
+				tx.AppendUpdate(control.Actor{Name: "filler"}, control.Request{ID: "t0"}, "state", "", time.Time{})
+			}
+			tx.AppendUpdate(control.Actor{Name: tc.u.Author}, control.Request{ID: tc.u.Item}, tc.u.Kind, "", time.Time{})
+			tx.PutUpdate(tc.u)
+			return nil
+		})
+		inTx(t, store, func(tx *control.Tx) {
+			if got := pendingMessage(tx, tc.item, at); got != tc.want {
+				t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -97,7 +111,7 @@ func TestPlanQuestionHoldsOnlyTheAskersSessionUntilItsResolutionWakesIt(t *testi
 	}
 	woken := map[string]int{}
 	c.Wake = func(s reconcile.Session, _ string) error { woken[s.Name]++; return nil }
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	attempt := st.Items[task.ID].Attempt
 	worker := control.Actor{Name: attempt, Role: "worker", Attempt: attempt}
 	out, err := c.Service.Execute(worker, control.Request{Op: "ask", Key: control.Secret(), ID: plan.ID, Body: "The unit lane is red on main"})
@@ -114,7 +128,7 @@ func TestPlanQuestionHoldsOnlyTheAskersSessionUntilItsResolutionWakesIt(t *testi
 	}
 	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: out.Updates[0].ID, Body: "Fixed on main; merge it in"})
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "running" {
 		t.Fatalf("asker is %s, want running", st.Items[task.ID].State)
 	}

@@ -2,9 +2,13 @@ package controlcmd
 
 import (
 	"bytes"
+	"context"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/dinoderek/engine/internal/control"
 )
 
 func TestServerLintBeforeApprovalIsReadOnly(t *testing.T) {
@@ -24,17 +28,13 @@ func TestServerLintBeforeApprovalIsReadOnly(t *testing.T) {
 			for range tt.tasks {
 				command(t, e, "task", "create", "--repo", repo.ID, "--plan", plan.ID, "--title", "Task", "--body", tt.body)
 			}
-			before, err := svc.Store.Snapshot()
-			if err != nil {
-				t.Fatal(err)
-			}
+			before := records(t, svc.Store)
 			e.Out.(*bytes.Buffer).Reset()
 			if code := Main([]string{"lint", plan.ID}, e); code != tt.code || !strings.Contains(e.Out.(*bytes.Buffer).String(), tt.want) {
 				t.Fatalf("lint: %d, out %s, err %s", code, e.Out, e.Err)
 			}
-			after, err := svc.Store.Snapshot()
-			if err != nil || !reflect.DeepEqual(before, after) {
-				t.Fatal("lint changed state", err)
+			if after := records(t, svc.Store); !reflect.DeepEqual(before, after) {
+				t.Fatal("lint changed state")
 			}
 		})
 	}
@@ -77,4 +77,24 @@ func TestExternalCompletionCLI(t *testing.T) {
 	if code := Main([]string{"task", "complete-external", task.ID, "--pr", pr}, e); code != 1 {
 		t.Fatal("accepted unversioned completion")
 	}
+}
+
+// records are the items and updates of s, to compare before and after a command.
+func records(t *testing.T, s *control.Store) (out struct {
+	Items   map[string]control.Item
+	Updates []control.Update
+}) {
+	t.Helper()
+	out.Items = map[string]control.Item{}
+	err := s.Read(context.Background(), func(tx *control.Tx) error {
+		for _, item := range tx.ItemsByKindUnder("", "") {
+			out.Items[item.ID] = item
+		}
+		out.Updates = slices.Collect(tx.UpdatesAfter(0, ""))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }

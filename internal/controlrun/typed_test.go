@@ -54,7 +54,7 @@ func TestAWakeLogsItsHashBeforeItIsTyped(t *testing.T) {
 	execute(t, c.Service, control.Request{Op: "say", ID: task.ID, Body: "Use the second approach"})
 	h.typed = nil
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	text := order.check(t, st.Attempts[st.Items[task.ID].Attempt].RunID)
 	if !strings.HasPrefix(text, "Read the new task and plan updates: engine updates "+task.ID) {
 		t.Errorf("typed %q, want the wake", text)
@@ -98,7 +98,7 @@ func TestAContinueLogsItsHashBeforeItIsTyped(t *testing.T) {
 	}
 	h.typed = nil
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	order.check(t, st.Attempts[st.Items[task.ID].Attempt].RunID)
 }
 
@@ -109,7 +109,7 @@ func TestADispatchRecoveredFromStatusRecordsItsPaneKey(t *testing.T) {
 	h.unresolved = true
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	at := st.Attempts[st.Items[task.ID].Attempt]
 	if at.State != "dispatching" {
 		t.Fatalf("the unresolved dispatch is %s", at.State)
@@ -118,7 +118,7 @@ func TestADispatchRecoveredFromStatusRecordsItsPaneKey(t *testing.T) {
 	h.status.Runs = append(h.status.Runs, hostops.Run{Name: "demo-" + task.ID[1:], PaneKey: "beef",
 		Record: session.Record{RunID: at.RunID, Name: "demo-" + task.ID[1:], Tmux: "engine:@7", Control: true}})
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if got := st.Attempts[at.ID]; got.State != "running" || got.Window != "@7" || got.PaneKey != "beef" {
 		t.Errorf("recovered attempt %+v, want it running in @7 with the run's pane key", got)
 	}

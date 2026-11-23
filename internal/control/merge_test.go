@@ -59,7 +59,7 @@ func TestMergeRequestValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) { reject(t, s, actor, c.r, c.status) })
 	}
 	st := mustSnapshot(t, s)
-	if _, ok := PendingMerge(st.LegacyTx(), task.ID); ok || len(st.Queue) != 0 {
+	if _, ok := PendingMerge(st.tx(), task.ID); ok || len(st.Queue) != 0 {
 		t.Fatal("a refused request was queued")
 	}
 }
@@ -142,21 +142,21 @@ func TestQueueStepAppliesOnlyToTheEntryItRead(t *testing.T) {
 	if e.Seq != from.Seq || !e.CheckedAt.Equal(checked.CheckedAt) || last.Recipient != "operator" || last.ReplyTo != req.ID || st.Updates[last.ID-2].Kind != "say" {
 		t.Fatalf("stepped entry %+v, updates %+v", e, st.Updates[len(st.Updates)-2:])
 	}
-	if !MergedAt(st.LegacyTx(), task.ID).IsZero() || MergedHead(st.LegacyTx(), task.ID) != "" {
+	if !MergedAt(st.tx(), task.ID).IsZero() || MergedHead(st.tx(), task.ID) != "" {
 		t.Fatal("merged before the merge step")
 	}
 	if ok, err := s.QueueStep(QueueStep{From: e, Done: true, Kind: MergeMerged, Text: "Merged at " + head}); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	st = mustSnapshot(t, s)
-	if got := st.Items[task.ID]; got.State != "done" || got.PR != good().PR || len(st.Queue) != 0 || MergedAt(st.LegacyTx(), task.ID).IsZero() {
+	if got := st.Items[task.ID]; got.State != "done" || got.PR != good().PR || len(st.Queue) != 0 || MergedAt(st.tx(), task.ID).IsZero() {
 		t.Fatalf("task %+v, queue %+v", got, st.Queue)
 	}
 	// The merged update answers the request that named the head.
-	if got := MergedHead(st.LegacyTx(), task.ID); got != head {
+	if got := MergedHead(st.tx(), task.ID); got != head {
 		t.Fatalf("merged head %q, want %q", got, head)
 	}
-	if got := MergedHead(st.LegacyTx(), "t999"); got != "" {
+	if got := MergedHead(st.tx(), "t999"); got != "" {
 		t.Fatalf("merged head of another task %q", got)
 	}
 	if st.Attempts[claimed.Attempt.ID].State == "ended" {
@@ -198,7 +198,7 @@ func TestAVanishedTaskKeepsItsPlace(t *testing.T) {
 	s := service(t)
 	task, a, claimed := reviewed(t, s)
 	call(t, s, a, ready(task.ID, good()))
-	if err := s.Store.Transaction(func(st *State) error {
+	if err := s.Store.modify(func(st *state) error {
 		at := st.Attempts[claimed.Attempt.ID]
 		at.LiveAt = time.Date(2026, 11, 7, 8, 0, 0, 0, time.UTC)
 		st.Attempts[at.ID] = at
@@ -211,7 +211,7 @@ func TestAVanishedTaskKeepsItsPlace(t *testing.T) {
 	}
 	st := mustSnapshot(t, s)
 	before, ok := st.Queue[task.ID]
-	if u, pending := PendingMerge(st.LegacyTx(), task.ID); !ok || !pending || u.Merge.Head != head {
+	if u, pending := PendingMerge(st.tx(), task.ID); !ok || !pending || u.Merge.Head != head {
 		t.Fatal("a vanished task left the queue")
 	}
 	// Its resume keeps it in-review, so its entry keeps its turn's bound.
@@ -247,7 +247,7 @@ func TestRecordMergedAnswersTheRequestTheMergeActedOn(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := mustSnapshot(t, s)
-	if got := MergedHead(st.LegacyTx(), task.ID); got != head || len(st.Queue) != 0 {
+	if got := MergedHead(st.tx(), task.ID); got != head || len(st.Queue) != 0 {
 		t.Fatalf("merged head %q, want %q; queue %+v", got, head, st.Queue)
 	}
 }

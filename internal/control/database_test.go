@@ -23,7 +23,7 @@ func TestDriverRunsWithoutSQLiteExecutable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = copy.Close() }()
-	got, err := copy.Snapshot()
+	got, err := copy.snapshot()
 	if err != nil || got.Updates[len(got.Updates)-1].Body != "in process" {
 		t.Fatalf("backup: %+v %v", got, err)
 	}
@@ -84,7 +84,7 @@ func TestWALReaderKeepsItsSnapshotBesideWriter(t *testing.T) {
 	if err = tx.QueryRow("SELECT count(*) FROM records").Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Transaction(func(st *State) error { st.Next = 42; return nil }); err != nil {
+	if err = s.modify(func(st *state) error { st.Next = 42; return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.QueryRow("SELECT count(*) FROM records").Scan(&after); err != nil || before != after {
@@ -101,7 +101,7 @@ func TestWALReaderKeepsItsSnapshotBesideWriter(t *testing.T) {
 func TestEveryRecordKindSurvivesReopen(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	s := service(t).Store
-	err := s.Transaction(func(st *State) error {
+	err := s.modify(func(st *state) error {
 		st.Next = 10
 		st.Hosts["devbox"] = HostRecord{TmuxStart: 1234}
 		st.PassAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -117,7 +117,7 @@ func TestEveryRecordKindSurvivesReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, _ := s.Snapshot()
+	want, _ := s.snapshot()
 	path := s.path
 	if err = s.Close(); err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestEveryRecordKindSurvivesReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = reopened.Close() }()
-	got, err := reopened.Snapshot()
+	got, err := reopened.snapshot()
 	if err != nil || !reflect.DeepEqual(want, got) {
 		t.Fatalf("reopen: %+v, want %+v (%v)", got, want, err)
 	}
@@ -143,7 +143,7 @@ func TestCommandReadsDoNotQuerySQLite(t *testing.T) {
 	for _, r := range []Request{{Op: "get", ID: plan.ID}, {Op: "list"}, {Op: "updates", ID: plan.ID}, {Op: "session-view"}, {Op: "inbox"}} {
 		call(t, s, op, r)
 	}
-	if _, err := s.Store.Snapshot(); err != nil {
+	if _, err := s.Store.snapshot(); err != nil {
 		t.Fatal(err)
 	}
 }

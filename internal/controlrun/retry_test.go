@@ -20,7 +20,7 @@ func endFirstAttempt(t *testing.T, c *Coordinator, h *host, task control.Item, a
 	t.Helper()
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	first := st.Attempts[st.Items[task.ID].Attempt]
 	crashedBefore(t, c, first)
 	claim(t, c, task)
@@ -29,7 +29,7 @@ func endFirstAttempt(t *testing.T, c *Coordinator, h *host, task control.Item, a
 		t.Fatal(err)
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "failed" || len(h.status.Windows) != 1 || len(h.released) != 0 {
 		t.Fatalf("the dead attempt left %s, windows %v, released %v", st.Items[task.ID].State, h.status.Windows, h.released)
 	}
@@ -45,23 +45,21 @@ func crashedBefore(t *testing.T, c *Coordinator, at control.Attempt) {
 	if control.Number(at.ID) < control.DeathCap {
 		t.Fatalf("attempt %s leaves no room for earlier deaths", at.ID)
 	}
-	if err := c.Service.Store.Transaction(func(st *control.State) error {
+	mutate(t, c.Service.Store, func(tx *control.Tx) error {
 		for i := 1; i < control.DeathCap; i++ {
 			id := fmt.Sprintf("a%d", control.Number(at.ID)-control.DeathCap+i)
-			if _, taken := st.Attempts[id]; taken {
+			if _, taken := tx.Attempt(id); taken {
 				return fmt.Errorf("attempt %s exists", id)
 			}
-			st.Attempts[id] = control.Attempt{ID: id, Item: at.Item, Host: "elsewhere", State: "ended", Window: "@9", Reason: control.EndVanished, Crashed: true}
+			tx.PutAttempt(control.Attempt{ID: id, Item: at.Item, Host: "elsewhere", State: "ended", Window: "@9", Reason: control.EndVanished, Crashed: true})
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 }
 
 func refusedNotices(t *testing.T, c *Coordinator, task control.Item) int {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	n := 0
 	for _, u := range st.Updates {
 		if u.Item == task.ID && u.Recipient == "operator" && strings.Contains(u.Body, "refused to start this execution") {
@@ -76,7 +74,7 @@ func TestRetryReleasesTheDeadWindowOfTheEndedAttemptFirst(t *testing.T) {
 	first := endFirstAttempt(t, c, h, task, false)
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	retry := st.Attempts[st.Items[task.ID].Attempt]
 	if retry.ID == first.ID || retry.State != "running" {
 		t.Fatalf("the retry did not start: %+v", retry)
@@ -103,7 +101,7 @@ func TestRetryIsNotDispatchedPastALiveWindow(t *testing.T) {
 	if len(h.released) != 0 || h.calls != 1 {
 		t.Errorf("released %v and dispatched %d times past a live window, want neither", h.released, h.calls-1)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].Attempt != first.ID {
 		t.Error("a retry was dispatched past a live window")
 	}
@@ -119,13 +117,13 @@ func TestARefusalWhoseReasonChangesIsNoticedOncePerExecution(t *testing.T) {
 			t.Fatalf("pass %d: %d refusal notices, want 1", i, n)
 		}
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if !strings.Contains(lastBody(st, task.ID), "uncommitted changes") {
 		t.Errorf("the notice does not say why the host refused: %q", lastBody(st, task.ID))
 	}
 	h.refuse = ""
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if at := st.Attempts[st.Items[task.ID].Attempt]; at.State != "running" {
 		t.Errorf("once the host accepts, the execution is %s, want running", at.State)
 	}
@@ -150,7 +148,7 @@ func TestAReplayedDispatchNeverReleases(t *testing.T) {
 	}
 }
 
-func lastBody(st control.State, item string) string {
+func lastBody(st snapshot, item string) string {
 	body := ""
 	for _, u := range st.Updates {
 		if u.Item == item && strings.Contains(u.Body, "refused to start") {
@@ -161,13 +159,10 @@ func lastBody(st control.State, item string) string {
 }
 
 func TestReleaseEndedActsOnlyOnAReadThatShowsTheWindowGone(t *testing.T) {
-	st := control.State{
-		Items: map[string]control.Item{"r1": {ID: "r1", Slug: "owner/demo"}, "t2": {ID: "t2", Repo: "r1"}},
-		Attempts: map[string]control.Attempt{
-			"a1": {ID: "a1", Item: "t2", Host: "devbox", State: "ended", Window: "@1", RunID: "run-1"},
-			"a2": {ID: "a2", Item: "t2", Host: "devbox", State: "dispatching", RunID: "run-2"},
-		},
-	}
+	a2 := control.Attempt{ID: "a2", Item: "t2", Host: "devbox", State: "dispatching", RunID: "run-2"}
+	task := control.Item{ID: "t2", Repo: "r1"}
+	store := seeded(t, []control.Item{{ID: "r1", Slug: "owner/demo"}, task}, []control.Attempt{
+		{ID: "a1", Item: "t2", Host: "devbox", State: "ended", Window: "@1", RunID: "run-1"}, a2})
 	dead := hostops.Window{Name: "demo-2", ID: "@1"}
 	tests := []struct {
 		name    string
@@ -191,9 +186,9 @@ func TestReleaseEndedActsOnlyOnAReadThatShowsTheWindowGone(t *testing.T) {
 			c := &Coordinator{Logf: t.Logf}
 			current := tt.current
 			if current.ID == "" {
-				current = st.Attempts["a2"]
+				current = a2
 			}
-			c.releaseEnded(st, st.Items["t2"], current, h)
+			inTx(t, store, func(tx *control.Tx) { c.releaseEnded(tx, task, current, h) })
 			if got := slices.Equal(h.released, []string{"demo-2"}); got != tt.want {
 				t.Errorf("released %v, want a release %v", h.released, tt.want)
 			}
@@ -202,13 +197,14 @@ func TestReleaseEndedActsOnlyOnAReadThatShowsTheWindowGone(t *testing.T) {
 }
 
 func TestReleaseEndedLogsAFailedRelease(t *testing.T) {
-	st := control.State{
-		Items:    map[string]control.Item{"r1": {ID: "r1", Slug: "owner/demo"}, "t2": {ID: "t2", Repo: "r1"}},
-		Attempts: map[string]control.Attempt{"a1": {ID: "a1", Item: "t2", Host: "devbox", State: "ended", Window: "@1"}},
-	}
+	task := control.Item{ID: "t2", Repo: "r1"}
+	store := seeded(t, []control.Item{{ID: "r1", Slug: "owner/demo"}, task},
+		[]control.Attempt{{ID: "a1", Item: "t2", Host: "devbox", State: "ended", Window: "@1"}})
 	var logged []string
 	c := &Coordinator{Logf: func(f string, a ...any) { logged = append(logged, f) }}
-	c.releaseEnded(st, st.Items["t2"], control.Attempt{ID: "a2", Item: "t2", Host: "devbox"}, failingRelease{&host{}})
+	inTx(t, store, func(tx *control.Tx) {
+		c.releaseEnded(tx, task, control.Attempt{ID: "a2", Item: "t2", Host: "devbox"}, failingRelease{&host{}})
+	})
 	if len(logged) != 1 || !strings.Contains(logged[0], "release the ended session") {
 		t.Errorf("logged %v", logged)
 	}

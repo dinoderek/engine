@@ -46,7 +46,7 @@ func TestMoveEndsTheAttemptMovedAndKeepsTheTask(t *testing.T) {
 	if n := len(st.Updates) - before; n != 1 || !strings.HasPrefix(st.Updates[len(st.Updates)-1].Body, EndMoved+": ") {
 		t.Fatalf("%d updates, last %+v", n, st.Updates[len(st.Updates)-1])
 	}
-	if !Vanished(st.LegacyTx(), st.Items[task.ID]) || st.Attempts[at.ID].Reason != EndMoved {
+	if !Vanished(st.tx(), st.Items[task.ID]) || st.Attempts[at.ID].Reason != EndMoved {
 		t.Fatal("a moved task is not dispatched again as a resume")
 	}
 	if q := call(t, s, op, Request{Op: "merge-queue", ID: task.Repo}).Queue; len(q) != 1 || q[0].Task != task.ID {

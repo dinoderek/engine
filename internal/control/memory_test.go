@@ -49,7 +49,7 @@ func TestReadsNeverCommitAndWritesSendOnlyChangedRecords(t *testing.T) {
 	_, plan := repoPlan(t, s)
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "one"})
 	sent := counted(s.Store)
-	if _, err := s.Store.Snapshot(); err != nil {
+	if _, err := s.Store.snapshot(); err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range []Request{{Op: "get", ID: plan.ID}, {Op: "list"}, {Op: "updates", ID: plan.ID}, {Op: "session-view"}, {Op: "inbox"}} {
@@ -87,9 +87,9 @@ func TestReadOperationsChangeNoRecord(t *testing.T) {
 		}
 		r.Op = name
 		for _, a := range []Actor{op, worker} {
-			before, _ := s.Store.Snapshot()
+			before, _ := s.Store.snapshot()
 			after := before.clone()
-			_, err := s.apply(after.LegacyTx(), a, r)
+			_, err := s.apply(after.tx(), a, r)
 			var refused *Problem
 			if err != nil && !errors.As(err, &refused) {
 				t.Fatal(name, err)
@@ -104,13 +104,13 @@ func TestReadOperationsChangeNoRecord(t *testing.T) {
 func TestFailedCommitLeavesMemoryAndDiskUnchanged(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
-	before, _ := s.Store.Snapshot()
+	before, _ := s.Store.snapshot()
 	s.Store.commit = func(*sql.Tx) error { return errors.New("disk full") }
 	if _, err := s.Execute(op, Request{Op: "say", ID: plan.ID, Body: "lost", Key: "k"}); err == nil {
 		t.Fatal("a failed commit succeeded")
 	}
 	refused := errors.New("refused")
-	err := s.Store.Transaction(func(st *State) error {
+	err := s.Store.modify(func(st *state) error {
 		delete(st.Items, plan.ID)
 		st.Updates[0].Body = "rewritten"
 		return refused
@@ -119,7 +119,7 @@ func TestFailedCommitLeavesMemoryAndDiskUnchanged(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 	s.Store.commit = (*sql.Tx).Commit
-	after, _ := s.Store.Snapshot()
+	after, _ := s.Store.snapshot()
 	if fingerprint(before) != fingerprint(after) {
 		t.Fatal("a failed transaction changed memory")
 	}
@@ -157,13 +157,13 @@ func TestCommitReportedFailedAfterSQLiteTookIt(t *testing.T) {
 	}
 	lost = false
 	durable(t, s.Store)
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if st.Updates[len(st.Updates)-1].Body != "kept" {
 		t.Fatal("memory missed the record SQLite took")
 	}
 	// The retry under the same key is answered from the receipt.
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "kept", Key: "k"})
-	if again, _ := s.Store.Snapshot(); len(again.Updates) != len(st.Updates) {
+	if again, _ := s.Store.snapshot(); len(again.Updates) != len(st.Updates) {
 		t.Fatal("the retry wrote the comment twice")
 	}
 }
@@ -173,7 +173,7 @@ func TestSnapshotMutationsNeverReachTheStore(t *testing.T) {
 	repo, plan := repoPlan(t, s)
 	a := newTask(t, s, repo.ID, plan.ID)
 	call(t, s, op, Request{Op: "create", Item: Item{Kind: "task", Repo: repo.ID, Plan: plan.ID, Title: "Next", Body: "## Outcome\nWorks\n## Tests\nProve it", Depends: []string{a.ID}}})
-	before, _ := s.Store.Snapshot()
+	before, _ := s.Store.snapshot()
 	want := fingerprint(before)
 	sent := counted(s.Store)
 	for id, item := range before.Items {
@@ -194,7 +194,7 @@ func TestSnapshotMutationsNeverReachTheStore(t *testing.T) {
 		}
 	}
 	before.Next = 99
-	after, _ := s.Store.Snapshot()
+	after, _ := s.Store.snapshot()
 	if fingerprint(after) != want || len(*sent) != 0 {
 		t.Fatal("a snapshot's mutation reached the store")
 	}
@@ -270,7 +270,7 @@ func shared(path string, a, b reflect.Value) []string {
 // TestCloneSharesNoMemory fills every field a state can reach, so a field
 // added later without its copy fails here.
 func TestCloneSharesNoMemory(t *testing.T) {
-	var st State
+	var st state
 	fill(reflect.ValueOf(&st).Elem())
 	if st.Receipts["k"].Response.Fleet.Hosts[0].Windows[0].Name != "x" || *st.Updates[0].Snapshot.Question.Recommended != 7 {
 		t.Fatalf("the state was not filled: %+v", st)
@@ -287,11 +287,11 @@ func TestCloneSharesNoMemory(t *testing.T) {
 	if got := shared("State", reflect.ValueOf(st), reflect.ValueOf(c)); len(got) != 2 {
 		t.Fatalf("two shared fields were reported as %v", got)
 	}
-	var empty State
+	var empty state
 	if c := empty.clone(); c.Updates != nil || c.Receipts == nil {
 		t.Fatalf("an empty state cloned to %+v", c)
 	}
-	withEmpty := State{Receipts: map[string]receipt{"k": {}}}
+	withEmpty := state{Receipts: map[string]receipt{"k": {}}}
 	if c := withEmpty.clone(); !reflect.DeepEqual(c.Receipts, withEmpty.Receipts) {
 		t.Fatal("an empty response changed in the clone")
 	}
@@ -302,35 +302,35 @@ func TestEveryKindOfChangeIsDurable(t *testing.T) {
 	repo, plan := repoPlan(t, s)
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "one"})
 	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "two"})
-	steps := map[string]func(*State){
-		"replace an update": func(st *State) { st.Updates[1].Body = "edited" },
-		"append and replace": func(st *State) {
+	steps := map[string]func(*state){
+		"replace an update": func(st *state) { st.Updates[1].Body = "edited" },
+		"append and replace": func(st *state) {
 			st.Updates[0].Left = "x"
 			st.update(op, Request{ID: plan.ID}, "say", "three", s.now())
 		},
-		"delete an update":   func(st *State) { st.Updates = append(st.Updates[:1], st.Updates[2:]...) },
-		"reuse an update id": func(st *State) { u := st.Updates[0]; u.Body = "again"; st.Updates = append(st.Updates, u) },
-		"truncate history":   func(st *State) { st.Updates = st.Updates[:1] },
-		"delete records": func(st *State) {
+		"delete an update":   func(st *state) { st.Updates = append(st.Updates[:1], st.Updates[2:]...) },
+		"reuse an update id": func(st *state) { u := st.Updates[0]; u.Body = "again"; st.Updates = append(st.Updates, u) },
+		"truncate history":   func(st *state) { st.Updates = st.Updates[:1] },
+		"delete records": func(st *state) {
 			delete(st.Items, repo.ID)
 			clear(st.Receipts)
 			st.Auth["k"] = Actor{Name: "n"}
 		},
-		"add and drop the rest": func(st *State) {
+		"add and drop the rest": func(st *state) {
 			delete(st.Auth, "k")
 			st.Attempts["a1"] = Attempt{ID: "a1"}
 			st.Queue["t1"] = QueueEntry{Task: "t1"}
 			st.Next = 40
 		},
-		"drop them": func(st *State) { delete(st.Attempts, "a1"); delete(st.Queue, "t1") },
+		"drop them": func(st *state) { delete(st.Attempts, "a1"); delete(st.Queue, "t1") },
 	}
 	for _, name := range []string{"replace an update", "append and replace", "delete an update", "reuse an update id", "truncate history", "delete records", "add and drop the rest", "drop them"} {
-		if err := s.Store.Transaction(func(st *State) error { steps[name](st); return nil }); err != nil {
+		if err := s.Store.modify(func(st *state) error { steps[name](st); return nil }); err != nil {
 			t.Fatal(name, err)
 		}
 		durable(t, s.Store)
 	}
-	want, _ := s.Store.Snapshot()
+	want, _ := s.Store.snapshot()
 	path := s.Store.path
 	if err := s.Store.Close(); err != nil {
 		t.Fatal(err)
@@ -340,7 +340,7 @@ func TestEveryKindOfChangeIsDurable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = reopened.Close() }()
-	got, _ := reopened.Snapshot()
+	got, _ := reopened.snapshot()
 	if !reflect.DeepEqual(got, want) || len(got.Updates) != 1 || got.Next != 40 {
 		t.Fatalf("a restart read %+v, committed %+v", got, want)
 	}
@@ -350,7 +350,7 @@ func TestUnchangedTransactionWritesNothing(t *testing.T) {
 	s := service(t)
 	repo, _ := repoPlan(t, s)
 	sent := counted(s.Store)
-	err := s.Store.Transaction(func(st *State) error {
+	err := s.Store.modify(func(st *state) error {
 		// An empty list encodes as a missing one: the same record.
 		item := st.Items[repo.ID]
 		item.Depends = []string{}
@@ -366,12 +366,12 @@ func TestUnchangedTransactionWritesNothing(t *testing.T) {
 // each transaction; a reader must never see it part moved.
 func TestReadersSeeOnlyCommittedStates(t *testing.T) {
 	s := service(t)
-	seed := func(st *State) error {
+	seed := func(st *state) error {
 		st.Attempts["a"] = Attempt{ID: "a", Seen: 50}
 		st.Attempts["b"] = Attempt{ID: "b"}
 		return nil
 	}
-	if err := s.Store.Transaction(seed); err != nil {
+	if err := s.Store.modify(seed); err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
@@ -379,7 +379,7 @@ func TestReadersSeeOnlyCommittedStates(t *testing.T) {
 	for range 4 {
 		wg.Go(func() {
 			for {
-				st, err := s.Store.Snapshot()
+				st, err := s.Store.snapshot()
 				if sum := st.Attempts["a"].Seen + st.Attempts["b"].Seen; err != nil || sum != 50 {
 					t.Errorf("a reader saw a sum of %d (%v)", sum, err)
 					return
@@ -395,7 +395,7 @@ func TestReadersSeeOnlyCommittedStates(t *testing.T) {
 		})
 	}
 	for range 20 {
-		err := s.Store.Transaction(func(st *State) error {
+		err := s.Store.modify(func(st *state) error {
 			a, b := st.Attempts["a"], st.Attempts["b"]
 			a.Seen--
 			st.Attempts["a"] = a
@@ -409,7 +409,7 @@ func TestReadersSeeOnlyCommittedStates(t *testing.T) {
 	}
 	close(done)
 	wg.Wait()
-	st, _ := s.Store.Snapshot()
+	st, _ := s.Store.snapshot()
 	if st.Attempts["b"].Seen != 20 {
 		t.Fatalf("writes were lost: %+v", st.Attempts)
 	}

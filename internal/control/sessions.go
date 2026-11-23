@@ -8,7 +8,7 @@ import (
 
 // Observation is the cached host view of one execution attempt.
 type Observation struct {
-	// State is working, waiting, limited, live, exited or unknown.
+	// state is working, waiting, limited, live, exited or unknown.
 	State string
 	// Seen is the last time the host reported the attempt's window live.
 	Seen time.Time

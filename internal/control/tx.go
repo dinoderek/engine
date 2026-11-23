@@ -14,7 +14,7 @@ import (
 // engine can answer it without loading anything else. A Tx is valid only
 // inside the function it is given to.
 type Tx struct {
-	st    *State
+	st    *state
 	write bool
 }
 
@@ -24,7 +24,7 @@ func (s *Store) Read(ctx context.Context, fn func(*Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return s.View(func(st *State) error { return fn(&Tx{st: st}) })
+	return s.view(func(st *state) error { return fn(&Tx{st: st}) })
 }
 
 // Write runs fn in the one writing transaction: every change it makes commits
@@ -33,14 +33,12 @@ func (s *Store) Write(ctx context.Context, fn func(*Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return s.Transaction(func(st *State) error { return fn(&Tx{st: st, write: true}) })
+	return s.modify(func(st *state) error { return fn(&Tx{st: st, write: true}) })
 }
 
-// LegacyTx lets a caller outside this package that still holds a State call
-// the functions that take a Tx. It shares the State, so both see each
-// other's changes. It exists only while such callers remain; moving the last
-// one deletes it. The Tx it returns is writable even inside a Read.
-func (s *State) LegacyTx() *Tx { return &Tx{st: s, write: true} }
+// tx is a writable Tx on s, for the code and tests of this package that hold
+// a state outside a Store.Read or Store.Write.
+func (s *state) tx() *Tx { return &Tx{st: s, write: true} }
 
 func (t *Tx) mustWrite() {
 	if !t.write {
@@ -76,6 +74,24 @@ func (t *Tx) update(id int) Update {
 func (t *Tx) PutItem(item Item) {
 	t.mustWrite()
 	t.st.Items[item.ID] = item
+}
+
+// DeleteItem removes the item with this ID.
+func (t *Tx) DeleteItem(id string) {
+	t.mustWrite()
+	delete(t.st.Items, id)
+}
+
+// CoordinatedItems are the items whose coordination intent is set, in no
+// order.
+func (t *Tx) CoordinatedItems() []Item {
+	var out []Item
+	for _, item := range t.st.Items {
+		if item.Coordinating {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // ItemsOfPlan are the tasks of plan, in no order.
@@ -371,6 +387,12 @@ func (t *Tx) QueueOf(repo string) []QueueEntry {
 	}
 	slices.SortFunc(out, func(a, b QueueEntry) int { return a.Seq - b.Seq })
 	return out
+}
+
+// QueueEntries are the entries of every repository's merge queue, in no
+// order.
+func (t *Tx) QueueEntries() []QueueEntry {
+	return slices.Collect(maps.Values(t.st.Queue))
 }
 
 // PutQueueEntry stores e under its task, in its repository's merge queue.

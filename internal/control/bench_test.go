@@ -82,7 +82,7 @@ func BenchmarkStore(b *testing.B) {
 	}
 	b.Run("read/snapshot", func(b *testing.B) {
 		for b.Loop() {
-			if _, err := s.Store.Snapshot(); err != nil {
+			if _, err := s.Store.snapshot(); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -91,7 +91,7 @@ func BenchmarkStore(b *testing.B) {
 		n := 0
 		for b.Loop() {
 			n++
-			err := s.Store.Transaction(func(st *State) error {
+			err := s.Store.modify(func(st *state) error {
 				at := st.Attempts["a600"]
 				at.Seen = n
 				st.Attempts["a600"] = at

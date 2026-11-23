@@ -59,7 +59,7 @@ func settled(t *testing.T, c *Coordinator) {
 // notes are the operator notices whose body contains text.
 func notes(t *testing.T, c *Coordinator, text string) []control.Update {
 	t.Helper()
-	st, err := c.Service.Store.Snapshot()
+	st, err := snapshotOf(c.Service.Store)
 	if err != nil {
 		t.Fatal(err)
 	}

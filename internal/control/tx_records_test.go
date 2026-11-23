@@ -212,6 +212,7 @@ func TestNewWriteAccessorsRefuseAReadTransaction(t *testing.T) {
 		"PutCredential":    func(tx *Tx) { tx.PutCredential("h", Actor{}) },
 		"PutQueueEntry":    func(tx *Tx) { tx.PutQueueEntry(QueueEntry{Task: "t1"}) },
 		"DeleteQueueEntry": func(tx *Tx) { tx.DeleteQueueEntry("t1") },
+		"DeleteItem":       func(tx *Tx) { tx.DeleteItem("t1") },
 		"PutHost":          func(tx *Tx) { tx.PutHost("h", HostRecord{}) },
 		"SetPassAt":        func(tx *Tx) { tx.SetPassAt(at0) },
 		"SetUpgrade":       func(tx *Tx) { tx.SetUpgrade(UpgradeRecord{}) },
@@ -226,4 +227,63 @@ func TestNewWriteAccessorsRefuseAReadTransaction(t *testing.T) {
 			_ = s.Store.Read(bg, func(tx *Tx) error { write(tx); return nil })
 		}()
 	}
+}
+
+func TestItemAccessorsFindCoordinatedItemsAndDeleteAnItem(t *testing.T) {
+	s := service(t)
+	repo, plan := repoPlan(t, s)
+	task := newTask(t, s, repo.ID, plan.ID)
+	err := s.Store.Write(bg, func(tx *Tx) error {
+		coordinated := tx.item(plan.ID)
+		coordinated.Coordinating = true
+		tx.PutItem(coordinated)
+		quiet := tx.item(task.ID)
+		quiet.Coordinating = false
+		tx.PutItem(quiet)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.Store.Read(bg, func(tx *Tx) error {
+		if got := tx.CoordinatedItems(); len(got) != 1 || got[0].ID != plan.ID {
+			t.Errorf("CoordinatedItems = %v, want only the plan", got)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Store.Write(bg, func(tx *Tx) error { tx.DeleteItem(task.ID); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Store.Read(bg, func(tx *Tx) error {
+		if _, ok := tx.Item(task.ID); ok {
+			t.Error("the deleted item is still there")
+		}
+		return nil
+	})
+}
+
+func TestQueueEntriesAreEveryRepositorysQueue(t *testing.T) {
+	s := service(t)
+	err := s.Store.Write(bg, func(tx *Tx) error {
+		tx.PutQueueEntry(QueueEntry{Task: "t1", Repo: "r1"})
+		tx.PutQueueEntry(QueueEntry{Task: "t2", Repo: "r2"})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Store.Read(bg, func(tx *Tx) error {
+		var tasks []string
+		for _, e := range tx.QueueEntries() {
+			tasks = append(tasks, e.Task)
+		}
+		slices.Sort(tasks)
+		if !slices.Equal(tasks, []string{"t1", "t2"}) {
+			t.Errorf("QueueEntries = %v, want t1 and t2", tasks)
+		}
+		return nil
+	})
 }

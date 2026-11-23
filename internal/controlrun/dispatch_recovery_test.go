@@ -35,7 +35,7 @@ func TestRecoveryKeyTellsErrorsApartByTheirFirstLine(t *testing.T) {
 
 func unresolvedNotices(t *testing.T, c *Coordinator, task control.Item) int {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	n := 0
 	for _, u := range st.Updates {
 		if u.Item == task.ID && strings.Contains(u.Body, "unresolved outcome") {
@@ -72,7 +72,7 @@ func TestReconcileEndsADispatchTheHostNeverLaunched(t *testing.T) {
 	h.unresolved = true
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	stuck := st.Attempts[st.Items[task.ID].Attempt]
 	if stuck.State != "dispatching" {
 		t.Fatalf("the unresolved dispatch is %s", stuck.State)
@@ -82,13 +82,13 @@ func TestReconcileEndsADispatchTheHostNeverLaunched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if out.Attempt.Reason != control.EndVanished || st.Items[task.ID].State != "todo" {
 		t.Fatalf("the reconciled dispatch: %+v, task %s", out.Attempt, st.Items[task.ID].State)
 	}
 	h.unresolved = false
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	next := st.Attempts[st.Items[task.ID].Attempt]
 	if next.ID == stuck.ID || next.State != "running" {
 		t.Fatalf("no new attempt was dispatched: %+v", next)
@@ -100,14 +100,14 @@ func TestReconcileEndsADispatchTheHostNeverLaunched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if _, err = c.Service.Execute(worker, control.Request{Op: "state", ID: task.ID, Version: st.Items[task.ID].Version, State: "in-review",
 		Item: control.Item{PR: reviewedPR}, Key: "review"}); err != nil {
 		t.Fatal(err)
 	}
 	h.status.Windows = nil
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if at := st.Attempts[next.ID]; at.Reason != control.EndVanished || st.Items[task.ID].State == "failed" {
 		t.Fatalf("the attempt after an unlaunched one lost its resume: %+v, task %s", at, st.Items[task.ID].State)
 	}
@@ -134,7 +134,7 @@ func TestReconcileRefusesADispatchTheHostMayHaveLaunched(t *testing.T) {
 			h.unresolved = true
 			pass(t, c)
 			pass(t, c)
-			st, _ := c.Service.Store.Snapshot()
+			st, _ := snapshotOf(c.Service.Store)
 			at := st.Attempts[st.Items[task.ID].Attempt]
 			if task.ID != "t3" || at.State != "dispatching" {
 				t.Fatalf("want task t3's attempt dispatching, got %s's %s", task.ID, at.State)
@@ -156,7 +156,7 @@ func TestReconcileRefusesADispatchTheHostMayHaveLaunched(t *testing.T) {
 // plan with no planner and nothing to dispatch one again.
 func TestReconcileRefusesAPlannersDispatch(t *testing.T) {
 	c, h, _, plan, _ := setup(t)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	out, err := c.Service.Dispatch(st.Items[plan.ID], "devbox", "claude", "planner")
 	if err != nil {
 		t.Fatal(err)

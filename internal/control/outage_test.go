@@ -32,7 +32,7 @@ func TestStartPassSavesTheStartAndMarksOnlyAGapOverTheThreshold(t *testing.T) {
 func TestAnOutageClearsTheStallTimersOfLiveAttemptsOnly(t *testing.T) {
 	store := service(t).Store
 	t0 := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
-	if err := store.Transaction(func(st *State) error {
+	if err := store.modify(func(st *state) error {
 		st.Attempts["a1"] = Attempt{ID: "a1", State: "running", WaitingSince: t0, IdleSince: t0}
 		st.Attempts["a2"] = Attempt{ID: "a2", State: "ended", WaitingSince: t0, IdleSince: t0}
 		return nil
@@ -44,7 +44,7 @@ func TestAnOutageClearsTheStallTimersOfLiveAttemptsOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	st, _ := store.Snapshot()
+	st, _ := store.snapshot()
 	if a := st.Attempts["a1"]; !a.WaitingSince.IsZero() || !a.IdleSince.IsZero() {
 		t.Errorf("live attempt %+v, want both timers cleared", a)
 	}
@@ -68,7 +68,7 @@ func TestThePassAtSurvivesAStoreReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
-	st, _ := reopened.Snapshot()
+	st, _ := reopened.snapshot()
 	if !st.PassAt.Equal(at) {
 		t.Errorf("saved pass start %v after reopen, want %v", st.PassAt, at)
 	}

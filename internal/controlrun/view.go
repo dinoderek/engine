@@ -12,29 +12,32 @@ import (
 )
 
 // Tasks are a plan's tasks by number: the read-only projection that lint and
-// coordination share. It only reads the snapshot; it never observes hosts or
-// persists state.
-func Tasks(st control.State, id string) []control.Item {
-	var items []control.Item
-	for _, t := range st.Items {
+// coordination share. It only reads; it never observes hosts or persists
+// state.
+func Tasks(tx *control.Tx, id string) []control.Item { return TasksOf(tx.ItemsOfPlan(id), id) }
+
+// TasksOf are the tasks of plan id among items, by number.
+func TasksOf(items []control.Item, id string) []control.Item {
+	var tasks []control.Item
+	for _, t := range items {
 		if t.Kind == "task" && t.Plan == id {
-			items = append(items, t)
+			tasks = append(tasks, t)
 		}
 	}
-	slices.SortFunc(items, func(a, b control.Item) int { return control.Number(a.ID) - control.Number(b.ID) })
-	return items
+	slices.SortFunc(tasks, func(a, b control.Item) int { return control.Number(a.ID) - control.Number(b.ID) })
+	return tasks
 }
 
 // view is what one pass decides on for root id: its records, and the
 // fleet's observation of their sessions.
-func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) reconcile.View {
-	root := st.Items[id]
-	fleet.Now, fleet.Limits = c.now(), control.HarnessLimits(st.LegacyTx())
-	fleet.Hosts = pausedHosts(st, fleet.Hosts)
-	v := reconcile.View{Now: fleet.Now, Fleet: fleet, Root: withSession(st, root, fleet)}
-	tasks := Tasks(st, id)
+func (c *Coordinator) view(tx *control.Tx, id string, fleet reconcile.Fleet) reconcile.View {
+	root, _ := tx.Item(id)
+	fleet.Now, fleet.Limits = c.now(), control.HarnessLimits(tx)
+	fleet.Hosts = pausedHosts(tx, fleet.Hosts)
+	v := reconcile.View{Now: fleet.Now, Fleet: fleet, Root: withSession(tx, root, fleet)}
+	tasks := Tasks(tx, id)
 	for _, t := range tasks {
-		v.Tasks = append(v.Tasks, withSession(st, t, fleet))
+		v.Tasks = append(v.Tasks, withSession(tx, t, fleet))
 	}
 	if len(tasks) > 0 {
 		for _, p := range lint.Items(tasks) {
@@ -44,30 +47,32 @@ func (c *Coordinator) view(st control.State, id string, fleet reconcile.Fleet) r
 	return v
 }
 
-// pausedHosts is hosts with the operator's pauses from st marked; the
-// pass's own list is left as it was.
-func pausedHosts(st control.State, hosts []reconcile.HostLoad) []reconcile.HostLoad {
+// pausedHosts is hosts with the operator's pauses marked; the pass's own list
+// is left as it was.
+func pausedHosts(tx *control.Tx, hosts []reconcile.HostLoad) []reconcile.HostLoad {
 	out := slices.Clone(hosts)
 	for i := range out {
-		out[i].Paused = st.Hosts[out[i].Name].Paused
+		out[i].Paused = tx.Host(out[i].Name).Paused
 	}
 	return out
 }
 
-// record is item as a pass reads it from st, without its session.
-func record(st control.State, item control.Item) reconcile.Item {
-	t := reconcile.Item{Item: item, Current: st.Attempts[item.Attempt], Name: sessionName(st.Items[item.Repo].Slug, control.Number(item.ID)),
-		Vanished: control.Vanished(st.LegacyTx(), item), Question: control.OwnQuestion(st.LegacyTx(), item.ID), PlanHold: control.NewStartHold(st.LegacyTx(), item.ID),
-		Stopped: st.Attempts[item.Attempt].Reason == control.EndStopped, Claimed: control.Claimed(st.LegacyTx(), st.Attempts[item.Attempt]), Resume: hadEarlierAttempt(st, item.ID, ""), MergedAt: control.MergedAt(st.LegacyTx(), item.ID), MergedHead: control.MergedHead(st.LegacyTx(), item.ID)}
+// record is item as a pass reads it, without its session.
+func record(tx *control.Tx, item control.Item) reconcile.Item {
+	current, _ := tx.Attempt(item.Attempt)
+	repo, _ := tx.Item(item.Repo)
+	t := reconcile.Item{Item: item, Current: current, Name: sessionName(repo.Slug, control.Number(item.ID)),
+		Vanished: control.Vanished(tx, item), Question: control.OwnQuestion(tx, item.ID), PlanHold: control.NewStartHold(tx, item.ID),
+		Stopped: current.Reason == control.EndStopped, Claimed: control.Claimed(tx, current), Resume: hadEarlierAttempt(tx, item.ID, ""), MergedAt: control.MergedAt(tx, item.ID), MergedHead: control.MergedHead(tx, item.ID)}
 	for _, id := range item.Depends {
-		if st.Items[id].State != "done" {
+		if dep, _ := tx.Item(id); dep.State != "done" {
 			t.Blocked = append(t.Blocked, id)
 		}
 	}
-	if req, ok := control.PendingMerge(st.LegacyTx(), item.ID); ok {
+	if req, ok := control.PendingMerge(tx, item.ID); ok {
 		t.Merge = &req
 	}
-	if u, ok := control.CleanedUp(st.LegacyTx(), item.ID); ok {
+	if u, ok := control.CleanedUp(tx, item.ID); ok {
 		t.Cleaned = &u
 	}
 	return t
@@ -76,14 +81,15 @@ func record(st control.State, item control.Item) reconcile.Item {
 // withSession is item's record with its current attempt's session, as the
 // fleet shows it and as the attempt's marks say it was flagged. A vanished
 // attempt has no session to observe.
-func withSession(st control.State, item control.Item, fleet reconcile.Fleet) reconcile.Item {
-	t := record(st, item)
-	t.Strays, t.StrayUnknown = strays(st, item, fleet)
-	at, ok := st.Attempts[item.Attempt]
+func withSession(tx *control.Tx, item control.Item, fleet reconcile.Fleet) reconcile.Item {
+	t := record(tx, item)
+	t.Strays, t.StrayUnknown = strays(tx, item, fleet)
+	at, ok := tx.Attempt(item.Attempt)
 	if !ok || t.Vanished {
 		return t
 	}
-	sess := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))
+	repo, _ := tx.Item(item.Repo)
+	sess := observe(at, fleet, repo.Slug, control.Number(item.ID))
 	sess.WaitingSince, sess.IdleSince, sess.LimitedSince = at.WaitingSince, at.IdleSince, at.LimitedSince
 	sess.StallNoted = at.Notice
 	if sess.ResetsAt == 0 && sess.Waiting {
@@ -94,7 +100,7 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 	}
 	sess.FarNoted = at.FarFor == sess.ResetsAt && sess.ResetsAt > 0
 	sess.StuckNoted = at.StuckFor == sess.ResetsAt && sess.ResetsAt > 0
-	sess.LimitAsked = slices.Contains(st.Hosts[at.Host].Limits[at.Harness].Tasks, item.ID)
+	sess.LimitAsked = slices.Contains(tx.Host(at.Host).Limits[at.Harness].Tasks, item.ID)
 	t.Session = &sess
 	return t
 }
@@ -106,12 +112,13 @@ func withSession(st control.State, item control.Item, fleet reconcile.Fleet) rec
 // as a later session there may reuse its tmux id. unknown is set when such
 // an attempt's host could not be read; a host gone from hosts.toml has
 // nothing left to release.
-func strays(st control.State, item control.Item, fleet reconcile.Fleet) (out []reconcile.Stray, unknown bool) {
-	for _, at := range st.Attempts {
-		if _, configured := fleet.Host(at.Host); at.Item != item.ID || at.Reason != control.EndMoved || at.Window == "" || at.MoveReleased || !configured {
+func strays(tx *control.Tx, item control.Item, fleet reconcile.Fleet) (out []reconcile.Stray, unknown bool) {
+	repo, _ := tx.Item(item.Repo)
+	for _, at := range tx.AttemptsFor(item.ID) {
+		if _, configured := fleet.Host(at.Host); at.Reason != control.EndMoved || at.Window == "" || at.MoveReleased || !configured {
 			continue
 		}
-		s := observe(at, fleet, st.Items[item.Repo].Slug, control.Number(item.ID))
+		s := observe(at, fleet, repo.Slug, control.Number(item.ID))
 		switch {
 		case s.Unknown:
 			unknown = true
@@ -184,22 +191,22 @@ func withWindow(s *reconcile.Session, w hostops.Window) {
 }
 
 func (c *Coordinator) keepObservations(v reconcile.View) error {
-	return c.Service.Store.Transaction(func(fresh *control.State) error {
+	return write(c.Service.Store, func(tx *control.Tx) error {
 		for _, t := range v.Sessions() {
-			at := fresh.Attempts[t.Attempt]
+			at, _ := tx.Attempt(t.Attempt)
 			if at.ID == "" || t.Session.Unknown {
 				continue
 			}
-			at = kept(at, *t.Session, v.Now, coordinating(fresh, fresh.Items[t.ID]))
-			fresh.Attempts[at.ID] = at
+			item, _ := tx.Item(t.ID)
+			tx.PutAttempt(kept(at, *t.Session, v.Now, coordinating(tx, item)))
 		}
 		return nil
 	})
 }
 
 // coordinating reports whether item's plan coordination still runs.
-func coordinating(st *control.State, item control.Item) bool {
-	return control.Root(st.LegacyTx(), item).Coordinating
+func coordinating(tx *control.Tx, item control.Item) bool {
+	return control.Root(tx, item).Coordinating
 }
 
 // since is the start of a spell that holds now: the recorded start, or now

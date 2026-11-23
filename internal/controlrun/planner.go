@@ -9,22 +9,22 @@ import (
 // planner that wrote tasks leaves the plan to go on with them; one that
 // wrote none is started again once, and a second such death stops
 // coordination, with both deaths' pane log tails.
-func (c *Coordinator) plannerEnded(st control.State, a reconcile.Action, at control.Attempt) error {
+func (c *Coordinator) plannerEnded(history []control.Attempt, a reconcile.Action, at control.Attempt) error {
 	switch at.Reason {
 	case control.EndVanished:
 		return c.notice(a.Item, "vanished/"+at.ID, a.Text+" after writing tasks; the plan goes on with them")
 	case control.EndEarlyDeath:
 		return c.notice(a.Item, "early/"+at.ID, a.Text+" without writing any task; a new planner is started"+tails([]control.Attempt{at}))
 	case control.EndFailed:
-		return c.plannerStopped(st, a, at)
+		return c.plannerStopped(history, a, at)
 	}
 	return nil
 }
 
 // plannerStopped tells the operator that a second planner death without a
 // task stopped the plan's coordination.
-func (c *Coordinator) plannerStopped(st control.State, a reconcile.Action, at control.Attempt) error {
-	deaths := earlyAttempts(st, at)
+func (c *Coordinator) plannerStopped(history []control.Attempt, a reconcile.Action, at control.Attempt) error {
+	deaths := earlyAttempts(history, at)
 	if len(deaths) > 2 {
 		deaths = deaths[len(deaths)-2:]
 	}
@@ -36,10 +36,10 @@ func (c *Coordinator) plannerStopped(st control.State, a reconcile.Action, at co
 // at a usage limit, unless the planner before it died at a limit too: the
 // operator was told then, so a replacement that meets the limit again is
 // quiet.
-func (c *Coordinator) plannerAtLimit(st control.State, a reconcile.Action, at control.Attempt) error {
+func (c *Coordinator) plannerAtLimit(history []control.Attempt, a reconcile.Action, at control.Attempt) error {
 	var prev control.Attempt
-	for _, o := range st.Attempts {
-		if o.Item == at.Item && control.Number(o.ID) < control.Number(at.ID) && control.Number(o.ID) > control.Number(prev.ID) {
+	for _, o := range history {
+		if control.Number(o.ID) < control.Number(at.ID) && control.Number(o.ID) > control.Number(prev.ID) {
 			prev = o
 		}
 	}

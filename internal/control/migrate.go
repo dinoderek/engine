@@ -50,7 +50,7 @@ func (s *Store) migrate() error {
 	return s.write(changes, migratePlanStates+telegramSchema+fmt.Sprintf("PRAGMA user_version=%d;\n", schemaVersion))
 }
 
-func retire(st *State, locks []legacyLock, now time.Time) {
+func retire(st *state, locks []legacyLock, now time.Time) {
 	coordinator := Actor{Name: "coordinator", Role: "coordinator"}
 	for _, item := range st.Items {
 		if item.Kind != "task" || !slices.Contains([]string{"running", "in-review", "needs-human"}, item.State) {
@@ -80,7 +80,7 @@ func retire(st *State, locks []legacyLock, now time.Time) {
 
 // legacyRequest is version 1's pending merge request: the task's newest from
 // its current attempt, unanswered.
-func legacyRequest(st *State, item Item) (Update, bool) {
+func legacyRequest(st *state, item Item) (Update, bool) {
 	for i := len(st.Updates) - 1; i >= 0; i-- {
 		u := st.Updates[i]
 		if u.Item != item.ID || u.Kind != "merge-request" || u.Merge == nil {
@@ -94,7 +94,7 @@ func legacyRequest(st *State, item Item) (Update, bool) {
 	return Update{}, false
 }
 
-func answered(st *State, id int) bool {
+func answered(st *state, id int) bool {
 	for _, u := range st.Updates[min(id, len(st.Updates)):] {
 		if u.ReplyTo == id && (u.Kind == MergeMerged || u.Kind == MergeRefused) {
 			return true

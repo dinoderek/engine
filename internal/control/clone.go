@@ -7,8 +7,8 @@ import (
 
 // clone copies the state deeply: nothing a caller does to the copy reaches
 // the original. Strings are shared; they never change.
-func (s State) clone() State {
-	out := State{
+func (s state) clone() state {
+	out := state{
 		Items:    make(map[string]Item, len(s.Items)),
 		Attempts: maps.Clone(s.Attempts),
 		Updates:  cloneUpdates(s.Updates),

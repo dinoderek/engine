@@ -253,8 +253,8 @@ type receipt struct {
 	Response Response `json:"response"`
 }
 
-// State is a consistent database snapshot used by one transaction.
-type State struct {
+// state is a consistent database snapshot used by one transaction.
+type state struct {
 	Items    map[string]Item       `json:"items"`
 	Attempts map[string]Attempt    `json:"attempts"`
 	Updates  []Update              `json:"updates"`
@@ -272,17 +272,17 @@ type State struct {
 	Upgrade UpgradeRecord `json:"upgrade,omitzero"`
 }
 
-func emptyState() State {
-	return State{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Queue: map[string]QueueEntry{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Hosts: map[string]HostRecord{}, Next: 1}
+func emptyState() state {
+	return state{Items: map[string]Item{}, Attempts: map[string]Attempt{}, Queue: map[string]QueueEntry{}, Auth: map[string]Actor{}, Receipts: map[string]receipt{}, Hosts: map[string]HostRecord{}, Next: 1}
 }
 
-func (s *State) id(prefix string) string {
+func (s *state) id(prefix string) string {
 	id := fmt.Sprintf("%s%d", prefix, s.Next)
 	s.Next++
 	return id
 }
 
-func (s *State) update(a Actor, r Request, kind, body string, now time.Time) Update {
+func (s *state) update(a Actor, r Request, kind, body string, now time.Time) Update {
 	u := Update{ID: len(s.Updates) + 1, Item: r.ID, Author: a.Name, At: now.UTC(), Kind: kind, Body: body,
 		Recipient: r.Recipient, ReplyTo: r.ReplyTo, RequiresReply: r.RequiresReply,
 		Choices: r.Choices, Recommended: r.Recommended, Class: r.Class}

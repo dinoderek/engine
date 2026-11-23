@@ -47,7 +47,7 @@ func requested(t *testing.T, reply func(hostops.MergeRequest) (hostops.Merged, e
 	c.Client = func(hosts.Host) remote.Client { return m }
 	pass(t, c)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	worker, err := c.Service.Authenticate(m.launches[st.Attempts[st.Items[task.ID].Attempt].RunID].Credential, "operator")
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func reply(code, reason string) func(hostops.MergeRequest) (hostops.Merged, erro
 
 func lastUpdate(t *testing.T, c *Coordinator, id string, kinds ...string) (control.Update, bool) {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	for i := len(st.Updates) - 1; i >= 0; i-- {
 		u := st.Updates[i]
 		for _, k := range kinds {
@@ -96,7 +96,7 @@ func lastUpdate(t *testing.T, c *Coordinator, id string, kinds ...string) (contr
 // operatorNotices are the coordinator's messages to the operator on id.
 func operatorNotices(t *testing.T, c *Coordinator, id string) []control.Update {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	var out []control.Update
 	for _, u := range st.Updates {
 		if u.Item == id && u.Recipient == "operator" && u.Author == "coordinator" {
@@ -108,7 +108,7 @@ func operatorNotices(t *testing.T, c *Coordinator, id string) []control.Update {
 
 func entry(t *testing.T, c *Coordinator, id string) (control.QueueEntry, bool) {
 	t.Helper()
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	e, ok := st.Queue[id]
 	return e, ok
 }
@@ -127,7 +127,7 @@ func TestCoordinatorMergesOnTheTasksHostAndCompletesTheTask(t *testing.T) {
 	if got := m.merges(); len(got) != 1 || got[0] != (hostops.MergeRequest{Repo: "owner/demo", PR: 42, Head: reviewedHead, Method: "squash"}) {
 		t.Fatalf("merge requests %+v", m.requests)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if got := st.Items[task.ID]; got.State != "done" || got.PR != reviewedPR || len(st.Queue) != 0 {
 		t.Fatalf("task %+v, queue %+v", got, st.Queue)
 	}
@@ -149,7 +149,7 @@ func TestCoordinatorHandsBackARedOrClosedPR(t *testing.T) {
 			m.status.Windows[0].State = "waiting"
 			pass(t, c)
 			u, ok := lastUpdate(t, c, task.ID, control.MergeRefused)
-			st, _ := c.Service.Store.Snapshot()
+			st, _ := snapshotOf(c.Service.Store)
 			if !ok || !strings.Contains(u.Body, "the reason") || st.Items[task.ID].State != "in-review" || len(st.Queue) != 0 || woken == 0 {
 				t.Fatalf("refusal %+v, task %s, queue %+v, woken %d", u, st.Items[task.ID].State, st.Queue, woken)
 			}
@@ -179,7 +179,7 @@ func TestABehindHeadGetsItsTurnAndMergesOnceRefreshed(t *testing.T) {
 	request(t, c, worker, task.ID, refreshed)
 	m.reply = reply(hostops.CodeMerged, "merged at "+refreshed)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if got := m.merges(); len(got) != 2 || got[1].Head != refreshed || st.Items[task.ID].State != "done" {
 		t.Fatalf("merges %+v, task %s", got, st.Items[task.ID].State)
 	}
@@ -224,7 +224,7 @@ func TestCoordinatorRecordsAMergeWhoseResultWasLost(t *testing.T) {
 	}
 	later(restarted, reconcile.CheckEvery)
 	pass(t, restarted)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "done" || len(m.merges()) != 2 {
 		t.Fatalf("task %s after %d merges", st.Items[task.ID].State, len(m.merges()))
 	}
@@ -236,14 +236,14 @@ func TestAVanishedHeadMergesWithoutItsSession(t *testing.T) {
 	pass(t, c) // the head, waiting on checks, is seen live
 	m.status.Windows = nil
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if at := st.Attempts[st.Items[task.ID].Attempt]; at.Reason != control.EndVanished {
 		t.Fatalf("attempt %+v", at)
 	}
 	m.reply = reply(hostops.CodeMerged, "merged at "+reviewedHead)
 	later(c, reconcile.CheckEvery)
 	pass(t, c)
-	if st, _ = c.Service.Store.Snapshot(); st.Items[task.ID].State != "done" {
+	if st, _ = snapshotOf(c.Service.Store); st.Items[task.ID].State != "done" {
 		t.Fatalf("task %s", st.Items[task.ID].State)
 	}
 }
@@ -251,13 +251,13 @@ func TestAVanishedHeadMergesWithoutItsSession(t *testing.T) {
 func TestADeadExecutionAtTheCapFailsAndLeavesTheQueue(t *testing.T) {
 	c, m, task, _ := requested(t, reply(hostops.CodePendingChecks, "running"))
 	m.status.Windows[0].Alive = false
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	crashedBefore(t, c, st.Attempts[st.Items[task.ID].Attempt])
 	if err := c.ConfirmEnded(st.Items[task.ID].Attempt); err != nil {
 		t.Fatal(err)
 	}
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if _, queued := st.Queue[task.ID]; st.Items[task.ID].State != "failed" || queued {
 		t.Fatalf("task %s, queued %v", st.Items[task.ID].State, queued)
 	}
@@ -268,7 +268,7 @@ func TestADeadExecutionAtTheCapFailsAndLeavesTheQueue(t *testing.T) {
 func mergeRequested(t *testing.T) (*Coordinator, *merger, control.Item, control.Attempt) {
 	t.Helper()
 	c, m, task, _ := requested(t, reply(hostops.CodeMerged, "merged at "+reviewedHead))
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	return c, m, task, st.Attempts[st.Items[task.ID].Attempt]
 }
 
@@ -298,14 +298,13 @@ func waitedLong(t *testing.T, c *Coordinator, m *merger, id string) control.Atte
 	t.Helper()
 	m.status.Windows[0].State = "waiting"
 	var at control.Attempt
-	if err := c.Service.Store.Transaction(func(st *control.State) error {
-		at = st.Attempts[st.Items[id].Attempt]
+	mutate(t, c.Service.Store, func(tx *control.Tx) error {
+		item, _ := tx.Item(id)
+		at, _ = tx.Attempt(item.Attempt)
 		at.WaitingSince = c.Service.Now().Add(-2 * reconcile.StallWait)
-		st.Attempts[at.ID] = at
+		tx.PutAttempt(at)
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	return at
 }
 
@@ -314,13 +313,13 @@ func TestPlanTaskSessionKeepsItsWindowToReportAfterTheMerge(t *testing.T) {
 	c.Wake = func(reconcile.Session, string) error { return nil }
 	at := waitedLong(t, c, m, task.ID)
 	pass(t, c)
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	if st.Items[task.ID].State != "done" || len(m.status.Windows) != 1 || st.Attempts[at.ID].State == "ended" {
 		t.Fatalf("task %s, windows %v, attempt %s: reaped as the executor was told", st.Items[task.ID].State, m.status.Windows, st.Attempts[at.ID].State)
 	}
 	later(c, reconcile.CleanupWait)
 	pass(t, c)
-	st, _ = c.Service.Store.Snapshot()
+	st, _ = snapshotOf(c.Service.Store)
 	if len(m.status.Windows) != 0 || st.Attempts[at.ID].State != "ended" {
 		t.Fatalf("windows %v, attempt %s after the report window", m.status.Windows, st.Attempts[at.ID].State)
 	}

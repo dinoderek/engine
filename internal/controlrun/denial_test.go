@@ -27,7 +27,7 @@ func TestAStallAfterADenialIsAPermissionStop(t *testing.T) {
 		now = now.Add(4 * time.Minute)
 		pass(t, c)
 	}
-	st, _ := c.Service.Store.Snapshot()
+	st, _ := snapshotOf(c.Service.Store)
 	var got []string
 	for _, u := range st.Updates {
 		if u.Item == task.ID && strings.Contains(u.Body, "waited for input") {
