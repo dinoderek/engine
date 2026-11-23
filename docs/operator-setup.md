@@ -123,19 +123,20 @@ then run `engine setup --host devbox`.
 
 `engine upgrade`, from any host in `hosts.toml`, brings every host to the
 head of `main`, mid-plan too. It stops the server's unit and backs up the
-database with the old binary, installs the new engine and your plugins on
-this host, sets up the server's host and starts the server, then sets up
-every other host. The server starts again even when a step fails.
-`--dry-run` prints the steps and changes nothing.
+database with the old binary, installs engine and your plugins here, sets
+up the server's host and starts the server, then sets up every other host.
+The server starts again even when a step fails. `--dry-run` only prints
+the steps.
 
 Busy tasks carry on; a session that dies meanwhile is an engine bug
 (`session-signals.md`, "Upgrade"; old plugin versions: `harnesses.md`).
 
-It refuses, changing nothing, when the server's host records no `services`
-table, does not answer, or its unit is not active. A host that is
-unreachable or stays open stops no others: run the commands the report
-lists, then rerun it. Restart `engine ui` yourself. A Mac server host has no unit: upgrade
-it by hand, in the order above (to back up, `control-server.md`, "Start"),
+It refuses, changing nothing, when this host's `config.toml` sets no
+`[server] host`, or the server's host records no `services` table, does
+not answer, or its unit is not active. An unreachable or open host stops
+no others: run the commands the report lists, then rerun it. Restart
+`engine ui` yourself. A Mac server host has no unit: upgrade it by hand,
+in the order above (to back up, `control-server.md`, "Start"),
 with `engine setup` and `engine setup --host <name>` for the setups.
 
 **The server's unit.** Write it once, by hand, on the server's host, as
