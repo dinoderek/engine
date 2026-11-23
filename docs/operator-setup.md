@@ -115,7 +115,7 @@ then run `engine setup --host devbox`.
    "Names and addresses"), which goes in `hosts.toml` on the Mac.
 4. **Install the tools** `go`, `tmux`, `gh`, `git` and `lsof` on the devbox, plus
    `claude` if it runs Claude and `sqlite3` if it runs Codex. `engine setup`
-   lists what is missing, and prints the `PATH` line and the `sudo systemctl
+   checks `go`, `tmux`, `gh` and `git` and lists what is missing, and prints the `PATH` line and the `sudo systemctl
    mask` line that stops the devbox suspending. Sign in once over SSH:
    `ssh -t <address> claude /login`.
 
