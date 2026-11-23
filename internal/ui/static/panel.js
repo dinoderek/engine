@@ -275,9 +275,30 @@ window.engine.panel = function (ctx) {
     sync();
   }
 
+  // adopt takes the open item's state, version and actions from the plan on
+  // show, which holds them for the plan and for each of its tasks.
+  function adopt(planEnv) {
+    const d = planEnv && planEnv.data;
+    const cur = st.item && st.item.data;
+    if (!d || !cur || cur.id !== st.shown) return;
+    let now = null;
+    if (d.plan.id === st.shown) {
+      now = { state: d.plan.state, version: d.version, actions: d.actions };
+    } else {
+      const t = d.tasks.find((x) => x.id === st.shown);
+      if (t) now = { state: t.state, held: !!t.held, version: t.version, actions: t.actions };
+    }
+    if (!now) return;
+    const { fetched, stale, error, failed: down } = planEnv;
+    st.item = { data: Object.assign({}, cur, now), fetched, stale, error, failed: down };
+    renderHead();
+  }
+
+  // refresh reads the open item again, except on Communications over the
+  // plan on show, which adopt keeps current without a read of its own.
   function refresh() {
     if (!st.shown) return;
-    fetchItem();
+    if (view.tab !== "communications" || !ctx.onPlan(st.shown)) fetchItem();
     if (view.tab !== "communications") return;
     if (st.thread) fetchThread({ statusOnly: st.thread.more });
     else ensureThread();
@@ -309,6 +330,7 @@ window.engine.panel = function (ctx) {
   return {
     sync,
     refresh,
+    adopt,
     head: () => { if (st.shown) renderHead(); },
     reload: () => (st.shown ? fetchItem() : Promise.resolve()),
     envs: () => [st.item, st.threadEnv].filter(Boolean),

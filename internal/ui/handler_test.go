@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -21,12 +22,15 @@ type fakeControl struct {
 	t     *testing.T
 	token string
 
-	mu     sync.Mutex
-	ops    []string
-	fail   int                                            // status to fail every call with; 0 answers
-	reads  func(control.Request) (control.Response, bool) // false answers unknown item
-	rows   []control.SessionRow                           // what session-view returns
-	server *httptest.Server
+	mu    sync.Mutex
+	ops   []string
+	fail  int                                            // status to fail every call with; 0 answers
+	reads func(control.Request) (control.Response, bool) // false answers unknown item
+	rows  []control.SessionRow                           // what session-view returns
+	// aggregates makes it a server that has overview and plan-detail, which
+	// answer from the same fixtures as the reads they combine.
+	aggregates bool
+	server     *httptest.Server
 }
 
 func newFakeControl(t *testing.T) *fakeControl {
@@ -42,6 +46,12 @@ func (f *fakeControl) serve(w http.ResponseWriter, r *http.Request) {
 		f.t.Errorf("decode request: %v", err)
 	}
 	f.mu.Lock()
+	if aggregateOp(req.Op) && !f.aggregates {
+		f.mu.Unlock()
+		w.WriteHeader(400)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "unknown operation " + strconv.Quote(req.Op)})
+		return
+	}
 	f.ops = append(f.ops, req.Op)
 	fail, token := f.fail, f.token
 	f.mu.Unlock()
@@ -69,6 +79,11 @@ func (f *fakeControl) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case req.Op == "overview":
+		out.Items = append(fixtureRepos(), fixturePlans()...)
+		out.Sessions = f.rows
+	case req.Op == "plan-detail":
+		out.Items, out.Attempts, out.Sessions = fixtureView(), fixtureAttempts(), f.rows
 	case req.Op == "list" && req.State == "repo":
 		out.Items = fixtureRepos()
 	case req.Op == "list" && req.State == "plan":

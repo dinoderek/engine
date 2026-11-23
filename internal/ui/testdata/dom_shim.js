@@ -225,4 +225,23 @@ function boot(staticDir, hash, fetchImpl, opts = {}) {
   return { doc, win, scripts, Event };
 }
 
-module.exports = { boot, Event };
+// withOverview adds /api/overview to a scripted fetch: the process answers it
+// with the inbox, sessions and plans routes' envelopes in one body, so the
+// scripted fetch needs only those routes.
+// seen, when given, collects each request the page makes.
+function withOverview(fetchImpl, seen) {
+  return async (url, init) => {
+    const u = new URL(url, "http://127.0.0.1");
+    if (seen) seen.push(u.pathname + u.search);
+    if (u.pathname !== "/api/overview") return fetchImpl(url, init);
+    const part = async (path) => {
+      const res = await fetchImpl(path + u.search);
+      const body = await res.json();
+      return res.ok ? body : { error: body.error };
+    };
+    const got = { inbox: await part("/api/inbox"), sessions: await part("/api/sessions"), plans: await part("/api/plans") };
+    return { ok: true, status: 200, statusText: "OK", json: async () => got };
+  };
+}
+
+module.exports = { boot, Event, withOverview };

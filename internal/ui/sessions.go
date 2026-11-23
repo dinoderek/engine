@@ -56,10 +56,19 @@ func feedbackByTask(rows []control.SessionRow) map[string]*control.UpdateRef {
 // sessions loads the Sessions tab. Like every view it falls back to its last
 // success when the control server fails.
 func (u *upstream) sessions(ctx context.Context) (Envelope, int) {
+	return u.sessionsFrom(ctx, u.newRead())
+}
+
+func (u *upstream) sessionsFrom(ctx context.Context, read *overviewRead) (Envelope, int) {
 	return u.view(ctx, "sessions", func(ctx context.Context) (any, error) {
-		got, err := u.call(ctx, control.Request{Op: "session-view"})
+		got, ok, err := read.get(ctx)
 		if err != nil {
 			return nil, err
+		}
+		if !ok {
+			if got, err = u.call(ctx, control.Request{Op: "session-view"}); err != nil {
+				return nil, err
+			}
 		}
 		return sessionList(got.Sessions), nil
 	})

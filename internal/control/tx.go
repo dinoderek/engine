@@ -297,6 +297,13 @@ func (t *Tx) CurrentAttempts() []Attempt {
 	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.attempt=a.id AND i.id=a.item"+byNumberOf("a.id"))
 }
 
+// CurrentAttemptsOfPlan are the attempts that are the current one of the plan
+// or of one of its tasks, by ID, ended or not.
+func (t *Tx) CurrentAttemptsOfPlan(plan string) []Attempt {
+	return fetchAll[Attempt](t, "SELECT a.data FROM attempts a JOIN items i ON i.attempt=a.id AND i.id=a.item"+
+		" WHERE i.plan=?1 OR i.id=?1"+byNumberOf("a.id"), plan)
+}
+
 // UnendedAttempts are the attempts not yet ended, by ID.
 func (t *Tx) UnendedAttempts() []Attempt {
 	// Two ranges, not !=, so the state index answers it.

@@ -31,6 +31,9 @@ func itemFake(t *testing.T) *fakeControl {
 				if u.Item == r.ID && u.ID > r.After {
 					out.Updates = append(out.Updates, u)
 				}
+				if u.Item == r.ID && u.RequiresReply {
+					out.Questions = append(out.Questions, control.QuestionStatus{ID: u.ID, State: "open"})
+				}
 			}
 			return out, true
 		}
@@ -94,12 +97,12 @@ func TestThreadRouteIsScopedAndPaged(t *testing.T) {
 	if !strings.Contains(body, "plan note") || strings.Contains(body, "Approve?") || !strings.Contains(body, `"questions":[{"id":1,"state":"open"}]`) {
 		t.Fatalf("plan thread after 1 = %s, want the later message and the question's status", body)
 	}
-	if _, body = d.get(t, "GET", "127.0.0.1", "/api/items/t6/thread?after=2"); !strings.Contains(body, `"messages":[]`) || !strings.Contains(body, `"next":2`) {
-		t.Fatalf("thread at its end = %s, want no messages and the cursor kept", body)
+	if _, body = d.get(t, "GET", "127.0.0.1", "/api/items/t6/thread?after=2"); !strings.Contains(body, `"messages":[]`) || !strings.Contains(body, `"next":4`) {
+		t.Fatalf("thread at its end = %s, want no messages and the cursor past the update that is not one", body)
 	}
 	for _, ops := range fc.calls() {
-		if ops != "get" && ops != "updates" {
-			t.Fatalf("thread reads forwarded %v, want only get and updates", fc.calls())
+		if ops != "updates" {
+			t.Fatalf("thread reads forwarded %v, want only updates", fc.calls())
 		}
 	}
 }

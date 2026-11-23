@@ -87,6 +87,9 @@ func messageListing(tx *Tx, a Actor, r Request) Response {
 			break
 		}
 	}
+	if r.Op == "updates" && r.ID != "" && readable(tx, a, r.ID) {
+		out.Questions = tx.QuestionStatuses(r.ID)
+	}
 	return out
 }
 

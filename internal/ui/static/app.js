@@ -22,7 +22,7 @@
   const $ = (id) => document.getElementById(id);
   const control = window.engine.control({ $, refresh: () => afterWrite(), render: () => { renderPane(); panel.head(); } });
   const panel = window.engine.panel({
-    $, view, writeHash, status: () => status(), repoName, control,
+    $, view, writeHash, status: () => status(), repoName, control, onPlan: (id) => onPlan(id),
     href: (id, tab, update) => here({ id, tab, update }),
     render: () => { renderPlans(); renderPane(); renderSessions(); renderInbox(); },
   });
@@ -54,6 +54,14 @@
     const p = new URLSearchParams();
     for (const k of ["repo", "state", "q"]) if (view[k]) p.set(k, view[k]);
     addOpen(p, open);
+    const s = p.toString();
+    return s ? "?" + s : "";
+  }
+
+  // filters is the hash's search part for the plan filters alone.
+  function filters() {
+    const p = new URLSearchParams();
+    for (const k of ["repo", "state", "q"]) if (view[k]) p.set(k, view[k]);
     const s = p.toString();
     return s ? "?" + s : "";
   }
@@ -110,6 +118,13 @@
     const a = el("a", { href: link(view.plan, view.task, { id, tab: "description" }), "data-key": key }, text);
     a.addEventListener("click", () => panel.noteOpener(key));
     return a;
+  }
+
+  // onPlan says whether the plan on show, refreshed with the page, holds the
+  // item: the plan itself or one of its tasks.
+  function onPlan(id) {
+    const d = view.page === "plans" && fetched.plan && fetched.plan.data;
+    return !!d && (d.plan.id === id || d.tasks.some((t) => t.id === id));
   }
 
   function repoName(id) {
@@ -234,6 +249,37 @@
     });
   }
 
+  // refreshOverview reloads the inbox, the sessions and the plan list with one
+  // read: the process answers one envelope for each, as its own route would.
+  async function refreshOverview() {
+    const nInbox = ++inboxPending;
+    const nSessions = ++sessionsPending;
+    const nPlans = ++pending;
+    let got;
+    try {
+      got = await load("/api/overview" + filters());
+    } catch (err) {
+      got = {};
+      for (const name of ["inbox", "sessions", "plans"]) got[name] = failed(fetched[name], err);
+    }
+    // A view that failed carries an error and no data: the page keeps what it holds, stale.
+    const settle = (name) => (got[name].error && !got[name].data ? failed(fetched[name], new Error(got[name].error)) : got[name]);
+    if (nInbox === inboxPending) {
+      fetched.inbox = settle("inbox");
+      renderInbox();
+    }
+    if (nSessions === sessionsPending) {
+      fetched.sessions = settle("sessions");
+      renderSessions();
+    }
+    if (nPlans === pending) {
+      fetched.plans = settle("plans");
+      renderPlans();
+    }
+    panel.head();
+    status();
+  }
+
   // refreshPlans reloads the list; cached reuses the dashboard's last read.
   async function refreshPlans(cached) {
     const n = ++pending;
@@ -266,6 +312,7 @@
       if (n !== planPending) return;
       fetched.plan = env;
     }
+    panel.adopt(fetched.plan);
     renderPane();
     status();
     if (scroll && view.task) {
@@ -276,21 +323,6 @@
 
   function renderSessions() {
     sessions.render(fetched.sessions);
-  }
-
-  async function refreshSessions() {
-    const n = ++sessionsPending;
-    let env;
-    try {
-      env = await load("/api/sessions");
-    } catch (err) {
-      env = failed(fetched.sessions, err);
-    }
-    if (n !== sessionsPending) return;
-    fetched.sessions = env;
-    renderSessions();
-    panel.head();
-    status();
   }
 
   // renderInbox draws the Inbox tab; refreshInbox reloads it.
@@ -330,14 +362,12 @@
     }
   }
 
+  // refresh reads the overview, the plan on show and the open thread: three
+  // calls to the control server, made together.
   function refresh() {
     if (document.visibilityState === "visible") {
-      refreshInbox();
-      refreshSessions();
-      if (view.page === "plans") {
-        refreshPlans();
-        refreshPlan(false);
-      }
+      refreshOverview();
+      if (view.page === "plans") refreshPlan(false);
       panel.refresh();
     }
   }
@@ -367,12 +397,8 @@
     renderSessions();
     renderInbox();
     panel.sync();
-    refreshInbox();
-    refreshSessions();
-    if (view.page === "plans") {
-      refreshPlans();
-      refreshPlan(true);
-    }
+    refreshOverview();
+    if (view.page === "plans") refreshPlan(true);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
