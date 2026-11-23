@@ -53,37 +53,47 @@ func (s Service) Execute(a Actor, r Request) (Response, error) {
 		run = s.Store.Read
 	}
 	err := run(context.Background(), func(tx *Tx) error {
-		if err := authorizeExecution(tx, a); err != nil {
-			return err
-		}
-		if r.Op == "attempt-reconcile" {
-			if err := stillChecked(tx, r.ID, checked); err != nil {
-				return err
-			}
-		}
-		if write && (r.Key == "" || len(r.Key) > 200) {
-			return problem(400, "a request key of 1–200 characters is required")
-		}
-		key := fingerprint([]string{a.Name, a.Attempt, r.Key})
-		hash := fingerprint(digested(r))
-		if prev, ok := tx.Receipt(key); write && ok {
-			if prev.Digest != hash {
-				return problem(409, "request key was already used for a different command")
-			}
-			out = prev.Response
-			return nil
-		}
 		var err error
-		out, err = s.apply(tx, a, r)
-		if err != nil {
-			return err
-		}
-		if write {
-			tx.PutReceipt(key, receipt{Digest: hash, Response: out}, s.now())
-		}
-		return nil
+		out, err = s.executeIn(tx, a, r, checked)
+		return err
 	})
 	return out, err
+}
+
+// executeIn runs r in tx: a write first sweeps the expired receipts, then
+// replays its request key's receipt or applies the command and stores one.
+func (s Service) executeIn(tx *Tx, a Actor, r Request, checked string) (Response, error) {
+	write := !slices.Contains(readOps, r.Op)
+	if err := authorizeExecution(tx, a); err != nil {
+		return Response{}, err
+	}
+	if r.Op == "attempt-reconcile" {
+		if err := stillChecked(tx, r.ID, checked); err != nil {
+			return Response{}, err
+		}
+	}
+	if write && (r.Key == "" || len(r.Key) > 200) {
+		return Response{}, problem(400, "a request key of 1–200 characters is required")
+	}
+	if write {
+		s.sweepReceipts(tx)
+	}
+	key := fingerprint([]string{a.Name, a.Attempt, r.Key})
+	hash := fingerprint(digested(r))
+	if prev, ok := tx.Receipt(key); write && ok {
+		if prev.Digest != hash {
+			return Response{}, problem(409, "request key was already used for a different command")
+		}
+		return prev.Response, nil
+	}
+	out, err := s.apply(tx, a, r)
+	if err != nil {
+		return Response{}, err
+	}
+	if write {
+		tx.PutReceipt(key, receipt{Digest: hash, Response: out}, s.now())
+	}
+	return out, nil
 }
 
 // checkReconcile runs the operator's attempt reconcile's host check and
