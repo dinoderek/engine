@@ -118,24 +118,27 @@ func TestStoreRefusesUnknownSchemaAndCorruption(t *testing.T) {
 }
 
 // A current database made before an index was added gets it on open, and one
-// that has it is left as it is.
+// that has it is left as it is. Each index added since is named here.
 func TestOpenAddsAnIndexAMadeDatabaseLacks(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "db")
 	s, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	added := []string{"attempts_limited", "updates_asked_item", "updates_asked_task"}
 	indexes := func(s *Store) (n int) {
-		if err := s.writer.QueryRow("SELECT count(*) FROM sqlite_schema WHERE name='attempts_limited'").Scan(&n); err != nil {
+		if err := s.writer.QueryRow("SELECT count(*) FROM sqlite_schema WHERE name IN ('attempts_limited','updates_asked_item','updates_asked_task')").Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
 	}
-	if indexes(s) != 1 {
-		t.Fatal("a new database lacks the index")
+	if indexes(s) != len(added) {
+		t.Fatal("a new database lacks an index")
 	}
-	if _, err = s.writer.Exec("DROP INDEX attempts_limited"); err != nil {
-		t.Fatal(err)
+	for _, name := range added {
+		if _, err = s.writer.Exec("DROP INDEX " + name); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = s.Close(); err != nil {
 		t.Fatal(err)
@@ -144,8 +147,8 @@ func TestOpenAddsAnIndexAMadeDatabaseLacks(t *testing.T) {
 		if s, err = Open(path); err != nil {
 			t.Fatal(err)
 		}
-		if indexes(s) != 1 {
-			t.Error("a reopened database lacks the index")
+		if indexes(s) != len(added) {
+			t.Error("a reopened database lacks an index")
 		}
 		if err = s.Close(); err != nil {
 			t.Fatal(err)
