@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"cmp"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -54,9 +55,10 @@ func execSQL(t *testing.T, path, statements string) {
 // openSQL is a connection to the database at path, beside any server's.
 func openSQL(t *testing.T, path string, readonly bool) *sql.DB {
 	t.Helper()
-	dsn := (&url.URL{Scheme: "file", Path: path}).String()
+	// The server's coordinator may be writing: wait for it, as the server does.
+	dsn := (&url.URL{Scheme: "file", Path: path}).String() + "?_pragma=busy_timeout(5000)"
 	if readonly {
-		dsn += "?mode=ro"
+		dsn += "&mode=ro"
 	}
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -96,6 +98,9 @@ type serverProcess struct {
 	addr   string
 	cmd    *exec.Cmd
 	stderr *syncBuffer
+	// client is the test's own, so stop can close its idle connections:
+	// one left open would hold the server's shutdown past its deadline.
+	client *http.Client
 }
 
 // serverHome is a home holding the operator credential at its default path,
@@ -114,14 +119,14 @@ func serverHome(t *testing.T) string {
 func serverToken(home string) string { return filepath.Join(home, ".config", "engine", "server-token") }
 
 // engineCommand is the engine command with args, under home, with PATH
-// holding nothing.
-func engineCommand(t *testing.T, home string, args ...string) *exec.Cmd {
+// holding nothing, killed once ctx ends.
+func engineCommand(ctx context.Context, t *testing.T, home string, args ...string) *exec.Cmd {
 	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(self, args...)
+	cmd := exec.CommandContext(ctx, self, args...)
 	var env []string
 	for _, kv := range processEnv() {
 		if !strings.HasPrefix(kv, "PATH=") {
@@ -140,8 +145,8 @@ func startServer(t *testing.T, home, db string) *serverProcess {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &serverProcess{t: t, home: home, db: db, token: token, stderr: &syncBuffer{}}
-	p.cmd = engineCommand(t, home, "serve", "--foreground", "--db", db, "--token-file", tokenFile, "--listen", "127.0.0.1:0")
+	p := &serverProcess{t: t, home: home, db: db, token: token, stderr: &syncBuffer{}, client: &http.Client{Transport: &http.Transport{}}}
+	p.cmd = engineCommand(context.Background(), t, home, "serve", "--foreground", "--db", db, "--token-file", tokenFile, "--listen", "127.0.0.1:0")
 	p.cmd.Stderr = p.stderr
 	stdout, err := p.cmd.StdoutPipe()
 	if err != nil {
@@ -165,6 +170,7 @@ func (p *serverProcess) stop() {
 	if p.cmd.ProcessState != nil {
 		return
 	}
+	p.client.CloseIdleConnections()
 	_ = p.cmd.Process.Signal(syscall.SIGTERM)
 	done := make(chan error, 1)
 	go func() { done <- p.cmd.Wait() }()
@@ -182,36 +188,36 @@ func (p *serverProcess) stop() {
 func (p *serverProcess) url() string { return "http://" + p.addr }
 
 func (p *serverProcess) operator() control.Client {
-	return control.Client{URL: p.url(), Token: p.token}
+	return control.Client{URL: p.url(), Token: p.token, HTTP: p.client}
 }
 
-// call runs r as the operator and fails the test on an error.
-func (p *serverProcess) call(r control.Request) control.Response {
-	p.t.Helper()
-	out, err := p.operator().Call(p.t.Context(), r)
+// call runs r as the operator and fails t on an error.
+func (p *serverProcess) call(t *testing.T, r control.Request) control.Response {
+	t.Helper()
+	out, err := p.operator().Call(t.Context(), r)
 	if err != nil {
-		p.t.Fatalf("%s %s: %v; stderr %s", r.Op, r.ID, err, p.stderr.String())
+		t.Fatalf("%s %s: %v; stderr %s", r.Op, r.ID, err, p.stderr.String())
 	}
 	return out
 }
 
 // raw is the server's JSON answer to r, as the operator, undecoded.
-func (p *serverProcess) raw(r control.Request) []byte {
-	p.t.Helper()
+func (p *serverProcess) raw(t *testing.T, r control.Request) []byte {
+	t.Helper()
 	body, _ := json.Marshal(r)
-	req, err := http.NewRequestWithContext(p.t.Context(), http.MethodPost, p.url()+"/v1/command", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, p.url()+"/v1/command", bytes.NewReader(body))
 	if err != nil {
-		p.t.Fatal(err)
+		t.Fatal(err)
 	}
 	req.Header.Set("Authorization", "Bearer "+p.token)
-	res, err := http.DefaultClient.Do(req)
+	res, err := p.client.Do(req)
 	if err != nil {
-		p.t.Fatal(err)
+		t.Fatal(err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	var out bytes.Buffer
 	if _, err = out.ReadFrom(res.Body); err != nil || res.StatusCode != http.StatusOK {
-		p.t.Fatalf("%s: %d %s %v", r.Op, res.StatusCode, out.String(), err)
+		t.Fatalf("%s: %d %s %v", r.Op, res.StatusCode, out.String(), err)
 	}
 	return out.Bytes()
 }
@@ -290,7 +296,7 @@ func acceptReads(t *testing.T, p *serverProcess) {
 		}
 	}
 	for _, r := range reads {
-		got := p.call(r.Request)
+		got := p.call(t, r.Request)
 		if r.Request.Op == "updates" && r.Request.ID != "" {
 			check(t, got.Questions != nil, "%s: an item's updates carry no question statuses", r.Request.ID)
 			got.Questions = nil
@@ -333,7 +339,7 @@ func acceptSlimSnapshots(t *testing.T, p *serverProcess, db string) {
 			Snapshot map[string]any `json:"snapshot"`
 		} `json:"updates"`
 	}
-	if err := json.Unmarshal(p.raw(control.Request{Op: "updates"}), &page); err != nil {
+	if err := json.Unmarshal(p.raw(t, control.Request{Op: "updates"}), &page); err != nil {
 		t.Fatal(err)
 	}
 	stored := openSQL(t, db, true)
@@ -375,7 +381,7 @@ func acceptSlimSnapshots(t *testing.T, p *serverProcess, db string) {
 // read that waited for the writer would never answer, since the write ends
 // only after the reads.
 func acceptReadsBesideAWrite(t *testing.T, p *serverProcess, db string) {
-	before := p.call(control.Request{Op: "get", ID: "p2"}).Item
+	before := p.call(t, control.Request{Op: "get", ID: "p2"}).Item
 	conn, err := openSQL(t, db, false).Conn(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -394,24 +400,24 @@ func acceptReadsBesideAWrite(t *testing.T, p *serverProcess, db string) {
 	if _, err = conn.ExecContext(t.Context(), "ROLLBACK"); err != nil {
 		t.Fatal(err)
 	}
-	p.call(control.Request{Op: "say", ID: "p2", Body: "Written once the other writer let go"})
+	p.call(t, control.Request{Op: "say", ID: "p2", Body: "Written once the other writer let go"})
 }
 
 // acceptWrites creates records and messages through the server, and replays
 // and reuses a request key.
 func acceptWrites(t *testing.T, p *serverProcess) {
-	repo := p.call(control.Request{Op: "create", Item: control.Item{Kind: "repo", Title: "Other", Slug: "owner/other", Remote: "git@example.test:owner/other.git"}}).Item
-	plan := p.call(control.Request{Op: "create", Item: control.Item{Kind: "plan", Repo: repo.ID, Title: "Second", Body: "Requirements"}}).Item
-	check(t, p.call(control.Request{Op: "get", ID: plan.ID}).Item.Title == "Second", "the new plan does not read back")
+	repo := p.call(t, control.Request{Op: "create", Item: control.Item{Kind: "repo", Title: "Other", Slug: "owner/other", Remote: "git@example.test:owner/other.git"}}).Item
+	plan := p.call(t, control.Request{Op: "create", Item: control.Item{Kind: "plan", Repo: repo.ID, Title: "Second", Body: "Requirements"}}).Item
+	check(t, p.call(t, control.Request{Op: "get", ID: plan.ID}).Item.Title == "Second", "the new plan does not read back")
 	say := control.Request{Op: "say", ID: plan.ID, Body: "Hello", Key: control.Secret()}
-	first := p.call(say)
-	again := p.call(say)
+	first := p.call(t, say)
+	again := p.call(t, say)
 	check(t, len(first.Updates) == 1 && jsonText(first) == jsonText(again), "a replayed key answered %s, then %s", jsonText(first), jsonText(again))
 	say.Body = "Another message"
 	_, err := p.operator().Call(t.Context(), say)
 	var problem *control.Problem
 	check(t, errors.As(err, &problem) && problem.Status == http.StatusConflict, "a reused key with another request: %v", err)
-	thread := p.call(control.Request{Op: "updates", ID: plan.ID}).Updates
+	thread := p.call(t, control.Request{Op: "updates", ID: plan.ID}).Updates
 	check(t, len(thread) == 2 && thread[1].Body == "Hello", "the plan's thread: %+v", thread)
 }
 
@@ -419,11 +425,11 @@ func acceptWrites(t *testing.T, p *serverProcess) {
 // them: only the dispatch receipts of the attempts still dispatching stay,
 // and an expired key is a new request.
 func acceptRetention(t *testing.T, p *serverProcess, db string) {
-	plan := p.call(control.Request{Op: "list", Item: control.Item{Kind: "plan"}}).Items[0]
+	plan := p.call(t, control.Request{Op: "list", Item: control.Item{Kind: "plan"}}).Items[0]
 	say := control.Request{Op: "say", ID: plan.ID, Body: "Before the sweep", Key: control.Secret()}
-	p.call(say)
+	p.call(t, say)
 	execSQL(t, db, "UPDATE receipts SET created='2026-01-01T00:00:00.000Z'")
-	p.call(control.Request{Op: "say", ID: plan.ID, Body: "This write sweeps"})
+	p.call(t, control.Request{Op: "say", ID: plan.ID, Body: "This write sweeps"})
 	rows, err := openSQL(t, db, true).QueryContext(t.Context(), "SELECT attempt FROM receipts WHERE created<'2026-01-02' ORDER BY attempt")
 	if err != nil {
 		t.Fatal(err)
@@ -438,14 +444,14 @@ func acceptRetention(t *testing.T, p *serverProcess, db string) {
 	}
 	check(t, rows.Close() == nil && slices.Equal(kept, []string{"a4", "a6", "a8"}), "receipts kept after the sweep: %v, want the dispatches of a4, a6 and a8", kept)
 	say.Body = "The same key, now expired"
-	check(t, len(p.call(say).Updates) == 1, "an expired key did not run as a new request")
+	check(t, len(p.call(t, say).Updates) == 1, "an expired key did not run as a new request")
 }
 
 // acceptBackupAndReopen backs up the stopped server's database with engine
 // serve --backup, through the driver with no sqlite3, and opens both again.
 func acceptBackupAndReopen(t *testing.T, home, db string) {
 	backup := filepath.Join(t.TempDir(), "backup.db")
-	cmd := engineCommand(t, home, "serve", "--backup", backup, "--db", db)
+	cmd := engineCommand(t.Context(), t, home, "serve", "--backup", backup, "--db", db)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("engine serve --backup: %v %s", err, out)
 	}
@@ -455,7 +461,7 @@ func acceptBackupAndReopen(t *testing.T, home, db string) {
 	want := scalar[int](t, db, "SELECT count(*) FROM updates")
 	check(t, scalar[int](t, backup, "SELECT count(*) FROM updates") == want, "the backup lost updates")
 	p := startServer(t, home, db)
-	check(t, len(p.call(control.Request{Op: "updates"}).Updates) > 0, "the reopened server answers no updates")
+	check(t, len(p.call(t, control.Request{Op: "updates"}).Updates) > 0, "the reopened server answers no updates")
 	p.stop()
 	check(t, scalar[int](t, db+".pre-v7", "PRAGMA user_version") == 6, "reopening touched the pre-v7 backup")
 }
@@ -468,8 +474,10 @@ func acceptRefusals(t *testing.T, home, dir string) {
 	taken := fixtureDatabase(t, filepath.Join(dir, "taken.db"))
 	writeFile(t, taken+".pre-v7", "someone's file")
 	for db, want := range map[string]string{newer: "schema 8 is newer than this server's 7", taken: taken + ".pre-v7"} {
-		cmd := engineCommand(t, home, "serve", "--foreground", "--db", db, "--listen", "127.0.0.1:0")
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		cmd := engineCommand(ctx, t, home, "serve", "--foreground", "--db", db, "--listen", "127.0.0.1:0")
 		out, err := cmd.CombinedOutput()
+		cancel()
 		var exit *exec.ExitError
 		check(t, errors.As(err, &exit) && exit.ExitCode() == 1 && strings.Contains(string(out), want), "serving %s: %v %s", db, err, out)
 	}

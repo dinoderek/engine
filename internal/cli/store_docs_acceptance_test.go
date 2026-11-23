@@ -38,7 +38,7 @@ func persistentDocs(t *testing.T) map[string]string {
 // sqlite3Reason is why block may name sqlite3: a Codex host's reader, the
 // tests' tools, or the offline status check that reads the database file
 // when the server does not answer. Anything else would be a server
-// prerequisite, which the in-process driver removed.
+// prerequisite, and the server needs none.
 func sqlite3Reason(doc, block string) bool {
 	return strings.Contains(block, "Codex") || doc == "docs/testing-strategy.md" ||
 		strings.Contains(block, "database check is unknown without `sqlite3` on the server")

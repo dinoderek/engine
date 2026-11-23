@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +24,7 @@ import (
 // there and are reported as serial.
 type commandLog struct {
 	upstream string
+	client   *http.Client
 
 	mu       sync.Mutex
 	calls    []control.Request
@@ -47,7 +50,7 @@ func (l *commandLog) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Header = r.Header.Clone()
-	res, err := http.DefaultClient.Do(out)
+	res, err := l.client.Do(out)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -109,7 +112,7 @@ func (l *commandLog) recorded() ([]control.Request, int) {
 func TestADashboardRefreshOfTheMigratedServerMakesThreeCalls(t *testing.T) {
 	db := fixtureDatabase(t, filepath.Join(t.TempDir(), "control.db"))
 	p := startServer(t, serverHome(t), db)
-	log := &commandLog{upstream: p.url()}
+	log := &commandLog{upstream: p.url(), client: p.client}
 	proxy := httptest.NewServer(log)
 	t.Cleanup(proxy.Close)
 	d := startDashboardOn(t, proxy.URL, p.token)
@@ -119,18 +122,31 @@ func TestADashboardRefreshOfTheMigratedServerMakesThreeCalls(t *testing.T) {
 		t.Fatalf("opening t3's thread: %d %+v %+v", status, env, opened)
 	}
 	cursor := opened.Next
-	said := p.call(control.Request{Op: "say", ID: "t3", Body: "After the cursor"}).Updates[0]
+	said := p.call(t, control.Request{Op: "say", ID: "t3", Body: "After the cursor"}).Updates[0]
 
 	log.arm(3)
 	routes := []string{"/api/overview", "/api/plans/p2", "/api/items/t3/thread?after=" + itoa(cursor)}
+	bodies := make([][]byte, len(routes))
+	errs := make([]error, len(routes))
+	var wg sync.WaitGroup
+	for i, route := range routes {
+		wg.Go(func() { bodies[i], errs[i] = d.fetch(t.Context(), route) })
+	}
+	wg.Wait()
 	var overview ui.Bundle
 	var thread ui.Thread
 	var plan, threadEnv envelope
-	var wg sync.WaitGroup
-	wg.Go(func() { overview = d.bundle(t, routes[0]) })
-	wg.Go(func() { _, plan = d.get(t, routes[1], nil) })
-	wg.Go(func() { _, threadEnv = d.get(t, routes[2], &thread) })
-	wg.Wait()
+	for i, out := range []any{&overview, &plan, &threadEnv} {
+		if errs[i] == nil {
+			errs[i] = json.Unmarshal(bodies[i], out)
+		}
+		if errs[i] != nil {
+			t.Fatalf("GET %s: %v; stderr %s", routes[i], errs[i], d.stderr.String())
+		}
+	}
+	if err := json.Unmarshal(threadEnv.Data, &thread); err != nil {
+		t.Fatal(err)
+	}
 
 	calls, peak := log.recorded()
 	check(t, len(calls) <= 3, "one refresh made %d control calls: %+v", len(calls), calls)
@@ -153,24 +169,23 @@ func TestADashboardRefreshOfTheMigratedServerMakesThreeCalls(t *testing.T) {
 	}
 }
 
-// bundle reads the dashboard's overview route, which answers an envelope
-// for each of its three views.
-func (d *dashboard) bundle(t *testing.T, path string) ui.Bundle {
-	t.Helper()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, d.base+path, nil)
+// fetch is the body of the dashboard's answer to a GET of path, an error
+// unless it is a 200.
+func (d *dashboard) fetch(ctx context.Context, path string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.base+path, nil)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("GET %s: %v; stderr %s", path, err, d.stderr.String())
+		return nil, err
 	}
 	defer func() { _ = res.Body.Close() }()
-	var b ui.Bundle
-	if err = json.NewDecoder(res.Body).Decode(&b); err != nil || res.StatusCode != http.StatusOK {
-		t.Fatalf("GET %s: %d %v", path, res.StatusCode, err)
+	body, err := io.ReadAll(res.Body)
+	if err == nil && res.StatusCode != http.StatusOK {
+		err = fmt.Errorf("status %d: %s", res.StatusCode, body)
 	}
-	return b
+	return body, err
 }
 
 func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
