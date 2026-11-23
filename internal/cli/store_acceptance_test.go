@@ -181,7 +181,9 @@ func (p *serverProcess) stop() {
 
 func (p *serverProcess) url() string { return "http://" + p.addr }
 
-func (p *serverProcess) operator() control.Client { return control.Client{URL: p.url(), Token: p.token} }
+func (p *serverProcess) operator() control.Client {
+	return control.Client{URL: p.url(), Token: p.token}
+}
 
 // call runs r as the operator and fails the test on an error.
 func (p *serverProcess) call(r control.Request) control.Response {
