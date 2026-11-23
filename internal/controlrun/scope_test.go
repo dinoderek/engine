@@ -91,13 +91,15 @@ func tracedRead(t *testing.T, path string, s *control.Store, fn func(*control.Tx
 
 // scans are the plan steps that walk a whole table, those of the few rows the
 // server keeps (a host's record, the counters) and of what is bounded by what
-// is in flight (the merge queue, the attempts that hit a usage limit) aside.
+// is in flight (the merge queue, the attempts that hit a usage limit) aside,
+// and a list of IDs the query was given (json_each) and the rows made from it.
 func scans(reads []planRead) []string {
 	var out []string
 	for _, r := range reads {
 		for _, step := range r.plan {
 			if strings.HasPrefix(step, "SCAN ") && !strings.Contains(step, "CONSTANT ROW") &&
-				!strings.Contains(step, "INDEX attempts_limited") && !strings.Contains(step, "INDEX queue_repo") {
+				!strings.Contains(step, "INDEX attempts_limited") && !strings.Contains(step, "INDEX queue_repo") &&
+				!strings.Contains(step, " VIRTUAL TABLE INDEX ") && !strings.HasPrefix(step, "SCAN (subquery-") {
 				out = append(out, step+" <- "+r.query)
 			}
 		}

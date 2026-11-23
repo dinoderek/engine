@@ -60,7 +60,9 @@ CREATE TABLE marks (name TEXT PRIMARY KEY, data TEXT NOT NULL);
 
 // currentIndexes creates, when absent, the indexes added to version 7 after
 // databases of it existed; a current database runs it on open.
-const currentIndexes = "CREATE INDEX IF NOT EXISTS attempts_limited ON attempts(host) WHERE json_extract(data, '$.limited')=1;\n"
+const currentIndexes = "CREATE INDEX IF NOT EXISTS attempts_limited ON attempts(host) WHERE json_extract(data, '$.limited')=1;\n" +
+	"CREATE INDEX IF NOT EXISTS updates_asked_item ON updates(item, id) WHERE requires_reply=1;\n" +
+	"CREATE INDEX IF NOT EXISTS updates_asked_task ON updates(task, id) WHERE requires_reply=1;\n"
 
 // snapshotFields are the fields of an item an update's snapshot keeps: what
 // its readers use. A held task's state before needs-human comes from the
