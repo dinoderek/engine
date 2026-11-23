@@ -18,18 +18,10 @@ import (
 // classifier judges it.
 func (c *Coordinator) queues(cfg *hosts.Config) error {
 	var repos []string
-	err := read(c.Service.Store, func(tx *control.Tx) error {
-		for _, e := range tx.QueueEntries() {
-			if !slices.Contains(repos, e.Repo) {
-				repos = append(repos, e.Repo)
-			}
-		}
-		return nil
-	})
+	err := read(c.Service.Store, func(tx *control.Tx) error { repos = tx.QueuedRepos(); return nil })
 	if err != nil {
 		return err
 	}
-	slices.SortFunc(repos, func(a, b string) int { return control.Number(a) - control.Number(b) })
 	for _, repo := range repos {
 		if err := c.queue(repo, cfg); err != nil {
 			c.log("merge queue %s: %v", repo, err)
@@ -42,7 +34,7 @@ func (c *Coordinator) queues(cfg *hosts.Config) error {
 // step can at most promote one head, unhead one entry or end one, so the
 // loop ends within two rounds per entry.
 func (c *Coordinator) queue(repo string, cfg *hosts.Config) error {
-	for range 2*c.queued() + 2 {
+	for range 2*c.queued(repo) + 2 {
 		v, err := c.queueView(repo)
 		if err != nil {
 			return err
@@ -65,10 +57,10 @@ func (c *Coordinator) queue(repo string, cfg *hosts.Config) error {
 	return nil
 }
 
-// queued is how many entries the merge queues hold, 0 when the store cannot
-// be read.
-func (c *Coordinator) queued() (n int) {
-	_ = read(c.Service.Store, func(tx *control.Tx) error { n = len(tx.QueueEntries()); return nil })
+// queued is how many entries repo's merge queue holds, 0 when the store
+// cannot be read.
+func (c *Coordinator) queued(repo string) (n int) {
+	_ = read(c.Service.Store, func(tx *control.Tx) error { n = len(tx.QueueOf(repo)); return nil })
 	return n
 }
 

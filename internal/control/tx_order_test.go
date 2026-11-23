@@ -43,7 +43,7 @@ func TestItemAndAttemptListingsFollowTheNumberInTheirIDs(t *testing.T) {
 		"CurrentAttempts":   attemptIDs(tx.CurrentAttempts()),
 		"UnendedAttempts":   attemptIDs(tx.UnendedAttempts()),
 		"AttemptsOnHost":    attemptIDs(tx.AttemptsOnHost("devbox")),
-		"HostedTaskAttempt": attemptIDs(tx.HostedTaskAttempts()),
+		"HostedTaskAttempt": attemptIDs(tx.HostedTaskAttemptsOf("devbox", "claude")),
 	} {
 		want := map[string][]string{
 			"ItemsByKindUnder": {"r1", "p2", "t9", "t10", "t100"}, "ItemsOfPlan": {"r1", "p2", "t9", "t10", "t100"},

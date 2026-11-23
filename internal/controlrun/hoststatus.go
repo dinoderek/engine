@@ -33,7 +33,7 @@ func (b *HostBoard) Record(tx *control.Tx, fleet reconcile.Fleet, ready *Readine
 		now = b.Now()
 	}
 	snap := control.HostStatus{At: now.UTC(), Hosts: make([]control.HostRow, 0, len(fleet.Hosts))}
-	attempts := activeAttempts(tx)
+	attempts := tx.ActiveAttempts()
 	for _, h := range fleet.Hosts {
 		row := hostRow(tx, attempts, h)
 		if ready != nil {

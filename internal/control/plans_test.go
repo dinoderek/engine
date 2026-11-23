@@ -61,6 +61,8 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 		"CoordinatedItems": {"items_coordinating"}, "ItemsOfPlan": {"items_plan"}, "RepoBySlug": {"items_kind"},
 		"AttemptsFor": {"attempts_item"}, "UnendedAttempts": {"attempts_state"}, "AttemptsOnHost": {"attempts_host"},
 		"DispatchTokens": {"receipts_attempt"}, "QueueOf": {"queue_repo"},
+		"Wrote": {"updates_author"}, "LimitedPairs": {"attempts_limited"}, "HostedTaskAttemptsOf": {"attempts_host"},
+		"ActiveAttempts": {"attempts_state"}, "QueuedRepos": {"queue_repo"},
 		"UpdatesAfter": {"updates_item"}, "InboxAfter": {"updates_recipient", "updates_reply"},
 		"NoticesBefore": {"updates_recipient", "updates_reply"}, "UpdatesAboutNewestFirst": {"updates_item", "updates_task"},
 		"QuestionsAbout": {"updates_item", "updates_task"}, "Resolution": {"updates_reply"}, "LatestUpdate": {"updates_item"},
@@ -79,7 +81,11 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 		"AttemptsFor":             func() { tx.AttemptsFor("t3") },
 		"UnendedAttempts":         func() { tx.UnendedAttempts() },
 		"AttemptsOnHost":          func() { tx.AttemptsOnHost("devbox") },
-		"HostedTaskAttempts":      func() { tx.HostedTaskAttempts() },
+		"HostedTaskAttemptsOf":    func() { tx.HostedTaskAttemptsOf("devbox", "claude") },
+		"LimitedPairs":            func() { tx.LimitedPairs() },
+		"ActiveAttempts":          func() { tx.ActiveAttempts() },
+		"QueuedRepos":             func() { tx.QueuedRepos() },
+		"Wrote":                   func() { tx.Wrote("a4") },
 		"Credential":              func() { tx.Credential("x") },
 		"Receipt":                 func() { tx.Receipt("x") },
 		"DispatchTokens":          func() { tx.DispatchTokens("a4") },
@@ -101,14 +107,26 @@ func TestEveryScopedAccessorIsAnIndexedQuery(t *testing.T) {
 			t.Fatalf("%s: %v", name, tx.err)
 		}
 		for _, step := range e.plans {
-			if strings.HasPrefix(step, "SCAN ") {
+			if strings.HasPrefix(step, "SCAN ") && !scansOnlyWhatIsBounded(step) {
 				t.Errorf("%s scans: %v", name, e.plans)
 			}
 		}
 		for _, index := range uses[name] {
-			if !strings.Contains(strings.Join(e.plans, "\n"), "INDEX "+index+" ") {
+			if !strings.Contains(strings.Join(e.plans, " ")+" ", "INDEX "+index+" ") {
 				t.Errorf("%s does not search %s: %v", name, index, e.plans)
 			}
 		}
 	}
+}
+
+// scansOnlyWhatIsBounded reports whether a scan step walks an index that
+// holds only a bounded part of its table: the attempts that hit a usage limit,
+// or the merges in flight.
+func scansOnlyWhatIsBounded(step string) bool {
+	for _, ok := range []string{"SCAN CONSTANT ROW", "USING INDEX attempts_limited", "USING COVERING INDEX queue_repo"} {
+		if strings.Contains(step, ok) {
+			return true
+		}
+	}
+	return false
 }

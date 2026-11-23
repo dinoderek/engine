@@ -58,12 +58,17 @@ func (c *Coordinator) wakeMessages(tx *control.Tx, v reconcile.View, cfg *hosts.
 // own updates and the coordinator's notices never wake it.
 func pendingMessage(tx *control.Tx, item control.Item, at control.Attempt) int {
 	last := 0
-	for u := range tx.UpdatesAfter(at.Seen, "") {
-		if u.Author == at.ID {
-			continue
+	for u := range tx.UpdatesAfter(at.Seen, item.ID) {
+		if u.Author != at.ID && slices.Contains(itemWakeKinds, u.Kind) {
+			last = max(last, u.ID)
 		}
-		if u.Item == item.ID && slices.Contains(itemWakeKinds, u.Kind) || planWake(item, u) {
-			last = u.ID
+	}
+	if item.Kind != "task" || item.Plan == "" {
+		return last
+	}
+	for u := range tx.UpdatesAfter(at.Seen, item.Plan) {
+		if u.Author != at.ID && planWake(item, u) {
+			last = max(last, u.ID)
 		}
 	}
 	return last

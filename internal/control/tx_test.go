@@ -135,10 +135,11 @@ func TestAReadTransactionRefusesAWrite(t *testing.T) {
 	s := service(t)
 	_, plan := repoPlan(t, s)
 	writes := map[string]func(*Tx){
-		"PutItem":      func(tx *Tx) { tx.PutItem(plan) },
-		"PutReceipt":   func(tx *Tx) { tx.PutReceipt("k", receipt{}, time.Time{}) },
-		"AppendUpdate": func(tx *Tx) { tx.AppendUpdate(op, Request{}, "say", "x", time.Time{}) },
-		"PutUpdate":    func(tx *Tx) { tx.PutUpdate(Update{ID: 1}) },
+		"PutItem":               func(tx *Tx) { tx.PutItem(plan) },
+		"PutReceipt":            func(tx *Tx) { tx.PutReceipt("k", receipt{}, time.Time{}) },
+		"DeleteExpiredReceipts": func(tx *Tx) { tx.DeleteExpiredReceipts(time.Time{}, 1) },
+		"AppendUpdate":          func(tx *Tx) { tx.AppendUpdate(op, Request{}, "say", "x", time.Time{}) },
+		"PutUpdate":             func(tx *Tx) { tx.PutUpdate(Update{ID: 1}) },
 	}
 	for name, write := range writes {
 		func() {

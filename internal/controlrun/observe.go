@@ -79,7 +79,7 @@ func (o *Observer) Record(tx *control.Tx, fleet reconcile.Fleet) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.prune(tx)
-	for _, at := range activeAttempts(tx) {
+	for _, at := range tx.ActiveAttempts() {
 		h, ok := loads[at.Host]
 		o.put(tx, at, h, ok)
 	}
@@ -92,7 +92,7 @@ func (o *Observer) Refresh() error {
 		o.mu.Lock()
 		o.prune(tx)
 		stale := map[string]bool{}
-		for _, at := range activeAttempts(tx) {
+		for _, at := range tx.ActiveAttempts() {
 			if o.needsRead(tx, at.Host) {
 				stale[at.Host] = true
 			}
@@ -135,7 +135,7 @@ func (o *Observer) needsRead(tx *control.Tx, host string) bool {
 	if o.inflight[host] {
 		return false
 	}
-	for _, at := range activeAttempts(tx) {
+	for _, at := range tx.ActiveAttempts() {
 		e, ok := o.entries[at.ID]
 		if at.Host == host && (!ok || o.now().Sub(e.at) >= ObservationFresh) {
 			return true
@@ -197,7 +197,7 @@ func (o *Observer) prune(tx *control.Tx) {
 		o.entries, o.inflight = map[string]observed{}, map[string]bool{}
 	}
 	keep := map[string]bool{}
-	for _, at := range activeAttempts(tx) {
+	for _, at := range tx.ActiveAttempts() {
 		keep[at.ID] = true
 	}
 	for id := range o.entries {
@@ -208,7 +208,7 @@ func (o *Observer) prune(tx *control.Tx) {
 }
 
 func (o *Observer) putHost(tx *control.Tx, h reconcile.HostLoad, configured bool) {
-	for _, at := range activeAttempts(tx) {
+	for _, at := range tx.ActiveAttempts() {
 		if at.Host == h.Name {
 			o.put(tx, at, h, configured)
 		}
@@ -228,16 +228,6 @@ func (o *Observer) put(tx *control.Tx, at control.Attempt, h reconcile.HostLoad,
 		e.seen = e.at
 	}
 	o.entries[at.ID] = e
-}
-
-func activeAttempts(tx *control.Tx) []control.Attempt {
-	var out []control.Attempt
-	for _, at := range tx.CurrentAttempts() {
-		if at.State != "ended" {
-			out = append(out, at)
-		}
-	}
-	return out
 }
 
 // hostState is what the coordinator's own observation of an attempt says, on
