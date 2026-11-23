@@ -60,17 +60,17 @@ var humanKinds = []string{"say", "ask", "reply", "resolved", KindPaneAnswer, Kin
 // sessionView projects every current, unended attempt, and every vanished
 // or early-death one awaiting its dispatch, from one snapshot. Host observations come only
 // from the cache, so a request never probes a host.
-func (s Service) sessionView(st *State, a Actor) (Response, error) {
+func (s Service) sessionView(tx *Tx, a Actor) (Response, error) {
 	if err := operator(a); err != nil {
 		return Response{}, err
 	}
 	out := Response{}
-	for _, at := range st.Attempts {
-		item, ok := st.Items[at.Item]
-		if !ok || item.Attempt != at.ID || at.State == "ended" && !Vanished(st, item) {
+	for _, at := range tx.CurrentAttempts() {
+		item, _ := tx.Item(at.Item)
+		if at.State == "ended" && !Vanished(tx.LegacyState(), item) {
 			continue
 		}
-		row := s.sessionRow(st, item, at)
+		row := s.sessionRow(tx, item, at)
 		if at.State == "ended" {
 			row.Observed = "exited"
 		}
@@ -80,9 +80,10 @@ func (s Service) sessionView(st *State, a Actor) (Response, error) {
 	return out, nil
 }
 
-func (s Service) sessionRow(st *State, item Item, at Attempt) SessionRow {
+func (s Service) sessionRow(tx *Tx, item Item, at Attempt) SessionRow {
+	repo, _ := tx.Item(item.Repo)
 	row := SessionRow{Item: item.ID, Kind: item.Kind, Role: "executor", Title: item.Title, Repo: item.Repo,
-		RepoSlug: st.Items[item.Repo].Slug, Plan: item.Plan, State: item.State, Attempt: at.ID, Host: at.Host,
+		RepoSlug: repo.Slug, Plan: item.Plan, State: item.State, Attempt: at.ID, Host: at.Host,
 		Harness: at.Harness, Started: at.Started, Observed: "unknown"}
 	if item.Kind == "plan" {
 		row.Role, row.Plan = "planner", item.ID
@@ -94,11 +95,11 @@ func (s Service) sessionRow(st *State, item Item, at Attempt) SessionRow {
 			row.Observed = obs.State
 		}
 	}
-	if id := OwnQuestion(st, item.ID); id > 0 {
-		row.Feedback = updateRef(st.Updates[id-1])
+	if id := OwnQuestion(tx, item.ID); id > 0 {
+		q, _ := tx.Update(id)
+		row.Feedback = updateRef(q)
 	}
-	for i := len(st.Updates) - 1; i >= 0; i-- {
-		u := st.Updates[i]
+	for u := range tx.UpdatesAboutNewestFirst(item.ID) {
 		if u.Item == item.ID && u.Author != "coordinator" && slices.Contains(humanKinds, u.Kind) && strings.TrimSpace(u.Body) != "" {
 			row.Latest = updateRef(u)
 			break

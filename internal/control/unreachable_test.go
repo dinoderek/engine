@@ -101,7 +101,7 @@ func TestAnUnreachableHostIsAskedAboutOnceItsTasksWaitedFifteenMinutes(t *testin
 	}
 	// It holds no task: each keeps its state, and can still change it.
 	for _, task := range tasks {
-		if st.Items[task.ID].State != "running" || OwnQuestion(&st, task.ID) != 0 {
+		if st.Items[task.ID].State != "running" || OwnQuestion(st.LegacyTx(), task.ID) != 0 {
 			t.Fatalf("%s is held: %+v", task.ID, st.Items[task.ID])
 		}
 	}
@@ -215,7 +215,7 @@ func TestAHostThatAnswersFirstResolvesItsQuestionAsReturned(t *testing.T) {
 		}
 	}
 	st := mustSnapshot(t, s)
-	by := resolution(&st, q.ID)
+	by := st.LegacyTx().Resolution(q.ID)
 	if by == 0 || st.Updates[by-1].Body != ResolutionReturned || st.Updates[by-1].Author != "coordinator" {
 		t.Fatalf("question %d is not resolved as returned", q.ID)
 	}

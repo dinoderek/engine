@@ -108,7 +108,7 @@ func stateChange(st *State, a Actor, item Item, want string) error {
 	if item.State == "needs-human" && a.Role != "operator" && a.Role != "coordinator" {
 		return problem(403, "operator must resolve the hard stop")
 	}
-	if want != "failed" && OwnQuestion(st, item.ID) > 0 {
+	if want != "failed" && OwnQuestion(st.LegacyTx(), item.ID) > 0 {
 		return problem(409, "operator question is unresolved")
 	}
 	if want == "done" && item.Kind == "plan" {
@@ -132,7 +132,7 @@ func (s Service) reserve(st *State, a Actor, r Request) (Response, error) {
 	if a.Role == "coordinator" && r.Version != item.Version {
 		return Response{}, problem(409, "card changed since placement; version is %d", item.Version)
 	}
-	if OwnQuestion(st, item.ID) > 0 || NewStartHold(st, item.ID) > 0 {
+	if OwnQuestion(st.LegacyTx(), item.ID) > 0 || NewStartHold(st, item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	if item.Held {
@@ -189,7 +189,7 @@ func NewStartHold(st *State, id string) int {
 			return 0
 		}
 	}
-	return PlanQuestion(st, id)
+	return PlanQuestion(st.LegacyTx(), id)
 }
 
 func cutSlug(s string) (string, string, bool) {
@@ -252,7 +252,7 @@ func (s Service) CheckDispatch(id, attempt string) error {
 		if !dispatchIntent(st, item) {
 			return problem(409, "coordination was stopped")
 		}
-		if OwnQuestion(st, item.ID) > 0 {
+		if OwnQuestion(st.LegacyTx(), item.ID) > 0 {
 			return problem(409, "operator question is unresolved")
 		}
 		return nil

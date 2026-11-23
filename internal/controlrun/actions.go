@@ -179,7 +179,7 @@ func (c *Coordinator) resume(a reconcile.Action, cfg *hosts.Config) error {
 	var at control.Attempt
 	err := c.Service.Store.Transaction(func(st *control.State) error {
 		current := st.Items[a.Item]
-		if control.OwnQuestion(st, current.ID) > 0 {
+		if control.OwnQuestion(st.LegacyTx(), current.ID) > 0 {
 			return nil
 		}
 		at = st.Attempts[current.Attempt]

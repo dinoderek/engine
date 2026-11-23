@@ -63,7 +63,7 @@ func (s Service) mergeRequest(st *State, a Actor, r Request) (Response, error) {
 	if item.PR != r.Merge.PR {
 		return Response{}, problem(409, "the merge request's PR is not the task's; record it with the in-review state")
 	}
-	if OwnQuestion(st, item.ID) > 0 {
+	if OwnQuestion(st.LegacyTx(), item.ID) > 0 {
 		return Response{}, problem(409, "operator question is unresolved")
 	}
 	m := *r.Merge
@@ -213,7 +213,7 @@ func mergeQueue(st *State, a Actor, repo string) (Response, error) {
 	if st.Items[repo].Kind != "repo" {
 		return Response{}, problem(404, "unknown repository %s", repo)
 	}
-	if !readable(st, a, repo) {
+	if !readable(st.LegacyTx(), a, repo) {
 		return Response{}, problem(403, "repository is outside this execution's read scope")
 	}
 	return Response{Queue: Queue(st, repo)}, nil

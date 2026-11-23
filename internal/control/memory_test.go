@@ -89,7 +89,7 @@ func TestReadOperationsChangeNoRecord(t *testing.T) {
 		for _, a := range []Actor{op, worker} {
 			before, _ := s.Store.Snapshot()
 			after := before.clone()
-			_, err := s.apply(&after, a, r)
+			_, err := s.apply(after.LegacyTx(), a, r)
 			var refused *Problem
 			if err != nil && !errors.As(err, &refused) {
 				t.Fatal(name, err)

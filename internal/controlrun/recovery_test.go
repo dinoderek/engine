@@ -29,7 +29,7 @@ func TestDeathDuringUnresolvedQuestionParksTheTaskUntilAnswered(t *testing.T) {
 	if h.calls != 1 || st.Items[task.ID].Attempt != first {
 		t.Fatal("a task parked on an operator question was dispatched again")
 	}
-	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.OwnQuestion(&st, task.ID), Body: "Take the first option."})
+	execute(t, c.Service, control.Request{Op: "resolve", ReplyTo: control.OwnQuestion(st.LegacyTx(), task.ID), Body: "Take the first option."})
 	pass(t, c)
 	st, _ = c.Service.Store.Snapshot()
 	resumed := st.Attempts[st.Items[task.ID].Attempt]

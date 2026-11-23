@@ -19,8 +19,8 @@ func TestPlanQuestionBlocksOnlyNewDispatches(t *testing.T) {
 	call(t, s, child, Request{Op: "state", ID: task.ID, Version: claimed.Item.Version, State: "in-review", Item: Item{PR: good().PR}})
 	call(t, s, child, ready(task.ID, good()))
 	st := mustSnapshot(t, s)
-	if _, queued := st.Queue[task.ID]; !queued || OwnQuestion(&st, task.ID) != 0 || PlanQuestion(&st, task.ID) != question.ID {
-		t.Fatalf("queued %v, own %d, plan %d; want a queued task held by no own question", queued, OwnQuestion(&st, task.ID), PlanQuestion(&st, task.ID))
+	if _, queued := st.Queue[task.ID]; !queued || OwnQuestion(st.LegacyTx(), task.ID) != 0 || PlanQuestion(st.LegacyTx(), task.ID) != question.ID {
+		t.Fatalf("queued %v, own %d, plan %d; want a queued task held by no own question", queued, OwnQuestion(st.LegacyTx(), task.ID), PlanQuestion(st.LegacyTx(), task.ID))
 	}
 
 	// A task that never started is held; one that did is dispatched again.

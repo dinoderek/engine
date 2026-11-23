@@ -22,20 +22,21 @@ func PlanStatus(plan Item, tasks []Item, asked bool) string {
 
 // withStatus returns a read response's copy of item, with a plan's status
 // and open question filled in. Neither is ever stored.
-func withStatus(st *State, item Item) Item {
+func withStatus(tx *Tx, item Item) Item {
 	if item.Kind != "plan" {
 		return item
 	}
 	var tasks []Item
-	for _, t := range st.Items {
-		if t.Kind == "task" && t.Plan == item.ID {
+	for _, t := range tx.ItemsOfPlan(item.ID) {
+		if t.Kind == "task" {
 			tasks = append(tasks, t)
 		}
 	}
-	id := OwnQuestion(st, item.ID)
+	id := OwnQuestion(tx, item.ID)
 	item.Status = PlanStatus(item, tasks, id > 0)
 	if id > 0 {
-		item.Question = updateRef(st.Updates[id-1])
+		q, _ := tx.Update(id)
+		item.Question = updateRef(q)
 	}
 	return item
 }
