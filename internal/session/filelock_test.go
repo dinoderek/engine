@@ -92,11 +92,13 @@ func TestEditFileTakesOverAStaleLockAndGivesUpOnAHeldOne(t *testing.T) {
 	if got := readFile(path); got != "a\n" {
 		t.Errorf("a locked file was written: %q", got)
 	}
-	old := l.now().Add(-lockStale - time.Second)
+	// A stale lock is taken over on the first look, without waiting.
+	stale := fakeLock(path, func(time.Time) { t.Error("waited on a stale lock") })
+	old := stale.now().Add(-lockStale - time.Second)
 	if err := os.Chtimes(path+".lock", old, old); err != nil {
 		t.Fatal(err)
 	}
-	if err := editFile(fakeLock(path, nil), path, nil, appendLine("b")); err != nil {
+	if err := editFile(stale, path, nil, appendLine("b")); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(path); got != "a\nb\n" {

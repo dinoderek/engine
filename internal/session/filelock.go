@@ -10,10 +10,11 @@ import (
 )
 
 // The lock on a shared file is the directory <file>.lock, as the
-// proper-lockfile convention has it: Claude Code takes it on its state file
-// around every write, which it applies to a fresh read. A lock older than
-// lockStale is a dead holder's (a live one refreshes it more often); engine
-// holds it far less long, so never refreshes it.
+// proper-lockfile convention has it: Claude Code takes it around its config
+// saves, which it applies to a fresh read (a save that cannot get it, or one
+// at exit, may write without it, which EditFile's stamp check covers). A
+// lock older than lockStale is a dead holder's (a live one refreshes it more
+// often); engine holds it far less long, so never refreshes it.
 const (
 	lockStale = 10 * time.Second
 	// lockWait bounds the wait for a held lock: past lockStale, so a dead

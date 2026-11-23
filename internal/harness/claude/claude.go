@@ -86,7 +86,8 @@ func (launcher) Join(string, string) (bool, string) { return false, "" }
 // Trust records the worktree, its clone and the plugin directory as trusted.
 // Claude Code keys a worktree's project by its clone, the canonical git root,
 // and checks that key before the worktree's own: once the clone is trusted,
-// a later spawn adds nothing that a concurrent write could lose.
+// a concurrent write that drops a later worktree's own key leaves the
+// session trusted.
 func (l launcher) Trust(dir, clone string, _ bool) error {
 	dirs := []string{dir, PluginDir(l.env.Var, l.env.Home)}
 	if clone != "" {
