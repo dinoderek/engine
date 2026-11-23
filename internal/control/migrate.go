@@ -43,7 +43,7 @@ func (s *Store) migrate(version int) error {
 	if err := s.vacuumInto(backup); err != nil {
 		return fmt.Errorf("control database migration backup %s: %w", backup, err)
 	}
-	return s.transaction(func(tx *sql.Tx) error {
+	err := s.transaction(func(tx *sql.Tx) error {
 		if err := checkRecords(tx); err != nil {
 			return err
 		}
@@ -67,6 +67,10 @@ func (s *Store) migrate(version int) error {
 		_, err = tx.Exec(fmt.Sprintf("DROP TABLE records; PRAGMA user_version=%d;", schemaVersion))
 		return err
 	})
+	if err != nil {
+		return fmt.Errorf("%w; the database is unchanged and its backup %s kept: move it away to retry", err, backup)
+	}
+	return nil
 }
 
 // migratePlanStates moves a plan stored in a state version 1 allowed, and

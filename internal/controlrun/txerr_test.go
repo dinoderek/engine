@@ -107,3 +107,31 @@ func TestRecoveryStopsAtAnAttemptItFailedToRead(t *testing.T) {
 		t.Fatalf("a3 %s, a5 %s; want the first adopted and the last left dispatching", first.State, last.State)
 	}
 }
+
+// TestALaunchNeverSpawnsOnARecordItFailedToRead reserves a dispatch, then
+// corrupts its repository: the launch reads it for the spawn and must stop.
+func TestALaunchNeverSpawnsOnARecordItFailedToRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	c, h, repo, _, task := setupAt(t, path)
+	out, err := c.Service.Dispatch(task, "devbox", "claude", "reserve")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err = db.Exec("UPDATE items SET data='not json' WHERE id=?", repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	err = read(c.Service.Store, func(tx *control.Tx) error {
+		if err := c.launch(tx, *out.Attempt, out.Credential, false, c.Config); err == nil {
+			t.Error("a launch over a corrupt repository succeeded")
+		}
+		return nil
+	})
+	if err == nil || len(h.launches) != 0 {
+		t.Fatalf("read error %v, launches %v; want a failed read and no spawn", err, h.launches)
+	}
+}

@@ -286,3 +286,17 @@ func TestReadersSeeOnlyCommittedStates(t *testing.T) {
 		t.Fatalf("writes were lost: a2 saw %d", got)
 	}
 }
+
+func TestAResolutionIsTheOldestOfAQuestionsResolvingReplies(t *testing.T) {
+	tx := blank(t)
+	for _, u := range []Update{{ID: 1, Kind: "ask", RequiresReply: true}, {ID: 2, Kind: "acknowledged", ReplyTo: 1},
+		{ID: 3, Kind: KindPaneAnswer, ReplyTo: 1}, {ID: 4, Kind: "resolved", ReplyTo: 1}, {ID: 5, Kind: "resolved", ReplyTo: 9}} {
+		tx.PutUpdate(u)
+	}
+	if got := tx.Resolution(1); got != 3 {
+		t.Fatalf("Resolution(1) = %d, want the oldest resolving reply, 3", got)
+	}
+	if got := tx.Resolution(2); got != 0 {
+		t.Fatalf("Resolution of an unresolved update = %d", got)
+	}
+}

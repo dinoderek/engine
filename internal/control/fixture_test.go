@@ -240,8 +240,8 @@ func TestAFailedMigrationLeavesTheDatabaseAtVersion6(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			path := fixtureDB(t)
 			rawSQL(t, path, bad)
-			if _, err := Open(path); err == nil {
-				t.Fatal("a migration with a bad record succeeded")
+			if _, err := Open(path); err == nil || !strings.Contains(err.Error(), path+backupSuffix+" kept") {
+				t.Fatalf("a migration with a bad record: %v; want a failure naming the kept backup", err)
 			}
 			out, err := fixtureSQL(t.Context(), path, "SELECT count(*) AS n FROM sqlite_schema WHERE name IN ('records', 'items')")
 			if err != nil || string(out) != `[{"n":1}]` || userVersion(t, path) != 6 {

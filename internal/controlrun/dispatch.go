@@ -60,6 +60,10 @@ func (c *Coordinator) launch(tx *control.Tx, at control.Attempt, credential stri
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Title: session.Title(item.ID, item.Title), Mode: hostops.HandsOff,
 			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(item.Requires),
 			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model, resume) + movedKickoff(tx, at)}}
+	// A read that failed above left zero values in req: never spawn on them.
+	if err := tx.Err(); err != nil {
+		return err
+	}
 	spawned, err := remote.ControlSpawn(c.Client(cfg.Hosts[at.Host]), req)
 	var refused *hostops.RefusedError
 	if errors.As(err, &refused) {
