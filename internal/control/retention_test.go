@@ -40,8 +40,7 @@ func receiptCount(t *testing.T, s Service) int {
 	return n
 }
 
-// say posts a message under the fingerprint-visible request key and returns
-// that key's receipt key.
+// receiptKey is the stored key of the operator's request key.
 func receiptKey(key string) string { return fingerprint([]string{op.Name, op.Attempt, key}) }
 
 func TestAReceiptIsDeletedSevenDaysAfterItWasWritten(t *testing.T) {
@@ -166,6 +165,9 @@ func TestTheSweepReadsTheCreatedIndexNotEveryReceipt(t *testing.T) {
 			t.Fatal(err)
 		}
 		plan = append(plan, detail)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	joined := strings.Join(plan, "\n")
 	if !strings.Contains(joined, "receipts_created") {
