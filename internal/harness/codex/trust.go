@@ -13,7 +13,8 @@ import (
 // after what is there. A session that joins a remote-control daemon takes its
 // folder trust only from the daemon's config.toml, one entry per folder. A
 // table already there for the path is replaced. Every other line is kept as
-// written. Codex and engine setup write the file too, so the edit retries as
+// written. Codex and engine setup write the file too: the edit holds the
+// file's lock, which serializes engine's writers, and retries as
 // session.EditFile says.
 func TrustFolder(config, dir string) error {
 	return editConfig(config, dir, nil, func(text string, keys []string) string {
@@ -46,7 +47,7 @@ func editConfig(config, dir string, check func(string) (session.Stamp, error), e
 		}
 		return []byte(out), nil
 	})
-	if errors.Is(err, session.ErrKeptChanging) {
+	if errors.Is(err, session.ErrKeptChanging) || errors.Is(err, session.ErrLockHeld) {
 		return fmt.Errorf("%w; edit the trust of %s by hand", err, dir)
 	}
 	return err

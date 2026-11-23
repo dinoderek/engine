@@ -25,12 +25,32 @@ const editAttempts = 3
 // EditFile rewrites the file at path with edit, which gets the file's bytes
 // (nil when it is missing) and returns the new bytes, or nil to leave the
 // file alone. The file is replaced in one rename, keeping its mode (0600
-// when new); a symlinked file is replaced at its target. Tools that share
-// the file write it without a lock engine could take, so when check, called
-// just before the rename, says the file changed since the read, the edit
-// starts again, a few times at most, then fails with ErrKeptChanging. A nil
-// check is FileStamp; tests replace it to play a concurrent writer.
+// when new); a symlinked file is replaced at its target.
+//
+// The edit holds the lock <path>.lock (fileLock), named after path as given
+// and not a symlink's target, as Claude Code names the lock it takes on its
+// own state file; every engine writer takes it too, so neither drops the
+// other's change; a lock held past its wait fails with ErrLockHeld. A tool
+// that writes without it is caught by check, called just before the rename:
+// when it says the file changed since the read, the edit starts again, a few
+// times at most, then fails with ErrKeptChanging. A nil check is FileStamp;
+// tests replace it to play a concurrent writer.
 func EditFile(path string, check func(string) (Stamp, error), edit func(data []byte) ([]byte, error)) error {
+	return editFile(lockFor(path), path, check, edit)
+}
+
+func editFile(lock fileLock, path string, check func(string) (Stamp, error), edit func(data []byte) ([]byte, error)) (err error) {
+	// With no folder for the file, nothing shares it, and an edit that
+	// leaves a missing file alone needs no lock.
+	if _, err := os.Stat(filepath.Dir(path)); errors.Is(err, fs.ErrNotExist) {
+		if out, err := edit(nil); err != nil || out == nil {
+			return wrapEdit(path, err)
+		}
+	}
+	if err := lock.acquire(); err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, lock.release()) }()
 	if check == nil {
 		check = stamp
 	}
@@ -50,7 +70,7 @@ func EditFile(path string, check func(string) (Stamp, error), edit func(data []b
 		}
 		out, err := edit(data)
 		if err != nil {
-			return fmt.Errorf("%s: %w", path, err)
+			return wrapEdit(path, err)
 		}
 		if out == nil {
 			return nil
@@ -61,6 +81,14 @@ func EditFile(path string, check func(string) (Stamp, error), edit func(data []b
 		}
 	}
 	return fmt.Errorf("%s %w", path, ErrKeptChanging)
+}
+
+// wrapEdit names path in an edit's error, and keeps nil.
+func wrapEdit(path string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", path, err)
 }
 
 // WriteFile replaces the file at path with data in one rename, so a reader

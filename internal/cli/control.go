@@ -46,14 +46,15 @@ var removedUsage = map[string]string{
 }
 
 // serverCommand reports whether args are a server command: one of the
-// server's own verbs, or run, tell, attach, lint or ps in their server form,
-// which take a plan or task ID (ps takes none).
+// server's own verbs, run, tell, attach, lint or ps in their server form,
+// which take a plan or task ID (ps takes none), or a host command the server
+// answers: host pause, resume or move, or any host command with --all.
 func serverCommand(args []string) bool {
 	if slices.Contains([]string{"serve", "repo", "plan", "task", "updates", "inbox", "ask", "reply", "ack", "resolve", "merge-queue", "attempt"}, args[0]) {
 		return true
 	}
 	if args[0] == "host" {
-		return slices.Contains(args[1:], "--all")
+		return len(args) > 1 && (slices.Contains([]string{"pause", "resume", "move"}, args[1]) || slices.Contains(args[1:], "--all"))
 	}
 	if args[0] == "ps" {
 		return !slices.Contains(args[1:], "--github")
