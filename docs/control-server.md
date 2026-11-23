@@ -34,9 +34,9 @@ Edits, approvals and workflow changes require the current `--version`. A plan's 
 
 **Moving a task.** Operator-only `engine task move <task> [--host <h>] [--harness <h>]` ends a running task's attempt `moved`, keeping its state and queue place, and sends its resume to that host (else off the old one) and harness. Off a host the latest pass did not read, it is a 409 (`move-unconfirmed`: the old session may still push) until `--yes` or a terminal confirms. For its dispatch, load `coordinator.md`.
 
-**Pausing a host.** Operator-only `engine host pause|resume <host>` sets or lifts a pause in the host's record: placement and dispatch refuse it (409), running sessions carry on; `engine host move <host> [--harness <h>] [--yes]` pauses it and moves each task running there, or only that harness's, as `task move` does. A task whose dispatch is in flight is left for a repeat. An unread host is one `move-unconfirmed` 409 for all, until `--yes` or a terminal confirms.
+**Pausing a host.** Operator-only `engine host pause|resume <host>` sets or lifts a pause in the host's record: placement skips it, planners too, and a dispatch to it is a 409; sessions carry on; `engine host move <host> [--harness <h>] [--yes]` pauses it and moves each task running there, or only that harness's, as `task move` does. A task still dispatching is left for a repeat. An unread host is one `move-unconfirmed` 409 for all, until `--yes` or a terminal confirms.
 
-**Completing outside engine.** `engine task complete-external <task-id> --version <n> --pr <url>` records work finished outside engine. Operator-only, for an inactive todo or failed task with no unresolved question, it records done and a PR URL, unverified.
+**Completing outside engine.** `engine task complete-external <task-id> --version <n> --pr <url>` records outside work. For an operator, on an inactive todo or failed task with no open question, it records done and a PR URL, unverified.
 
 ## API and storage
 
@@ -50,7 +50,7 @@ The operator credential is an owner-only regular file. Every dispatch creates a 
 
 ## Updates and operator inbox
 
-Updates are immutable and ordered; read up to 200 after a cursor. Comments change no state. A question atomically holds a task in `needs-human`: its own, or the asking task (the update's `task`) when a task's session asks on its plan. Acknowledgements and replies leave it unresolved. Resolution records the decision and atomically restores each held task's earlier state, unless another question holds it, its state changed or its execution ended. A task's own questions, including one it asked on its plan, block its state changes, completion, merge and quota resume. A plan's question blocks only planner handoff and the first dispatch of its tasks.
+Updates are immutable and ordered; read up to 200 after a cursor. A question atomically holds a task in `needs-human`: its own, or the asking task (the update's `task`) when a task's session asks on its plan. Acknowledgements and replies leave it unresolved. Resolution records the decision and atomically restores each held task's earlier state, unless another question holds it, its state changed or its execution ended. A task's own questions, including one it asked on its plan, block its state changes, completion, merge and quota resume. A plan's question blocks only planner handoff and the first dispatch of its tasks.
 
 **Choices and class.** `ask` takes `choices`, `recommended` (an index) and `class` (a hard-stop class in lower case); `internal/control/question.go` holds the limits. Choices on another operation, or a bad value, is a 400. The update keeps them: `updates`, `inbox`, a plan's `question` and `feedback` return them. A resolution by choice records its text as the body, then any note. Resolving a resolved question, by the operator or a pane answer, is a 409 with reason `already-resolved`, writing nothing; a replayed request key returns its first result.
 
