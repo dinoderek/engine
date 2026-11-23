@@ -24,7 +24,7 @@ func (c *Coordinator) plannerEnded(history []control.Attempt, a reconcile.Action
 // plannerStopped tells the operator that a second planner death without a
 // task stopped the plan's coordination.
 func (c *Coordinator) plannerStopped(history []control.Attempt, a reconcile.Action, at control.Attempt) error {
-	deaths := earlyAttempts(history, at)
+	deaths := earlyAttempts(history)
 	if len(deaths) > 2 {
 		deaths = deaths[len(deaths)-2:]
 	}

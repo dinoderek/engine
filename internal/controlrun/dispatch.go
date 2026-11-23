@@ -258,7 +258,10 @@ func (c *Coordinator) ConfirmEnded(id string) error {
 			return nil
 		}
 		item, _ := tx.Item(at.Item)
-		plan, name = item.Kind == "plan", windowName(tx, item)
+		plan = item.Kind == "plan"
+		if at.State != "ended" {
+			name = windowName(tx, item)
+		}
 		return nil
 	}); err != nil {
 		return err

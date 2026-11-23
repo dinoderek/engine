@@ -79,10 +79,14 @@ func TestExternalCompletionCLI(t *testing.T) {
 	}
 }
 
-// records are the items and updates of s, to compare before and after a command.
+// records are every record of s a Tx can read, to compare before and after a
+// command.
 func records(t *testing.T, s *control.Store) (out struct {
-	Items   map[string]control.Item
-	Updates []control.Update
+	Items    map[string]control.Item
+	Attempts []control.Attempt
+	Queue    []control.QueueEntry
+	Hosts    map[string]control.HostRecord
+	Updates  []control.Update
 }) {
 	t.Helper()
 	out.Items = map[string]control.Item{}
@@ -90,6 +94,10 @@ func records(t *testing.T, s *control.Store) (out struct {
 		for _, item := range tx.ItemsByKindUnder("", "") {
 			out.Items[item.ID] = item
 		}
+		out.Attempts = tx.AttemptsFor("")
+		slices.SortFunc(out.Attempts, func(a, b control.Attempt) int { return control.Number(a.ID) - control.Number(b.ID) })
+		out.Queue, out.Hosts = tx.QueueEntries(), tx.HostRecords()
+		slices.SortFunc(out.Queue, func(a, b control.QueueEntry) int { return a.Seq - b.Seq })
 		out.Updates = slices.Collect(tx.UpdatesAfter(0, ""))
 		return nil
 	})

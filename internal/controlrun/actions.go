@@ -70,10 +70,10 @@ func (c *Coordinator) endAttempt(a reconcile.Action) error {
 	case at.Reason == control.EndEarlyDeath:
 		return c.notice(a.Item, "early/"+at.ID, a.Text+" before it claimed the task; the task is dispatched again once"+tails([]control.Attempt{at}))
 	case at.Early:
-		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(history, at)))
+		return c.notice(a.Item, "failed/"+at.ID, a.Text+" before it claimed the task, for the second time; the task failed"+tails(earlyAttempts(history)))
 	case at.Crashed:
 		return c.notice(a.Item, "failed/"+at.ID, fmt.Sprintf("%s after claiming the task, %d such deaths in a row; the task failed%s",
-			a.Text, control.DeathCap, tails(lastCrashes(history, at))))
+			a.Text, control.DeathCap, tails(lastCrashes(history))))
 	}
 	return c.notice(a.Item, "failed/"+at.ID, a.Text)
 }
@@ -119,13 +119,13 @@ func (c *Coordinator) history(item string) (plan bool, attempts []control.Attemp
 
 // earlyAttempts are the attempts of at's task that died before claiming it,
 // oldest first, at the newest.
-func earlyAttempts(history []control.Attempt, at control.Attempt) []control.Attempt {
+func earlyAttempts(history []control.Attempt) []control.Attempt {
 	return attemptsOf(history, func(o control.Attempt) bool { return o.Early })
 }
 
 // lastCrashes are the last two crashes of at's item, at the newest: the
 // deaths the cap counted last.
-func lastCrashes(history []control.Attempt, at control.Attempt) []control.Attempt {
+func lastCrashes(history []control.Attempt) []control.Attempt {
 	out := attemptsOf(history, func(o control.Attempt) bool { return o.Crashed })
 	return out[max(0, len(out)-2):]
 }
