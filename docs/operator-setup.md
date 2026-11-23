@@ -113,10 +113,10 @@ then run `engine setup --host devbox`.
    `ssh -o BatchMode=yes <user>@<tailscale name> true` must succeed with no
    prompt. That string is the devbox's `address` (`hosts-and-sessions.md`,
    "Names and addresses"), which goes in `hosts.toml` on the Mac.
-4. **Install the tools** `go`, `tmux`, `gh` and `git` on the devbox, plus
+4. **Install the tools** `go`, `tmux`, `gh`, `git` and `lsof` on the devbox, plus
    `claude` if it runs Claude and `sqlite3` if it runs Codex. `engine setup`
-   lists what is missing, and prints the `PATH` line and the `sudo systemctl
-   mask` line that stops the devbox suspending. Sign in once over SSH:
+   does not check `lsof` or `sqlite3`, and prints the `PATH` line and the `sudo systemctl
+   mask` line that stops suspending. Sign in once over SSH:
    `ssh -t <address> claude /login`.
 
 ## Upgrading

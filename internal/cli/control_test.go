@@ -53,14 +53,26 @@ func TestHookRefusesEveryMergeInAnEngineSessionAndPointsAtMergeReady(t *testing.
 }
 
 func TestServerCommandsRouteByTheirIDs(t *testing.T) {
-	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"run", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps"}, {"ps", "--json"}, {"lint", "p2"}, {"host", "status", "--all"}, {"host", "status", "--all", "--json"}, {"task", "complete-external", "t3", "--version", "1", "--pr", "url"}} {
+	for _, args := range [][]string{{"repo", "list"}, {"plan", "show", "p2"}, {"run", "p2"}, {"run", "t3"}, {"tell", "t3", "hi"}, {"attach", "t3"}, {"ps"}, {"ps", "--json"}, {"lint", "p2"}, {"host", "status", "--all"}, {"host", "status", "--all", "--json"}, {"task", "complete-external", "t3", "--version", "1", "--pr", "url"}, {"host", "pause", "devbox", "--json"}, {"host", "resume", "devbox"}, {"host", "move", "devbox", "--harness", "claude", "--yes"}} {
 		if !serverCommand(args) {
 			t.Fatal(args)
 		}
 	}
-	for _, args := range [][]string{{"run", ghIssue}, {"run"}, {"ps", "--github"}, {"tell", "r-7", "hi"}, {"attach", "r-7"}, {"lint", ghIssue}, {"start", "t3"}, {"host", "status", "--json"}, {"host", "spawn", "--json"}, {"labels", "sync", "o/r"}} {
+	for _, args := range [][]string{{"run", ghIssue}, {"run"}, {"ps", "--github"}, {"tell", "r-7", "hi"}, {"attach", "r-7"}, {"lint", ghIssue}, {"start", "t3"}, {"host", "status", "--json"}, {"host", "spawn", "--json"}, {"host"}, {"labels", "sync", "o/r"}} {
 		if serverCommand(args) {
 			t.Fatal("not a server form:", args)
+		}
+	}
+}
+
+// A host pause, resume or move reaches the server's command layer, not the
+// host ops that refuse it as an unknown op.
+func TestHostPauseResumeAndMoveAreNotHostOps(t *testing.T) {
+	for _, verb := range []string{"pause", "resume", "move"} {
+		var stdout, stderr bytes.Buffer
+		Run([]string{"host", verb, "devbox", "--json"}, Env{Home: t.TempDir(), Out: &stdout, Err: &stderr, Getenv: func(string) string { return "" }})
+		if strings.Contains(stdout.String(), "unknown op") || strings.Contains(stderr.String(), "usage: engine host <op>") {
+			t.Fatalf("host %s fell through to host ops: %s %s", verb, stdout.String(), stderr.String())
 		}
 	}
 }
