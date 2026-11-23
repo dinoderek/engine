@@ -168,3 +168,22 @@ func TestDispatchTokensAreTheCredentialsOfAnAttemptsReceipts(t *testing.T) {
 		t.Fatalf("DispatchTokens of an attempt with none: %v", got)
 	}
 }
+
+func TestOnlyAWriteIsBoundedInTime(t *testing.T) {
+	s := service(t)
+	repoPlan(t, s)
+	s.Store.writeTimeout = 20 * time.Millisecond
+	slow := func(tx *Tx) error {
+		time.Sleep(60 * time.Millisecond)
+		if items := tx.ItemsByKindUnder("", ""); len(items) != 2 {
+			return errors.New("the records went missing")
+		}
+		return nil
+	}
+	if err := s.Store.Read(context.Background(), slow); err != nil {
+		t.Fatalf("a slow read: %v", err)
+	}
+	if err := s.Store.Write(context.Background(), slow); err == nil {
+		t.Fatal("a write outlived its bound")
+	}
+}

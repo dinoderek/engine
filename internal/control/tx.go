@@ -30,12 +30,13 @@ type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// txTimeout bounds one transaction, a write holding the one writer.
-const txTimeout = 15 * time.Second
+// writeTimeout bounds a write, which holds the one writer.
+const writeTimeout = 15 * time.Second
 
 // Read runs fn in a WAL read transaction on the reader pool, and commits
 // nothing. Reads run beside each other and beside the writer, and see every
-// earlier commit whole or not at all.
+// earlier commit whole or not at all. A read is bounded only by ctx: a
+// coordinator pass applies its actions, host calls included, inside one.
 func (s *Store) Read(ctx context.Context, fn func(*Tx) error) error {
 	return s.run(ctx, false, fn)
 }
@@ -60,8 +61,11 @@ func (s *Store) run(ctx context.Context, write bool, fn func(*Tx) error) error {
 	if write {
 		db = s.writer
 	}
-	ctx, cancel := context.WithTimeout(ctx, txTimeout)
-	defer cancel()
+	if write {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.writeTimeout)
+		defer cancel()
+	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

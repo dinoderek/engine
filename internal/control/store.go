@@ -23,6 +23,8 @@ type Store struct {
 	writer  *sql.DB
 	readers *sql.DB
 	commit  func(*sql.Tx) error
+	// writeTimeout bounds each Store.Write.
+	writeTimeout time.Duration
 }
 
 // Open creates a private database and refuses a database already owned by a
@@ -47,7 +49,7 @@ func Open(path string) (*Store, error) {
 		_ = f.Close()
 		return nil, fmt.Errorf("database already owned: %w", err)
 	}
-	s := &Store{path: path, lock: f, commit: (*sql.Tx).Commit}
+	s := &Store{path: path, lock: f, commit: (*sql.Tx).Commit, writeTimeout: writeTimeout}
 	if err = s.openDatabases(); err == nil {
 		err = s.initialize()
 	}
