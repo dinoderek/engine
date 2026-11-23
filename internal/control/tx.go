@@ -331,16 +331,17 @@ func (t *Tx) Receipt(key string) (receipt, bool) {
 	return fetch[receipt](t, "SELECT data FROM receipts WHERE key=?", key)
 }
 
-// PutReceipt stores the result of a request key's fingerprint. A receipt
-// that hands out a credential is its attempt's dispatch receipt.
-func (t *Tx) PutReceipt(key string, r receipt) {
+// PutReceipt stores the result of a request key's fingerprint, written at
+// at by the service's clock. A receipt that hands out a credential is its
+// attempt's dispatch receipt.
+func (t *Tx) PutReceipt(key string, r receipt, at time.Time) {
 	t.mustWrite()
 	attempt := ""
 	if r.Response.Attempt != nil && r.Response.Credential != "" {
 		attempt = r.Response.Attempt.ID
 	}
-	t.exec("INSERT INTO receipts(key,attempt,data) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET attempt=excluded.attempt, data=excluded.data",
-		key, attempt, t.encode(r))
+	t.exec("INSERT INTO receipts(key,created,attempt,data) VALUES(?,?,?,?) ON CONFLICT(key) DO UPDATE SET attempt=excluded.attempt, data=excluded.data",
+		key, at.UTC().Format(createdLayout), attempt, t.encode(r))
 }
 
 // DispatchTokens are the credentials a dispatch of attempt id left in its

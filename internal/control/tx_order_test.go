@@ -160,10 +160,10 @@ func TestAFailedQueryFailsItsTransaction(t *testing.T) {
 func TestDispatchTokensAreTheCredentialsOfAnAttemptsReceipts(t *testing.T) {
 	tx := blank(t)
 	at := &Attempt{ID: "a2"}
-	tx.PutReceipt("k1", receipt{Response: Response{Attempt: at, Credential: "first"}})
-	tx.PutReceipt("k2", receipt{Response: Response{Attempt: at}})
-	tx.PutReceipt("k3", receipt{Response: Response{Attempt: &Attempt{ID: "a3"}, Credential: "other"}})
-	tx.PutReceipt("k4", receipt{Response: Response{Attempt: at, Credential: "second"}})
+	tx.PutReceipt("k1", receipt{Response: Response{Attempt: at, Credential: "first"}}, time.Time{})
+	tx.PutReceipt("k2", receipt{Response: Response{Attempt: at}}, time.Time{})
+	tx.PutReceipt("k3", receipt{Response: Response{Attempt: &Attempt{ID: "a3"}, Credential: "other"}}, time.Time{})
+	tx.PutReceipt("k4", receipt{Response: Response{Attempt: at, Credential: "second"}}, time.Time{})
 	if got := tx.DispatchTokens("a2"); !slices.Equal(got, []string{"first", "second"}) {
 		t.Fatalf("DispatchTokens: %v", got)
 	}
@@ -298,5 +298,15 @@ func TestAResolutionIsTheOldestOfAQuestionsResolvingReplies(t *testing.T) {
 	}
 	if got := tx.Resolution(2); got != 0 {
 		t.Fatalf("Resolution of an unresolved update = %d", got)
+	}
+}
+
+func TestAReceiptIsCreatedAtTheServicesClock(t *testing.T) {
+	s := service(t)
+	_, plan := repoPlan(t, s)
+	call(t, s, op, Request{Op: "say", ID: plan.ID, Body: "stamped", Key: "k"})
+	out, err := s.Store.sql("SELECT DISTINCT created FROM receipts")
+	if want := `[{"created":"2026-11-07T09:00:00.000Z"}]`; err != nil || string(out) != want {
+		t.Fatalf("receipts created %s (%v), want every one at the service's clock: %s", out, err, want)
 	}
 }

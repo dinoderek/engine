@@ -150,7 +150,7 @@ func (r records) load(t *testing.T) *Tx {
 		tx.PutCredential(hash, a)
 	}
 	for key, rec := range r.Receipts {
-		tx.PutReceipt(key, rec)
+		tx.PutReceipt(key, rec, time.Time{})
 	}
 	for name, rec := range r.Hosts {
 		tx.PutHost(name, rec)

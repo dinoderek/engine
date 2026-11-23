@@ -135,3 +135,13 @@ func TestALaunchNeverSpawnsOnARecordItFailedToRead(t *testing.T) {
 		t.Fatalf("read error %v, launches %v; want a failed read and no spawn", err, h.launches)
 	}
 }
+
+// TestAWindowNameNeedsNoRepository: an item whose repository a failed read
+// did not find names its window without one, never panicking.
+func TestAWindowNameNeedsNoRepository(t *testing.T) {
+	inTx(t, emptyStore(t), func(tx *control.Tx) {
+		if got := windowName(tx, control.Item{ID: "t3", Repo: "r9"}); got != "-3" {
+			t.Fatalf("window name %q", got)
+		}
+	})
+}

@@ -152,7 +152,8 @@ func endedEarlier(tx *control.Tx, item string, current control.Attempt) bool {
 // windowName is the task's tmux window name on a host, <repo>-<task>.
 func windowName(tx *control.Tx, item control.Item) string {
 	repo, _ := tx.Item(item.Repo)
-	return fmt.Sprintf("%s-%d", strings.Split(repo.Slug, "/")[1], control.Number(item.ID))
+	_, name, _ := strings.Cut(repo.Slug, "/")
+	return fmt.Sprintf("%s-%d", name, control.Number(item.ID))
 }
 
 func kickoff(item control.Item, at control.Attempt, reviewer string, resume bool) string {

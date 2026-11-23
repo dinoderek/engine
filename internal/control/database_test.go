@@ -109,7 +109,7 @@ func TestEveryRecordKindSurvivesReopen(t *testing.T) {
 		tx.PutUpdate(Update{ID: 3, Item: "r1", Body: "persisted", At: pass})
 		tx.PutQueueEntry(QueueEntry{Task: "t4", Repo: "r1", Seq: 3, Phase: QueueWaiting})
 		tx.PutCredential("token", Actor{Name: "a2", Role: "worker", Attempt: "a2"})
-		tx.PutReceipt("request", receipt{Digest: "digest", Response: Response{Items: []Item{{ID: "r1"}}}})
+		tx.PutReceipt("request", receipt{Digest: "digest", Response: Response{Items: []Item{{ID: "r1"}}}}, time.Time{})
 	})
 	want, _ := s.snapshot()
 	path := s.path

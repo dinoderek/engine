@@ -181,7 +181,7 @@ func TestTheMigrationSlimsEveryUpdatesSnapshot(t *testing.T) {
 		}
 		snapshots++
 		if want := slim(*u.Snapshot); !reflect.DeepEqual(u.Snapshot, want) || u.Snapshot.State == "" || u.Snapshot.Version == 0 {
-			t.Errorf("update %d keeps %+v; want only a version, title and state", u.ID, *u.Snapshot)
+			t.Errorf("update %d keeps %+v; want only an id, kind, version, title and state", u.ID, *u.Snapshot)
 		}
 	}
 	if snapshots == 0 {
