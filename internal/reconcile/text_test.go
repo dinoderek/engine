@@ -31,9 +31,9 @@ func TestActionTextsAndMarks(t *testing.T) {
 		{"a wait after a denial is the Permission stop", view(plan("planned"), with(task(2, "running"), denied)),
 			[]string{"Permission hard stop", "Bash `gh pr merge 3` was denied"}, func(a Action) bool { return a.Stalled.Equal(denied.WaitingSince) && a.Attempt == "a2" }},
 		{"a wait while signed out names the sign-in", view(plan("planned"), with(task(2, "running"), signedOutWait())),
-			[]string{"demo-2 has waited for input for 10m0s, while claude is signed out on devbox", "engine setup --host devbox", "type continue"}, nil},
+			[]string{"demo-2 has waited for input for 10m, while claude is signed out on devbox", "engine setup --host devbox", "type continue"}, nil},
 		{"a planner waiting while signed out keeps its name", view(with(plan("approved"), signedOutWait())),
-			[]string{"the planner demo-1 has waited for input for 10m0s, while claude is signed out on devbox"}, nil},
+			[]string{"the planner demo-1 has waited for input for 10m, while claude is signed out on devbox"}, nil},
 		{"a signed-out wait leads with the sign-in and names the denial", view(plan("planned"), with(task(2, "running"), deniedAndSignedOut())),
 			[]string{"while claude is signed out on devbox", "It also follows a denied permission request, the Permission hard stop (hard-stops.md): Bash `gh pr merge 3` was denied"},
 			func(a Action) bool { return strings.Index(a.Text, "signed out") < strings.Index(a.Text, "Permission") }},
@@ -42,11 +42,15 @@ func TestActionTextsAndMarks(t *testing.T) {
 		{"the planner sign-in notice says it waits", withFleet(view(plan("approved")), signedOut(fleet(2), "claude")),
 			[]string{"The planner waits: claude is signed out on devbox", "starts once the harness is signed in"}, nil},
 		{"a plain wait says how long", view(plan("planned"), with(task(2, "running"), waiting(StallWait))),
-			[]string{"demo-2 has waited for input for 10m0s, outside a hard stop"}, nil},
+			[]string{"demo-2 has waited for input for 10m without asking through the server: it may be waiting on you in its window"}, nil},
+		{"a long wait says its own length, not the threshold", view(plan("planned"), with(task(2, "running"), waiting(6*time.Hour+16*time.Minute+20*time.Second))),
+			[]string{"demo-2 has waited for input for 6h16m without asking"}, nil},
+		{"a planner's plain wait says how long", view(with(plan("approved"), waiting(StallWait+time.Minute))),
+			[]string{"the planner demo-1 has waited for input for 11m without asking through the server"}, nil},
 		{"a planner at a dialog says to answer it", view(with(plan("approved"), atDialog(StallWait))),
-			[]string{"the planner demo-1 has waited for input for 10m0s: its harness says it is likely held at a dialog in its window. Answer it there"}, nil},
+			[]string{"the planner demo-1 has waited for input for 10m: its harness says it is likely held at a dialog in its window. Answer it there"}, nil},
 		{"a claimed task at a dialog says to answer it", view(plan("planned"), with(task(2, "running"), atDialog(StallWait))),
-			[]string{"demo-2 has waited for input for 10m0s: its harness says it is likely held at a dialog"}, nil},
+			[]string{"demo-2 has waited for input for 10m: its harness says it is likely held at a dialog"}, nil},
 		{"an unclaimed task at a dialog says to answer it", view(plan("planned"), with(task(2, "todo"), atDialog(time.Minute))),
 			[]string{"demo-2 has not claimed the task 5m0s after it started: its harness says it is likely held at a dialog in its window"}, nil},
 		{"the claim wait says so", view(plan("planned"), with(task(2, "todo"), working())),
@@ -82,8 +86,8 @@ func TestActionTextsAndMarks(t *testing.T) {
 func TestAnOldDenialIsAPlainWait(t *testing.T) {
 	s := waiting(StallWait)
 	s.Denial = &hostops.Denial{At: s.WaitingSince.Add(-DenialLead - time.Second), Tool: "Bash"}
-	if WaitText(s, "plain") != "plain" {
-		t.Error(WaitText(s, "plain"))
+	if got := WaitText(s, "demo-2", t0); strings.Contains(got, "Permission") || !strings.Contains(got, "without asking") {
+		t.Error(got)
 	}
 }
 

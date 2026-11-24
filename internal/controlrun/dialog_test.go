@@ -37,7 +37,7 @@ func TestAPlannerHeldAtADialogStallsAndIsNeverTyped(t *testing.T) {
 		later = later.Add(4 * time.Minute)
 		pass(t, c)
 	}
-	if n := dialogNotices(t, c, plan.ID); len(n) != 1 || !strings.Contains(n[0], "has waited for input for 10m0s: its harness says it is likely held at a dialog in its window") {
+	if n := dialogNotices(t, c, plan.ID); len(n) != 1 || !strings.Contains(n[0], ": its harness says it is likely held at a dialog in its window") {
 		t.Errorf("notices %q, want one stall naming the dialog", n)
 	}
 	if woke != 0 {

@@ -123,7 +123,8 @@ func TestDecide(t *testing.T) {
 		{"a planner harness signed out here is a notice, not a start", withFleet(view(plan("approved")), signedOut(fleet(2), "claude")), []string{"notice p1 planner-signin/2/claude"}},
 		{"a live planner is left to work", view(with(plan("approved"), working())), nil},
 		{"an unknown planner is left alone", view(with(plan("approved"), Session{Unknown: true})), nil},
-		{"a planner waiting outside a hard stop is flagged", view(with(plan("approved"), waiting(StallWait))), []string{fmt.Sprintf("notice p1 stall/a1/%d", unix(-StallWait))}},
+		{"a planner waiting with no question is flagged", view(with(plan("approved"), waiting(StallWait))), []string{fmt.Sprintf("notice p1 stall/a1/%d", unix(-StallWait))}},
+		{"a planner waiting on its plan question is not flagged", view(question(with(plan("approved"), waiting(StallWait)), 5)), nil},
 		{"a planned plan's lint failure is a notice", withLint(view(plan("approved"), task(2, "todo"))), []string{"notice p1 lint/2"}},
 		{"a later plan's lint failure is a notice too", withLint(view(plan("planned"), task(2, "todo"))), []string{"notice p1 lint/2"}},
 		{"a plan that passes lint is planned", view(plan("approved"), task(2, "todo")), []string{"state p1 planned"}},
@@ -143,7 +144,7 @@ func TestDecide(t *testing.T) {
 		{"an operator question parks a vanished task", view(plan("planned"), vanished(task(2, "running"), 7)), nil},
 
 		// Stalls and the claim wait.
-		{"a held session waiting outside a hard stop is flagged", view(plan("planned"), with(task(2, "running"), waiting(StallWait))),
+		{"a held session waiting with no hard stop raised is flagged", view(plan("planned"), with(task(2, "running"), waiting(StallWait))),
 			[]string{fmt.Sprintf("notice t2 stall/a2/%d", unix(-StallWait))}},
 		{"a flagged wait is not flagged again", view(plan("planned"), with(task(2, "running"), flagged(waiting(StallWait)))), nil},
 		{"a short wait is not flagged", view(plan("planned"), with(task(2, "running"), waiting(StallWait-time.Second))), nil},

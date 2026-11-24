@@ -202,11 +202,16 @@ func (v View) moveHeld(t Item) bool {
 	return ok && (h.Unreachable != "" || h.Status.RunsError != "")
 }
 
+// AtHardStop reports whether the item waits on the operator: it is in
+// needs-human, or has its own unresolved question. A session's wait there
+// is the protocol's, so it never counts toward a stall.
+func (t Item) AtHardStop() bool { return t.State == "needs-human" || t.Question > 0 }
+
 // Wakeable reports whether a pointer at new updates may be typed into the
 // item's session: the session is idle, so typing cuts into no turn, and the
 // item is at no hard stop.
 func (t Item) Wakeable() bool {
-	return t.Session != nil && t.Session.Idle() && t.State != "needs-human" && t.Question == 0 && !t.Stopped
+	return t.Session != nil && t.Session.Idle() && !t.AtHardStop() && !t.Stopped
 }
 
 // observed returns the item's session, or a zero one that is neither live
