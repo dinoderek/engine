@@ -14,7 +14,8 @@ import (
 const (
 	// ClaimWait is how long a started session has to claim its task.
 	ClaimWait = control.ClaimWait
-	// StallWait is how long a session may wait for input outside a hard stop.
+	// StallWait is how long a session may wait for input with no hard stop
+	// raised.
 	StallWait = 10 * time.Minute
 	// DenialLead is how long before a wait was first seen a permission
 	// denial may have been logged and still be the wait's cause: a session
@@ -153,15 +154,16 @@ func (s Session) Denied() bool {
 	return s.Denial != nil && !s.WaitingSince.IsZero() && !s.Denial.At.Before(s.WaitingSince.Add(-DenialLead))
 }
 
-// WaitText is a waiting session's stall text: plain, unless its host says
-// its harness is signed out, which names the sign-in, or the wait follows a
-// permission denial. Then it is the Permission hard stop the session did
-// not raise, naming the tool, its exact input and why. A signed-out wait
-// leads with the sign-in and names the denial too. A session held at a
-// dialog says so instead.
-func WaitText(s Session, plain string) string {
+// WaitText is a waiting session's stall text, naming who waits and for how
+// long by now: plain, unless its host says its harness is signed out, which
+// names the sign-in, or the wait follows a permission denial. Then it is the
+// Permission hard stop the session did not raise, naming the tool, its exact
+// input and why. A signed-out wait leads with the sign-in and names the
+// denial too. A session held at a dialog says so instead.
+func WaitText(s Session, who string, now time.Time) string {
+	waited := fmt.Sprintf("%s has waited for input for %s", who, waitedFor(now.Sub(s.WaitingSince)))
 	if s.AtDialog() {
-		return DialogText(strings.TrimSuffix(plain, ", outside a hard stop"))
+		return DialogText(waited)
 	}
 	denial := ""
 	if s.Denied() {
@@ -173,19 +175,23 @@ func WaitText(s Session, plain string) string {
 		denial = fmt.Sprintf("%s %s was %s", d.Tool, deniedInput(d.Input), why)
 	}
 	if s.SignedOut {
-		text := fmt.Sprintf("%s, while %s. Sign it in there, then type continue in the window",
-			strings.TrimSuffix(plain, ", outside a hard stop"), signedOutText(s.Host, s.Harness))
+		text := fmt.Sprintf("%s, while %s. Sign it in there, then type continue in the window", waited, signedOutText(s.Host, s.Harness))
 		if denial != "" {
 			text += ". It also follows a denied permission request, the Permission hard stop (hard-stops.md): " + denial
 		}
 		return text
 	}
 	if denial == "" {
-		return plain
+		return waited + " without asking through the server: it may be waiting on you in its window"
 	}
-	return fmt.Sprintf("%s has waited for input for %s after a denied permission request, the Permission hard stop (hard-stops.md): "+
+	return fmt.Sprintf("%s after a denied permission request, the Permission hard stop (hard-stops.md): "+
 		"%s. Allow it with a permission rule in the session, or do it by hand, then tell the session to carry on",
-		s.Name, StallWait, denial)
+		waited, denial)
+}
+
+// waitedFor is a wait's length to the minute, as 10m or 6h16m.
+func waitedFor(d time.Duration) string {
+	return strings.TrimSuffix(d.Round(time.Minute).String(), "0s")
 }
 
 // DialogText is a stall text for a session held at a dialog: the operator

@@ -198,7 +198,13 @@ func (c *Coordinator) keepObservations(v reconcile.View) error {
 				continue
 			}
 			item, _ := tx.Item(t.ID)
-			tx.PutAttempt(kept(at, *t.Session, v.Now, coordinating(tx, item)))
+			at = kept(at, *t.Session, v.Now, coordinating(tx, item))
+			if t.AtHardStop() {
+				// The wait is the protocol's: its stall clock starts once
+				// the operator answers.
+				at.WaitingSince = time.Time{}
+			}
+			tx.PutAttempt(at)
 		}
 		return nil
 	})

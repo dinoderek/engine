@@ -65,8 +65,8 @@ func planStep(v View) ([]Action, bool) {
 		if acts := limit(v, p); len(acts) > 0 {
 			return acts, true
 		}
-		if planner.Waited(v.Now, StallWait) && !planner.Flagged(planner.WaitingSince) {
-			return stall(p, planner.WaitingSince, WaitText(*planner, "the planner "+planner.Name+" has waited for input for "+StallWait.String())), true
+		if !p.AtHardStop() && planner.Waited(v.Now, StallWait) && !planner.Flagged(planner.WaitingSince) {
+			return stall(p, planner.WaitingSince, WaitText(*planner, "the planner "+planner.Name, v.Now)), true
 		}
 		return quiet(v, p), true
 	case len(v.Tasks) == 0 && planner != nil:
@@ -240,7 +240,7 @@ func releaseMoved(v View) []Action {
 }
 
 // stalls flags a session that has not claimed in time, that died before
-// claiming, or that waits outside a hard stop: once per wait, and once per
+// claiming, or that waits with no hard stop raised: once per wait, and once per
 // session that died. A limited session gets its limit step instead.
 func stalls(v View) []Action {
 	var acts []Action
@@ -269,8 +269,8 @@ func stalls(v View) []Action {
 				text = DialogText(text)
 			}
 			acts = append(acts, stall(t, s.Spawned, text)...)
-		case t.claimed() && t.state() != "needs-human" && t.Question == 0 && s.Waited(v.Now, StallWait) && !s.Flagged(s.WaitingSince):
-			acts = append(acts, stall(t, s.WaitingSince, WaitText(*s, fmt.Sprintf("%s has waited for input for %s, outside a hard stop", s.Name, StallWait)))...)
+		case t.claimed() && !t.AtHardStop() && s.Waited(v.Now, StallWait) && !s.Flagged(s.WaitingSince):
+			acts = append(acts, stall(t, s.WaitingSince, WaitText(*s, s.Name, v.Now))...)
 		}
 	}
 	return acts
