@@ -22,7 +22,7 @@ with a run under its name takes a slot.
 below its slots.
 
 **Capabilities** are declared per host (`internal/hosts/hosts.go`). A task
-requires its card's and its repository's (`engine repo edit` replaces the repository's).
+requires its card's plus its repository's, which `engine repo edit` replaces.
 
 ```toml
 default_harness = "claude"
