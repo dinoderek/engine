@@ -14,7 +14,7 @@ host (`engine setup --host <name>` copies it); each host's own name is in
 hostname or IP. Its `address` goes to `ssh` as is, never posted.
 
 **Slots.** `(ram_gb - reserve_gb) / gb_per_session`, rounded down, is a
-host's concurrent sessions; `max_sessions` replaces it. Only a live window
+host's sessions; `max_sessions` replaces it. Only a live window
 with a run under its name takes a slot.
 
 **Heavy sessions.** A task is heavy when it requires a top-level
