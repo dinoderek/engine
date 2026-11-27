@@ -34,7 +34,7 @@ func place(v View) []Action {
 // want is what placement is asked for t: a task the operator moved goes
 // only where its move sends it.
 func want(t Item) Want {
-	w := Want{ID: t.ID, Repo: t.Repo, Requires: t.Requires, Harness: t.Harness}
+	w := Want{ID: t.ID, Repo: t.Repo, Requires: control.Requires(control.Item{Requires: t.RepoRequires}, t.Item), Harness: t.Harness}
 	if at := t.Current; at.Reason == control.EndMoved {
 		w.Harness = cmp.Or(at.MoveHarness, w.Harness)
 		w.Host, w.Avoid = at.MoveHost, at.Host

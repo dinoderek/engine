@@ -61,7 +61,7 @@ func pausedHosts(tx *control.Tx, hosts []reconcile.HostLoad) []reconcile.HostLoa
 func record(tx *control.Tx, item control.Item) reconcile.Item {
 	current, _ := tx.Attempt(item.Attempt)
 	repo, _ := tx.Item(item.Repo)
-	t := reconcile.Item{Item: item, Current: current, Name: sessionName(repo.Slug, control.Number(item.ID)),
+	t := reconcile.Item{Item: item, Current: current, Name: sessionName(repo.Slug, control.Number(item.ID)), RepoRequires: repo.Requires,
 		Vanished: control.Vanished(tx, item), Question: control.OwnQuestion(tx, item.ID), PlanHold: control.NewStartHold(tx, item.ID),
 		Stopped: current.Reason == control.EndStopped, Claimed: control.Claimed(tx, current), Resume: hadEarlierAttempt(tx, item.ID, ""), MergedAt: control.MergedAt(tx, item.ID), MergedHead: control.MergedHead(tx, item.ID)}
 	for _, id := range item.Depends {

@@ -97,7 +97,7 @@ finds fields by them.
 | Gates | `## Gates` | Lanes beyond the repo's default, for the paths touched. |
 | Overrides | `## Overrides` | Only those this card adds to its plan's. |
 | Depends on | `--depends <id>,<id>` | Tasks that must be `done` first. |
-| Requires | `--requires <cap>,<cap>` | Host capabilities, such as `docker`. |
+| Requires | `--requires <cap>,<cap>` | Host capabilities, such as `docker`, beyond the repository's own `requires` (`engine repo show`), which every task adds. |
 | Harness, tier | `--harness`, `--tier` | Optional. Empty means the default harness and `standard`. |
 
 - **Open:** a product question belongs in the plan's `## Questions`, not

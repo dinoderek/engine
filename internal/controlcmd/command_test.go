@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -52,7 +53,10 @@ func command(t *testing.T, e Env, args ...string) control.Response {
 
 func TestCLIPlanTasksAndOperatorMessages(t *testing.T) {
 	e, _ := environment(t)
-	repo := command(t, e, "repo", "add", "--title", "Demo", "--slug", "owner/demo", "--remote", "ssh://example.test/demo").Item
+	repo := command(t, e, "repo", "add", "--title", "Demo", "--slug", "owner/demo", "--remote", "ssh://example.test/demo", "--requires", "ios").Item
+	if repo = command(t, e, "repo", "edit", repo.ID, "--version", "1", "--requires", "ios,docker").Item; !reflect.DeepEqual(repo.Requires, []string{"ios", "docker"}) {
+		t.Fatalf("repo edit requires: %v", repo.Requires)
+	}
 	plan := command(t, e, "plan", "create", "--repo", repo.ID, "--title", "Feature", "--body", "Requirements").Item
 	task := command(t, e, "task", "create", "--repo", repo.ID, "--plan", plan.ID, "--title", "Task", "--body", "## Outcome\nWorks\n## Tests\nProve it").Item
 	command(t, e, "plan", "approve", plan.ID, "--version", "1")

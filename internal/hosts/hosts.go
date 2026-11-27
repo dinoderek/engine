@@ -113,7 +113,8 @@ type Config struct {
 	QuotaThresholds map[string]int
 	GBPerSession    int
 	ReserveGB       int
-	// HeavyCapabilities make a task heavy when its card requires one.
+	// HeavyCapabilities make a task heavy when its card or repository requires
+	// one.
 	HeavyCapabilities []string
 	Harnesses         map[string]Harness
 	Hosts             map[string]Host

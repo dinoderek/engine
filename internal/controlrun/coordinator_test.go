@@ -254,11 +254,17 @@ func TestInterruptedBeforeDispatchReusesPersistedIdentity(t *testing.T) {
 }
 
 func TestPlannerDispatchAndInvalidPlanBlock(t *testing.T) {
-	c, h, _, plan, task := setup(t)
+	c, h, repo, plan, task := setup(t)
 	mutate(t, c.Service.Store, func(tx *control.Tx) error { tx.DeleteItem(task.ID); return nil })
+	// A repository's heavy requirement is its tasks', never its planner's.
+	execute(t, c.Service, control.Request{Op: "edit", ID: repo.ID, Version: repo.Version, Item: control.Item{Requires: []string{"ios"}}})
+	c.Config.HeavyCapabilities = []string{"ios"}
 	pass(t, c)
+	if len(h.launches) != 1 {
+		t.Fatalf("planner launches: %d", len(h.launches))
+	}
 	for _, req := range h.launches {
-		if req.Spawn.Tier != "deep" || req.Spawn.Task != control.Number(plan.ID) || req.Spawn.Title != plan.ID+" · Feature" {
+		if req.Spawn.Heavy || req.Spawn.Tier != "deep" || req.Spawn.Task != control.Number(plan.ID) || req.Spawn.Title != plan.ID+" · Feature" {
 			t.Fatal(req)
 		}
 	}
