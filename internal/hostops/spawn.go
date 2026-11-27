@@ -31,7 +31,8 @@ type SpawnRequest struct {
 	Effort  string
 	RunID   string
 	Kickoff string
-	// Heavy is true when the card requires a heavy capability.
+	// Heavy is true when the task, by its card or its repository, requires a
+	// heavy capability.
 	Heavy bool
 	// Resume is true when the task had an earlier attempt, so a branch
 	// origin already has is the task's own work and the worktree opens on

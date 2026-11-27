@@ -56,9 +56,13 @@ func (c *Coordinator) launch(tx *control.Tx, at control.Attempt, credential stri
 		return err
 	}
 	repo, _ := tx.Item(item.Repo)
+	requires := item.Requires
+	if item.Kind == "task" {
+		requires = control.Requires(repo, item)
+	}
 	req := hostops.ControlRequest{URL: c.URL, Credential: credential, Attempt: at.ID, Remote: repo.Remote,
 		Spawn: hostops.SpawnRequest{Repo: repo.Slug, Task: control.Number(item.ID), Feature: item.Plan, Title: session.Title(item.ID, item.Title), Mode: hostops.HandsOff,
-			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(control.Requires(repo, item)),
+			Harness: at.Harness, Tier: tier, Model: model.Model, Effort: model.Effort, RunID: at.RunID, Heavy: cfg.Heavy(requires),
 			Resume: resume, Kickoff: kickoff(item, at, reviewer.Model, resume) + movedKickoff(tx, at)}}
 	// A read that failed above left zero values in req: never spawn on them.
 	if err := tx.Err(); err != nil {

@@ -10,8 +10,8 @@ For dispatch, Git credentials and run credential files, load `coordinator.md`.
 host (`engine setup --host <name>` copies it); each host's own name is in
 `~/.config/engine/host`.
 
-**Names and addresses.** A host's name is its `[host.<name>]` key; its
-`address` goes to `ssh` as is, never posted.
+**Names and addresses.** A host's name is its `[host.<name>]` key, never a
+hostname or IP. Its `address` goes to `ssh` as is, never posted.
 
 **Slots.** `(ram_gb - reserve_gb) / gb_per_session`, rounded down, is a
 host's concurrent sessions; `max_sessions` replaces it. Only a live window
@@ -21,9 +21,8 @@ with a run under its name takes a slot.
 `heavy_capabilities` entry; a host's `max_heavy_sessions` caps heavy sessions
 below its slots.
 
-**Capabilities** are declared per host and named by `requires`
-(`internal/hosts/hosts.go`). A task requires its repository's (operator-only
-`engine repo edit`) and its card's.
+**Capabilities** are declared per host (`internal/hosts/hosts.go`). A task
+requires its card's and its repository's (`engine repo edit` replaces them).
 
 ```toml
 default_harness = "claude"

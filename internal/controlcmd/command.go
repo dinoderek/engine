@@ -42,7 +42,7 @@ const Usage = "engine serve\n" +
 	"engine serve --foreground [--db <path>] [--token-file <path>] [--listen 127.0.0.1:7331] [--advertise <origin>]\n" +
 	"engine serve --backup <path> [--db <path>] [--token-file <path>]\n" +
 	"engine repo add --title <name> --slug <owner/name> --remote <git-url> [--requires <cap>,…]\n" +
-	"engine repo edit <id> --version <n> [--requires <cap>,…]\n" +
+	"engine repo edit <id> --version <n> --requires <cap>,…   (replaces them)\n" +
 	"engine plan create --repo <id> --title <text> --body-file <path|->\n" +
 	"engine task create --repo <id> --plan <id> --title <text> --body-file <path|->\n" +
 	"engine plan show|list|edit|approve|state|stop <id> [--version <n>] [--state <state>]\n" +
