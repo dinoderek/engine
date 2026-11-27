@@ -42,6 +42,9 @@ type Item struct {
 	// PlanHold is the open plan question that keeps the task from a new
 	// start, or 0. A task with an earlier attempt is never held by it.
 	PlanHold int
+	// RepoRequires are the capabilities the item's repository requires of
+	// every task's host, on top of the card's own.
+	RepoRequires []string
 	// Blocked are the dependencies that are not done.
 	Blocked []string
 	// Resume is true when an earlier attempt opened a window, so the next

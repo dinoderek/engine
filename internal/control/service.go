@@ -331,11 +331,11 @@ func (s Service) edit(tx *Tx, a Actor, r Request) (Response, error) {
 	if !workerItem(tx, a, r.ID) {
 		return Response{}, problem(403, "cannot edit another execution's item")
 	}
-	if old.Kind == "repo" {
-		return Response{}, problem(400, "repository identity is immutable")
-	}
 	if r.Version != old.Version {
 		return Response{}, problem(409, "version is %d", old.Version)
+	}
+	if old.Kind == "repo" {
+		return s.editRepo(tx, a, r, old)
 	}
 	if active(tx, old) {
 		return Response{}, problem(409, "stop the active execution before editing its card")

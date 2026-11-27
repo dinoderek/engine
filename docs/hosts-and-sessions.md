@@ -10,19 +10,20 @@ For dispatch, Git credentials and run credential files, load `coordinator.md`.
 host (`engine setup --host <name>` copies it); each host's own name is in
 `~/.config/engine/host`.
 
-**Names and addresses.** A host's name is its `[host.<name>]` key, never a
-hostname or IP. Its `address` goes to `ssh` as is, never posted.
+**Names and addresses.** A host's name is its `[host.<name>]` key; its
+`address` goes to `ssh` as is, never posted.
 
 **Slots.** `(ram_gb - reserve_gb) / gb_per_session`, rounded down, is a
 host's concurrent sessions; `max_sessions` replaces it. Only a live window
 with a run under its name takes a slot.
 
-**Heavy sessions.** A task is heavy when its card requires a top-level
+**Heavy sessions.** A task is heavy when it requires a top-level
 `heavy_capabilities` entry; a host's `max_heavy_sessions` caps heavy sessions
 below its slots.
 
-**Capabilities** are declared per host and named by a card's `requires`
-(`internal/hosts/hosts.go`).
+**Capabilities** are declared per host and named by `requires`
+(`internal/hosts/hosts.go`). A task requires its repository's (operator-only
+`engine repo edit`) and its card's.
 
 ```toml
 default_harness = "claude"
@@ -60,12 +61,12 @@ Each harness runs through its pinned `bin`, never a `PATH` lookup. For launch li
 
 In start order, each ready task goes to a host that has a free slot (a
 heavy slot, for a heavy task), the chosen harness signed in and under its cap,
-every capability the card requires, not paused (`engine host pause`), a tmux server whose working
+every capability the task requires, not paused (`engine host pause`), a tmux server whose working
 directory exists (`tmux.md`), a passed readiness probe for its repo (`readiness.md`),
 and no usage limit holding that host × harness (`session-signals.md`, "Death
 at a limit").
-Among those, the host with most free slots wins, then the fewest
-capabilities, then the lowest name.
+Among those, most free slots wins, then fewest capabilities, then
+lowest name.
 
 For an unpinned card, `harness_ratio` scores each positive-weight harness by
 `(live sessions across hosts + 1) / weight`; the lowest wins, ties prefer

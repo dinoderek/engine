@@ -101,3 +101,28 @@ func TestAPlanQuestionKeepsANewTaskOutOfPlacement(t *testing.T) {
 		t.Fatalf("a held task was placed: %d attempts, %d launches, %s", len(st.Attempts), h.calls, st.Items[task.ID].State)
 	}
 }
+
+func TestARepositoryRequirementPlacesEveryTaskAndMakesItHeavy(t *testing.T) {
+	c, h, repo, _, task := setup(t)
+	execute(t, c.Service, control.Request{Op: "edit", ID: repo.ID, Version: repo.Version, Item: control.Item{Requires: []string{"ios"}}})
+	devbox := c.Config.Hosts["devbox"]
+	devbox.Capabilities = []string{"linux"}
+	c.Config.Hosts["devbox"] = devbox
+	c.Config.HeavyCapabilities = []string{"ios"}
+	pass(t, c)
+	pass(t, c)
+	if st, err := snapshotOf(c.Service.Store); err != nil || st.Items[task.ID].Attempt != "" {
+		t.Fatalf("a host without the repository's capability took its task: %v", err)
+	}
+	devbox.Capabilities = []string{"linux", "ios"}
+	c.Config.Hosts["devbox"] = devbox
+	pass(t, c)
+	st, err := snapshotOf(c.Service.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := st.Attempts[st.Items[task.ID].Attempt]
+	if at.Host != "devbox" || !h.launches[at.RunID].Spawn.Heavy {
+		t.Fatalf("task with the repository's heavy capability: attempt %+v, launch %+v", at, h.launches[at.RunID].Spawn)
+	}
+}
